@@ -6,6 +6,10 @@ import { EMPTY_AUTH, fromNodeDto, fromRequestDto, toRequestDto } from './request
 
 export type SidebarView = 'explorer' | 'git';
 
+export const SIDEBAR_MIN_WIDTH = 180;
+export const SIDEBAR_MAX_WIDTH = 600;
+export const SIDEBAR_DEFAULT_WIDTH = 256;
+
 const LAST_WORKSPACE_KEY = 'missive.lastWorkspace';
 
 /**
@@ -38,6 +42,8 @@ export class WorkspaceStore {
 
   readonly sidebarView = signal<SidebarView>('explorer');
   readonly sidebarOpen = signal(true);
+  /** Sidebar width in pixels; kept here so it survives closing and reopening the sidebar. */
+  readonly sidebarWidth = signal(SIDEBAR_DEFAULT_WIDTH);
 
   readonly documents = signal<RequestDocument[]>([]);
   readonly activeId = signal<string | null>(null);
@@ -94,6 +100,12 @@ export class WorkspaceStore {
       this.sidebarView.set(view);
       this.sidebarOpen.set(true);
     }
+  }
+
+  setSidebarWidth(width: number): void {
+    this.sidebarWidth.set(
+      Math.round(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width))),
+    );
   }
 
   /** Opens an unsaved request that will be saved in `folder` (`''` is the workspace root). */

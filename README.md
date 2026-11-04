@@ -6,8 +6,9 @@ choose, and Missive can synchronize that folder with git directly from the app.
 No account, no cloud workspace, no proprietary export format.
 
 > **Status:** early development. You can open a workspace folder, browse its
-> request files, edit them in the tabbed request editor and save changes or new
-> requests back to disk. Sending requests, environments and git sync are not
+> request files in the explorer (a sidebar you can resize by dragging its edge),
+> edit them in the tabbed request editor and save changes or new requests back
+> to disk. Sending requests, environments and git sync are not
 > implemented yet (the source control panel still shows sample data).
 
 ## Why Missive
