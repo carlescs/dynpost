@@ -8,8 +8,7 @@ No account, no cloud workspace, no proprietary export format.
 > **Status:** early development. The app is currently a Photino.NET + Angular
 > skeleton with the initial UI layout (workspace explorer and source control
 > sidebar, resizable by dragging its edge, tabbed request editor) running on
-> sample data; the features below
-> describe what is planned.
+> sample data; the features below describe what is planned.
 
 ## Why Missive
 
