@@ -93,8 +93,13 @@ Desktop → Application
 - The UI talks to the host through Photino's message bridge. Use a typed
   request/response envelope with a correlation id and an explicit error shape;
   keep message types defined in one place on each side and keep them in sync.
-- The frontend is loaded from local files: keep hash routing and the relative
-  base href working. Don't depend on a dev server at runtime.
+- The bundled frontend is served by `Missive.Desktop/Hosting/BundledAssets.cs`
+  through a Photino custom scheme: `app://localhost/` on Linux/macOS and an
+  intercepted `http://localhost/` on Windows (WebView2 can't navigate to custom
+  schemes via Photino). Never load it from `file://`: WebView2 blocks the
+  module scripts Angular emits. Keep hash routing and the relative base href,
+  and don't depend on a dev server or external `http://` resources at runtime
+  (on Windows the handler intercepts `http://` requests).
 
 ## Workspace file conventions
 

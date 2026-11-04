@@ -142,7 +142,10 @@ dotnet run --project src/Missive.Desktop
 
 The .NET build runs `npm ci` and the Angular production build, then copies the
 frontend into `wwwroot` beside the desktop executable. The host resolves assets
-relative to its executable, not the current working directory.
+relative to its executable, not the current working directory, and serves them
+to the webview through a custom scheme handler (`app://localhost/`, or an
+intercepted `http://localhost/` on Windows) rather than `file://`, because
+WebView2 won't run the Angular build's module scripts from `file://`.
 
 ## Frontend development
 
@@ -154,8 +157,7 @@ npm start
 
 Open `http://localhost:4200` for Angular live reload in a browser. The desktop
 host always loads the bundled frontend; rebuild/restart it to see frontend
-changes. Routing uses hash URLs and assets use a relative base URL so they work
-from local files.
+changes. Routing uses hash URLs and assets use a relative base URL.
 
 ## Build and publish
 
