@@ -13,11 +13,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Missive.Application", "src\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Missive.Infrastructure", "src\Missive.Infrastructure\Missive.Infrastructure.csproj", "{4E7DCE2E-48E9-45BE-82C2-A098A89C8EFA}"
 EndProject
-Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "Missive.Client", "src\Missive.Client\", "{6F2B8E4A-3C1D-4E5F-9A7B-2D8C0E1F3A45}"
-	ProjectSection(WebsiteProperties) = preProject
-		UseIISExpress = "false"
-		SlnRelativePath = "src\Missive.Client\"
-	EndProjectSection
+Project("{54A90642-561A-4BB1-A94E-469ADEE60C69}") = "Missive.Client", "src\Missive.Client\Missive.Client.esproj", "{6F2B8E4A-3C1D-4E5F-9A7B-2D8C0E1F3A45}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
@@ -121,6 +117,12 @@ Global
 		{29B26F5F-0C7A-4F6E-A8B5-EE3A3432C2E1}.Release|x64.Build.0 = Release|Any CPU
 		{29B26F5F-0C7A-4F6E-A8B5-EE3A3432C2E1}.Release|x86.ActiveCfg = Release|Any CPU
 		{29B26F5F-0C7A-4F6E-A8B5-EE3A3432C2E1}.Release|x86.Build.0 = Release|Any CPU
+		{6F2B8E4A-3C1D-4E5F-9A7B-2D8C0E1F3A45}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F2B8E4A-3C1D-4E5F-9A7B-2D8C0E1F3A45}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6F2B8E4A-3C1D-4E5F-9A7B-2D8C0E1F3A45}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6F2B8E4A-3C1D-4E5F-9A7B-2D8C0E1F3A45}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F2B8E4A-3C1D-4E5F-9A7B-2D8C0E1F3A45}.Release|x64.ActiveCfg = Release|Any CPU
+		{6F2B8E4A-3C1D-4E5F-9A7B-2D8C0E1F3A45}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

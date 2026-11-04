@@ -34,9 +34,10 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
     `dist/missive-client/browser` into `wwwroot`.
   - `tests/Missive.<Layer>.Tests` — one test project per backend layer.
 - All projects are in `Missive.sln` (solution folders `src` and `tests`). The
-  Angular client is included as a folder (Web Site) entry so it shows up in
-  Visual Studio; it has no build configuration in the solution — the
-  Desktop csproj builds it. The backend layer and test projects are empty
+  Angular client is included as a JavaScript project
+  (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
+  Studio; it is not built by the solution and has npm install/build disabled —
+  the Desktop csproj builds it. The backend layer and test projects are empty
   scaffolds so far.
 
 ## Commands
