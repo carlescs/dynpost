@@ -1,9 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Missive.Application.Folders;
+using Missive.Application.Git;
 using Missive.Application.Requests;
+using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Desktop.Hosting;
+using Missive.Infrastructure.Git;
+using Missive.Infrastructure.Settings;
 using Missive.Infrastructure.Workspaces;
 using Photino.NET;
 
@@ -42,7 +46,10 @@ internal static class Program
         new ServiceCollection()
             .AddSingleton<CurrentWorkspace>()
             .AddSingleton<IWorkspaceRepository, FileSystemWorkspaceRepository>()
+            .AddSingleton<IGitService, GitCliService>()
+            .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
             .AddTransient<OpenWorkspace>()
+            .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetWorkspaceTree>()
             .AddTransient<LoadRequest>()
             .AddTransient<CreateRequest>()
@@ -52,5 +59,9 @@ internal static class Program
             .AddTransient<RenameFolder>()
             .AddTransient<MoveFolder>()
             .AddTransient<DeleteFolder>()
+            .AddTransient<GetGitStatus>()
+            .AddTransient<CommitChanges>()
+            .AddTransient<PullChanges>()
+            .AddTransient<PushChanges>()
             .BuildServiceProvider();
 }

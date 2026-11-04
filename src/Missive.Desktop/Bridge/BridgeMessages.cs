@@ -16,6 +16,9 @@ internal static class BridgeMessageTypes
     /// <summary>Opens a folder by path. Payload: <see cref="OpenWorkspacePayload"/>. Result: workspace.</summary>
     public const string WorkspaceOpen = "workspace.open";
 
+    /// <summary>Reopens the workspace from the previous session. Payload: none. Result: workspace, or null if there is none.</summary>
+    public const string WorkspaceOpenLast = "workspace.openLast";
+
     /// <summary>Re-reads the open workspace. Payload: none. Result: workspace.</summary>
     public const string WorkspaceTree = "workspace.tree";
 
@@ -42,6 +45,18 @@ internal static class BridgeMessageTypes
 
     /// <summary>Deletes a folder with its requests. Payload: <see cref="DeleteFolderPayload"/>. Result: none.</summary>
     public const string FolderDelete = "folder.delete";
+
+    /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
+    public const string GitStatus = "git.status";
+
+    /// <summary>Commits changes. Payload: <see cref="GitCommitPayload"/>. Result: commit id and new status.</summary>
+    public const string GitCommit = "git.commit";
+
+    /// <summary>Pulls the current branch (merge, never rebase). Payload: none. Result: outcome and new status.</summary>
+    public const string GitPull = "git.pull";
+
+    /// <summary>Pushes (or publishes) the current branch, never forcing. Payload: none. Result: new status.</summary>
+    public const string GitPush = "git.push";
 }
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
@@ -70,6 +85,9 @@ internal sealed record CreateFolderPayload(string Parent, string Name);
 internal sealed record RenameFolderPayload(string Path, string Name);
 
 internal sealed record DeleteFolderPayload(string Path);
+
+/// <param name="Paths">Workspace-relative paths to commit; omitted or empty commits every change.</param>
+internal sealed record GitCommitPayload(string Message, IReadOnlyList<string>? Paths = null);
 
 internal static class BridgeErrorCodes
 {

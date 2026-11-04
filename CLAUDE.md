@@ -34,7 +34,8 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   - `src/Missive.Desktop` — Photino.NET 4 window, bridge, composition root. Its
     csproj runs `npm ci` + `npm run build` for the client and copies
     `dist/missive-client/browser` into `wwwroot`.
-  - `tests/Missive.<Layer>.Tests` — one test project per backend layer.
+  - `tests/Missive.<Layer>.Tests` — one test project per backend layer
+    (Desktop tests drive the bridge router with real use cases and mocked ports).
 - All projects are in `Missive.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
@@ -128,11 +129,20 @@ Desktop → Application
   load/save round-trips.
 - Secrets, response history and UI state go in `.missive/` (git-ignored),
   never in tracked files. Ensure `.missive/` is in the workspace `.gitignore`.
+  App-wide, per-user settings (such as the last opened workspace) go through
+  `IAppSettingsStore` into `settings.json` in the user's app data folder, never
+  into a workspace or the webview's storage.
 - If you change the format, update the examples in `README.md`.
 
 ## Git behavior in the app
 
-- Use the user's existing git configuration and credentials.
+- Use the user's existing git configuration and credentials: the adapter
+  (`Infrastructure/Git/GitCliService.cs`) runs the `git` CLI rather than a git
+  library, with terminal prompts disabled so it never hangs. Git use cases act
+  on `CurrentWorkspace` like the other use cases.
+- Pull always merges (`--no-rebase`); conflicts are left in the working tree and
+  reported. Files under `.missive/` are excluded from status and commits even
+  if the `.gitignore` entry is missing.
 - Never force-push, rewrite history, or auto-resolve conflicts. Report
   conflicts and errors to the user clearly.
 - Don't commit or push without an explicit user action.

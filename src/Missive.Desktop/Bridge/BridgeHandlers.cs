@@ -1,5 +1,6 @@
 using Missive.Application.Common;
 using Missive.Application.Folders;
+using Missive.Application.Git;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,8 @@ internal static class BridgeHandlers
             })
             .Register<OpenWorkspacePayload, WorkspaceDto>(BridgeMessageTypes.WorkspaceOpen,
                 (p, ct) => Use<OpenWorkspace>().ExecuteAsync(p.Path, ct))
+            .Register(BridgeMessageTypes.WorkspaceOpenLast,
+                ct => Use<OpenLastWorkspace>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.WorkspaceTree,
                 ct => Use<GetWorkspaceTree>().ExecuteAsync(ct))
             .Register<LoadRequestPayload, RequestDto>(BridgeMessageTypes.RequestLoad,
@@ -44,7 +47,15 @@ internal static class BridgeHandlers
             .Register<MoveFolderPayload, FolderDto>(BridgeMessageTypes.FolderMove,
                 (p, _) => Task.FromResult(Use<MoveFolder>().Execute(p.Path, p.Parent)))
             .Register<DeleteFolderPayload, Unit?>(BridgeMessageTypes.FolderDelete,
-                (p, _) => Task.FromResult(NoValue(Use<DeleteFolder>().Execute(p.Path))));
+                (p, _) => Task.FromResult(NoValue(Use<DeleteFolder>().Execute(p.Path))))
+            .Register(BridgeMessageTypes.GitStatus,
+                async ct => (await Use<GetGitStatus>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register<GitCommitPayload, GitCommitDto>(BridgeMessageTypes.GitCommit,
+                async (p, ct) => (await Use<CommitChanges>().ExecuteAsync(new CommitChangesRequest(p.Message, p.Paths), ct)).Map(GitCommitDto.From))
+            .Register(BridgeMessageTypes.GitPull,
+                async ct => (await Use<PullChanges>().ExecuteAsync(ct)).Map(GitPullDto.From))
+            .Register(BridgeMessageTypes.GitPush,
+                async ct => (await Use<PushChanges>().ExecuteAsync(ct)).Map(GitStatusDto.From));
     }
 
     /// <summary>Results without a value are sent as a <c>null</c> payload.</summary>

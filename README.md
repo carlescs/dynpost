@@ -8,8 +8,9 @@ No account, no cloud workspace, no proprietary export format.
 > **Status:** early development. You can open a workspace folder, browse its
 > request files in the explorer (a sidebar you can resize by dragging its edge),
 > edit them in the tabbed request editor and save changes or new requests back
-> to disk. Sending requests, environments and git sync are not
-> implemented yet (the source control panel still shows sample data).
+> to disk, and sync the folder with git from the Source control view (status,
+> commit, pull, push). Sending requests and environments are not implemented
+> yet.
 
 ## Why Missive
 
@@ -136,6 +137,29 @@ environment files changed, lets you commit them with a message, and pulls and
 pushes the current branch. It uses your existing git credentials. Missive never
 force-pushes and never resolves conflicts automatically: conflicting files are
 reported so you can resolve them (in Missive's editor or your own tools).
+
+Missive runs your installed `git` command-line client, so your git
+configuration, hooks and credential helpers apply as usual. In detail:
+
+- **Status** lists changed files inside the workspace folder only (the
+  workspace can be a subfolder of a larger repository), plus the branch, its
+  upstream and how many commits it is ahead of or behind it. It refreshes when
+  you come back to the window.
+- **Commit** stages and commits every change in the workspace, or only the files
+  you tick in the changes list, and never touches files outside the workspace.
+  Files in `.missive/` are never committed, even if they are not git-ignored.
+- **Pull** merges the upstream branch into yours; it never rebases. If the merge
+  conflicts, the conflicted files are listed and left for you to resolve and
+  mark as resolved (`git add`); committing then completes the merge.
+- **Push** pushes the current branch without force. A branch with no upstream
+  yet is published to `origin` (or the only remote) and tracks it from then on.
+  If the remote has commits you don't have, the push is rejected and you are
+  asked to pull first.
+
+Missive reopens the last workspace at the next launch, if its folder still
+exists. That choice is stored per user, outside any workspace, in
+`settings.json` in the app data folder (`%APPDATA%\Missive` on Windows,
+`~/.config/Missive` on Linux and macOS).
 
 ## Architecture
 

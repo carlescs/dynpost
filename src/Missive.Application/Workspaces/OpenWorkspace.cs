@@ -1,9 +1,13 @@
 using Missive.Application.Common;
+using Missive.Application.Settings;
 
 namespace Missive.Application.Workspaces;
 
-/// <summary>Opens a folder as the current workspace and lists its requests.</summary>
-public sealed class OpenWorkspace(IWorkspaceRepository repository, CurrentWorkspace current)
+/// <summary>
+/// Opens a folder as the current workspace and lists its requests. The folder is remembered as
+/// the one to reopen at the next launch.
+/// </summary>
+public sealed class OpenWorkspace(IWorkspaceRepository repository, CurrentWorkspace current, IAppSettingsStore settings)
 {
     public async Task<Result<WorkspaceDto>> ExecuteAsync(string folder, CancellationToken cancellationToken = default)
     {
@@ -19,6 +23,17 @@ public sealed class OpenWorkspace(IWorkspaceRepository repository, CurrentWorksp
         }
 
         current.Open(folder);
+        await RememberAsync(folder, cancellationToken);
         return WorkspaceTreeBuilder.Build(folder, entries.Value);
+    }
+
+    /// <summary>Best effort: failing to remember the folder must not stop the user from opening it.</summary>
+    private async Task RememberAsync(string folder, CancellationToken cancellationToken)
+    {
+        var saved = await settings.LoadAsync(cancellationToken);
+        if (saved.LastWorkspacePath != folder)
+        {
+            await settings.SaveAsync(saved with { LastWorkspacePath = folder }, cancellationToken);
+        }
     }
 }

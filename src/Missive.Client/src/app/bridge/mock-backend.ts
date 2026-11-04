@@ -59,6 +59,7 @@ export class MockBackend {
     });
     const payload = request.payload as Record<string, unknown> | undefined;
 
+    if (request.type === 'workspace.openLast') return ok(null);
     if (request.type === 'workspace.pick' || request.type === 'workspace.open') {
       this.open = true;
       return ok(this.workspace());

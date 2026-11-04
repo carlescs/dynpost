@@ -58,11 +58,38 @@ export interface WorkspaceDto {
   nodes: WorkspaceNodeDto[];
 }
 
+export type GitFileStatus =
+  'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted';
+
+export interface GitChange {
+  /** Path relative to the workspace folder, with `/` separators. */
+  path: string;
+  status: GitFileStatus;
+  /** For a rename, the path the file was renamed from. */
+  originalPath?: string | null;
+}
+
+export interface GitStatus {
+  /** The checked-out branch; `null` when HEAD is detached. */
+  branch?: string | null;
+  /** The branch's upstream, e.g. `origin/main`; `null` when none is set. */
+  upstream?: string | null;
+  ahead: number;
+  behind: number;
+  /** Whether a merge is in progress. */
+  merging: boolean;
+  changes: GitChange[];
+}
+
+export type PullOutcome = 'upToDate' | 'updated' | 'conflicted';
+
 /** Every message type with its payload and result. */
 export interface BridgeMessages {
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
   'workspace.pick': { payload: void; result: WorkspaceDto | null };
   'workspace.open': { payload: { path: string }; result: WorkspaceDto };
+  /** Reopens the workspace from the previous session; `null` when there is none. */
+  'workspace.openLast': { payload: void; result: WorkspaceDto | null };
   /** Re-reads the open workspace from disk. */
   'workspace.tree': { payload: void; result: WorkspaceDto };
   'request.load': { payload: { path: string }; result: RequestDto };
@@ -80,6 +107,17 @@ export interface BridgeMessages {
   'folder.move': { payload: { path: string; parent: string }; result: FolderDto };
   /** Deletes a folder with its requests; refused if it holds other files. */
   'folder.delete': { payload: { path: string }; result: null };
+  /** The open workspace's git status. */
+  'git.status': { payload: void; result: GitStatus };
+  /** Commits `paths`, or every change in the workspace when `paths` is omitted. */
+  'git.commit': {
+    payload: { message: string; paths?: string[] };
+    result: { commitId: string; status: GitStatus };
+  };
+  /** Pulls the current branch with a merge (never a rebase). */
+  'git.pull': { payload: void; result: { outcome: PullOutcome; status: GitStatus } };
+  /** Pushes the current branch, or publishes it when it has no upstream. Never forces. */
+  'git.push': { payload: void; result: GitStatus };
 }
 
 export type BridgeMessageType = keyof BridgeMessages;

@@ -30,7 +30,13 @@ public readonly record struct Result<T>
 
     public bool IsSuccess => Error is null;
 
+    public bool IsFailure => !IsSuccess;
+
     public T Value => IsSuccess ? _value! : throw new InvalidOperationException($"Result failed: {Error!.Message}");
+
+    /// <summary>Transforms the value of a successful result; a failure is passed through.</summary>
+    public Result<TOut> Map<TOut>(Func<T, TOut> map) =>
+        IsSuccess ? Result<TOut>.Success(map(_value!)) : Result<TOut>.Failure(Error!);
 
     public static Result<T> Success(T value) => new(value, null);
 

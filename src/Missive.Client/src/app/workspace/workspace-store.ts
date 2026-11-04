@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Bridge, BridgeError } from '../bridge/bridge';
 import { WorkspaceDto } from '../bridge/messages';
-import { GitState, RequestContent, RequestDocument, WorkspaceInfo, WorkspaceNode } from './models';
+import { RequestContent, RequestDocument, WorkspaceInfo, WorkspaceNode } from './models';
 import { EMPTY_AUTH, fromNodeDto, fromRequestDto, toRequestDto } from './request-mapping';
 
 export type SidebarView = 'explorer' | 'git';
@@ -10,14 +10,12 @@ export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 600;
 export const SIDEBAR_DEFAULT_WIDTH = 256;
 
-const LAST_WORKSPACE_KEY = 'missive.lastWorkspace';
-
 /**
  * UI state for the open workspace: the file tree, git status and the documents open in the
  * editor. All file work happens in the .NET host through the {@link Bridge}; this store only
  * mirrors what is on disk.
  *
- * Git status is still placeholder sample data until git support exists in the host.
+ * Git state lives in the `GitStore`.
  */
 @Injectable({ providedIn: 'root' })
 export class WorkspaceStore {
@@ -29,16 +27,6 @@ export class WorkspaceStore {
   readonly opening = signal(false);
   /** The last error to show the user, or `null`. */
   readonly error = signal<string | null>(null);
-
-  readonly git = signal<GitState>({
-    branch: 'main',
-    ahead: 1,
-    behind: 0,
-    changes: [
-      { path: 'users/create-user.yaml', status: 'modified' },
-      { path: 'orders/list-orders.yaml', status: 'added' },
-    ],
-  });
 
   readonly sidebarView = signal<SidebarView>('explorer');
   readonly sidebarOpen = signal(true);
@@ -53,15 +41,18 @@ export class WorkspaceStore {
 
   private untitledCount = 0;
 
-  /** Reopens the workspace from the previous session, if it still exists. */
+  /**
+   * Reopens the workspace from the previous session, if it still exists. The host remembers it in
+   * the user's settings file, which outlives the webview's storage.
+   */
   async restore(): Promise<void> {
-    const root = readLastWorkspace();
-    if (!root || this.workspace()) return;
+    if (this.workspace()) return;
     try {
-      this.applyWorkspace(await this.bridge.send('workspace.open', { path: root }));
+      const workspace = await this.bridge.send('workspace.openLast');
+      // Don't replace a folder the user opened in the meantime.
+      if (workspace && !this.workspace()) this.applyWorkspace(workspace);
     } catch {
-      // The folder may have been moved or deleted; start without a workspace.
-      writeLastWorkspace(null);
+      // Start without a workspace; the user can open one.
     }
   }
 
@@ -329,7 +320,6 @@ export class WorkspaceStore {
   private applyWorkspace(workspace: WorkspaceDto): void {
     this.workspace.set({ name: workspace.name, root: workspace.root });
     this.tree.set(workspace.nodes.map(fromNodeDto));
-    writeLastWorkspace(workspace.root);
   }
 
   private patchDocument(id: string, patch: Partial<RequestDocument>): void {
@@ -370,21 +360,4 @@ function countRequests(node: WorkspaceNode | null): number {
 function parentFolder(path: string): string {
   const index = path.lastIndexOf('/');
   return index < 0 ? '' : path.slice(0, index);
-}
-
-function readLastWorkspace(): string | null {
-  try {
-    return localStorage.getItem(LAST_WORKSPACE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeLastWorkspace(root: string | null): void {
-  try {
-    if (root) localStorage.setItem(LAST_WORKSPACE_KEY, root);
-    else localStorage.removeItem(LAST_WORKSPACE_KEY);
-  } catch {
-    // Storage can be unavailable; remembering the workspace is only a convenience.
-  }
 }

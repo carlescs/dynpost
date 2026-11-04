@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Domain.Requests;
 using Missive.Domain.Workspaces;
@@ -10,6 +11,13 @@ public class OpenWorkspaceTests
 {
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly CurrentWorkspace _current = new();
+    private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
+
+    public OpenWorkspaceTests()
+    {
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(AppSettings.Default);
+        _settings.SaveAsync(default!, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+    }
 
     [Fact]
     public async Task OpensTheFolderAndBuildsTheTree()
@@ -26,7 +34,7 @@ public class OpenWorkspaceTests
                 Result<HttpRequestDefinition>.Failure(ErrorCodes.InvalidFile, "bad yaml")),
         ]));
 
-        var result = await new OpenWorkspace(_repository, _current).ExecuteAsync("/work/my-api");
+        var result = await new OpenWorkspace(_repository, _current, _settings).ExecuteAsync("/work/my-api");
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/work/my-api", _current.Root);
@@ -47,7 +55,7 @@ public class OpenWorkspaceTests
         _current.Open("/work/previous");
         _repository.FolderExists("/nope").Returns(false);
 
-        var result = await new OpenWorkspace(_repository, _current).ExecuteAsync("/nope");
+        var result = await new OpenWorkspace(_repository, _current, _settings).ExecuteAsync("/nope");
 
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
         Assert.Equal("/work/previous", _current.Root);

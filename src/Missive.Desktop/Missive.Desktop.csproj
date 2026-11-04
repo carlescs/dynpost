@@ -14,6 +14,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Missive.Desktop.Tests" />
+    <!-- Lets NSubstitute (Castle DynamicProxy) mock internal interfaces in tests. -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Missive.Application\Missive.Application.csproj" />
     <ProjectReference Include="..\Missive.Infrastructure\Missive.Infrastructure.csproj" />
   </ItemGroup>
