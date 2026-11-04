@@ -135,7 +135,9 @@ public sealed class GitCliServiceTests : IDisposable
         var again = await _git.PullAsync(bob);
 
         Assert.True(push.IsSuccess, push.Error?.Message);
+        Assert.True(pull.IsSuccess, pull.Error?.Message);
         Assert.Equal(PullOutcome.Updated, pull.Value);
+        Assert.True(again.IsSuccess, again.Error?.Message);
         Assert.Equal(PullOutcome.UpToDate, again.Value);
         Assert.Equal("name: A changed\n", File.ReadAllText(Path.Combine(bob, "a.yaml")));
     }
@@ -167,6 +169,7 @@ public sealed class GitCliServiceTests : IDisposable
 
         var pull = await _git.PullAsync(bob);
 
+        Assert.True(pull.IsSuccess, pull.Error?.Message);
         Assert.Equal(PullOutcome.Conflicted, pull.Value);
         var status = (await _git.GetStatusAsync(bob)).Value;
         Assert.True(status.IsMerging);
@@ -202,7 +205,9 @@ public sealed class GitCliServiceTests : IDisposable
 
         string Clone(string name)
         {
-            TestGit.Run(_temp.Path, "clone", "--quiet", remote, name);
+            // Set before checkout, so a global core.autocrlf=true (Windows runners) can't rewrite
+            // line endings and make the clone look modified.
+            TestGit.Run(_temp.Path, "clone", "--quiet", "--config", "core.autocrlf=false", remote, name);
             var path = _temp.Combine(name);
             TestGit.Configure(path, name);
             return path;
