@@ -5,10 +5,11 @@ on Postman. Its difference: your collections are plain files in a folder you
 choose, and Missive can synchronize that folder with git directly from the app.
 No account, no cloud workspace, no proprietary export format.
 
-> **Status:** early development. The app is currently a Photino.NET + Angular
-> skeleton with the initial UI layout (workspace explorer and source control
-> sidebar, resizable by dragging its edge, tabbed request editor) running on
-> sample data; the features below describe what is planned.
+> **Status:** early development. You can open a workspace folder, browse its
+> request files in the explorer (a sidebar you can resize by dragging its edge),
+> edit them in the tabbed request editor and save changes or new requests back
+> to disk. Sending requests, environments and git sync are not
+> implemented yet (the source control panel still shows sample data).
 
 ## Why Missive
 
@@ -21,8 +22,12 @@ No account, no cloud workspace, no proprietary export format.
 
 ## Planned features
 
-- [ ] Request editor: method, URL, query parameters, headers and body
-      (JSON, raw text, form-data, `x-www-form-urlencoded`)
+- [x] Open a folder as a workspace and browse its requests
+- [x] Create, rename and delete (nested) collection folders, and move requests
+      and folders between them with drag and drop
+- [x] Request editor: method, URL, query parameters, headers, auth and body
+      (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
+- [ ] Sending requests
 - [ ] Response viewer: status, time, size, headers and a pretty-printed body
 - [ ] Collections as folders, with optional folder-level defaults
 - [ ] Environments with `{{variable}}` substitution
@@ -72,6 +77,45 @@ body:
       "name": "Ada Lovelace"
     }
 ```
+
+Keys are always written in this order — `name`, `method`, `url`, `params`,
+`headers`, `auth`, `body` — and empty sections are left out. Query parameters
+use the same `name: value` form as headers. A parameter or header that is
+disabled in the editor is kept in the file with a `~` prefix (so names cannot
+start with `~`):
+
+```yaml
+params:
+  page: "1"
+  ~debug: "true"     # disabled
+```
+
+Auth types are `basic` (`username`, `password`), `bearer` (`token`) and
+`apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
+instead of a header). Body types are `json`, `text`, `form` and `urlencoded`.
+
+New requests are saved as a file named after the request (`Create user` →
+`create-user.yaml`, or `create-user-2.yaml` if that name is taken). Renaming a
+request renames its file too, unless the file name was chosen by hand. The
+explorer lists every `.yaml`/`.yml` file except `missive.yaml`, `_folder.yaml`,
+the `environments/` folder and hidden files and folders; files that can't be
+read are shown with an error instead of being hidden. Saving a request whose
+content didn't change leaves its file untouched. Comments and keys Missive
+doesn't know are not preserved when a request is saved with changes.
+
+Folders are collections and can be nested. From the explorer you can create,
+rename (F2) and delete them. Drag a request or a folder onto another folder
+(or onto empty space in the explorer for the workspace root) to move it there;
+moved files keep their names, and nothing is moved if the destination already
+has an entry with that name. Open requests follow renamed and moved folders. Folder
+names are kept as typed, but must work on Windows, macOS and Linux (no
+`/ \ < > : " | ? *`, no leading dot or trailing dot, no reserved names such as
+`CON`), and `environments` is reserved at the workspace root. Deleting a folder
+removes the requests in it and only goes ahead when the folder holds nothing
+else — request files, `_folder.yaml`, `.gitkeep` and OS files such as
+`.DS_Store` — so other files you keep there are never deleted. Git doesn't
+track empty folders, so a new folder appears in commits once it contains a
+request.
 
 An environment file (`environments/dev.yaml`):
 
@@ -157,9 +201,10 @@ npm ci
 npm start
 ```
 
-Open `http://localhost:4200` for Angular live reload in a browser. The desktop
-host always loads the bundled frontend; rebuild/restart it to see frontend
-changes. Routing uses hash URLs and assets use a relative base URL.
+Open `http://localhost:4200` for Angular live reload in a browser. Outside the
+desktop host there is no .NET backend, so the client talks to an in-memory
+sample workspace instead (nothing is written to disk). The desktop host always
+loads the bundled frontend; rebuild/restart it to see frontend changes. Routing uses hash URLs and assets use a relative base URL.
 
 ## Build and publish
 
@@ -178,7 +223,7 @@ runtime and the platform webview prerequisites above, but not Node.js.
 - `src/Missive.Desktop`: Photino window, bridge, composition root, and
   build/publish integration.
 - `src/Missive.Client`: standalone Angular app with SCSS styles, Tailwind
-  CSS, and Font Awesome icons.
+  CSS, Font Awesome icons and Angular CDK drag and drop.
 - `src/Missive.Domain`, `src/Missive.Application`, `src/Missive.Infrastructure`:
   backend layers (see [Architecture](#architecture)).
 - `tests/Missive.Domain.Tests`, `tests/Missive.Application.Tests`: fast unit
