@@ -1,50 +1,97 @@
 using System.Text.Json;
 using Missive.Application.Common;
+using Missive.Application.Requests;
 
 namespace Missive.Desktop.Bridge;
 
 /// <summary>
-/// A message from the UI: <c>{ "id": "1", "type": "git.status", "payload": { ... } }</c>. The id
-/// correlates the response. Keep in sync with <c>Missive.Client/src/app/bridge/messages.ts</c>.
+/// The message types the UI can send. Keep in sync with
+/// <c>src/Missive.Client/src/app/bridge/messages.ts</c>.
 /// </summary>
-internal sealed record BridgeRequest(string Id, string Type, JsonElement? Payload = null);
-
-/// <summary>
-/// The reply to a <see cref="BridgeRequest"/>: <c>{ "id", "ok": true, "payload" }</c> or
-/// <c>{ "id", "ok": false, "error": { "code", "message" } }</c>.
-/// </summary>
-internal sealed record BridgeResponse(string Id, bool Ok, object? Payload = null, Error? Error = null)
-{
-    public static BridgeResponse Success(string id, object? payload) => new(id, true, payload);
-
-    public static BridgeResponse Failure(string id, Error error) => new(id, false, Error: error);
-}
-
-/// <summary>Message type names. Keep in sync with the client's <c>messages.ts</c>.</summary>
 internal static class BridgeMessageTypes
 {
-    public const string WorkspacePickFolder = "workspace.pickFolder";
+    /// <summary>Shows a folder picker and opens the chosen folder. Payload: none. Result: workspace or null if cancelled.</summary>
+    public const string WorkspacePick = "workspace.pick";
+
+    /// <summary>Opens a folder by path. Payload: <see cref="OpenWorkspacePayload"/>. Result: workspace.</summary>
     public const string WorkspaceOpen = "workspace.open";
-    public const string WorkspaceGetLast = "workspace.getLast";
+
+    /// <summary>Reopens the workspace from the previous session. Payload: none. Result: workspace, or null if there is none.</summary>
+    public const string WorkspaceOpenLast = "workspace.openLast";
+
+    /// <summary>Re-reads the open workspace. Payload: none. Result: workspace.</summary>
+    public const string WorkspaceTree = "workspace.tree";
+
+    /// <summary>Reads a request file. Payload: <see cref="LoadRequestPayload"/>. Result: request.</summary>
+    public const string RequestLoad = "request.load";
+
+    /// <summary>Saves a new request in a folder. Payload: <see cref="CreateRequestPayload"/>. Result: saved request.</summary>
+    public const string RequestCreate = "request.create";
+
+    /// <summary>Saves an existing request file. Payload: <see cref="SaveRequestPayload"/>. Result: saved request.</summary>
+    public const string RequestSave = "request.save";
+
+    /// <summary>Moves a request file into another folder. Payload: <see cref="MoveRequestPayload"/>. Result: its new path.</summary>
+    public const string RequestMove = "request.move";
+
+    /// <summary>Creates a folder. Payload: <see cref="CreateFolderPayload"/>. Result: folder.</summary>
+    public const string FolderCreate = "folder.create";
+
+    /// <summary>Renames a folder. Payload: <see cref="RenameFolderPayload"/>. Result: folder (new path).</summary>
+    public const string FolderRename = "folder.rename";
+
+    /// <summary>Moves a folder into another folder. Payload: <see cref="MoveFolderPayload"/>. Result: folder (new path).</summary>
+    public const string FolderMove = "folder.move";
+
+    /// <summary>Deletes a folder with its requests. Payload: <see cref="DeleteFolderPayload"/>. Result: none.</summary>
+    public const string FolderDelete = "folder.delete";
+
+    /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
     public const string GitStatus = "git.status";
+
+    /// <summary>Commits changes. Payload: <see cref="GitCommitPayload"/>. Result: commit id and new status.</summary>
     public const string GitCommit = "git.commit";
+
+    /// <summary>Pulls the current branch (merge, never rebase). Payload: none. Result: outcome and new status.</summary>
     public const string GitPull = "git.pull";
+
+    /// <summary>Pushes (or publishes) the current branch, never forcing. Payload: none. Result: new status.</summary>
     public const string GitPush = "git.push";
 }
 
-/// <summary>Errors produced by the bridge itself rather than by a use case.</summary>
-internal static class BridgeErrors
+/// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
+internal sealed record BridgeRequest(string Id, string Type, JsonElement? Payload);
+
+/// <summary>The answer to a <see cref="BridgeRequest"/>: either <see cref="Payload"/> or <see cref="Error"/>.</summary>
+internal sealed record BridgeResponse(string Id, bool Ok, object? Payload = null, Error? Error = null);
+
+internal sealed record OpenWorkspacePayload(string Path);
+
+internal sealed record LoadRequestPayload(string Path);
+
+internal sealed record CreateRequestPayload(string Folder, RequestDto Request);
+
+internal sealed record SaveRequestPayload(string Path, RequestDto Request);
+
+/// <param name="Folder">The destination folder; <c>""</c> is the workspace root.</param>
+internal sealed record MoveRequestPayload(string Path, string Folder);
+
+/// <param name="Parent">The destination folder; <c>""</c> is the workspace root.</param>
+internal sealed record MoveFolderPayload(string Path, string Parent);
+
+/// <param name="Parent">The containing folder; <c>""</c> is the workspace root.</param>
+internal sealed record CreateFolderPayload(string Parent, string Name);
+
+internal sealed record RenameFolderPayload(string Path, string Name);
+
+internal sealed record DeleteFolderPayload(string Path);
+
+/// <param name="Paths">Workspace-relative paths to commit; omitted or empty commits every change.</param>
+internal sealed record GitCommitPayload(string Message, IReadOnlyList<string>? Paths = null);
+
+internal static class BridgeErrorCodes
 {
-    public const string UnknownTypeCode = "bridge.unknown_type";
-    public const string InvalidPayloadCode = "bridge.invalid_payload";
-    public const string InternalErrorCode = "bridge.internal_error";
-
-    public static Error UnknownType(string type) =>
-        new(UnknownTypeCode, $"Unknown message type '{type}'.");
-
-    public static Error InvalidPayload(string type, string details) =>
-        new(InvalidPayloadCode, $"Invalid payload for '{type}': {details}");
-
-    public static Error InternalError(string details) =>
-        new(InternalErrorCode, $"Unexpected error: {details}");
+    public const string UnknownType = "unknown_message";
+    public const string BadPayload = "bad_payload";
+    public const string Internal = "internal_error";
 }

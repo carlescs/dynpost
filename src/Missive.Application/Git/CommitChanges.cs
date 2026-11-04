@@ -1,21 +1,21 @@
 using Missive.Application.Common;
+using Missive.Application.Workspaces;
 using Missive.Domain.Git;
 
 namespace Missive.Application.Git;
 
-/// <param name="WorkspacePath">The workspace folder.</param>
 /// <param name="Message">The commit message entered by the user.</param>
 /// <param name="Paths">
 /// Workspace-relative paths of the changed files to commit, or <c>null</c>/empty to commit every change.
 /// </param>
-public sealed record CommitChangesRequest(string WorkspacePath, string Message, IReadOnlyList<string>? Paths = null);
+public sealed record CommitChangesRequest(string Message, IReadOnlyList<string>? Paths = null);
 
 /// <param name="CommitId">The id of the new commit.</param>
 /// <param name="Status">The workspace's git state after the commit.</param>
 public sealed record CommitChangesResult(string CommitId, GitStatus Status);
 
-/// <summary>Commits the user's changes in the workspace with a message.</summary>
-public sealed class CommitChanges(IGitService git)
+/// <summary>Commits the user's changes in the open workspace with a message.</summary>
+public sealed class CommitChanges(IGitService git, CurrentWorkspace workspace)
 {
     public async Task<Result<CommitChangesResult>> ExecuteAsync(
         CommitChangesRequest request,
@@ -26,7 +26,15 @@ public sealed class CommitChanges(IGitService git)
             return GitErrors.InvalidCommitMessage();
         }
 
-        var before = await git.GetStatusAsync(request.WorkspacePath, cancellationToken);
+        var root = workspace.RequireRoot();
+        if (root.IsFailure)
+        {
+            return root.Error!;
+        }
+
+        var workspacePath = root.Value;
+
+        var before = await git.GetStatusAsync(workspacePath, cancellationToken);
         if (before.IsFailure)
         {
             return before.Error!;
@@ -44,13 +52,13 @@ public sealed class CommitChanges(IGitService git)
             return error;
         }
 
-        var commit = await git.CommitAsync(request.WorkspacePath, message, paths, cancellationToken);
+        var commit = await git.CommitAsync(workspacePath, message, paths, cancellationToken);
         if (commit.IsFailure)
         {
             return commit.Error!;
         }
 
-        var after = await git.GetStatusAsync(request.WorkspacePath, cancellationToken);
+        var after = await git.GetStatusAsync(workspacePath, cancellationToken);
         if (after.IsFailure)
         {
             return after.Error!;

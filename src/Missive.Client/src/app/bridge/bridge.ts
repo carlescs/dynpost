@@ -1,69 +1,74 @@
 import { Injectable } from '@angular/core';
 import {
-  BRIDGE_UNAVAILABLE,
+  BridgeErrorShape,
+  BridgeMessageType,
+  BridgeMessages,
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
-  BridgeResult,
-  MessageType,
-  RequestOf,
-  ResponseOf,
 } from './messages';
+import { MockBackend } from './mock-backend';
 
-/** The message API Photino injects into the webview as `window.external`. */
+/** The messaging API Photino injects into the webview. */
 interface PhotinoExternal {
   sendMessage(message: string): void;
   receiveMessage(callback: (message: string) => void): void;
 }
 
-function photinoExternal(): PhotinoExternal | null {
-  const external = (globalThis as { external?: Partial<PhotinoExternal> }).external;
-  return typeof external?.sendMessage === 'function' &&
-    typeof external.receiveMessage === 'function'
-    ? (external as PhotinoExternal)
-    : null;
+/** A failure reported by the host (or by the bridge itself). */
+export class BridgeError extends Error implements BridgeErrorShape {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'BridgeError';
+  }
+}
+
+interface Pending {
+  resolve(value: unknown): void;
+  reject(error: BridgeError): void;
 }
 
 /**
- * Typed request/response calls to the .NET host over Photino's message bridge. Every call
- * resolves to a {@link BridgeResult}; it never rejects.
+ * Typed request/response channel to the .NET host. Each request carries a correlation id that
+ * the host echoes in its response.
+ *
+ * Outside the desktop host (the `npm start` dev server) requests go to an in-memory
+ * {@link MockBackend} with sample data, so the UI can still be developed in a browser.
  */
 @Injectable({ providedIn: 'root' })
 export class Bridge {
-  private readonly external = photinoExternal();
-  private readonly pending = new Map<string, (response: BridgeResponseEnvelope) => void>();
-  private nextId = 0;
+  private readonly external = Bridge.findHost();
+  private readonly mock = this.external ? null : new MockBackend();
+  private readonly pending = new Map<string, Pending>();
+  private nextId = 1;
 
-  /** Whether the app runs inside the desktop host (not, for example, on the dev server). */
-  readonly available = this.external !== null;
+  /** Whether the app runs inside the desktop host rather than a plain browser. */
+  readonly isDesktop = this.external !== null;
 
   constructor() {
     this.external?.receiveMessage((message) => this.receive(message));
   }
 
-  request<T extends MessageType>(
-    type: T,
-    payload: RequestOf<T>,
-  ): Promise<BridgeResult<ResponseOf<T>>> {
-    if (!this.external) {
-      return Promise.resolve({
-        ok: false,
-        error: {
-          code: BRIDGE_UNAVAILABLE,
-          message: 'This needs the Missive desktop app.',
-        },
-      });
+  send<K extends BridgeMessageType>(
+    type: K,
+    ...payload: BridgeMessages[K]['payload'] extends void ? [] : [BridgeMessages[K]['payload']]
+  ): Promise<BridgeMessages[K]['result']> {
+    const envelope: BridgeRequestEnvelope = {
+      id: String(this.nextId++),
+      type,
+      payload: payload[0],
+    };
+
+    if (this.mock) {
+      return this.mock.handle(envelope).then((response) => this.unwrap(response)) as Promise<
+        BridgeMessages[K]['result']
+      >;
     }
 
-    const id = String(++this.nextId);
-    const envelope: BridgeRequestEnvelope = { id, type, payload };
-    return new Promise((resolve) => {
-      this.pending.set(id, (response) =>
-        resolve(
-          response.ok
-            ? { ok: true, value: response.payload as ResponseOf<T> }
-            : { ok: false, error: response.error },
-        ),
-      );
+    return new Promise((resolve, reject) => {
+      this.pending.set(envelope.id, { resolve: resolve as (value: unknown) => void, reject });
       this.external!.sendMessage(JSON.stringify(envelope));
     });
   }
@@ -71,18 +76,33 @@ export class Bridge {
   private receive(message: string): void {
     let response: BridgeResponseEnvelope;
     try {
-      response = JSON.parse(message) as BridgeResponseEnvelope;
+      response = JSON.parse(message);
     } catch {
-      console.error('Ignored a bridge message that is not JSON.', message);
+      console.error('Ignoring malformed bridge message', message);
       return;
     }
 
-    const resolve = this.pending.get(response.id);
-    if (!resolve) {
-      console.error('Ignored a bridge response with an unknown id.', response);
-      return;
-    }
+    const pending = this.pending.get(response.id);
+    if (!pending) return;
     this.pending.delete(response.id);
-    resolve(response);
+
+    try {
+      pending.resolve(this.unwrap(response));
+    } catch (error) {
+      pending.reject(error as BridgeError);
+    }
+  }
+
+  private unwrap(response: BridgeResponseEnvelope): unknown {
+    if (response.ok) return response.payload;
+    throw new BridgeError(response.error.code, response.error.message);
+  }
+
+  private static findHost(): PhotinoExternal | null {
+    const external = (window as unknown as { external?: Partial<PhotinoExternal> }).external;
+    return typeof external?.sendMessage === 'function' &&
+      typeof external.receiveMessage === 'function'
+      ? (external as PhotinoExternal)
+      : null;
   }
 }

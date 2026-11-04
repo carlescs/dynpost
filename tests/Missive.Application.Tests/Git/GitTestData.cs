@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Workspaces;
 using Missive.Domain.Git;
 
 namespace Missive.Application.Tests.Git;
@@ -17,4 +18,12 @@ internal static class GitTestData
     public static GitStatus Clean() => Status();
 
     public static Result<T> Ok<T>(T value) => Result<T>.Success(value);
+
+    /// <summary>A current workspace with <see cref="WorkspacePath"/> open.</summary>
+    public static CurrentWorkspace OpenedWorkspace()
+    {
+        var workspace = new CurrentWorkspace();
+        workspace.Open(WorkspacePath);
+        return workspace;
+    }
 }

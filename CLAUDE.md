@@ -23,7 +23,9 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   configured (`.prettierrc`: 100 cols, single quotes). Styles are SCSS
   (`inlineStyleLanguage: scss`, global `src/styles.scss`). Tailwind CSS v4 runs
   through PostCSS (`.postcssrc.json`) from its own entry, `src/tailwind.css`. Icons with Font Awesome
-  (`@fortawesome/angular-fontawesome`, free solid icons).
+  (`@fortawesome/angular-fontawesome`, free solid icons). Drag and drop uses
+  Angular CDK (`@angular/cdk/drag-drop`); the explorer tree's nested drop
+  lists are explained in `sidebar/explorer-state.ts`.
 - Backend (.NET 10), clean architecture — see "Backend architecture" below:
   - `src/Missive.Domain` — entities, value objects, pure rules.
   - `src/Missive.Application` — use cases and port interfaces.
@@ -33,15 +35,12 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
     csproj runs `npm ci` + `npm run build` for the client and copies
     `dist/missive-client/browser` into `wwwroot`.
   - `tests/Missive.<Layer>.Tests` — one test project per backend layer
-    (Desktop tests cover the bridge dispatcher and handlers).
+    (Desktop tests drive the bridge router with real use cases and mocked ports).
 - All projects are in `Missive.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
   Studio; it is not built by the solution and has npm install/build disabled —
-  the Desktop csproj builds it. So far the backend implements git sync only
-  (`Domain/Git`, `Application/Git`, `Infrastructure/Git`), exposed to the UI
-  through the bridge (`Desktop/Bridge`, client `src/app/bridge` and
-  `src/app/git`).
+  the Desktop csproj builds it.
 
 ## Commands
 
@@ -55,7 +54,7 @@ cd src/Missive.Client && npm run format:check # Prettier check (CI enforces it)
 ```
 
 Test projects use xUnit with NSubstitute for mocking; there is no linter beyond
-Prettier. Infrastructure git tests need `git` on the PATH. Before finishing, run `dotnet build Missive.sln` and
+Prettier. Before finishing, run `dotnet build Missive.sln` and
 `dotnet test Missive.sln` (or `npm run build` for client-only changes), and
 `npm run format:check` when you touch the client.
 
@@ -106,14 +105,12 @@ Desktop → Application
   the webview. Sending HTTP from .NET avoids CORS and header restrictions.
 - The UI talks to the host through Photino's message bridge. Use a typed
   request/response envelope with a correlation id and an explicit error shape;
-  keep message types defined in one place on each side and keep them in sync.
-  On the host, `Bridge/BridgeMessages.cs` holds the envelope and type names and
-  each handler (a `BridgeHandler<TRequest, TResponse>` registered in
-  `Composition/ServiceCollectionExtensions.cs`) has its contract records next
-  to it; on the client, `src/app/bridge/messages.ts` holds them all. Responses
-  are `{ id, ok: true, payload }` or `{ id, ok: false, error: { code, message } }`
-  and the client's `Bridge.request()` resolves to a result, never rejects.
-  Messages are handled off the UI thread.
+  keep message types defined in one place on each side and keep them in sync:
+  `src/Missive.Desktop/Bridge/BridgeMessages.cs` (handlers in
+  `BridgeHandlers.cs`) and `src/Missive.Client/src/app/bridge/messages.ts`.
+  Outside the desktop host the client's `Bridge` falls back to an in-memory
+  `MockBackend` (`bridge/mock-backend.ts`) so `npm start` works; keep it
+  roughly in step with new message types.
 - The bundled frontend is served by `Missive.Desktop/Hosting/BundledAssets.cs`
   through a Photino custom scheme: `app://localhost/` on Linux/macOS and an
   intercepted `http://localhost/` on Windows (WebView2 can't navigate to custom
@@ -131,16 +128,18 @@ Desktop → Application
 - Only rewrite a file when its content actually changed — no reformatting on
   load/save round-trips.
 - Secrets, response history and UI state go in `.missive/` (git-ignored),
-  never in tracked files. App-wide, per-user settings (such as the last opened
-  workspace) go through `IAppSettingsStore` into `settings.json` in the user's
-  app data folder, never into a workspace. Ensure `.missive/` is in the workspace `.gitignore`.
+  never in tracked files. Ensure `.missive/` is in the workspace `.gitignore`.
+  App-wide, per-user settings (such as the last opened workspace) go through
+  `IAppSettingsStore` into `settings.json` in the user's app data folder, never
+  into a workspace or the webview's storage.
 - If you change the format, update the examples in `README.md`.
 
 ## Git behavior in the app
 
 - Use the user's existing git configuration and credentials: the adapter
   (`Infrastructure/Git/GitCliService.cs`) runs the `git` CLI rather than a git
-  library, with terminal prompts disabled so it never hangs.
+  library, with terminal prompts disabled so it never hangs. Git use cases act
+  on `CurrentWorkspace` like the other use cases.
 - Pull always merges (`--no-rebase`); conflicts are left in the working tree and
   reported. Files under `.missive/` are excluded from status and commits even
   if the `.gitignore` entry is missing.

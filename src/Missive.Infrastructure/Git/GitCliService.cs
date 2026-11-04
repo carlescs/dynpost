@@ -204,7 +204,7 @@ public sealed class GitCliService : IGitService
             return GitErrors.CommandFailed("push", Details(push.Value));
         }
 
-        return Unit.Default;
+        return Unit.Value;
     }
 
     /// <summary>

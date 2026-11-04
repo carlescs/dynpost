@@ -13,7 +13,7 @@ public class PushChangesTests
 
     public PushChangesTests()
     {
-        _useCase = new PushChanges(_git);
+        _useCase = new PushChanges(_git, OpenedWorkspace());
     }
 
     [Fact]
@@ -21,7 +21,7 @@ public class PushChangesTests
     {
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Status(branch: null)));
 
-        var result = await _useCase.ExecuteAsync(WorkspacePath);
+        var result = await _useCase.ExecuteAsync();
 
         Assert.Equal(GitErrors.DetachedHeadCode, result.Error?.Code);
         _ = _git.DidNotReceiveWithAnyArgs().PushAsync(default!, default, default);
@@ -33,7 +33,7 @@ public class PushChangesTests
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
             .Returns(Ok(Status(merging: true, changes: [new GitChange("a.yaml", GitFileStatus.Conflicted)])));
 
-        var result = await _useCase.ExecuteAsync(WorkspacePath);
+        var result = await _useCase.ExecuteAsync();
 
         Assert.Equal(GitErrors.UnresolvedConflictsCode, result.Error?.Code);
         _ = _git.DidNotReceiveWithAnyArgs().PushAsync(default!, default, default);
@@ -46,9 +46,9 @@ public class PushChangesTests
     {
         var after = Status();
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Status(upstream: upstream)), Ok(after));
-        _git.PushAsync(default!, default, default).ReturnsForAnyArgs(Ok(Unit.Default));
+        _git.PushAsync(default!, default, default).ReturnsForAnyArgs(Ok(Unit.Value));
 
-        var result = await _useCase.ExecuteAsync(WorkspacePath);
+        var result = await _useCase.ExecuteAsync();
 
         Assert.True(result.IsSuccess);
         Assert.Same(after, result.Value);
@@ -62,7 +62,7 @@ public class PushChangesTests
         _git.PushAsync(default!, default, default)
             .ReturnsForAnyArgs(Result<Unit>.Failure(GitErrors.PushRejected("! refs/heads/main [rejected]")));
 
-        var result = await _useCase.ExecuteAsync(WorkspacePath);
+        var result = await _useCase.ExecuteAsync();
 
         Assert.Equal(GitErrors.PushRejectedCode, result.Error?.Code);
     }

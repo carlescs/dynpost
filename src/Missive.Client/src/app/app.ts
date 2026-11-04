@@ -1,6 +1,12 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faPaperPlane, faPlus } from '@fortawesome/free-solid-svg-icons';
+import {
+  faCircleExclamation,
+  faFolderOpen,
+  faPaperPlane,
+  faPlus,
+  faXmark,
+} from '@fortawesome/free-solid-svg-icons';
 import { DocumentTabs } from './editor/document-tabs';
 import { RequestEditor } from './editor/request-editor';
 import { ActivityBar } from './shell/activity-bar';
@@ -11,9 +17,29 @@ import { WorkspaceStore } from './workspace/workspace-store';
 @Component({
   imports: [AppHeader, ActivityBar, Sidebar, DocumentTabs, RequestEditor, FaIconComponent],
   selector: 'app-root',
-  host: { class: 'flex h-screen flex-col overflow-hidden bg-white font-sans text-slate-800' },
+  host: {
+    class: 'flex h-screen flex-col overflow-hidden bg-white font-sans text-slate-800',
+    '(document:keydown)': 'onKeydown($event)',
+  },
   template: `
     <app-header />
+    @if (store.error(); as error) {
+      <div
+        class="flex shrink-0 items-start gap-2 border-b border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800"
+        role="alert"
+      >
+        <fa-icon class="mt-0.5" [icon]="faCircleExclamation" />
+        <span class="min-w-0 flex-1 break-words">{{ error }}</span>
+        <button
+          type="button"
+          class="flex size-5 shrink-0 items-center justify-center rounded hover:bg-rose-100"
+          aria-label="Dismiss"
+          (click)="store.dismissError()"
+        >
+          <fa-icon [icon]="faXmark" />
+        </button>
+      </div>
+    }
     <div class="flex min-h-0 flex-1">
       <app-activity-bar />
       @if (store.sidebarOpen()) {
@@ -28,22 +54,53 @@ import { WorkspaceStore } from './workspace/workspace-store';
         } @else {
           <div class="flex flex-1 flex-col items-center justify-center gap-4 text-slate-500">
             <fa-icon class="text-5xl text-slate-300" [icon]="faPaperPlane" />
-            <p>Open a request from the explorer, or create a new one.</p>
-            <button
-              type="button"
-              class="flex items-center gap-2 rounded bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700"
-              (click)="store.newRequest()"
-            >
-              <fa-icon [icon]="faPlus" /> New request
-            </button>
+            @if (store.workspace()) {
+              <p>Open a request from the explorer, or create a new one.</p>
+              <button
+                type="button"
+                class="flex items-center gap-2 rounded bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700"
+                (click)="store.newRequest()"
+              >
+                <fa-icon [icon]="faPlus" /> New request
+              </button>
+            } @else {
+              <p>Open a folder to work with the requests it contains.</p>
+              <button
+                type="button"
+                class="flex items-center gap-2 rounded bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700 disabled:opacity-50"
+                [disabled]="store.opening()"
+                (click)="store.openFolder()"
+              >
+                <fa-icon [icon]="faFolderOpen" /> Open folder
+              </button>
+            }
+            @if (!store.isDesktop) {
+              <p class="text-xs text-slate-400">
+                Browser preview: sample data in memory, nothing is written to disk.
+              </p>
+            }
           </div>
         }
       </main>
     </div>
   `,
 })
-export class App {
+export class App implements OnInit {
   protected readonly store = inject(WorkspaceStore);
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faPlus = faPlus;
+  protected readonly faFolderOpen = faFolderOpen;
+  protected readonly faXmark = faXmark;
+  protected readonly faCircleExclamation = faCircleExclamation;
+
+  ngOnInit(): void {
+    void this.store.restore();
+  }
+
+  protected onKeydown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      void this.store.saveActive();
+    }
+  }
 }

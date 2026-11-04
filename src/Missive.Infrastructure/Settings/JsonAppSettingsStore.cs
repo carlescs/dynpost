@@ -67,7 +67,7 @@ public sealed class JsonAppSettingsStore(string filePath) : IAppSettingsStore
             var json = JsonSerializer.Serialize(settings, JsonOptions) + "\n";
             await File.WriteAllTextAsync(temporaryPath, json, new UTF8Encoding(false), cancellationToken);
             File.Move(temporaryPath, filePath, overwrite: true);
-            return Unit.Default;
+            return Unit.Value;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -1,25 +1,62 @@
 /**
- * Bridge message contract between the UI and the .NET host. Keep in sync with
- * `Missive.Desktop/Bridge/BridgeMessages.cs` and the contracts next to the handlers
- * (`Missive.Desktop/Bridge/**`).
+ * Messages exchanged with the .NET host over the Photino bridge. Keep in sync with
+ * `src/Missive.Desktop/Bridge/BridgeMessages.cs`.
  */
 
-/** An expected failure reported by the host. */
-export interface BridgeError {
-  code: string;
-  message: string;
+export interface KeyValueDto {
+  key: string;
+  value: string;
+  enabled: boolean;
 }
 
-/** UI → host. */
-export interface BridgeRequestEnvelope {
-  id: string;
-  type: MessageType;
-  payload: unknown;
+export interface AuthDto {
+  type: 'none' | 'basic' | 'bearer' | 'apiKey';
+  username?: string | null;
+  password?: string | null;
+  token?: string | null;
+  key?: string | null;
+  value?: string | null;
+  in?: 'header' | 'query' | null;
 }
 
-/** Host → UI, correlated by `id`. */
-export type BridgeResponseEnvelope =
-  { id: string; ok: true; payload?: unknown } | { id: string; ok: false; error: BridgeError };
+export interface BodyDto {
+  type: 'none' | 'json' | 'text' | 'form' | 'urlencoded';
+  content: string;
+}
+
+export interface RequestDto {
+  name: string;
+  method: string;
+  url: string;
+  params: KeyValueDto[];
+  headers: KeyValueDto[];
+  auth: AuthDto;
+  body: BodyDto;
+}
+
+export interface SavedRequestDto {
+  path: string;
+  request: RequestDto;
+}
+
+export interface FolderDto {
+  path: string;
+}
+
+export interface WorkspaceNodeDto {
+  path: string;
+  name: string;
+  kind: 'folder' | 'request';
+  method?: string | null;
+  error?: string | null;
+  children?: WorkspaceNodeDto[] | null;
+}
+
+export interface WorkspaceDto {
+  name: string;
+  root: string;
+  nodes: WorkspaceNodeDto[];
+}
 
 export type GitFileStatus =
   'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted';
@@ -29,14 +66,14 @@ export interface GitChange {
   path: string;
   status: GitFileStatus;
   /** For a rename, the path the file was renamed from. */
-  originalPath?: string;
+  originalPath?: string | null;
 }
 
 export interface GitStatus {
-  /** The checked-out branch; absent when HEAD is detached. */
-  branch?: string;
-  /** The branch's upstream, e.g. `origin/main`; absent when none is set. */
-  upstream?: string;
+  /** The checked-out branch; `null` when HEAD is detached. */
+  branch?: string | null;
+  /** The branch's upstream, e.g. `origin/main`; `null` when none is set. */
+  upstream?: string | null;
   ahead: number;
   behind: number;
   /** Whether a merge is in progress. */
@@ -46,45 +83,71 @@ export interface GitStatus {
 
 export type PullOutcome = 'upToDate' | 'updated' | 'conflicted';
 
-export interface WorkspaceInfo {
-  /** Absolute path of the workspace folder. */
-  path: string;
-  /** The folder's name, for display. */
-  name: string;
-}
-
-export interface WorkspaceRequest {
-  workspacePath: string;
-}
-
-/** Request and response payloads, by message type. */
+/** Every message type with its payload and result. */
 export interface BridgeMessages {
-  /** Shows the folder dialog only; open the chosen folder with `workspace.open`. */
-  'workspace.pickFolder': {
-    request: Record<string, never>;
-    /** Absent when the user cancelled. */
-    response: { path?: string };
-  };
-  /** Opens a workspace folder and remembers it for the next launch. */
-  'workspace.open': { request: WorkspaceRequest; response: WorkspaceInfo };
-  /** The workspace opened last, if its folder still exists. */
-  'workspace.getLast': { request: Record<string, never>; response: { workspace?: WorkspaceInfo } };
-  'git.status': { request: WorkspaceRequest; response: GitStatus };
+  /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
+  'workspace.pick': { payload: void; result: WorkspaceDto | null };
+  'workspace.open': { payload: { path: string }; result: WorkspaceDto };
+  /** Reopens the workspace from the previous session; `null` when there is none. */
+  'workspace.openLast': { payload: void; result: WorkspaceDto | null };
+  /** Re-reads the open workspace from disk. */
+  'workspace.tree': { payload: void; result: WorkspaceDto };
+  'request.load': { payload: { path: string }; result: RequestDto };
+  /** Saves a new request in a folder (`''` is the workspace root). */
+  'request.create': { payload: { folder: string; request: RequestDto }; result: SavedRequestDto };
+  /** Saves an existing request file; the result path differs if the file was renamed. */
+  'request.save': { payload: { path: string; request: RequestDto }; result: SavedRequestDto };
+  /** Moves a request file into `folder` (`''` is the root), keeping its file name. */
+  'request.move': { payload: { path: string; folder: string }; result: { path: string } };
+  /** Creates a folder inside `parent` (`''` is the workspace root). */
+  'folder.create': { payload: { parent: string; name: string }; result: FolderDto };
+  /** Renames a folder within its parent; the result is its new path. */
+  'folder.rename': { payload: { path: string; name: string }; result: FolderDto };
+  /** Moves a folder into `parent` (`''` is the root), keeping its name. */
+  'folder.move': { payload: { path: string; parent: string }; result: FolderDto };
+  /** Deletes a folder with its requests; refused if it holds other files. */
+  'folder.delete': { payload: { path: string }; result: null };
+  /** The open workspace's git status. */
+  'git.status': { payload: void; result: GitStatus };
+  /** Commits `paths`, or every change in the workspace when `paths` is omitted. */
   'git.commit': {
-    /** Without `paths`, every change in the workspace is committed. */
-    request: WorkspaceRequest & { message: string; paths?: string[] };
-    response: { commitId: string; status: GitStatus };
+    payload: { message: string; paths?: string[] };
+    result: { commitId: string; status: GitStatus };
   };
-  'git.pull': { request: WorkspaceRequest; response: { outcome: PullOutcome; status: GitStatus } };
-  'git.push': { request: WorkspaceRequest; response: GitStatus };
+  /** Pulls the current branch with a merge (never a rebase). */
+  'git.pull': { payload: void; result: { outcome: PullOutcome; status: GitStatus } };
+  /** Pushes the current branch, or publishes it when it has no upstream. Never forces. */
+  'git.push': { payload: void; result: GitStatus };
 }
 
-export type MessageType = keyof BridgeMessages;
-export type RequestOf<T extends MessageType> = BridgeMessages[T]['request'];
-export type ResponseOf<T extends MessageType> = BridgeMessages[T]['response'];
+export type BridgeMessageType = keyof BridgeMessages;
 
-/** The outcome of a bridge call: the response payload or the reported error. */
-export type BridgeResult<T> = { ok: true; value: T } | { ok: false; error: BridgeError };
+export interface BridgeRequestEnvelope {
+  id: string;
+  type: BridgeMessageType;
+  payload?: unknown;
+}
 
-/** Error codes produced on the UI side of the bridge. */
-export const BRIDGE_UNAVAILABLE = 'bridge.unavailable';
+export interface BridgeErrorShape {
+  code: string;
+  message: string;
+}
+
+export type BridgeResponseEnvelope =
+  { id: string; ok: true; payload: unknown } | { id: string; ok: false; error: BridgeErrorShape };
+
+/** Error codes the host can return. */
+export const ERROR_CODES = {
+  noWorkspace: 'no_workspace',
+  notFound: 'not_found',
+  invalidPath: 'invalid_path',
+  invalidFile: 'invalid_file',
+  invalidRequest: 'invalid_request',
+  alreadyExists: 'already_exists',
+  folderNotEmpty: 'folder_not_empty',
+  io: 'io_error',
+  unknownMessage: 'unknown_message',
+  badPayload: 'bad_payload',
+  internal: 'internal_error',
+  noHost: 'no_host',
+} as const;

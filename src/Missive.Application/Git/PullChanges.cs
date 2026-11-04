@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Workspaces;
 using Missive.Domain.Git;
 
 namespace Missive.Application.Git;
@@ -8,12 +9,17 @@ namespace Missive.Application.Git;
 public sealed record PullChangesResult(PullOutcome Outcome, GitStatus Status);
 
 /// <summary>Pulls the current branch from its upstream.</summary>
-public sealed class PullChanges(IGitService git)
+public sealed class PullChanges(IGitService git, CurrentWorkspace workspace)
 {
-    public async Task<Result<PullChangesResult>> ExecuteAsync(
-        string workspacePath,
-        CancellationToken cancellationToken = default)
+    public async Task<Result<PullChangesResult>> ExecuteAsync(CancellationToken cancellationToken = default)
     {
+        var root = workspace.RequireRoot();
+        if (root.IsFailure)
+        {
+            return root.Error!;
+        }
+
+        var workspacePath = root.Value;
         var before = await git.GetStatusAsync(workspacePath, cancellationToken);
         if (before.IsFailure)
         {

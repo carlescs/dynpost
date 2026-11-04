@@ -1,7 +1,6 @@
 using Missive.Application.Settings;
 using Missive.Infrastructure.Settings;
 using Missive.Infrastructure.Tests.Git;
-using Missive.Infrastructure.Workspace;
 
 namespace Missive.Infrastructure.Tests.Settings;
 
@@ -40,14 +39,5 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
         File.WriteAllText(file, "{ not json");
 
         Assert.Equal(AppSettings.Default, await new JsonAppSettingsStore(file).LoadAsync());
-    }
-
-    [Fact]
-    public async Task WorkspaceRepository_ChecksTheFolderExists()
-    {
-        var workspaces = new FileSystemWorkspaceRepository();
-
-        Assert.True(await workspaces.ExistsAsync(_temp.Path));
-        Assert.False(await workspaces.ExistsAsync(_temp.Combine("missing")));
     }
 }

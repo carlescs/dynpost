@@ -32,7 +32,7 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
   template: `
     <header class="flex h-9 shrink-0 items-center justify-between px-3">
       <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Source control</h2>
-      @if (workspace.workspacePath()) {
+      @if (workspace.workspace()) {
         <button
           type="button"
           class="flex size-6 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-200 enabled:hover:text-slate-800 disabled:opacity-50"
@@ -50,23 +50,17 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
       <p class="px-3 text-sm text-slate-500">
         Source control is available in the Missive desktop app.
       </p>
-    } @else if (workspace.restoring()) {
-      <p class="px-3 text-sm text-slate-500">
-        <fa-icon [icon]="faSpinner" animation="spin" /> Opening the last workspace…
-      </p>
-    } @else if (!workspace.workspacePath()) {
+    } @else if (!workspace.workspace()) {
       <div class="space-y-2 px-3 text-sm text-slate-500">
         <p>Open a workspace folder to see its changes and sync it with git.</p>
         <button
           type="button"
-          class="flex items-center justify-center gap-2 rounded px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 w-full bg-sky-600 text-white enabled:hover:bg-sky-700"
-          (click)="workspace.openWorkspace()"
+          class="flex w-full items-center justify-center gap-2 rounded bg-sky-600 px-3 py-1 text-sm text-white enabled:hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+          [disabled]="workspace.opening()"
+          (click)="workspace.openFolder()"
         >
           <fa-icon [icon]="faFolderOpen" /> Open folder
         </button>
-        @if (workspace.openError(); as error) {
-          <p class="text-rose-700" role="alert">{{ error.message }}</p>
-        }
       </div>
     } @else {
       @if (git.error(); as error) {

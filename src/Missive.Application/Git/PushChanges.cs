@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Workspaces;
 using Missive.Domain.Git;
 
 namespace Missive.Application.Git;
@@ -7,10 +8,17 @@ namespace Missive.Application.Git;
 /// Pushes the current branch. A branch without an upstream is published to the workspace's remote
 /// and tracks it from then on.
 /// </summary>
-public sealed class PushChanges(IGitService git)
+public sealed class PushChanges(IGitService git, CurrentWorkspace workspace)
 {
-    public async Task<Result<GitStatus>> ExecuteAsync(string workspacePath, CancellationToken cancellationToken = default)
+    public async Task<Result<GitStatus>> ExecuteAsync(CancellationToken cancellationToken = default)
     {
+        var root = workspace.RequireRoot();
+        if (root.IsFailure)
+        {
+            return root.Error!;
+        }
+
+        var workspacePath = root.Value;
         var before = await git.GetStatusAsync(workspacePath, cancellationToken);
         if (before.IsFailure)
         {

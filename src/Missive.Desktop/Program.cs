@@ -1,8 +1,14 @@
 using Microsoft.Extensions.DependencyInjection;
+using Missive.Application.Folders;
+using Missive.Application.Git;
+using Missive.Application.Requests;
+using Missive.Application.Settings;
+using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
-using Missive.Desktop.Bridge.Workspace;
-using Missive.Desktop.Composition;
 using Missive.Desktop.Hosting;
+using Missive.Infrastructure.Git;
+using Missive.Infrastructure.Settings;
+using Missive.Infrastructure.Workspaces;
 using Photino.NET;
 
 namespace Missive.Desktop;
@@ -20,24 +26,42 @@ internal static class Program
             throw new FileNotFoundException("Angular assets are missing. Run dotnet build first.", indexPath);
         }
 
+        using var services = ConfigureServices();
         var assets = new BundledAssets(wwwroot);
-        var window = new PhotinoWindow();
 
-        using var services = new ServiceCollection()
-            .AddMissive()
-            .AddSingleton<IFolderPicker>(new PhotinoFolderPicker(window))
-            .BuildServiceProvider();
-
-        var bridge = services.GetRequiredService<PhotinoBridge>();
-
-        window
+        var window = new PhotinoWindow()
             .SetTitle("Missive")
             .SetUseOsDefaultSize(false)
             .SetSize(1024, 768)
             .Center()
-            .RegisterCustomSchemeHandler(BundledAssets.Scheme, assets.Handle)
-            .RegisterWebMessageReceivedHandler(bridge.OnWebMessageReceived)
-            .Load(BundledAssets.StartUri)
-            .WaitForClose();
+            .RegisterCustomSchemeHandler(BundledAssets.Scheme, assets.Handle);
+
+        var bridge = new PhotinoBridge(window);
+        bridge.Attach(BridgeHandlers.Create(services, bridge));
+
+        window.Load(BundledAssets.StartUri).WaitForClose();
     }
+
+    private static ServiceProvider ConfigureServices() =>
+        new ServiceCollection()
+            .AddSingleton<CurrentWorkspace>()
+            .AddSingleton<IWorkspaceRepository, FileSystemWorkspaceRepository>()
+            .AddSingleton<IGitService, GitCliService>()
+            .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
+            .AddTransient<OpenWorkspace>()
+            .AddTransient<OpenLastWorkspace>()
+            .AddTransient<GetWorkspaceTree>()
+            .AddTransient<LoadRequest>()
+            .AddTransient<CreateRequest>()
+            .AddTransient<SaveRequest>()
+            .AddTransient<MoveRequest>()
+            .AddTransient<CreateFolder>()
+            .AddTransient<RenameFolder>()
+            .AddTransient<MoveFolder>()
+            .AddTransient<DeleteFolder>()
+            .AddTransient<GetGitStatus>()
+            .AddTransient<CommitChanges>()
+            .AddTransient<PullChanges>()
+            .AddTransient<PushChanges>()
+            .BuildServiceProvider();
 }
