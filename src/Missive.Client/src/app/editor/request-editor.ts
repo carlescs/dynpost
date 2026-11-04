@@ -1,15 +1,16 @@
 import { Component, inject, input, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faFloppyDisk, faPaperPlane } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import {
   AUTH_TYPES,
   AuthType,
   BODY_TYPES,
   BodyType,
   HTTP_METHODS,
-  HttpMethod,
   KeyValue,
   METHOD_COLORS,
+  RequestAuth,
+  RequestContent,
   RequestDocument,
 } from '../workspace/models';
 import { WorkspaceStore } from '../workspace/workspace-store';
@@ -47,14 +48,21 @@ const BODY_LABELS: Record<BodyType, string> = {
         [value]="doc.name"
         (input)="patch({ name: $any($event.target).value })"
       />
-      <span class="truncate text-xs text-slate-400">{{ doc.path ?? 'Not saved yet' }}</span>
+      <span class="truncate text-xs text-slate-400" [title]="doc.path ?? ''">{{
+        doc.path ?? 'New request — will be saved in ' + (doc.folder || 'the workspace root')
+      }}</span>
       <button
         type="button"
         class="flex items-center gap-2 rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100 disabled:opacity-50"
-        title="Save request"
-        [disabled]="!doc.dirty"
+        title="Save request (Ctrl+S)"
+        [disabled]="!doc.dirty || doc.saving"
+        (click)="save()"
       >
-        <fa-icon [icon]="faFloppyDisk" /> Save
+        <fa-icon
+          [icon]="doc.saving ? faSpinner : faFloppyDisk"
+          [animation]="doc.saving ? 'spin' : undefined"
+        />
+        Save
       </button>
     </div>
 
@@ -69,7 +77,7 @@ const BODY_LABELS: Record<BodyType, string> = {
           (change)="patch({ method: $any($event.target).value })"
         >
           @for (method of methods; track method) {
-            <option [value]="method">{{ method }}</option>
+            <option [value]="method" [selected]="method === doc.method">{{ method }}</option>
           }
         </select>
         <input
@@ -132,20 +140,90 @@ const BODY_LABELS: Record<BodyType, string> = {
             Type
             <select
               class="rounded border border-slate-300 px-2 py-1"
-              [value]="doc.auth"
-              (change)="patch({ auth: $any($event.target).value })"
+              [value]="doc.auth.type"
+              (change)="patchAuth({ type: $any($event.target).value })"
             >
               @for (type of authTypes; track type) {
-                <option [value]="type">{{ authLabels[type] }}</option>
+                <option [value]="type" [selected]="type === doc.auth.type">
+                  {{ authLabels[type] }}
+                </option>
               }
             </select>
           </label>
-          @if (doc.auth === 'none') {
-            <p class="mt-3 text-sm text-slate-500">This request does not use authorization.</p>
-          } @else {
-            <p class="mt-3 text-sm text-slate-500">
-              {{ authLabels[doc.auth] }} settings will appear here. Secret values are stored in
-              <code>.missive/</code>, never in the request file.
+          @switch (doc.auth.type) {
+            @case ('none') {
+              <p class="mt-3 text-sm text-slate-500">This request does not use authorization.</p>
+            }
+            @case ('basic') {
+              <div class="mt-3 grid max-w-lg grid-cols-[auto_1fr] items-center gap-2 text-sm">
+                <label for="auth-username">Username</label>
+                <input
+                  id="auth-username"
+                  [class]="fieldClass"
+                  spellcheck="false"
+                  [value]="doc.auth.username"
+                  (input)="patchAuth({ username: $any($event.target).value })"
+                />
+                <label for="auth-password">Password</label>
+                <input
+                  id="auth-password"
+                  [class]="fieldClass"
+                  spellcheck="false"
+                  [value]="doc.auth.password"
+                  (input)="patchAuth({ password: $any($event.target).value })"
+                />
+              </div>
+            }
+            @case ('bearer') {
+              <div class="mt-3 grid max-w-lg grid-cols-[auto_1fr] items-center gap-2 text-sm">
+                <label for="auth-token">Token</label>
+                <input
+                  id="auth-token"
+                  [class]="fieldClass"
+                  spellcheck="false"
+                  [value]="doc.auth.token"
+                  (input)="patchAuth({ token: $any($event.target).value })"
+                />
+              </div>
+            }
+            @case ('apiKey') {
+              <div class="mt-3 grid max-w-lg grid-cols-[auto_1fr] items-center gap-2 text-sm">
+                <label for="auth-key">Key</label>
+                <input
+                  id="auth-key"
+                  [class]="fieldClass"
+                  spellcheck="false"
+                  placeholder="X-API-Key"
+                  [value]="doc.auth.key"
+                  (input)="patchAuth({ key: $any($event.target).value })"
+                />
+                <label for="auth-value">Value</label>
+                <input
+                  id="auth-value"
+                  [class]="fieldClass"
+                  spellcheck="false"
+                  [value]="doc.auth.value"
+                  (input)="patchAuth({ value: $any($event.target).value })"
+                />
+                <label for="auth-in">Add to</label>
+                <select
+                  id="auth-in"
+                  class="justify-self-start rounded border border-slate-300 px-2 py-1"
+                  [value]="doc.auth.in"
+                  (change)="patchAuth({ in: $any($event.target).value })"
+                >
+                  <option value="header" [selected]="doc.auth.in === 'header'">Header</option>
+                  <option value="query" [selected]="doc.auth.in === 'query'">
+                    Query parameters
+                  </option>
+                </select>
+              </div>
+            }
+          }
+          @if (doc.auth.type !== 'none') {
+            <p class="mt-3 text-xs text-slate-500">
+              These values are saved in the request file. Use a variable such as
+              <code>{{ secretExample }}</code> to keep secrets out of it.
             </p>
           }
         }
@@ -213,20 +291,21 @@ export class RequestEditor {
   protected readonly bodyLabels = BODY_LABELS;
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faFloppyDisk = faFloppyDisk;
+  protected readonly faSpinner = faSpinner;
+  protected readonly secretExample = '{{apiToken}}';
+  protected readonly fieldClass =
+    'min-w-0 rounded border border-slate-300 px-2 py-1 font-mono focus:border-sky-500 focus:outline-none';
 
-  protected patch(
-    patch: Partial<{
-      name: string;
-      method: HttpMethod;
-      url: string;
-      params: KeyValue[];
-      headers: KeyValue[];
-      auth: AuthType;
-      bodyType: BodyType;
-      body: string;
-    }>,
-  ): void {
+  protected patch(patch: Partial<RequestContent>): void {
     this.store.update(this.document().id, patch);
+  }
+
+  protected patchAuth(patch: Partial<RequestAuth>): void {
+    this.patch({ auth: { ...this.document().auth, ...patch } });
+  }
+
+  protected save(): void {
+    void this.store.save(this.document().id);
   }
 
   protected count(doc: RequestDocument, tab: RequestTab): number {

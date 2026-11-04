@@ -13,21 +13,43 @@ export interface KeyValue {
   enabled: boolean;
 }
 
-/** A request open in the editor. Mirrors one request YAML file in the workspace. */
-export interface RequestDocument {
-  /** Workspace-relative file path; `null` for a new request that has not been saved yet. */
-  path: string | null;
-  /** Stable id for the open document (the path, or a generated id for unsaved requests). */
-  id: string;
+export type ApiKeyLocation = 'header' | 'query';
+
+/** Auth settings. Fields for other types are kept while editing so switching type loses nothing. */
+export interface RequestAuth {
+  type: AuthType;
+  username: string;
+  password: string;
+  token: string;
+  key: string;
+  value: string;
+  in: ApiKeyLocation;
+}
+
+/** The editable content of a request file. */
+export interface RequestContent {
   name: string;
   method: HttpMethod;
   url: string;
   params: KeyValue[];
   headers: KeyValue[];
-  auth: AuthType;
+  auth: RequestAuth;
   bodyType: BodyType;
   body: string;
+}
+
+/** A request open in the editor. Mirrors one request YAML file in the workspace. */
+export interface RequestDocument extends RequestContent {
+  /** Workspace-relative file path; `null` for a new request that has not been saved yet. */
+  path: string | null;
+  /** Where a new request will be saved (`''` is the workspace root). */
+  folder: string;
+  /** Stable id for the open document (the path, or a generated id for unsaved requests). */
+  id: string;
   dirty: boolean;
+  saving: boolean;
+  /** Incremented on every edit, so a save can tell whether the document changed meanwhile. */
+  revision: number;
 }
 
 export interface WorkspaceNode {
@@ -37,10 +59,18 @@ export interface WorkspaceNode {
   kind: 'folder' | 'request';
   /** Only for requests: shown as a badge in the tree. */
   method?: HttpMethod;
+  /** Only for requests whose file could not be read: why. */
+  error?: string;
   children?: WorkspaceNode[];
 }
 
 export type GitFileStatus = 'modified' | 'added' | 'deleted' | 'untracked' | 'conflicted';
+
+export interface WorkspaceInfo {
+  name: string;
+  /** Absolute path of the workspace folder. */
+  root: string;
+}
 
 export interface GitChange {
   path: string;

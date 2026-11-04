@@ -37,8 +37,7 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
   Studio; it is not built by the solution and has npm install/build disabled —
-  the Desktop csproj builds it. The backend layer and test projects are empty
-  scaffolds so far.
+  the Desktop csproj builds it.
 
 ## Commands
 
@@ -51,7 +50,7 @@ cd src/Missive.Client && npm start            # browser dev server on :4200
 cd src/Missive.Client && npm run format:check # Prettier check (CI enforces it)
 ```
 
-Test projects use xUnit with NSubstitute for mocking; there are no tests yet and no linter beyond
+Test projects use xUnit with NSubstitute for mocking; there is no linter beyond
 Prettier. Before finishing, run `dotnet build Missive.sln` and
 `dotnet test Missive.sln` (or `npm run build` for client-only changes), and
 `npm run format:check` when you touch the client.
@@ -103,7 +102,12 @@ Desktop → Application
   the webview. Sending HTTP from .NET avoids CORS and header restrictions.
 - The UI talks to the host through Photino's message bridge. Use a typed
   request/response envelope with a correlation id and an explicit error shape;
-  keep message types defined in one place on each side and keep them in sync.
+  keep message types defined in one place on each side and keep them in sync:
+  `src/Missive.Desktop/Bridge/BridgeMessages.cs` (handlers in
+  `BridgeHandlers.cs`) and `src/Missive.Client/src/app/bridge/messages.ts`.
+  Outside the desktop host the client's `Bridge` falls back to an in-memory
+  `MockBackend` (`bridge/mock-backend.ts`) so `npm start` works; keep it
+  roughly in step with new message types.
 - The bundled frontend is served by `Missive.Desktop/Hosting/BundledAssets.cs`
   through a Photino custom scheme: `app://localhost/` on Linux/macOS and an
   intercepted `http://localhost/` on Windows (WebView2 can't navigate to custom
