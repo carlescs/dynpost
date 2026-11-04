@@ -211,17 +211,33 @@ export class WorkspaceStore {
   async renameFolder(path: string, name: string): Promise<boolean> {
     try {
       const renamed = await this.bridge.send('folder.rename', { path, name });
-      const move = (p: string) => (isWithin(p, path) ? renamed.path + p.slice(path.length) : p);
-      this.documents.update((docs) =>
-        docs.map((d) => {
-          const moved = { ...d, folder: move(d.folder) };
-          return d.path ? { ...moved, id: move(d.id), path: move(d.path) } : moved;
-        }),
-      );
-      const active = this.activeId();
-      if (active) this.activeId.set(move(active));
-      this.error.set(null);
-      await this.refresh();
+      await this.relocated(path, renamed.path);
+      return true;
+    } catch (error) {
+      this.report(error);
+      return false;
+    }
+  }
+
+  /** Moves a folder into `parent` (`''` is the root); open requests inside it follow. */
+  async moveFolder(path: string, parent: string): Promise<boolean> {
+    if (parent === parentFolder(path) || isWithin(parent, path)) return false;
+    try {
+      const moved = await this.bridge.send('folder.move', { path, parent });
+      await this.relocated(path, moved.path);
+      return true;
+    } catch (error) {
+      this.report(error);
+      return false;
+    }
+  }
+
+  /** Moves a request file into `folder` (`''` is the root); its open tab follows. */
+  async moveRequest(path: string, folder: string): Promise<boolean> {
+    if (folder === parentFolder(path)) return false;
+    try {
+      const moved = await this.bridge.send('request.move', { path, folder });
+      await this.relocated(path, moved.path);
       return true;
     } catch (error) {
       this.report(error);
@@ -289,6 +305,25 @@ export class WorkspaceStore {
 
   dismissError(): void {
     this.error.set(null);
+  }
+
+  /**
+   * Updates open documents after the file or folder at `from` moved to `to` on disk, then reloads
+   * the tree.
+   */
+  private async relocated(from: string, to: string): Promise<void> {
+    const move = (p: string) => (isWithin(p, from) ? to + p.slice(from.length) : p);
+    this.documents.update((docs) =>
+      docs.map((d) => {
+        if (!d.path) return { ...d, folder: move(d.folder) };
+        const path = move(d.path);
+        return { ...d, id: path, path, folder: parentFolder(path) };
+      }),
+    );
+    const active = this.activeId();
+    if (active) this.activeId.set(move(active));
+    this.error.set(null);
+    await this.refresh();
   }
 
   private applyWorkspace(workspace: WorkspaceDto): void {

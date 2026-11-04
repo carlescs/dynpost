@@ -28,11 +28,17 @@ internal static class BridgeMessageTypes
     /// <summary>Saves an existing request file. Payload: <see cref="SaveRequestPayload"/>. Result: saved request.</summary>
     public const string RequestSave = "request.save";
 
+    /// <summary>Moves a request file into another folder. Payload: <see cref="MoveRequestPayload"/>. Result: its new path.</summary>
+    public const string RequestMove = "request.move";
+
     /// <summary>Creates a folder. Payload: <see cref="CreateFolderPayload"/>. Result: folder.</summary>
     public const string FolderCreate = "folder.create";
 
     /// <summary>Renames a folder. Payload: <see cref="RenameFolderPayload"/>. Result: folder (new path).</summary>
     public const string FolderRename = "folder.rename";
+
+    /// <summary>Moves a folder into another folder. Payload: <see cref="MoveFolderPayload"/>. Result: folder (new path).</summary>
+    public const string FolderMove = "folder.move";
 
     /// <summary>Deletes a folder with its requests. Payload: <see cref="DeleteFolderPayload"/>. Result: none.</summary>
     public const string FolderDelete = "folder.delete";
@@ -51,6 +57,12 @@ internal sealed record LoadRequestPayload(string Path);
 internal sealed record CreateRequestPayload(string Folder, RequestDto Request);
 
 internal sealed record SaveRequestPayload(string Path, RequestDto Request);
+
+/// <param name="Folder">The destination folder; <c>""</c> is the workspace root.</param>
+internal sealed record MoveRequestPayload(string Path, string Folder);
+
+/// <param name="Parent">The destination folder; <c>""</c> is the workspace root.</param>
+internal sealed record MoveFolderPayload(string Path, string Parent);
 
 /// <param name="Parent">The containing folder; <c>""</c> is the workspace root.</param>
 internal sealed record CreateFolderPayload(string Parent, string Name);

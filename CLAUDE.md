@@ -23,7 +23,9 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   configured (`.prettierrc`: 100 cols, single quotes). Styles are SCSS
   (`inlineStyleLanguage: scss`, global `src/styles.scss`). Tailwind CSS v4 runs
   through PostCSS (`.postcssrc.json`) from its own entry, `src/tailwind.css`. Icons with Font Awesome
-  (`@fortawesome/angular-fontawesome`, free solid icons).
+  (`@fortawesome/angular-fontawesome`, free solid icons). Drag and drop uses
+  Angular CDK (`@angular/cdk/drag-drop`); the explorer tree's nested drop
+  lists are explained in `sidebar/explorer-state.ts`.
 - Backend (.NET 10), clean architecture — see "Backend architecture" below:
   - `src/Missive.Domain` — entities, value objects, pure rules.
   - `src/Missive.Application` — use cases and port interfaces.

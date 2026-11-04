@@ -42,6 +42,10 @@ internal static class FolderPaths
         return problem is null ? parent.Combine(trimmed!) : new Error(ErrorCodes.InvalidPath, problem);
     }
 
+    /// <summary>Whether <paramref name="path"/> is <paramref name="folder"/> itself or inside it.</summary>
+    public static bool IsWithin(WorkspacePath path, WorkspacePath folder) =>
+        path == folder || path.Value.StartsWith(folder.Value + "/", StringComparison.Ordinal);
+
     /// <summary>Whether every segment of the path is a folder the explorer shows.</summary>
     private static bool IsCollectionPath(WorkspacePath path)
     {

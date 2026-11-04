@@ -23,7 +23,8 @@ No account, no cloud workspace, no proprietary export format.
 ## Planned features
 
 - [x] Open a folder as a workspace and browse its requests
-- [x] Create, rename and delete (nested) collection folders
+- [x] Create, rename and delete (nested) collection folders, and move requests
+      and folders between them with drag and drop
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
 - [ ] Sending requests
@@ -103,7 +104,10 @@ content didn't change leaves its file untouched. Comments and keys Missive
 doesn't know are not preserved when a request is saved with changes.
 
 Folders are collections and can be nested. From the explorer you can create,
-rename (F2) and delete them; open requests follow a renamed folder. Folder
+rename (F2) and delete them. Drag a request or a folder onto another folder
+(or onto empty space in the explorer for the workspace root) to move it there;
+moved files keep their names, and nothing is moved if the destination already
+has an entry with that name. Open requests follow renamed and moved folders. Folder
 names are kept as typed, but must work on Windows, macOS and Linux (no
 `/ \ < > : " | ? *`, no leading dot or trailing dot, no reserved names such as
 `CON`), and `environments` is reserved at the workspace root. Deleting a folder
@@ -219,7 +223,7 @@ runtime and the platform webview prerequisites above, but not Node.js.
 - `src/Missive.Desktop`: Photino window, bridge, composition root, and
   build/publish integration.
 - `src/Missive.Client`: standalone Angular app with SCSS styles, Tailwind
-  CSS, and Font Awesome icons.
+  CSS, Font Awesome icons and Angular CDK drag and drop.
 - `src/Missive.Domain`, `src/Missive.Application`, `src/Missive.Infrastructure`:
   backend layers (see [Architecture](#architecture)).
 - `tests/Missive.Domain.Tests`, `tests/Missive.Application.Tests`: fast unit

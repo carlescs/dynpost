@@ -47,8 +47,10 @@ internal static class Program
             .AddTransient<LoadRequest>()
             .AddTransient<CreateRequest>()
             .AddTransient<SaveRequest>()
+            .AddTransient<MoveRequest>()
             .AddTransient<CreateFolder>()
             .AddTransient<RenameFolder>()
+            .AddTransient<MoveFolder>()
             .AddTransient<DeleteFolder>()
             .BuildServiceProvider();
 }

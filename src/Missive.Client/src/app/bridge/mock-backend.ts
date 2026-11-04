@@ -113,20 +113,37 @@ export class MockBackend {
         if (!name || /[\\/<>:"|?*]/.test(name) || name.startsWith('.')) {
           return fail(ERROR_CODES.invalidPath, `'${name}' is not a valid folder name.`);
         }
-        const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-        const target = parent ? `${parent}/${name}` : name;
+        const target = join(parentOf(path), name);
         if (target === path) return ok({ path });
         if (this.exists(target))
           return fail(ERROR_CODES.alreadyExists, `'${target}' already exists.`);
-        const move = (p: string) => (p === path ? target : target + p.slice(path.length));
-        for (const folder of [...this.folders].filter((f) => isWithin(f, path))) {
-          this.folders.delete(folder);
-          this.folders.add(move(folder));
+        this.relocateFolder(path, target);
+        return ok({ path: target });
+      }
+      case 'folder.move': {
+        const path = payload?.['path'] as string;
+        const parent = payload?.['parent'] as string;
+        if (parent === parentOf(path)) return ok({ path });
+        if (isWithin(parent, path)) {
+          return fail(ERROR_CODES.invalidPath, `'${path}' can't be moved into itself.`);
         }
-        for (const [file, dto] of [...this.files].filter(([f]) => isWithin(f, path))) {
-          this.files.delete(file);
-          this.files.set(move(file), dto);
-        }
+        const target = join(parent, nameOf(path));
+        if (this.exists(target))
+          return fail(ERROR_CODES.alreadyExists, `'${target}' already exists.`);
+        this.relocateFolder(path, target);
+        return ok({ path: target });
+      }
+      case 'request.move': {
+        const path = payload?.['path'] as string;
+        const folder = payload?.['folder'] as string;
+        const dto = this.files.get(path);
+        if (!dto) return fail(ERROR_CODES.notFound, `The request file '${path}' does not exist.`);
+        const target = join(folder, nameOf(path));
+        if (target === path) return ok({ path });
+        if (this.exists(target))
+          return fail(ERROR_CODES.alreadyExists, `'${target}' already exists.`);
+        this.files.delete(path);
+        this.files.set(target, dto);
         return ok({ path: target });
       }
       case 'folder.delete': {
@@ -139,6 +156,18 @@ export class MockBackend {
       }
       default:
         return fail(ERROR_CODES.unknownMessage, `Unknown message type '${request.type}'.`);
+    }
+  }
+
+  private relocateFolder(path: string, target: string): void {
+    const move = (p: string) => target + p.slice(path.length);
+    for (const folder of [...this.folders].filter((f) => isWithin(f, path))) {
+      this.folders.delete(folder);
+      this.folders.add(move(folder));
+    }
+    for (const [file, dto] of [...this.files].filter(([f]) => isWithin(f, path))) {
+      this.files.delete(file);
+      this.files.set(move(file), dto);
     }
   }
 
@@ -192,6 +221,18 @@ export class MockBackend {
     };
     return { name: 'my-api (browser preview)', root: this.root, nodes: nodes('') };
   }
+}
+
+function parentOf(path: string): string {
+  return path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+}
+
+function nameOf(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+function join(folder: string, name: string): string {
+  return folder ? `${folder}/${name}` : name;
 }
 
 function isWithin(path: string, folder: string): boolean {

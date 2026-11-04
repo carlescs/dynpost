@@ -70,10 +70,14 @@ export interface BridgeMessages {
   'request.create': { payload: { folder: string; request: RequestDto }; result: SavedRequestDto };
   /** Saves an existing request file; the result path differs if the file was renamed. */
   'request.save': { payload: { path: string; request: RequestDto }; result: SavedRequestDto };
+  /** Moves a request file into `folder` (`''` is the root), keeping its file name. */
+  'request.move': { payload: { path: string; folder: string }; result: { path: string } };
   /** Creates a folder inside `parent` (`''` is the workspace root). */
   'folder.create': { payload: { parent: string; name: string }; result: FolderDto };
   /** Renames a folder within its parent; the result is its new path. */
   'folder.rename': { payload: { path: string; name: string }; result: FolderDto };
+  /** Moves a folder into `parent` (`''` is the root), keeping its name. */
+  'folder.move': { payload: { path: string; parent: string }; result: FolderDto };
   /** Deletes a folder with its requests; refused if it holds other files. */
   'folder.delete': { payload: { path: string }; result: null };
 }
