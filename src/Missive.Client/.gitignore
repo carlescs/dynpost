@@ -4,6 +4,8 @@
 /dist
 /tmp
 /out-tsc
+# Visual Studio JavaScript SDK (Missive.Client.esproj); on Linux it writes "obj\Debug"
+/obj*
 /bazel-out
 
 # Node
