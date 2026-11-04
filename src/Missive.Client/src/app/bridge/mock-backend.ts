@@ -96,9 +96,55 @@ export class MockBackend {
         }
         return ok({ path, request: structuredClone(dto) });
       }
+      case 'folder.create': {
+        const parent = payload?.['parent'] as string;
+        const name = ((payload?.['name'] as string) ?? '').trim();
+        if (!name || /[\\/<>:"|?*]/.test(name) || name.startsWith('.')) {
+          return fail(ERROR_CODES.invalidPath, `'${name}' is not a valid folder name.`);
+        }
+        const path = parent ? `${parent}/${name}` : name;
+        if (this.exists(path)) return fail(ERROR_CODES.alreadyExists, `'${path}' already exists.`);
+        this.folders.add(path);
+        return ok({ path });
+      }
+      case 'folder.rename': {
+        const path = payload?.['path'] as string;
+        const name = ((payload?.['name'] as string) ?? '').trim();
+        if (!name || /[\\/<>:"|?*]/.test(name) || name.startsWith('.')) {
+          return fail(ERROR_CODES.invalidPath, `'${name}' is not a valid folder name.`);
+        }
+        const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+        const target = parent ? `${parent}/${name}` : name;
+        if (target === path) return ok({ path });
+        if (this.exists(target))
+          return fail(ERROR_CODES.alreadyExists, `'${target}' already exists.`);
+        const move = (p: string) => (p === path ? target : target + p.slice(path.length));
+        for (const folder of [...this.folders].filter((f) => isWithin(f, path))) {
+          this.folders.delete(folder);
+          this.folders.add(move(folder));
+        }
+        for (const [file, dto] of [...this.files].filter(([f]) => isWithin(f, path))) {
+          this.files.delete(file);
+          this.files.set(move(file), dto);
+        }
+        return ok({ path: target });
+      }
+      case 'folder.delete': {
+        const path = payload?.['path'] as string;
+        for (const folder of [...this.folders])
+          if (isWithin(folder, path)) this.folders.delete(folder);
+        for (const file of [...this.files.keys()])
+          if (isWithin(file, path)) this.files.delete(file);
+        return ok(null);
+      }
       default:
         return fail(ERROR_CODES.unknownMessage, `Unknown message type '${request.type}'.`);
     }
+  }
+
+  private exists(path: string): boolean {
+    const lower = path.toLowerCase();
+    return [...this.folders, ...this.files.keys()].some((p) => p.toLowerCase() === lower);
   }
 
   private clean(dto: RequestDto): RequestDto {
@@ -146,6 +192,10 @@ export class MockBackend {
     };
     return { name: 'my-api (browser preview)', root: this.root, nodes: nodes('') };
   }
+}
+
+function isWithin(path: string, folder: string): boolean {
+  return path === folder || path.startsWith(`${folder}/`);
 }
 
 function slug(name: string): string {

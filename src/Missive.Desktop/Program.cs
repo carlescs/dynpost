@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Missive.Application.Folders;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
@@ -46,5 +47,8 @@ internal static class Program
             .AddTransient<LoadRequest>()
             .AddTransient<CreateRequest>()
             .AddTransient<SaveRequest>()
+            .AddTransient<CreateFolder>()
+            .AddTransient<RenameFolder>()
+            .AddTransient<DeleteFolder>()
             .BuildServiceProvider();
 }

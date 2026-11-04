@@ -12,7 +12,16 @@ public sealed record FolderEntry(WorkspacePath Path, IReadOnlyList<WorkspaceEntr
 /// <summary>A request file. <see cref="Request"/> holds the parsed file, or why it could not be read.</summary>
 public sealed record RequestFileEntry(WorkspacePath Path, Result<HttpRequestDefinition> Request) : WorkspaceEntry(Path);
 
-/// <summary>Reads and writes request files inside a workspace folder.</summary>
+/// <summary>Everything inside a folder, recursively, as workspace paths.</summary>
+/// <param name="Files">Regular files.</param>
+/// <param name="Folders">Sub-folders.</param>
+/// <param name="Links">Symbolic links and other special entries, which are never followed.</param>
+public sealed record FolderContents(
+    IReadOnlyList<WorkspacePath> Files,
+    IReadOnlyList<WorkspacePath> Folders,
+    IReadOnlyList<WorkspacePath> Links);
+
+/// <summary>Reads and writes request files and folders inside a workspace folder.</summary>
 public interface IWorkspaceRepository
 {
     /// <summary>Whether <paramref name="root"/> is an existing folder.</summary>
@@ -33,4 +42,19 @@ public interface IWorkspaceRepository
 
     /// <summary>Renames or moves a file. Fails if the destination already exists.</summary>
     Result<Unit> MoveFile(string root, WorkspacePath from, WorkspacePath to);
+
+    /// <summary>Whether a file or a folder exists at <paramref name="path"/>.</summary>
+    bool EntryExists(string root, WorkspacePath path);
+
+    bool DirectoryExists(string root, WorkspacePath path);
+
+    Result<Unit> CreateFolder(string root, WorkspacePath path);
+
+    /// <summary>Renames or moves a folder and everything in it. Fails if the destination exists.</summary>
+    Result<Unit> MoveFolder(string root, WorkspacePath from, WorkspacePath to);
+
+    Result<FolderContents> ReadFolderContents(string root, WorkspacePath path);
+
+    /// <summary>Deletes a folder and everything in it.</summary>
+    Result<Unit> DeleteFolder(string root, WorkspacePath path);
 }

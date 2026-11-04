@@ -23,6 +23,7 @@ No account, no cloud workspace, no proprietary export format.
 ## Planned features
 
 - [x] Open a folder as a workspace and browse its requests
+- [x] Create, rename and delete (nested) collection folders
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
 - [ ] Sending requests
@@ -100,6 +101,17 @@ the `environments/` folder and hidden files and folders; files that can't be
 read are shown with an error instead of being hidden. Saving a request whose
 content didn't change leaves its file untouched. Comments and keys Missive
 doesn't know are not preserved when a request is saved with changes.
+
+Folders are collections and can be nested. From the explorer you can create,
+rename (F2) and delete them; open requests follow a renamed folder. Folder
+names are kept as typed, but must work on Windows, macOS and Linux (no
+`/ \ < > : " | ? *`, no leading dot or trailing dot, no reserved names such as
+`CON`), and `environments` is reserved at the workspace root. Deleting a folder
+removes the requests in it and only goes ahead when the folder holds nothing
+else — request files, `_folder.yaml`, `.gitkeep` and OS files such as
+`.DS_Store` — so other files you keep there are never deleted. Git doesn't
+track empty folders, so a new folder appears in commits once it contains a
+request.
 
 An environment file (`environments/dev.yaml`):
 

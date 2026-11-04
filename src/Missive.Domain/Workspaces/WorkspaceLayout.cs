@@ -46,4 +46,82 @@ public static class WorkspaceLayout
         var dot = fileName.LastIndexOf('.');
         return dot <= 0 ? fileName : fileName[..dot];
     }
+
+    /// <summary>Files Missive may delete along with a folder: its own files and OS clutter.</summary>
+    private static readonly HashSet<string> DisposableFiles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        FolderDefaultsFile,
+        ".gitkeep",
+        ".DS_Store",
+        "Thumbs.db",
+        "desktop.ini",
+    };
+
+    private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
+
+    private const int MaxNameLength = 255;
+
+    /// <summary>
+    /// Checks a new collection folder name for <paramref name="parent"/>. Names must work on
+    /// Windows, macOS and Linux so the workspace can be shared through git. Returns <c>null</c>
+    /// when the name is valid, otherwise why it is not.
+    /// </summary>
+    public static string? ValidateFolderName(WorkspacePath parent, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "The folder needs a name.";
+        }
+
+        if (name != name.Trim())
+        {
+            return "Folder names cannot start or end with spaces.";
+        }
+
+        if (name.Length > MaxNameLength)
+        {
+            return $"Folder names can have at most {MaxNameLength} characters.";
+        }
+
+        if (name.IndexOfAny(['/', '\\', '<', '>', ':', '"', '|', '?', '*']) >= 0 || name.Any(char.IsControl))
+        {
+            return "Folder names cannot contain / \\ < > : \" | ? * or control characters.";
+        }
+
+        if (name.StartsWith('.'))
+        {
+            return "Folder names cannot start with a dot; such folders are hidden.";
+        }
+
+        if (name.EndsWith('.'))
+        {
+            return "Folder names cannot end with a dot.";
+        }
+
+        var stem = name.Split('.')[0];
+        if (ReservedDeviceNames.Contains(stem))
+        {
+            return $"'{name}' is a reserved name on Windows.";
+        }
+
+        if (!IsCollectionFolder(parent, name))
+        {
+            return $"'{name}' is reserved for workspace settings.";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a file can be deleted together with the collection folder holding it: request files
+    /// and Missive's own or OS-generated files. Anything else belongs to the user and blocks the
+    /// deletion.
+    /// </summary>
+    public static bool IsDisposableFile(string fileName) =>
+        DisposableFiles.Contains(fileName) || (!fileName.StartsWith('.') && HasRequestExtension(fileName));
 }

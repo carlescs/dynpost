@@ -194,6 +194,68 @@ export class WorkspaceStore {
     }
   }
 
+  /** Creates a folder inside `parent` (`''` is the root). Returns its path, or `null` on failure. */
+  async createFolder(parent: string, name: string): Promise<string | null> {
+    try {
+      const { path } = await this.bridge.send('folder.create', { parent, name });
+      this.error.set(null);
+      await this.refresh();
+      return path;
+    } catch (error) {
+      this.report(error);
+      return null;
+    }
+  }
+
+  /** Renames a folder; open requests inside it follow. Returns whether it worked. */
+  async renameFolder(path: string, name: string): Promise<boolean> {
+    try {
+      const renamed = await this.bridge.send('folder.rename', { path, name });
+      const move = (p: string) => (isWithin(p, path) ? renamed.path + p.slice(path.length) : p);
+      this.documents.update((docs) =>
+        docs.map((d) => {
+          const moved = { ...d, folder: move(d.folder) };
+          return d.path ? { ...moved, id: move(d.id), path: move(d.path) } : moved;
+        }),
+      );
+      const active = this.activeId();
+      if (active) this.activeId.set(move(active));
+      this.error.set(null);
+      await this.refresh();
+      return true;
+    } catch (error) {
+      this.report(error);
+      return false;
+    }
+  }
+
+  /**
+   * Deletes a folder with the requests in it, after asking the user. Open requests from the folder
+   * are closed.
+   */
+  async deleteFolder(path: string): Promise<void> {
+    const requests = countRequests(findNode(this.tree(), path));
+    const open = this.documents().filter((d) => isWithin(d.folder, path));
+    const dirty = open.filter((d) => d.dirty).length;
+    const question =
+      `Delete the folder "${path}"` +
+      (requests ? ` and the ${requests} request(s) in it?` : '?') +
+      (dirty ? ` ${dirty} open request(s) with unsaved changes will be closed.` : '');
+    if (!confirm(question)) return;
+
+    try {
+      await this.bridge.send('folder.delete', { path });
+      const closed = new Set(open.map((d) => d.id));
+      const remaining = this.documents().filter((d) => !closed.has(d.id));
+      this.documents.set(remaining);
+      if (closed.has(this.activeId() ?? '')) this.activeId.set(remaining.at(-1)?.id ?? null);
+      this.error.set(null);
+      await this.refresh();
+    } catch (error) {
+      this.report(error);
+    }
+  }
+
   async saveActive(): Promise<void> {
     const id = this.activeId();
     if (id) await this.save(id);
@@ -249,6 +311,25 @@ export class WorkspaceStore {
       error instanceof BridgeError || error instanceof Error ? error.message : String(error),
     );
   }
+}
+
+/** Whether `path` is `folder` itself or inside it. */
+function isWithin(path: string, folder: string): boolean {
+  return path === folder || path.startsWith(`${folder}/`);
+}
+
+function findNode(nodes: WorkspaceNode[], path: string): WorkspaceNode | null {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    if (node.children && isWithin(path, node.path)) return findNode(node.children, path);
+  }
+  return null;
+}
+
+function countRequests(node: WorkspaceNode | null): number {
+  if (!node) return 0;
+  if (node.kind === 'request') return 1;
+  return (node.children ?? []).reduce((sum, child) => sum + countRequests(child), 0);
 }
 
 function parentFolder(path: string): string {

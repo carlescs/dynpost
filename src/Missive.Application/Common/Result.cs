@@ -8,6 +8,8 @@ public static class ErrorCodes
     public const string InvalidPath = "invalid_path";
     public const string InvalidFile = "invalid_file";
     public const string InvalidRequest = "invalid_request";
+    public const string AlreadyExists = "already_exists";
+    public const string FolderNotEmpty = "folder_not_empty";
     public const string Io = "io_error";
 }
 

@@ -34,4 +34,48 @@ public class WorkspaceLayoutTests
         Assert.Equal("create-user.yaml", WorkspaceLayout.RequestFileName("Create user"));
         Assert.Equal("create-user-2.yaml", WorkspaceLayout.RequestFileName("Create user", 2));
     }
+
+    [Theory]
+    [InlineData("", "users")]
+    [InlineData("", "Admin API v2")]
+    [InlineData("users", "environments")]
+    [InlineData("", "ünïcode")]
+    public void ValidateFolderName_AcceptsPortableNames(string parent, string name)
+    {
+        Assert.Null(WorkspaceLayout.ValidateFolderName(WorkspacePath.Parse(parent), name));
+    }
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("", "   ")]
+    [InlineData("", " users")]
+    [InlineData("", "a/b")]
+    [InlineData("", "a\\b")]
+    [InlineData("", "what?")]
+    [InlineData("", "a:b")]
+    [InlineData("", ".hidden")]
+    [InlineData("", "..")]
+    [InlineData("", "trailing.")]
+    [InlineData("", "CON")]
+    [InlineData("", "nul.txt")]
+    [InlineData("", "environments")]
+    [InlineData("", null)]
+    public void ValidateFolderName_RejectsUnportableOrReservedNames(string parent, string? name)
+    {
+        Assert.NotNull(WorkspaceLayout.ValidateFolderName(WorkspacePath.Parse(parent), name));
+    }
+
+    [Theory]
+    [InlineData("get-user.yaml", true)]
+    [InlineData("old.yml", true)]
+    [InlineData("_folder.yaml", true)]
+    [InlineData(".gitkeep", true)]
+    [InlineData(".DS_Store", true)]
+    [InlineData("README.md", false)]
+    [InlineData("script.sh", false)]
+    [InlineData(".env", false)]
+    public void IsDisposableFile(string fileName, bool expected)
+    {
+        Assert.Equal(expected, WorkspaceLayout.IsDisposableFile(fileName));
+    }
 }

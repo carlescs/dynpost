@@ -89,6 +89,112 @@ public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
         }
     }
 
+    public bool EntryExists(string root, WorkspacePath path) => Path.Exists(FullPath(root, path));
+
+    public bool DirectoryExists(string root, WorkspacePath path) => Directory.Exists(FullPath(root, path));
+
+    public Result<Unit> CreateFolder(string root, WorkspacePath path)
+    {
+        try
+        {
+            Directory.CreateDirectory(FullPath(root, path));
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return IoError($"Could not create '{path}': {ex.Message}");
+        }
+    }
+
+    public Result<Unit> MoveFolder(string root, WorkspacePath from, WorkspacePath to)
+    {
+        var source = FullPath(root, from);
+        var destination = FullPath(root, to);
+        try
+        {
+            if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase))
+            {
+                // Case-only rename: go through a temporary name so it also works on
+                // case-insensitive file systems.
+                var temporary = destination + ".missive-rename-" + Guid.NewGuid().ToString("N")[..8];
+                Directory.Move(source, temporary);
+                Directory.Move(temporary, destination);
+            }
+            else
+            {
+                if (Path.Exists(destination))
+                {
+                    return new Error(ErrorCodes.AlreadyExists, $"'{to}' already exists.");
+                }
+
+                Directory.Move(source, destination);
+            }
+
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return IoError($"Could not rename '{from}' to '{to}': {ex.Message}");
+        }
+    }
+
+    public Result<FolderContents> ReadFolderContents(string root, WorkspacePath path)
+    {
+        var files = new List<WorkspacePath>();
+        var folders = new List<WorkspacePath>();
+        var links = new List<WorkspacePath>();
+
+        try
+        {
+            Collect(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return IoError($"Could not read '{path}': {ex.Message}");
+        }
+
+        return new FolderContents(files, folders, links);
+
+        void Collect(WorkspacePath folder)
+        {
+            foreach (var info in new DirectoryInfo(FullPath(root, folder)).EnumerateFileSystemInfos())
+            {
+                if (!WorkspacePath.TryParse(info.Name, out _))
+                {
+                    continue;
+                }
+
+                var child = folder.Combine(info.Name);
+                if (info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    links.Add(child);
+                }
+                else if (info is DirectoryInfo)
+                {
+                    folders.Add(child);
+                    Collect(child);
+                }
+                else
+                {
+                    files.Add(child);
+                }
+            }
+        }
+    }
+
+    public Result<Unit> DeleteFolder(string root, WorkspacePath path)
+    {
+        try
+        {
+            Directory.Delete(FullPath(root, path), recursive: true);
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return IoError($"Could not delete '{path}': {ex.Message}");
+        }
+    }
+
     private async Task<IReadOnlyList<WorkspaceEntry>> ListFolderAsync(string root, WorkspacePath folder, CancellationToken cancellationToken)
     {
         var directory = new DirectoryInfo(FullPath(root, folder));

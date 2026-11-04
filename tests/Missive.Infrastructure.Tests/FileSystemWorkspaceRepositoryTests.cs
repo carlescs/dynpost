@@ -94,6 +94,64 @@ public sealed class FileSystemWorkspaceRepositoryTests : IDisposable
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
     }
 
+    [Fact]
+    public async Task Folders_CanBeCreatedRenamedAndDeleted()
+    {
+        var users = WorkspacePath.Parse("api/users");
+        Assert.True(_repository.CreateFolder(_root, users).IsSuccess);
+        Assert.True(_repository.DirectoryExists(_root, users));
+        Write("api/users/get-user.yaml", "name: Get user\n");
+        Write("api/orders/list.yaml", "name: List\n");
+
+        var people = WorkspacePath.Parse("api/people");
+        Assert.True(_repository.MoveFolder(_root, users, people).IsSuccess);
+        Assert.False(_repository.EntryExists(_root, users));
+        Assert.Equal("name: Get user\n", await File.ReadAllTextAsync(Path.Combine(_root, "api", "people", "get-user.yaml")));
+
+        var clash = _repository.MoveFolder(_root, people, WorkspacePath.Parse("api/orders"));
+        Assert.Equal(ErrorCodes.AlreadyExists, clash.Error?.Code);
+
+        Assert.True(_repository.DeleteFolder(_root, people).IsSuccess);
+        Assert.False(_repository.EntryExists(_root, people));
+        Assert.True(_repository.FileExists(_root, WorkspacePath.Parse("api/orders/list.yaml")));
+    }
+
+    [Fact]
+    public void MoveFolder_HandlesCaseOnlyRenames()
+    {
+        Write("users/get-user.yaml", "name: Get user\n");
+
+        var result = _repository.MoveFolder(_root, WorkspacePath.Parse("users"), WorkspacePath.Parse("Users"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["Users"], Directory.GetDirectories(_root).Select(Path.GetFileName));
+        Assert.True(File.Exists(Path.Combine(_root, "Users", "get-user.yaml")));
+    }
+
+    [Fact]
+    public void ReadFolderContents_ListsEverythingRecursivelyWithoutFollowingLinks()
+    {
+        Write("users/get-user.yaml", "name: Get user\n");
+        Write("users/admin/notes.md", "hi\n");
+        Write("elsewhere/secret.txt", "x\n");
+        var linked = false;
+        try
+        {
+            Directory.CreateSymbolicLink(Path.Combine(_root, "users", "link"), Path.Combine(_root, "elsewhere"));
+            linked = true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Creating symbolic links needs extra rights on some Windows machines.
+        }
+
+        var contents = _repository.ReadFolderContents(_root, WorkspacePath.Parse("users")).Value;
+
+        Assert.Equal(["users/admin/notes.md", "users/get-user.yaml"], contents.Files.Select(f => f.Value).Order());
+        Assert.Equal(["users/admin"], contents.Folders.Select(f => f.Value));
+        Assert.Equal(linked ? ["users/link"] : [], contents.Links.Select(f => f.Value));
+    }
+
     private void Write(string relativePath, string content)
     {
         var full = Path.Combine(_root, relativePath);
