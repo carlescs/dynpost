@@ -20,7 +20,10 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
 ## Stack and layout
 
 - `src/Missive.Client` — Angular 22 standalone app (no NgModules), Prettier
-  configured (`.prettierrc`: 100 cols, single quotes).
+  configured (`.prettierrc`: 100 cols, single quotes). Styles are SCSS
+  (`inlineStyleLanguage: scss`, global `src/styles.scss`). Tailwind CSS v4 runs
+  through PostCSS (`.postcssrc.json`) from its own entry, `src/tailwind.css`. Icons with Font Awesome
+  (`@fortawesome/angular-fontawesome`, free solid icons).
 - Backend (.NET 10), clean architecture — see "Backend architecture" below:
   - `src/Missive.Domain` — entities, value objects, pure rules.
   - `src/Missive.Application` — use cases and port interfaces.
@@ -43,7 +46,7 @@ cd src/Missive.Client && npm ci && npm run build   # client only
 cd src/Missive.Client && npm start            # browser dev server on :4200
 ```
 
-Test projects use xUnit; there are no tests yet and no linter. Before
+Test projects use xUnit with NSubstitute for mocking; there are no tests yet and no linter. Before
 finishing, run `dotnet build Missive.sln` and `dotnet test Missive.sln` (or
 `npm run build` for client-only changes). Add tests alongside new backend code.
 
@@ -75,8 +78,10 @@ Desktop → Application
   presentation adapter. Bridge handlers deserialize a message, call one use
   case, and serialize the result — no business logic in handlers or
   `Program.cs`.
-- **Tests**: Domain and Application tests are pure unit tests using fakes for
-  ports. Infrastructure tests run against temporary directories and real
+- **Tests**: Domain and Application tests are pure unit tests; mock ports
+  with **NSubstitute** (`Substitute.For<IHttpSender>()`) rather than
+  hand-written fakes or other mocking libraries. Don't mock Domain types — use
+  real instances. Infrastructure tests run against temporary directories and real
   temporary git repositories.
 - Don't add a project reference that breaks the dependency rule; if you need
   one, add a port in Application instead.
@@ -115,4 +120,13 @@ Desktop → Application
 - C#: nullable enabled, implicit usings, file-scoped namespaces, async for I/O.
 - TypeScript: strict mode, standalone components, signals for local state;
   format with Prettier.
+- Styling: Tailwind utility classes in templates first. When custom styles are
+  needed, write SCSS (component `styles` are compiled as SCSS; global styles go
+  in `src/styles.scss`). Keep Tailwind-specific CSS (`@import 'tailwindcss'`,
+  `@theme` tokens, `@utility`) in `src/tailwind.css` only. Tailwind v4 doesn't
+  support being run through Sass, so don't `@use`/`@import` Tailwind from SCSS.
+- Icons: Font Awesome only. Import individual icons
+  (`import { faPaperPlane } from '@fortawesome/free-solid-svg-icons'`) and
+  render with `<fa-icon [icon]="...">` via `FaIconComponent` so unused icons
+  are tree-shaken; don't import whole icon packs or use the CDN/webfont.
 - Keep changes focused; update `README.md` when user-visible behavior changes.

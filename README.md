@@ -173,7 +173,8 @@ runtime and the platform webview prerequisites above, but not Node.js.
 
 - `src/Missive.Desktop`: Photino window, bridge, composition root, and
   build/publish integration.
-- `src/Missive.Client`: standalone Angular app, styles, and routes.
+- `src/Missive.Client`: standalone Angular app with SCSS styles, Tailwind
+  CSS, and Font Awesome icons.
 - `src/Missive.Domain`, `src/Missive.Application`, `src/Missive.Infrastructure`:
   backend layers (see [Architecture](#architecture)).
 - `tests/Missive.Domain.Tests`, `tests/Missive.Application.Tests`: fast unit
@@ -181,7 +182,7 @@ runtime and the platform webview prerequisites above, but not Node.js.
 - `tests/Missive.Infrastructure.Tests`: integration tests against temporary
   folders and git repositories.
 
-Run the backend tests (xUnit) with:
+Run the backend tests (xUnit, with NSubstitute for mocking) with:
 
 ```sh
 dotnet test Missive.sln
