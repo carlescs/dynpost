@@ -30,23 +30,22 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
     csproj runs `npm ci` + `npm run build` for the client and copies
     `dist/missive-client/browser` into `wwwroot`.
   - `tests/Missive.<Layer>.Tests` — one test project per backend layer.
-- Only `Missive.Desktop` and `Missive.Client` exist today; create the other
-  projects (and add them to `Missive.sln`) when the first code for that layer
-  is written.
+- All projects are in `Missive.sln` (solution folders `src` and `tests`). The
+  backend layer and test projects are empty scaffolds so far.
 
 ## Commands
 
 ```sh
-dotnet build Missive.sln                      # builds host + Angular client
+dotnet build Missive.sln                      # builds all projects + Angular client
+dotnet test Missive.sln                       # runs xUnit tests
 dotnet run --project src/Missive.Desktop      # run the desktop app (needs a GUI)
 cd src/Missive.Client && npm ci && npm run build   # client only
 cd src/Missive.Client && npm start            # browser dev server on :4200
 ```
 
-No tests or linter exist yet. Before finishing, at minimum run
-`dotnet build Missive.sln` (or `npm run build` for client-only changes). Once
-test projects exist, `dotnet test Missive.sln` runs them; update this section
-then.
+Test projects use xUnit; there are no tests yet and no linter. Before
+finishing, run `dotnet build Missive.sln` and `dotnet test Missive.sln` (or
+`npm run build` for client-only changes). Add tests alongside new backend code.
 
 ## Backend architecture
 
