@@ -1,13 +1,113 @@
 # Missive
 
-A minimal cross-platform desktop app using Photino.NET 4, .NET 10, and Angular 22.
-Photino opens the compiled Angular frontend in a native webview; no web server is
-needed at runtime.
+Missive is a lightweight, cross-platform desktop HTTP client — a simplified take
+on Postman. Its difference: your collections are plain files in a folder you
+choose, and Missive can synchronize that folder with git directly from the app.
+No account, no cloud workspace, no proprietary export format.
+
+> **Status:** early development. The app is currently a Photino.NET + Angular
+> skeleton; the features below describe what is planned.
+
+## Why Missive
+
+- **Files first.** A collection is just a folder. Each request is one readable
+  YAML file you can open, grep, review and edit with any tool.
+- **Git native.** Share and version collections the same way you share code:
+  commit, pull and push from inside Missive, using your existing git setup.
+- **Local and private.** Secrets and response history stay on your machine and
+  never end up in the repository.
+
+## Planned features
+
+- [ ] Request editor: method, URL, query parameters, headers and body
+      (JSON, raw text, form-data, `x-www-form-urlencoded`)
+- [ ] Response viewer: status, time, size, headers and a pretty-printed body
+- [ ] Collections as folders, with optional folder-level defaults
+- [ ] Environments with `{{variable}}` substitution
+- [ ] Auth helpers: Basic, Bearer token and API key
+- [ ] Local response history (kept out of git)
+- [ ] Git sync: changed-file status, commit, pull, push, current branch, and
+      clear reporting of merge conflicts
+
+### Non-goals
+
+Missive deliberately stays small. Out of scope for now: pre-request/test
+scripting, collection runners, mock servers, cloud accounts and hosted team
+workspaces (git is the collaboration layer).
+
+## Workspace format
+
+A workspace is a folder, usually a git repository:
+
+```text
+my-api/
+├── missive.yaml            # workspace metadata
+├── environments/
+│   ├── dev.yaml
+│   └── prod.yaml
+├── users/                  # a folder is a collection
+│   ├── _folder.yaml        # optional folder-level defaults (headers, auth)
+│   ├── get-user.yaml
+│   └── create-user.yaml
+└── .missive/               # local only, git-ignored: secrets, history, UI state
+```
+
+A request file:
+
+```yaml
+name: Create user
+method: POST
+url: "{{baseUrl}}/users"
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  token: "{{apiToken}}"
+body:
+  type: json
+  content: |
+    {
+      "name": "Ada Lovelace"
+    }
+```
+
+An environment file (`environments/dev.yaml`):
+
+```yaml
+name: Development
+variables:
+  baseUrl: http://localhost:5000
+```
+
+Secret values such as `apiToken` belong in `.missive/secrets.yaml`, which
+Missive keeps out of git. Files are written with stable key order and minimal
+noise so diffs stay small and merges stay easy. The format is still evolving.
+
+## Git sync
+
+When the workspace folder is a git repository, Missive shows which request and
+environment files changed, lets you commit them with a message, and pulls and
+pushes the current branch. It uses your existing git credentials. Missive never
+force-pushes and never resolves conflicts automatically: conflicting files are
+reported so you can resolve them (in Missive's editor or your own tools).
+
+## Architecture
+
+```text
+Angular UI (webview)  ⇄  Photino message bridge  ⇄  .NET host
+                                                     ├─ sends HTTP requests
+                                                     ├─ reads/writes workspace files
+                                                     └─ runs git operations
+```
+
+Requests are sent from the .NET host rather than the webview, so they are not
+subject to browser CORS rules and can use any headers.
 
 ## Prerequisites
 
 - .NET 10 SDK
 - Node.js 22.22.3+ (22.x) or 24.15.0+ (24.x), with npm
+- git, for workspace synchronization
 - Windows: Microsoft Edge WebView2 Runtime
 - macOS: the system WebKit runtime (no additional install)
 - Linux: GTK 3, WebKitGTK 4.1, and libnotify. On Ubuntu 24.04:
@@ -37,9 +137,9 @@ npm start
 ```
 
 Open `http://localhost:4200` for Angular live reload in a browser. The desktop
-host always loads the bundled frontend; rebuild/restart it to see frontend changes.
-The welcome screen includes a counter to verify Angular interaction. Routing uses
-hash URLs and assets use a relative base URL so they work from local files.
+host always loads the bundled frontend; rebuild/restart it to see frontend
+changes. Routing uses hash URLs and assets use a relative base URL so they work
+from local files.
 
 ## Build and publish
 
@@ -53,10 +153,11 @@ Run the `Missive.Desktop` executable (`Missive.Desktop.exe` on Windows) in
 it. This is a framework-dependent publish: the target machine needs the .NET 10
 runtime and the platform webview prerequisites above, but not Node.js.
 
-## Layout
+## Repository layout
 
-- `src/Missive.Desktop`: Photino window and build/publish integration.
+- `src/Missive.Desktop`: Photino window, .NET host services, and build/publish
+  integration.
 - `src/Missive.Client`: standalone Angular app, styles, and routes.
 
-No test runner or linter is configured. `npm run build` in the frontend and
+No test runner or linter is configured yet. `npm run build` in the frontend and
 `dotnet build Missive.sln` validate TypeScript/templates and the desktop host.
