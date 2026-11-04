@@ -28,7 +28,7 @@ jobs:
           - { os: ubuntu-latest, rid: linux-x64 }
           - { os: macos-latest, rid: osx-arm64 }
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v5
         with:
