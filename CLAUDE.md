@@ -19,15 +19,20 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
 
 ## Stack and layout
 
-- `src/Missive.Desktop` — .NET 10 console app hosting a Photino.NET 4 window.
-  Its csproj runs `npm ci` + `npm run build` for the client and copies
-  `dist/missive-client/browser` into `wwwroot`. Host-side services (HTTP
-  sending, workspace I/O, git) live here.
 - `src/Missive.Client` — Angular 22 standalone app (no NgModules), Prettier
   configured (`.prettierrc`: 100 cols, single quotes).
-- When non-UI logic grows (YAML model, variable resolution, git), move it into a
-  `src/Missive.Core` class library with a matching test project rather than
-  growing `Program.cs`.
+- Backend (.NET 10), clean architecture — see "Backend architecture" below:
+  - `src/Missive.Domain` — entities, value objects, pure rules.
+  - `src/Missive.Application` — use cases and port interfaces.
+  - `src/Missive.Infrastructure` — adapters (YAML files, HTTP, git, secrets,
+    history).
+  - `src/Missive.Desktop` — Photino.NET 4 window, bridge, composition root. Its
+    csproj runs `npm ci` + `npm run build` for the client and copies
+    `dist/missive-client/browser` into `wwwroot`.
+  - `tests/Missive.<Layer>.Tests` — one test project per backend layer.
+- Only `Missive.Desktop` and `Missive.Client` exist today; create the other
+  projects (and add them to `Missive.sln`) when the first code for that layer
+  is written.
 
 ## Commands
 
@@ -39,13 +44,48 @@ cd src/Missive.Client && npm start            # browser dev server on :4200
 ```
 
 No tests or linter exist yet. Before finishing, at minimum run
-`dotnet build Missive.sln` (or `npm run build` for client-only changes). If you
-add tests, document the command here.
+`dotnet build Missive.sln` (or `npm run build` for client-only changes). Once
+test projects exist, `dotnet test Missive.sln` runs them; update this section
+then.
+
+## Backend architecture
+
+Clean architecture; the dependency rule is strict — references point inward
+only:
+
+```text
+Desktop → Infrastructure → Application → Domain
+Desktop → Application
+```
+
+- **Domain**: plain C# — no I/O, no `HttpClient`, no file system, no YAML or git
+  libraries, no DI attributes. Holds the request/collection/environment model,
+  `{{variable}}` resolution, auth rules, and validation. Prefer immutable
+  records and explicit value objects.
+- **Application**: one class per use case (e.g. `SendRequest`,
+  `SaveRequest`, `OpenWorkspace`, `CommitChanges`, `PullChanges`,
+  `PushChanges`). Defines the ports it needs as interfaces (`IWorkspaceRepository`,
+  `IHttpSender`, `IGitService`, `ISecretStore`, `IHistoryStore`, `IClock`).
+  Input/output DTOs live here; use cases never return Infrastructure types.
+  Expected failures (invalid YAML, merge conflict, network error) are returned
+  as results, not thrown.
+- **Infrastructure**: implements Application ports. All third-party packages
+  for YAML, git and I/O are referenced only here. File-format serialization
+  (key order, omitting defaults) lives here, not in Domain.
+- **Desktop**: composition root (`Microsoft.Extensions.DependencyInjection`) and
+  presentation adapter. Bridge handlers deserialize a message, call one use
+  case, and serialize the result — no business logic in handlers or
+  `Program.cs`.
+- **Tests**: Domain and Application tests are pure unit tests using fakes for
+  ports. Infrastructure tests run against temporary directories and real
+  temporary git repositories.
+- Don't add a project reference that breaks the dependency rule; if you need
+  one, add a port in Application instead.
 
 ## Architecture rules
 
-- **All network, filesystem and git work happens in .NET**, never in the
-  webview. Sending HTTP from .NET avoids CORS and header restrictions.
+- **All network, filesystem and git work happens in the .NET backend**, never in
+  the webview. Sending HTTP from .NET avoids CORS and header restrictions.
 - The UI talks to the host through Photino's message bridge. Use a typed
   request/response envelope with a correlation id and an explicit error shape;
   keep message types defined in one place on each side and keep them in sync.

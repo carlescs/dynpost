@@ -94,14 +94,30 @@ reported so you can resolve them (in Missive's editor or your own tools).
 ## Architecture
 
 ```text
-Angular UI (webview)  ⇄  Photino message bridge  ⇄  .NET host
-                                                     ├─ sends HTTP requests
-                                                     ├─ reads/writes workspace files
-                                                     └─ runs git operations
+Angular UI (webview)  ⇄  Photino message bridge  ⇄  .NET backend
 ```
 
-Requests are sent from the .NET host rather than the webview, so they are not
+Requests are sent from the .NET backend rather than the webview, so they are not
 subject to browser CORS rules and can use any headers.
+
+The backend follows **clean architecture**. Dependencies point inward only:
+
+```text
+Missive.Desktop ──► Missive.Infrastructure ──► Missive.Application ──► Missive.Domain
+```
+
+(`Missive.Desktop` also references `Missive.Application` directly to invoke use
+cases.)
+
+| Project | Responsibility | May reference |
+| --- | --- | --- |
+| `Missive.Domain` | Entities and value objects (`Workspace`, `Collection`, `HttpRequestDefinition`, `Environment`, `Auth`), variable resolution and other pure rules. No I/O, no framework dependencies. | — |
+| `Missive.Application` | Use cases (open workspace, save request, send request, resolve environment, commit/pull/push) and the ports they need, e.g. `IWorkspaceRepository`, `IHttpSender`, `IGitService`, `ISecretStore`, `IHistoryStore`. | Domain |
+| `Missive.Infrastructure` | Adapters implementing the ports: YAML file storage, `HttpClient` sender, git, `.missive/` secrets and history. | Application, Domain |
+| `Missive.Desktop` | Composition root and presentation adapter: Photino window, bridge message dispatch to use cases, dependency injection wiring. | All of the above |
+
+The Angular client is a separate presentation layer that only talks to
+`Missive.Desktop` through bridge messages.
 
 ## Prerequisites
 
@@ -155,9 +171,18 @@ runtime and the platform webview prerequisites above, but not Node.js.
 
 ## Repository layout
 
-- `src/Missive.Desktop`: Photino window, .NET host services, and build/publish
-  integration.
+- `src/Missive.Desktop`: Photino window, bridge, composition root, and
+  build/publish integration.
 - `src/Missive.Client`: standalone Angular app, styles, and routes.
+
+Planned (see [Architecture](#architecture)):
+
+- `src/Missive.Domain`, `src/Missive.Application`, `src/Missive.Infrastructure`:
+  backend layers.
+- `tests/Missive.Domain.Tests`, `tests/Missive.Application.Tests`: fast unit
+  tests with no I/O.
+- `tests/Missive.Infrastructure.Tests`: integration tests against temporary
+  folders and git repositories.
 
 No test runner or linter is configured yet. `npm run build` in the frontend and
 `dotnet build Missive.sln` validate TypeScript/templates and the desktop host.
