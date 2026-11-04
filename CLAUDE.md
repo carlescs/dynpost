@@ -37,8 +37,9 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
   Studio; it is not built by the solution and has npm install/build disabled —
-  the Desktop csproj builds it. The backend layer and test projects are empty
-  scaffolds so far.
+  the Desktop csproj builds it. So far the backend implements git sync only
+  (`Domain/Git`, `Application/Git`, `Infrastructure/Git`); it is not yet wired
+  to the UI through the bridge.
 
 ## Commands
 
@@ -51,8 +52,8 @@ cd src/Missive.Client && npm start            # browser dev server on :4200
 cd src/Missive.Client && npm run format:check # Prettier check (CI enforces it)
 ```
 
-Test projects use xUnit with NSubstitute for mocking; there are no tests yet and no linter beyond
-Prettier. Before finishing, run `dotnet build Missive.sln` and
+Test projects use xUnit with NSubstitute for mocking; there is no linter beyond
+Prettier. Infrastructure git tests need `git` on the PATH. Before finishing, run `dotnet build Missive.sln` and
 `dotnet test Missive.sln` (or `npm run build` for client-only changes), and
 `npm run format:check` when you touch the client.
 
@@ -126,7 +127,12 @@ Desktop → Application
 
 ## Git behavior in the app
 
-- Use the user's existing git configuration and credentials.
+- Use the user's existing git configuration and credentials: the adapter
+  (`Infrastructure/Git/GitCliService.cs`) runs the `git` CLI rather than a git
+  library, with terminal prompts disabled so it never hangs.
+- Pull always merges (`--no-rebase`); conflicts are left in the working tree and
+  reported. Files under `.missive/` are excluded from status and commits even
+  if the `.gitignore` entry is missing.
 - Never force-push, rewrite history, or auto-resolve conflicts. Report
   conflicts and errors to the user clearly.
 - Don't commit or push without an explicit user action.
