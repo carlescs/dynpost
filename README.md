@@ -6,7 +6,9 @@ choose, and Missive can synchronize that folder with git directly from the app.
 No account, no cloud workspace, no proprietary export format.
 
 > **Status:** early development. The app is currently a Photino.NET + Angular
-> skeleton; the features below describe what is planned.
+> skeleton with the initial UI layout (workspace explorer and source control
+> sidebar, tabbed request editor) running on sample data; the features below
+> describe what is planned.
 
 ## Why Missive
 
