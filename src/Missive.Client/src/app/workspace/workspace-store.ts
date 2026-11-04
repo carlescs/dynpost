@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Bridge } from '../bridge/bridge';
-import { BridgeError } from '../bridge/messages';
+import { BridgeError, WorkspaceInfo } from '../bridge/messages';
 import { RequestDocument, WorkspaceNode } from './models';
 
 export type SidebarView = 'explorer' | 'git';
@@ -23,6 +23,8 @@ export class WorkspaceStore {
   readonly workspacePath = signal<string | null>(null);
   readonly workspaceName = signal('my-api');
   readonly openError = signal<BridgeError | null>(null);
+  /** Whether the workspace from the last session is still being reopened at startup. */
+  readonly restoring = signal(false);
 
   readonly tree = signal<WorkspaceNode[]>([
     {
@@ -59,19 +61,44 @@ export class WorkspaceStore {
 
   private untitledCount = 0;
 
+  constructor() {
+    if (this.bridge.available) void this.restoreLastWorkspace();
+  }
+
   /** Asks the host for a workspace folder and opens it; does nothing if the user cancels. */
   async openWorkspace(): Promise<void> {
     this.openError.set(null);
-    const result = await this.bridge.request('workspace.pickFolder', {});
-    if (!result.ok) {
-      this.openError.set(result.error);
+    const picked = await this.bridge.request('workspace.pickFolder', {});
+    if (!picked.ok) {
+      this.openError.set(picked.error);
       return;
     }
-    const { path, name } = result.value;
-    if (path) {
-      this.workspacePath.set(path);
-      this.workspaceName.set(name ?? path);
+    if (!picked.value.path) return;
+
+    const opened = await this.bridge.request('workspace.open', {
+      workspacePath: picked.value.path,
+    });
+    if (opened.ok) this.setWorkspace(opened.value);
+    else this.openError.set(opened.error);
+  }
+
+  /** Reopens the workspace from the last session, if its folder still exists. */
+  private async restoreLastWorkspace(): Promise<void> {
+    this.restoring.set(true);
+    try {
+      const last = await this.bridge.request('workspace.getLast', {});
+      // Don't override a folder the user opened in the meantime.
+      if (last.ok && last.value.workspace && !this.workspacePath()) {
+        this.setWorkspace(last.value.workspace);
+      }
+    } finally {
+      this.restoring.set(false);
     }
+  }
+
+  private setWorkspace(workspace: WorkspaceInfo): void {
+    this.workspacePath.set(workspace.path);
+    this.workspaceName.set(workspace.name);
   }
 
   showView(view: SidebarView): void {

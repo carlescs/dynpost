@@ -14,10 +14,12 @@ internal sealed record PickFolderRequest
 }
 
 /// <param name="Path">The chosen folder, or <c>null</c> when the user cancelled.</param>
-/// <param name="Name">The folder's name, for display.</param>
-internal sealed record PickFolderResponse(string? Path, string? Name);
+internal sealed record PickFolderResponse(string? Path);
 
-/// <summary>Lets the user choose the workspace folder.</summary>
+/// <summary>
+/// Lets the user choose a workspace folder. Only shows the dialog; the UI then opens the folder
+/// with <see cref="BridgeMessageTypes.WorkspaceOpen"/>.
+/// </summary>
 internal sealed class PickWorkspaceFolderHandler(IFolderPicker picker) : BridgeHandler<PickFolderRequest, PickFolderResponse>
 {
     public override string Type => BridgeMessageTypes.WorkspacePickFolder;
@@ -27,12 +29,6 @@ internal sealed class PickWorkspaceFolderHandler(IFolderPicker picker) : BridgeH
         CancellationToken cancellationToken)
     {
         var path = await picker.PickFolderAsync("Open workspace folder", cancellationToken);
-        if (string.IsNullOrEmpty(path))
-        {
-            return new PickFolderResponse(null, null);
-        }
-
-        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
-        return new PickFolderResponse(path, string.IsNullOrEmpty(name) ? path : name);
+        return new PickFolderResponse(string.IsNullOrEmpty(path) ? null : path);
     }
 }

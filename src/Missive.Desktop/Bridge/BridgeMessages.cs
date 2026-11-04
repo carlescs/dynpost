@@ -24,6 +24,8 @@ internal sealed record BridgeResponse(string Id, bool Ok, object? Payload = null
 internal static class BridgeMessageTypes
 {
     public const string WorkspacePickFolder = "workspace.pickFolder";
+    public const string WorkspaceOpen = "workspace.open";
+    public const string WorkspaceGetLast = "workspace.getLast";
     public const string GitStatus = "git.status";
     public const string GitCommit = "git.commit";
     public const string GitPull = "git.pull";

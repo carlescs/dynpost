@@ -46,17 +46,29 @@ export interface GitStatus {
 
 export type PullOutcome = 'upToDate' | 'updated' | 'conflicted';
 
+export interface WorkspaceInfo {
+  /** Absolute path of the workspace folder. */
+  path: string;
+  /** The folder's name, for display. */
+  name: string;
+}
+
 export interface WorkspaceRequest {
   workspacePath: string;
 }
 
 /** Request and response payloads, by message type. */
 export interface BridgeMessages {
+  /** Shows the folder dialog only; open the chosen folder with `workspace.open`. */
   'workspace.pickFolder': {
     request: Record<string, never>;
-    /** Both absent when the user cancelled. */
-    response: { path?: string; name?: string };
+    /** Absent when the user cancelled. */
+    response: { path?: string };
   };
+  /** Opens a workspace folder and remembers it for the next launch. */
+  'workspace.open': { request: WorkspaceRequest; response: WorkspaceInfo };
+  /** The workspace opened last, if its folder still exists. */
+  'workspace.getLast': { request: Record<string, never>; response: { workspace?: WorkspaceInfo } };
   'git.status': { request: WorkspaceRequest; response: GitStatus };
   'git.commit': {
     /** Without `paths`, every change in the workspace is committed. */

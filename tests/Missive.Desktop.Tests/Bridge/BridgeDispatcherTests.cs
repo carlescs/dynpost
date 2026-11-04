@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Missive.Application.Common;
 using Missive.Application.Git;
+using Missive.Application.Settings;
+using Missive.Application.Workspace;
 using Missive.Desktop.Bridge;
 using Missive.Desktop.Bridge.Git;
 using Missive.Desktop.Bridge.Workspace;
@@ -16,6 +18,8 @@ public class BridgeDispatcherTests
 
     private readonly IGitService _git = Substitute.For<IGitService>();
     private readonly IFolderPicker _picker = Substitute.For<IFolderPicker>();
+    private readonly IWorkspaceRepository _workspaces = Substitute.For<IWorkspaceRepository>();
+    private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
     private readonly BridgeDispatcher _dispatcher;
 
     public BridgeDispatcherTests()
@@ -23,6 +27,8 @@ public class BridgeDispatcherTests
         _dispatcher = new BridgeDispatcher(
         [
             new PickWorkspaceFolderHandler(_picker),
+            new OpenWorkspaceHandler(new OpenWorkspace(_workspaces, _settings)),
+            new GetLastWorkspaceHandler(new GetLastWorkspace(_settings, _workspaces)),
             new GitStatusHandler(new GetGitStatus(_git)),
             new GitCommitHandler(new CommitChanges(_git)),
             new GitPullHandler(new PullChanges(_git)),
@@ -163,16 +169,13 @@ public class BridgeDispatcherTests
     }
 
     [Fact]
-    public async Task PickFolder_ReturnsThePathAndName()
+    public async Task PickFolder_ReturnsThePath()
     {
-        var folder = Path.Combine(Path.GetTempPath(), "my-api");
-        _picker.PickFolderAsync(default!, default).ReturnsForAnyArgs(Task.FromResult<string?>(folder));
+        _picker.PickFolderAsync(default!, default).ReturnsForAnyArgs(Task.FromResult<string?>(Workspace));
 
         var response = await DispatchAsync("""{ "id": "6", "type": "workspace.pickFolder", "payload": {} }""");
 
-        var payload = response.GetProperty("payload");
-        Assert.Equal(folder, payload.GetProperty("path").GetString());
-        Assert.Equal("my-api", payload.GetProperty("name").GetString());
+        Assert.Equal(Workspace, response.GetProperty("payload").GetProperty("path").GetString());
     }
 
     [Fact]
@@ -184,6 +187,59 @@ public class BridgeDispatcherTests
 
         Assert.True(response.GetProperty("ok").GetBoolean());
         Assert.False(response.GetProperty("payload").TryGetProperty("path", out _));
+    }
+
+    [Fact]
+    public async Task OpenWorkspace_ReturnsTheWorkspaceAndRemembersIt()
+    {
+        _workspaces.ExistsAsync(Workspace, Arg.Any<CancellationToken>()).Returns(true);
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(AppSettings.Default);
+        _settings.SaveAsync(default!, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Default));
+
+        var response = await DispatchAsync(
+            """{ "id": "8", "type": "workspace.open", "payload": { "workspacePath": "/work/my-api" } }""");
+
+        var payload = response.GetProperty("payload");
+        Assert.Equal(Workspace, payload.GetProperty("path").GetString());
+        Assert.Equal("my-api", payload.GetProperty("name").GetString());
+        _ = _settings.Received(1).SaveAsync(
+            Arg.Is<AppSettings>(s => s.LastWorkspacePath == Workspace),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OpenWorkspace_MissingFolder_IsReported()
+    {
+        _workspaces.ExistsAsync(default!, default).ReturnsForAnyArgs(false);
+
+        var response = await DispatchAsync(
+            """{ "id": "9", "type": "workspace.open", "payload": { "workspacePath": "/gone" } }""");
+
+        Assert.Equal(WorkspaceErrors.NotFoundCode, ErrorCode(response));
+    }
+
+    [Fact]
+    public async Task GetLastWorkspace_ReturnsTheRememberedWorkspace()
+    {
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new AppSettings(Workspace));
+        _workspaces.ExistsAsync(Workspace, Arg.Any<CancellationToken>()).Returns(true);
+
+        var response = await DispatchAsync("""{ "id": "10", "type": "workspace.getLast", "payload": {} }""");
+
+        var workspace = response.GetProperty("payload").GetProperty("workspace");
+        Assert.Equal(Workspace, workspace.GetProperty("path").GetString());
+        Assert.Equal("my-api", workspace.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task GetLastWorkspace_WithNothingRemembered_ReturnsNoWorkspace()
+    {
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(AppSettings.Default);
+
+        var response = await DispatchAsync("""{ "id": "11", "type": "workspace.getLast", "payload": {} }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean());
+        Assert.False(response.GetProperty("payload").TryGetProperty("workspace", out _));
     }
 
     private async Task<JsonElement> DispatchAsync(string message)

@@ -131,7 +131,9 @@ Desktop → Application
 - Only rewrite a file when its content actually changed — no reformatting on
   load/save round-trips.
 - Secrets, response history and UI state go in `.missive/` (git-ignored),
-  never in tracked files. Ensure `.missive/` is in the workspace `.gitignore`.
+  never in tracked files. App-wide, per-user settings (such as the last opened
+  workspace) go through `IAppSettingsStore` into `settings.json` in the user's
+  app data folder, never into a workspace. Ensure `.missive/` is in the workspace `.gitignore`.
 - If you change the format, update the examples in `README.md`.
 
 ## Git behavior in the app

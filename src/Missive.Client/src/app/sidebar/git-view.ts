@@ -50,6 +50,10 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
       <p class="px-3 text-sm text-slate-500">
         Source control is available in the Missive desktop app.
       </p>
+    } @else if (workspace.restoring()) {
+      <p class="px-3 text-sm text-slate-500">
+        <fa-icon [icon]="faSpinner" animation="spin" /> Opening the last workspace…
+      </p>
     } @else if (!workspace.workspacePath()) {
       <div class="space-y-2 px-3 text-sm text-slate-500">
         <p>Open a workspace folder to see its changes and sync it with git.</p>

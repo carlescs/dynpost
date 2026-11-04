@@ -99,7 +99,10 @@ Missive runs your installed `git` command-line client, so your git
 configuration, hooks and credential helpers apply as usual. In detail:
 
 - **Opening a workspace**: choose its folder with **Open folder** in the header
-  (or in the Source control view).
+  (or in the Source control view). Missive reopens the last workspace at the
+  next launch, if its folder still exists. That choice is stored per user,
+  outside any workspace, in `settings.json` in the app data folder
+  (`%APPDATA%\Missive` on Windows, `~/.config/Missive` on Linux and macOS).
 - **Status** lists changed files inside the workspace folder only (the
   workspace can be a subfolder of a larger repository), plus the branch, its
   upstream and how many commits it is ahead of or behind it.
