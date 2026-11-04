@@ -47,11 +47,18 @@ dotnet test Missive.sln                       # runs xUnit tests
 dotnet run --project src/Missive.Desktop      # run the desktop app (needs a GUI)
 cd src/Missive.Client && npm ci && npm run build   # client only
 cd src/Missive.Client && npm start            # browser dev server on :4200
+cd src/Missive.Client && npm run format:check # Prettier check (CI enforces it)
 ```
 
-Test projects use xUnit with NSubstitute for mocking; there are no tests yet and no linter. Before
-finishing, run `dotnet build Missive.sln` and `dotnet test Missive.sln` (or
-`npm run build` for client-only changes). Add tests alongside new backend code.
+Test projects use xUnit with NSubstitute for mocking; there are no tests yet and no linter beyond
+Prettier. Before finishing, run `dotnet build Missive.sln` and
+`dotnet test Missive.sln` (or `npm run build` for client-only changes), and
+`npm run format:check` when you touch the client.
+
+CI (`.github/workflows/ci.yml`) runs the Prettier check, the client build, and
+build + test on Windows, Linux and macOS. `.github/workflows/release.yml`
+publishes self-contained desktop builds to a GitHub release when a `v*` tag is
+pushed. Add tests alongside new backend code.
 
 ## Backend architecture
 
