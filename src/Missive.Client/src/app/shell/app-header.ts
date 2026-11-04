@@ -1,8 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faPaperPlane } from '@fortawesome/free-solid-svg-icons';
+import { faFolderOpen, faPaperPlane } from '@fortawesome/free-solid-svg-icons';
+import { Bridge } from '../bridge/bridge';
+import { WorkspaceStore } from '../workspace/workspace-store';
 
-/** Main application header. Hosts the app name; global options will go on the right. */
+/** Main application header: the app name, and global actions on the right. */
 @Component({
   selector: 'app-header',
   imports: [FaIconComponent],
@@ -14,10 +16,23 @@ import { faPaperPlane } from '@fortawesome/free-solid-svg-icons';
     <fa-icon class="text-sky-400" [icon]="faPaperPlane" />
     <span class="text-sm font-semibold tracking-wide text-white">Missive</span>
     <div class="ml-auto flex items-center gap-1">
-      <!-- Global options (settings, workspace switcher, …) go here. -->
+      @if (bridge.available) {
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
+          [title]="store.workspacePath() ?? 'Open a workspace folder'"
+          (click)="store.openWorkspace()"
+        >
+          <fa-icon [icon]="faFolderOpen" />
+          {{ store.workspacePath() ? store.workspaceName() : 'Open folder' }}
+        </button>
+      }
     </div>
   `,
 })
 export class AppHeader {
+  protected readonly store = inject(WorkspaceStore);
+  protected readonly bridge = inject(Bridge);
   protected readonly faPaperPlane = faPaperPlane;
+  protected readonly faFolderOpen = faFolderOpen;
 }

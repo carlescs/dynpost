@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { faCodeBranch, faFolderTree } from '@fortawesome/free-solid-svg-icons';
+import { GitStore } from '../git/git-store';
 import { SidebarView, WorkspaceStore } from '../workspace/workspace-store';
 
 @Component({
@@ -22,11 +23,11 @@ import { SidebarView, WorkspaceStore } from '../workspace/workspace-store';
           <span class="absolute inset-y-1 -left-1 w-0.5 rounded bg-sky-400"></span>
         }
         <fa-icon [icon]="item.icon" />
-        @if (item.view === 'git' && store.git().changes.length) {
+        @if (item.view === 'git' && git.changeCount()) {
           <span
             class="absolute right-0.5 bottom-0.5 min-w-4 rounded-full bg-sky-500 px-1 text-[10px] leading-4 text-white"
           >
-            {{ store.git().changes.length }}
+            {{ git.changeCount() }}
           </span>
         }
       </button>
@@ -35,6 +36,7 @@ import { SidebarView, WorkspaceStore } from '../workspace/workspace-store';
 })
 export class ActivityBar {
   protected readonly store = inject(WorkspaceStore);
+  protected readonly git = inject(GitStore);
 
   protected readonly items: { view: SidebarView; label: string; icon: typeof faFolderTree }[] = [
     { view: 'explorer', label: 'Explorer', icon: faFolderTree },

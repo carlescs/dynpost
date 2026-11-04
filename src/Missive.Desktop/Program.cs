@@ -1,3 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
+using Missive.Desktop.Bridge;
+using Missive.Desktop.Bridge.Workspace;
+using Missive.Desktop.Composition;
 using Missive.Desktop.Hosting;
 using Photino.NET;
 
@@ -17,13 +21,22 @@ internal static class Program
         }
 
         var assets = new BundledAssets(wwwroot);
+        var window = new PhotinoWindow();
 
-        new PhotinoWindow()
+        using var services = new ServiceCollection()
+            .AddMissive()
+            .AddSingleton<IFolderPicker>(new PhotinoFolderPicker(window))
+            .BuildServiceProvider();
+
+        var bridge = services.GetRequiredService<PhotinoBridge>();
+
+        window
             .SetTitle("Missive")
             .SetUseOsDefaultSize(false)
             .SetSize(1024, 768)
             .Center()
             .RegisterCustomSchemeHandler(BundledAssets.Scheme, assets.Handle)
+            .RegisterWebMessageReceivedHandler(bridge.OnWebMessageReceived)
             .Load(BundledAssets.StartUri)
             .WaitForClose();
     }

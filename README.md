@@ -8,8 +8,9 @@ No account, no cloud workspace, no proprietary export format.
 > **Status:** early development. The app is currently a Photino.NET + Angular
 > skeleton with the initial UI layout (workspace explorer and source control
 > sidebar, resizable by dragging its edge, tabbed request editor) running on
-> sample data. The backend git sync (status, commit, pull, push) is implemented
-> but not yet connected to the UI; the other features below are planned.
+> sample data. Git sync works: open a workspace folder from the header and use
+> the Source control view to see changes, commit, pull and push. The other
+> features below are planned.
 
 ## Why Missive
 
@@ -97,11 +98,13 @@ reported so you can resolve them (in Missive's editor or your own tools).
 Missive runs your installed `git` command-line client, so your git
 configuration, hooks and credential helpers apply as usual. In detail:
 
+- **Opening a workspace**: choose its folder with **Open folder** in the header
+  (or in the Source control view).
 - **Status** lists changed files inside the workspace folder only (the
   workspace can be a subfolder of a larger repository), plus the branch, its
   upstream and how many commits it is ahead of or behind it.
 - **Commit** stages and commits every change in the workspace, or only the files
-  you select, and never touches files outside the workspace. Files in
+  you tick in the changes list, and never touches files outside the workspace. Files in
   `.missive/` are never committed, even if they are not git-ignored.
 - **Pull** merges the upstream branch into yours; it never rebases. If the merge
   conflicts, the conflicted files are listed and left for you to resolve and

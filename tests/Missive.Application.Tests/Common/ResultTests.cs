@@ -23,4 +23,14 @@ public class ResultTests
         Assert.Equal("test.failed", result.Error?.Code);
         Assert.Throws<InvalidOperationException>(() => result.Value);
     }
+
+    [Fact]
+    public void Map_TransformsSuccessAndPassesFailureThrough()
+    {
+        Result<int> success = 21;
+        Result<int> failure = new Error("test.failed", "It failed.");
+
+        Assert.Equal("42", success.Map(v => (v * 2).ToString()).Value);
+        Assert.Equal("test.failed", failure.Map(v => v.ToString()).Error?.Code);
+    }
 }

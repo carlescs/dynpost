@@ -29,6 +29,10 @@ public sealed class Result<T>
     /// <summary>The error of a failed result, or <c>null</c> on success.</summary>
     public Error? Error { get; }
 
+    /// <summary>Transforms the value of a successful result; a failure is passed through.</summary>
+    public Result<TOut> Map<TOut>(Func<T, TOut> map) =>
+        IsSuccess ? Result<TOut>.Success(map(_value!)) : Result<TOut>.Failure(Error!);
+
     public static Result<T> Success(T value) => new(value);
 
     public static Result<T> Failure(Error error) => new(error ?? throw new ArgumentNullException(nameof(error)));

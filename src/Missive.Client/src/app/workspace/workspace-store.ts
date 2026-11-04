@@ -1,5 +1,7 @@
-import { Injectable, computed, signal } from '@angular/core';
-import { GitState, RequestDocument, WorkspaceNode } from './models';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { Bridge } from '../bridge/bridge';
+import { BridgeError } from '../bridge/messages';
+import { RequestDocument, WorkspaceNode } from './models';
 
 export type SidebarView = 'explorer' | 'git';
 
@@ -8,15 +10,19 @@ export const SIDEBAR_MAX_WIDTH = 600;
 export const SIDEBAR_DEFAULT_WIDTH = 256;
 
 /**
- * UI state for the open workspace: the file tree, git status and the documents open in the
- * editor.
+ * UI state for the open workspace: its folder, the file tree and the documents open in the editor.
  *
- * The workspace tree and git status are placeholder sample data until the Photino bridge to the
- * .NET backend exists; all file and git work will happen there.
+ * The workspace tree is placeholder sample data until requests are loaded from disk through the
+ * bridge; all file work happens in the .NET backend.
  */
 @Injectable({ providedIn: 'root' })
 export class WorkspaceStore {
+  private readonly bridge = inject(Bridge);
+
+  /** Absolute path of the workspace folder, or `null` until the user opens one. */
+  readonly workspacePath = signal<string | null>(null);
   readonly workspaceName = signal('my-api');
+  readonly openError = signal<BridgeError | null>(null);
 
   readonly tree = signal<WorkspaceNode[]>([
     {
@@ -40,16 +46,6 @@ export class WorkspaceStore {
     { path: 'health.yaml', name: 'Health check', kind: 'request', method: 'GET' },
   ]);
 
-  readonly git = signal<GitState>({
-    branch: 'main',
-    ahead: 1,
-    behind: 0,
-    changes: [
-      { path: 'users/create-user.yaml', status: 'modified' },
-      { path: 'orders/list-orders.yaml', status: 'added' },
-    ],
-  });
-
   readonly sidebarView = signal<SidebarView>('explorer');
   readonly sidebarOpen = signal(true);
   /** Sidebar width in pixels; kept here so it survives closing and reopening the sidebar. */
@@ -62,6 +58,21 @@ export class WorkspaceStore {
   );
 
   private untitledCount = 0;
+
+  /** Asks the host for a workspace folder and opens it; does nothing if the user cancels. */
+  async openWorkspace(): Promise<void> {
+    this.openError.set(null);
+    const result = await this.bridge.request('workspace.pickFolder', {});
+    if (!result.ok) {
+      this.openError.set(result.error);
+      return;
+    }
+    const { path, name } = result.value;
+    if (path) {
+      this.workspacePath.set(path);
+      this.workspaceName.set(name ?? path);
+    }
+  }
 
   showView(view: SidebarView): void {
     if (this.sidebarView() === view) {

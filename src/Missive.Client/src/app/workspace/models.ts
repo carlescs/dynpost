@@ -40,20 +40,6 @@ export interface WorkspaceNode {
   children?: WorkspaceNode[];
 }
 
-export type GitFileStatus = 'modified' | 'added' | 'deleted' | 'untracked' | 'conflicted';
-
-export interface GitChange {
-  path: string;
-  status: GitFileStatus;
-}
-
-export interface GitState {
-  branch: string;
-  ahead: number;
-  behind: number;
-  changes: GitChange[];
-}
-
 export const METHOD_COLORS: Record<HttpMethod, string> = {
   GET: 'text-emerald-600',
   POST: 'text-amber-600',

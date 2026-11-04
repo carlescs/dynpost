@@ -32,14 +32,16 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   - `src/Missive.Desktop` — Photino.NET 4 window, bridge, composition root. Its
     csproj runs `npm ci` + `npm run build` for the client and copies
     `dist/missive-client/browser` into `wwwroot`.
-  - `tests/Missive.<Layer>.Tests` — one test project per backend layer.
+  - `tests/Missive.<Layer>.Tests` — one test project per backend layer
+    (Desktop tests cover the bridge dispatcher and handlers).
 - All projects are in `Missive.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
   Studio; it is not built by the solution and has npm install/build disabled —
   the Desktop csproj builds it. So far the backend implements git sync only
-  (`Domain/Git`, `Application/Git`, `Infrastructure/Git`); it is not yet wired
-  to the UI through the bridge.
+  (`Domain/Git`, `Application/Git`, `Infrastructure/Git`), exposed to the UI
+  through the bridge (`Desktop/Bridge`, client `src/app/bridge` and
+  `src/app/git`).
 
 ## Commands
 
@@ -105,6 +107,13 @@ Desktop → Application
 - The UI talks to the host through Photino's message bridge. Use a typed
   request/response envelope with a correlation id and an explicit error shape;
   keep message types defined in one place on each side and keep them in sync.
+  On the host, `Bridge/BridgeMessages.cs` holds the envelope and type names and
+  each handler (a `BridgeHandler<TRequest, TResponse>` registered in
+  `Composition/ServiceCollectionExtensions.cs`) has its contract records next
+  to it; on the client, `src/app/bridge/messages.ts` holds them all. Responses
+  are `{ id, ok: true, payload }` or `{ id, ok: false, error: { code, message } }`
+  and the client's `Bridge.request()` resolves to a result, never rejects.
+  Messages are handled off the UI thread.
 - The bundled frontend is served by `Missive.Desktop/Hosting/BundledAssets.cs`
   through a Photino custom scheme: `app://localhost/` on Linux/macOS and an
   intercepted `http://localhost/` on Windows (WebView2 can't navigate to custom
