@@ -5,7 +5,7 @@ namespace Missive.Application.Tests.Git;
 
 internal static class GitTestData
 {
-    public const string Workspace = "/work/my-api";
+    public const string WorkspacePath = "/work/my-api";
 
     public static GitStatus Status(
         string? branch = "main",

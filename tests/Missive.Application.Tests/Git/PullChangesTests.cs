@@ -19,9 +19,9 @@ public class PullChangesTests
     [Fact]
     public async Task DetachedHead_IsRejected()
     {
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>()).Returns(Ok(Status(branch: null, upstream: null)));
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Status(branch: null, upstream: null)));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.Equal(GitErrors.DetachedHeadCode, result.Error?.Code);
         _ = _git.DidNotReceiveWithAnyArgs().PullAsync(default!, default);
@@ -30,9 +30,9 @@ public class PullChangesTests
     [Fact]
     public async Task BranchWithoutUpstream_IsRejected()
     {
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>()).Returns(Ok(Status(upstream: null)));
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Status(upstream: null)));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.Equal(GitErrors.NoUpstreamCode, result.Error?.Code);
         _ = _git.DidNotReceiveWithAnyArgs().PullAsync(default!, default);
@@ -41,10 +41,10 @@ public class PullChangesTests
     [Fact]
     public async Task UnresolvedConflicts_AreRejected()
     {
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>())
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
             .Returns(Ok(Status(merging: true, changes: [new GitChange("a.yaml", GitFileStatus.Conflicted)])));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.Equal(GitErrors.UnresolvedConflictsCode, result.Error?.Code);
         _ = _git.DidNotReceiveWithAnyArgs().PullAsync(default!, default);
@@ -57,10 +57,10 @@ public class PullChangesTests
     public async Task Pull_ReturnsTheOutcomeAndTheNewStatus(PullOutcome outcome)
     {
         var after = Status(merging: true, changes: [new GitChange("a.yaml", GitFileStatus.Conflicted)]);
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>()).Returns(Ok(Clean()), Ok(after));
-        _git.PullAsync(Workspace, Arg.Any<CancellationToken>()).Returns(Ok(outcome));
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Clean()), Ok(after));
+        _git.PullAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(outcome));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(outcome, result.Value.Outcome);
@@ -70,11 +70,11 @@ public class PullChangesTests
     [Fact]
     public async Task PullFailure_IsReturned()
     {
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>()).Returns(Ok(Clean()));
-        _git.PullAsync(Workspace, Arg.Any<CancellationToken>())
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Clean()));
+        _git.PullAsync(WorkspacePath, Arg.Any<CancellationToken>())
             .Returns(Result<PullOutcome>.Failure(GitErrors.CommandFailed("pull", "offline")));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.Equal(GitErrors.CommandFailedCode, result.Error?.Code);
         Assert.Contains("offline", result.Error!.Message);

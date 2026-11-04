@@ -19,9 +19,9 @@ public class PushChangesTests
     [Fact]
     public async Task DetachedHead_IsRejected()
     {
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>()).Returns(Ok(Status(branch: null)));
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Status(branch: null)));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.Equal(GitErrors.DetachedHeadCode, result.Error?.Code);
         _ = _git.DidNotReceiveWithAnyArgs().PushAsync(default!, default, default);
@@ -30,10 +30,10 @@ public class PushChangesTests
     [Fact]
     public async Task UnresolvedConflicts_AreRejected()
     {
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>())
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
             .Returns(Ok(Status(merging: true, changes: [new GitChange("a.yaml", GitFileStatus.Conflicted)])));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.Equal(GitErrors.UnresolvedConflictsCode, result.Error?.Code);
         _ = _git.DidNotReceiveWithAnyArgs().PushAsync(default!, default, default);
@@ -45,24 +45,24 @@ public class PushChangesTests
     public async Task Push_SetsTheUpstreamOnlyWhenMissing(string? upstream, bool setUpstream)
     {
         var after = Status();
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>()).Returns(Ok(Status(upstream: upstream)), Ok(after));
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Status(upstream: upstream)), Ok(after));
         _git.PushAsync(default!, default, default).ReturnsForAnyArgs(Ok(Unit.Default));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.True(result.IsSuccess);
         Assert.Same(after, result.Value);
-        _ = _git.Received(1).PushAsync(Workspace, setUpstream, Arg.Any<CancellationToken>());
+        _ = _git.Received(1).PushAsync(WorkspacePath, setUpstream, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task RejectedPush_IsReturned()
     {
-        _git.GetStatusAsync(Workspace, Arg.Any<CancellationToken>()).Returns(Ok(Status()));
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Status()));
         _git.PushAsync(default!, default, default)
             .ReturnsForAnyArgs(Result<Unit>.Failure(GitErrors.PushRejected("! refs/heads/main [rejected]")));
 
-        var result = await _useCase.ExecuteAsync(Workspace);
+        var result = await _useCase.ExecuteAsync(WorkspacePath);
 
         Assert.Equal(GitErrors.PushRejectedCode, result.Error?.Code);
     }
