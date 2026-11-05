@@ -34,6 +34,15 @@ internal static class BridgeMessageTypes
     /// <summary>Moves a request file into another folder. Payload: <see cref="MoveRequestPayload"/>. Result: its new path.</summary>
     public const string RequestMove = "request.move";
 
+    /// <summary>
+    /// Sends a request (saved or not) and waits for the response. Payload: <see cref="SendRequestPayload"/>.
+    /// Result: response.
+    /// </summary>
+    public const string RequestSend = "request.send";
+
+    /// <summary>Cancels a request being sent. Payload: <see cref="CancelRequestPayload"/>. Result: whether it was being sent.</summary>
+    public const string RequestCancel = "request.cancel";
+
     /// <summary>Creates a folder. Payload: <see cref="CreateFolderPayload"/>. Result: folder.</summary>
     public const string FolderCreate = "folder.create";
 
@@ -81,6 +90,11 @@ internal sealed record LoadRequestPayload(string Path);
 internal sealed record CreateRequestPayload(string Folder, RequestDto Request);
 
 internal sealed record SaveRequestPayload(string Path, RequestDto Request);
+
+/// <param name="Id">Chosen by the UI; pass it to <see cref="BridgeMessageTypes.RequestCancel"/> to cancel.</param>
+internal sealed record SendRequestPayload(string Id, RequestDto Request);
+
+internal sealed record CancelRequestPayload(string Id);
 
 /// <param name="Folder">The destination folder; <c>""</c> is the workspace root.</param>
 internal sealed record MoveRequestPayload(string Path, string Folder);

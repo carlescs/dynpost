@@ -1,3 +1,5 @@
+import { ResponseDto } from '../bridge/messages';
+
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
@@ -38,6 +40,10 @@ export interface RequestContent {
   body: string;
 }
 
+/** The outcome of the last send of a request: its response, or why there is none. */
+export type ResponseState =
+  { kind: 'response'; response: ResponseDto } | { kind: 'error'; code: string; message: string };
+
 /** A request open in the editor. Mirrors one request YAML file in the workspace. */
 export interface RequestDocument extends RequestContent {
   /** Workspace-relative file path; `null` for a new request that has not been saved yet. */
@@ -48,6 +54,10 @@ export interface RequestDocument extends RequestContent {
   id: string;
   dirty: boolean;
   saving: boolean;
+  /** The id of the send in progress, or `null` when the request isn't being sent. */
+  sendId: string | null;
+  /** The last response (or send error); kept in memory only. */
+  response: ResponseState | null;
   /** Incremented on every edit, so a save can tell whether the document changed meanwhile. */
   revision: number;
 }

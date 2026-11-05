@@ -39,6 +39,24 @@ export interface SavedRequestDto {
   request: RequestDto;
 }
 
+export interface ResponseDto {
+  status: number;
+  /** The reason phrase, e.g. `Not Found`; may be empty. */
+  statusText: string;
+  /** In the order received; names may repeat. */
+  headers: { key: string; value: string }[];
+  /** The media type without parameters, e.g. `application/json`. */
+  contentType?: string | null;
+  /** The body as text, or base64 when `bodyEncoding` is `base64` (binary content). */
+  body: string;
+  bodyEncoding: 'text' | 'base64';
+  /** Size of the received body in bytes. */
+  size: number;
+  /** Whether the body was too large and was cut off. */
+  truncated: boolean;
+  durationMs: number;
+}
+
 export interface FolderDto {
   path: string;
 }
@@ -118,6 +136,13 @@ export interface BridgeMessages {
   'request.save': { payload: { path: string; request: RequestDto }; result: SavedRequestDto };
   /** Moves a request file into `folder` (`''` is the root), keeping its file name. */
   'request.move': { payload: { path: string; folder: string }; result: { path: string } };
+  /**
+   * Sends a request (saved or not) from the host and waits for the response. `id` is chosen by
+   * the UI and can be passed to `request.cancel`.
+   */
+  'request.send': { payload: { id: string; request: RequestDto }; result: ResponseDto };
+  /** Cancels a request being sent; the result says whether it was still being sent. */
+  'request.cancel': { payload: { id: string }; result: boolean };
   /** Creates a folder inside `parent` (`''` is the workspace root). */
   'folder.create': { payload: { parent: string; name: string }; result: FolderDto };
   /** Renames a folder within its parent; the result is its new path. */
@@ -170,6 +195,10 @@ export const ERROR_CODES = {
   alreadyExists: 'already_exists',
   folderNotEmpty: 'folder_not_empty',
   io: 'io_error',
+  networkError: 'http.network_error',
+  timeout: 'http.timeout',
+  cancelled: 'http.cancelled',
+  alreadySending: 'http.already_sending',
   unknownMessage: 'unknown_message',
   badPayload: 'bad_payload',
   internal: 'internal_error',

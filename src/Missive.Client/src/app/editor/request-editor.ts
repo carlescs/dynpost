@@ -1,6 +1,6 @@
 import { Component, inject, input, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { faBan, faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import {
   AUTH_TYPES,
   AuthType,
@@ -14,7 +14,10 @@ import {
   RequestDocument,
 } from '../workspace/models';
 import { WorkspaceStore } from '../workspace/workspace-store';
+import { CodeEditor } from './code/code-editor';
 import { KeyValueTable } from './key-value-table';
+import { ResponseViewer } from './response-viewer';
+import { VariableInput } from './variable-input';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body';
 
@@ -35,7 +38,7 @@ const BODY_LABELS: Record<BodyType, string> = {
 
 @Component({
   selector: 'app-request-editor',
-  imports: [FaIconComponent, KeyValueTable],
+  imports: [FaIconComponent, KeyValueTable, ResponseViewer, CodeEditor, VariableInput],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     @let doc = document();
@@ -80,22 +83,34 @@ const BODY_LABELS: Record<BodyType, string> = {
             <option [value]="method" [selected]="method === doc.method">{{ method }}</option>
           }
         </select>
-        <input
-          class="min-w-0 flex-1 px-3 py-1.5 font-mono text-sm focus:outline-none"
+        <app-variable-input
+          class="flex-1"
+          ariaLabel="URL"
           [placeholder]="urlPlaceholder"
-          aria-label="URL"
-          spellcheck="false"
           [value]="doc.url"
-          (input)="patch({ url: $any($event.target).value })"
+          (valueChange)="patch({ url: $event })"
         />
       </div>
-      <button
-        type="button"
-        class="flex items-center gap-2 rounded bg-sky-600 px-4 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-        [disabled]="!doc.url.trim()"
-      >
-        <fa-icon [icon]="faPaperPlane" /> Send
-      </button>
+      @if (doc.sendId) {
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded border border-slate-300 px-4 text-sm font-medium hover:bg-slate-100"
+          title="Cancel the request"
+          (click)="cancel()"
+        >
+          <fa-icon [icon]="faBan" /> Cancel
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded bg-sky-600 px-4 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          title="Send request (Ctrl+Enter)"
+          [disabled]="!doc.url.trim()"
+          (click)="send()"
+        >
+          <fa-icon [icon]="faPaperPlane" /> Send
+        </button>
+      }
     </div>
 
     <!-- Request sections -->
@@ -119,7 +134,7 @@ const BODY_LABELS: Record<BodyType, string> = {
       }
     </div>
 
-    <section class="min-h-32 flex-1 overflow-y-auto px-4 py-2">
+    <section class="flex min-h-32 flex-1 flex-col overflow-y-auto px-4 py-2">
       @switch (activeTab()) {
         @case ('params') {
           <app-key-value-table
@@ -245,28 +260,30 @@ const BODY_LABELS: Record<BodyType, string> = {
           @if (doc.bodyType === 'none') {
             <p class="mt-3 text-sm text-slate-500">This request does not have a body.</p>
           } @else {
-            <textarea
-              class="mt-2 block h-48 w-full rounded border border-slate-300 p-2 font-mono text-sm focus:border-sky-500 focus:outline-none"
-              aria-label="Request body"
-              spellcheck="false"
+            @if (doc.bodyType === 'form' || doc.bodyType === 'urlencoded') {
+              <p class="mt-2 text-xs text-slate-500">
+                One <code>name=value</code> pair per line.
+                @if (doc.bodyType === 'urlencoded') {
+                  Values are sent as written, so percent-encode them.
+                }
+              </p>
+            }
+            <app-code-editor
+              class="mt-2 min-h-24 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
+              ariaLabel="Request body"
               [value]="doc.body"
-              (input)="patch({ body: $any($event.target).value })"
-            ></textarea>
+              [language]="doc.bodyType === 'json' ? 'json' : 'plaintext'"
+              [highlightVariables]="true"
+              (valueChange)="patch({ body: $event })"
+              (submit)="send()"
+            />
           }
         }
       }
     </section>
 
     <!-- Response -->
-    <section class="flex h-2/5 min-h-32 shrink-0 flex-col border-t border-slate-200 bg-slate-50">
-      <header class="flex h-9 items-center px-4">
-        <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Response</h2>
-      </header>
-      <div class="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-slate-400">
-        <fa-icon class="text-2xl" [icon]="faPaperPlane" />
-        Send the request to see the response here.
-      </div>
-    </section>
+    <app-response-viewer [document]="doc" />
   `,
 })
 export class RequestEditor {
@@ -292,6 +309,7 @@ export class RequestEditor {
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faFloppyDisk = faFloppyDisk;
   protected readonly faSpinner = faSpinner;
+  protected readonly faBan = faBan;
   protected readonly secretExample = '{{apiToken}}';
   protected readonly fieldClass =
     'min-w-0 rounded border border-slate-300 px-2 py-1 font-mono focus:border-sky-500 focus:outline-none';
@@ -306,6 +324,14 @@ export class RequestEditor {
 
   protected save(): void {
     void this.store.save(this.document().id);
+  }
+
+  protected send(): void {
+    void this.store.send(this.document().id);
+  }
+
+  protected cancel(): void {
+    void this.store.cancelSend(this.document().id);
   }
 
   protected count(doc: RequestDocument, tab: RequestTab): number {

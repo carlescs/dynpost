@@ -8,9 +8,9 @@ No account, no cloud workspace, no proprietary export format.
 > **Status:** early development. You can open a workspace folder, browse its
 > request files in the explorer (a sidebar you can resize by dragging its edge),
 > edit them in the tabbed request editor and save changes or new requests back
-> to disk, and sync the folder with git from the Source control view (status,
-> commit, pull, push). Sending requests and environments are not implemented
-> yet.
+> to disk, send them and inspect the response, and sync the folder with git
+> from the Source control view (status, commit, pull, push). Environments (and
+> so `{{variable}}` values) are not implemented yet.
 
 ## Why Missive
 
@@ -28,11 +28,11 @@ No account, no cloud workspace, no proprietary export format.
       and folders between them with drag and drop
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
-- [ ] Sending requests
-- [ ] Response viewer: status, time, size, headers and a pretty-printed body
+- [x] Sending requests
+- [x] Response viewer: status, time, size, headers and a pretty-printed body
 - [ ] Collections as folders, with optional folder-level defaults
 - [ ] Environments with `{{variable}}` substitution
-- [ ] Auth helpers: Basic, Bearer token and API key
+- [x] Auth helpers: Basic, Bearer token and API key
 - [ ] Local response history (kept out of git)
 - [ ] Git sync: changed-file status, commit, pull, push, current branch, and
       clear reporting of merge conflicts
@@ -94,6 +94,8 @@ params:
 Auth types are `basic` (`username`, `password`), `bearer` (`token`) and
 `apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
 instead of a header). Body types are `json`, `text`, `form` and `urlencoded`.
+`form` (multipart) and `urlencoded` bodies hold one `name=value` pair per line;
+`urlencoded` values are sent as written, so percent-encode them yourself.
 
 New requests are saved as a file named after the request (`Create user` →
 `create-user.yaml`, or `create-user-2.yaml` if that name is taken). Renaming a
@@ -129,6 +131,34 @@ variables:
 Secret values such as `apiToken` belong in `.missive/secrets.yaml`, which
 Missive keeps out of git. Files are written with stable key order and minimal
 noise so diffs stay small and merges stay easy. The format is still evolving.
+
+## Sending requests
+
+**Send** (or Ctrl+Enter) sends the request as it is in the editor, saved or
+not; **Cancel** stops it. Requests are sent by the .NET backend, so browser
+rules such as CORS don't apply. When sending:
+
+- Enabled query parameters are appended to the URL, which gets `http://` if it
+  has no scheme. Disabled parameters and headers are left out.
+- `{{variable}}` references, highlighted in the URL and body editors, are
+  resolved first. Until environments exist no
+  variables are defined, so a request that uses one is not sent and the
+  undefined names are listed.
+- Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
+  query parameter; a header you set yourself takes precedence. JSON, text and
+  `urlencoded` bodies get a matching `Content-Type` unless you set one.
+- A `User-Agent: Missive` header is added unless you set one. Redirects are
+  followed, compressed responses are decompressed and no cookies are kept
+  between requests. A request times out after 60 seconds.
+
+The response pane shows the status, the time until the whole body was read, the
+body size and the headers. Request and response bodies are shown in the Monaco
+editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,
+GraphQL and Markdown, chosen from the body type or the response's
+`Content-Type`); JSON request bodies are also validated as you type. JSON
+responses are pretty-printed (switch to **Raw** for the original text), images
+are previewed, and other binary bodies are not shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
+request only; nothing is written to the workspace.
 
 ## Git sync
 
@@ -265,7 +295,7 @@ runtime and the platform webview prerequisites above, but not Node.js.
 - `src/Missive.Desktop`: Photino window, bridge, composition root, and
   build/publish integration.
 - `src/Missive.Client`: standalone Angular app with SCSS styles, Tailwind
-  CSS, Font Awesome icons and Angular CDK drag and drop.
+  CSS, Font Awesome icons, Angular CDK drag and drop and the Monaco editor.
 - `src/Missive.Domain`, `src/Missive.Application`, `src/Missive.Infrastructure`:
   backend layers (see [Architecture](#architecture)).
 - `tests/Missive.Domain.Tests`, `tests/Missive.Application.Tests`: fast unit

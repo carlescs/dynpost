@@ -1,6 +1,7 @@
 using Missive.Application.Common;
 using Missive.Application.Folders;
 using Missive.Application.Git;
+using Missive.Application.Http;
 using Missive.Domain.Git;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
@@ -41,6 +42,10 @@ internal static class BridgeHandlers
                 (p, ct) => Use<SaveRequest>().ExecuteAsync(p.Path, p.Request, ct))
             .Register<MoveRequestPayload, MovedRequestDto>(BridgeMessageTypes.RequestMove,
                 (p, _) => Task.FromResult(Use<MoveRequest>().Execute(p.Path, p.Folder)))
+            .Register<SendRequestPayload, ResponseDto>(BridgeMessageTypes.RequestSend,
+                (p, ct) => Use<SendRequest>().ExecuteAsync(p.Id, p.Request, ct))
+            .Register<CancelRequestPayload, bool>(BridgeMessageTypes.RequestCancel,
+                (p, _) => Task.FromResult(Result<bool>.Success(Use<CancelRequest>().Execute(p.Id))))
             .Register<CreateFolderPayload, FolderDto>(BridgeMessageTypes.FolderCreate,
                 (p, _) => Task.FromResult(Use<CreateFolder>().Execute(p.Parent, p.Name)))
             .Register<RenameFolderPayload, FolderDto>(BridgeMessageTypes.FolderRename,

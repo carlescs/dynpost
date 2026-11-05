@@ -54,8 +54,19 @@
                 "input": "public"
               }
             ],
-            "styles": ["src/tailwind.css", "src/styles.scss"],
-            "inlineStyleLanguage": "scss"
+            "styles": [
+              "src/tailwind.css",
+              "src/styles.scss",
+              {
+                "input": "node_modules/monaco-editor/min/vs/editor/editor.main.css",
+                "bundleName": "monaco",
+                "inject": false
+              }
+            ],
+            "inlineStyleLanguage": "scss",
+            "loader": {
+              ".ttf": "file"
+            }
           },
           "configurations": {
             "production": {
