@@ -40,7 +40,9 @@ internal static class GitIgnoreFile
             return content;
         }
 
-        var separator = content.Length == 0 || content.EndsWith('\n') ? string.Empty : "\n";
-        return content + separator + LocalFolderEntry + "\n";
+        // Match the file's line endings, so the change is one added line.
+        var newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var separator = content.Length == 0 || content.EndsWith('\n') ? string.Empty : newline;
+        return content + separator + LocalFolderEntry + newline;
     }
 }

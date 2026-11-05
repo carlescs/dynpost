@@ -7,6 +7,7 @@ import {
   GitStatus,
   PullOutcome,
 } from '../bridge/messages';
+import { EnvironmentStore } from '../environments/environment-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 
 export type GitOperation =
@@ -25,6 +26,7 @@ export interface GitNotice {
 export class GitStore {
   private readonly bridge = inject(Bridge);
   private readonly workspace = inject(WorkspaceStore);
+  private readonly environments = inject(EnvironmentStore);
 
   /** Whether git is reachable: the browser dev server has no git backend. */
   readonly available = this.bridge.isDesktop;
@@ -116,9 +118,10 @@ export class GitStore {
       (r) => {
         this.status.set(r.status);
         this.notice.set(PULL_NOTICES[r.outcome]);
-        // A pull can add, change or remove request files.
+        // A pull can add, change or remove request and environment files.
         void this.workspace.refresh();
         void this.workspace.reloadFromDisk();
+        void this.environments.refresh();
       },
     );
   }
@@ -164,6 +167,7 @@ export class GitStore {
         });
         void this.workspace.refresh();
         void this.workspace.reloadFromDisk([path]);
+        void this.environments.refresh();
       },
     );
   }
@@ -179,6 +183,7 @@ export class GitStore {
         this.notice.set({ kind: 'info', text: 'The merge was aborted.' });
         void this.workspace.refresh();
         void this.workspace.reloadFromDisk();
+        void this.environments.refresh();
       },
     );
   }

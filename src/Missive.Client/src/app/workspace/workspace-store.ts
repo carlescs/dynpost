@@ -10,7 +10,7 @@ import {
 } from './models';
 import { EMPTY_AUTH, fromNodeDto, fromRequestDto, toRequestDto } from './request-mapping';
 
-export type SidebarView = 'explorer' | 'git';
+export type SidebarView = 'explorer' | 'environments' | 'git';
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 600;

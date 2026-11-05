@@ -13,6 +13,7 @@ import {
   RequestContent,
   RequestDocument,
 } from '../workspace/models';
+import { EnvironmentStore } from '../environments/environment-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 import { CodeEditor } from './code/code-editor';
 import { KeyValueTable } from './key-value-table';
@@ -93,6 +94,7 @@ const BODY_LABELS: Record<BodyType, string> = {
           class="flex-1"
           ariaLabel="URL"
           [placeholder]="urlPlaceholder"
+          [variables]="environments.variables()"
           [value]="doc.url"
           (valueChange)="patch({ url: $event })"
         />
@@ -280,6 +282,7 @@ const BODY_LABELS: Record<BodyType, string> = {
               [value]="doc.body"
               [language]="doc.bodyType === 'json' ? 'json' : 'plaintext'"
               [highlightVariables]="true"
+              [variables]="environments.variables()"
               (valueChange)="patch({ body: $event })"
               (submit)="send()"
             />
@@ -296,6 +299,7 @@ export class RequestEditor {
   readonly document = input.required<RequestDocument>();
 
   private readonly store = inject(WorkspaceStore);
+  protected readonly environments = inject(EnvironmentStore);
 
   protected readonly activeTab = signal<RequestTab>('params');
   protected readonly tabs: { id: RequestTab; label: string }[] = [

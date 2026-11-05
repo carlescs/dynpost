@@ -1,7 +1,10 @@
 using System.Text;
 using Missive.Application.Common;
+using Missive.Application.Environments;
 using Missive.Application.Http;
 using Missive.Application.Requests;
+using Missive.Application.Workspaces;
+using Missive.Domain.Environments;
 using Missive.Domain.Http;
 using NSubstitute;
 
@@ -12,7 +15,38 @@ public class SendRequestTests
     private readonly IHttpSender _sender = Substitute.For<IHttpSender>();
     private readonly InFlightRequests _inFlight = new();
 
-    private SendRequest CreateSendRequest() => new(_sender, _inFlight);
+    private const string Root = "/work/my-api";
+
+    private readonly IEnvironmentStore _environments = Substitute.For<IEnvironmentStore>();
+    private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
+    private readonly IWorkspaceStateStore _state = Substitute.For<IWorkspaceStateStore>();
+    private readonly CurrentWorkspace _current = new();
+
+    public SendRequestTests()
+    {
+        _state.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(WorkspaceState.Default);
+        _secrets.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
+                new Dictionary<string, IReadOnlyDictionary<string, string>>()));
+    }
+
+    private SendRequest CreateSendRequest() =>
+        new(_sender, _inFlight, new ActiveEnvironment(_environments, _secrets, _state, _current));
+
+    /// <summary>Opens a workspace with <paramref name="environment"/> selected as <c>dev.yaml</c>.</summary>
+    private void SelectEnvironment(EnvironmentDefinition environment, Dictionary<string, string>? secrets = null)
+    {
+        _current.Open(Root);
+        _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("dev.yaml"));
+        _environments.Exists(Root, "dev.yaml").Returns(true);
+        _environments.ReadAsync(Root, "dev.yaml", Arg.Any<CancellationToken>()).Returns(environment);
+        if (secrets is not null)
+        {
+            _secrets.LoadAsync(Root, Arg.Any<CancellationToken>())
+                .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
+                    new Dictionary<string, IReadOnlyDictionary<string, string>> { ["dev.yaml"] = secrets }));
+        }
+    }
 
     private static RequestDto Request(string url = "https://api.example.com/users", string name = "List users") =>
         new(name, "GET", url, [new KeyValueDto("page", "2")], [], new AuthDto("bearer", Token: "abc"), new BodyDto("none", ""));
@@ -69,6 +103,107 @@ public class SendRequestTests
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error?.Code);
         Assert.Contains("baseUrl", result.Error!.Message);
         await _sender.DidNotReceiveWithAnyArgs().SendAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task Execute_WithoutEnvironment_SaysNoneIsSelected()
+    {
+        _current.Open(Root);
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request(url: "{{baseUrl}}/users"));
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error?.Code);
+        Assert.Contains("No environment is selected.", result.Error!.Message);
+    }
+
+    [Fact]
+    public async Task Execute_ResolvesVariablesFromTheSelectedEnvironmentAndItsSecrets()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response(""));
+        SelectEnvironment(
+            new EnvironmentDefinition("Development", [
+                new EnvironmentVariable("host", "localhost:5000"),
+                new EnvironmentVariable("baseUrl", "http://{{host}}/api"),
+                new EnvironmentVariable("token", "", Secret: true),
+            ]),
+            new Dictionary<string, string> { ["token"] = "s3cret" });
+        var request = Request(url: "{{baseUrl}}/users") with { Auth = new AuthDto("bearer", Token: "{{token}}") };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r =>
+                r.Url.AbsoluteUri == "http://localhost:5000/api/users?page=2"
+                && r.Headers.Contains(KeyValuePair.Create("Authorization", "Bearer s3cret"))),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_ExplainsSecretsWithoutALocalValue()
+    {
+        SelectEnvironment(new EnvironmentDefinition("Development", [
+            new EnvironmentVariable("baseUrl", "http://localhost"),
+            new EnvironmentVariable("token", "", Secret: true),
+        ]));
+        var request = Request(url: "{{baseUrl}}/users") with { Auth = new AuthDto("bearer", Token: "{{token}}") };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error?.Code);
+        Assert.Contains("aren't defined: token.", result.Error!.Message);
+        Assert.Contains("enter token in the environment 'Development'", result.Error.Message);
+        await _sender.DidNotReceiveWithAnyArgs().SendAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task Execute_NamesTheEnvironmentThatLacksAVariable()
+    {
+        SelectEnvironment(new EnvironmentDefinition("Development", [new EnvironmentVariable("host", "localhost")]));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request(url: "{{baseUrl}}/users"));
+
+        Assert.Contains("Add them to the environment 'Development'.", result.Error?.Message);
+    }
+
+    [Fact]
+    public async Task Execute_RefusesEnvironmentsWhoseVariablesLoop()
+    {
+        SelectEnvironment(new EnvironmentDefinition("Development", [
+            new EnvironmentVariable("a", "{{b}}"),
+            new EnvironmentVariable("b", "{{a}}"),
+        ]));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request());
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error?.Code);
+        Assert.Contains("'a', 'b' refer to each other", result.Error!.Message);
+    }
+
+    [Fact]
+    public async Task Execute_IgnoresASelectedEnvironmentWhoseFileIsGone()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response(""));
+        SelectEnvironment(new EnvironmentDefinition("Development"));
+        _environments.Exists(Root, "dev.yaml").Returns(false);
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request());
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _environments.DidNotReceiveWithAnyArgs().ReadAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task Execute_ReportsAnUnreadableSelectedEnvironment()
+    {
+        SelectEnvironment(new EnvironmentDefinition("Development"));
+        _environments.ReadAsync(Root, "dev.yaml", Arg.Any<CancellationToken>())
+            .Returns(Result<EnvironmentDefinition>.Failure(ErrorCodes.InvalidFile, "'environments/dev.yaml' is not valid."));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request());
+
+        Assert.Equal(ErrorCodes.InvalidFile, result.Error?.Code);
+        Assert.StartsWith("The selected environment can't be used.", result.Error!.Message);
     }
 
     [Fact]

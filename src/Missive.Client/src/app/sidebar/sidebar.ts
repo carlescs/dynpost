@@ -5,6 +5,7 @@ import {
   SIDEBAR_MIN_WIDTH,
   WorkspaceStore,
 } from '../workspace/workspace-store';
+import { EnvironmentsView } from './environments-view';
 import { ExplorerView } from './explorer-view';
 import { GitView } from './git-view';
 
@@ -12,7 +13,7 @@ const KEYBOARD_STEP = 16;
 
 @Component({
   selector: 'app-sidebar',
-  imports: [ExplorerView, GitView],
+  imports: [ExplorerView, EnvironmentsView, GitView],
   host: {
     class: 'relative flex shrink-0 flex-col border-r border-slate-200 bg-slate-50',
     role: 'complementary',
@@ -22,6 +23,9 @@ const KEYBOARD_STEP = 16;
     @switch (store.sidebarView()) {
       @case ('explorer') {
         <app-explorer-view />
+      }
+      @case ('environments') {
+        <app-environments-view />
       }
       @case ('git') {
         <app-git-view />

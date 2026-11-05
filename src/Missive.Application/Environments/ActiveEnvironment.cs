@@ -1,0 +1,91 @@
+using Missive.Application.Common;
+using Missive.Application.Workspaces;
+using Missive.Domain.Environments;
+
+namespace Missive.Application.Environments;
+
+/// <summary>The variables requests are sent with.</summary>
+/// <param name="EnvironmentName">The selected environment's name, or <c>null</c> when none is selected.</param>
+/// <param name="Values">The variables' resolved values, by name.</param>
+/// <param name="UnsetSecrets">
+/// Secret variables the environment declares but that have no value on this computer (for
+/// example after cloning the workspace). They are not in <see cref="Values"/>.
+/// </param>
+public sealed record ActiveVariables(
+    string? EnvironmentName,
+    IReadOnlyDictionary<string, string> Values,
+    IReadOnlySet<string> UnsetSecrets)
+{
+    public static ActiveVariables None { get; } =
+        new(null, new Dictionary<string, string>(), new HashSet<string>());
+}
+
+/// <summary>Reads the variables of the selected environment of the open workspace.</summary>
+public sealed class ActiveEnvironment(
+    IEnvironmentStore store,
+    ISecretStore secrets,
+    IWorkspaceStateStore state,
+    CurrentWorkspace current)
+{
+    /// <summary>
+    /// The selected environment's variables. Without a workspace or a selected environment (or
+    /// when the selected file no longer exists) there are none. An environment that can't be read
+    /// or whose variables refer to each other in a loop is an error.
+    /// </summary>
+    public async Task<Result<ActiveVariables>> LoadAsync(CancellationToken cancellationToken = default)
+    {
+        if (current.Root is not { } root)
+        {
+            return ActiveVariables.None;
+        }
+
+        var id = (await state.LoadAsync(root, cancellationToken)).ActiveEnvironment;
+        if (id is null || !EnvironmentMapper.IsValidId(id) || !store.Exists(root, id))
+        {
+            return ActiveVariables.None;
+        }
+
+        var environment = await store.ReadAsync(root, id, cancellationToken);
+        if (!environment.IsSuccess)
+        {
+            return environment.Error!.Code == ErrorCodes.NotFound
+                ? ActiveVariables.None
+                : new Error(environment.Error.Code, $"The selected environment can't be used. {environment.Error.Message}");
+        }
+
+        var stored = await secrets.LoadAsync(root, cancellationToken);
+        if (!stored.IsSuccess)
+        {
+            return stored.Error!;
+        }
+
+        var secretValues = stored.Value.GetValueOrDefault(id);
+        var unset = new SortedSet<string>(StringComparer.Ordinal);
+        var variables = new List<EnvironmentVariable>();
+        foreach (var variable in environment.Value.Variables)
+        {
+            if (!variable.Secret)
+            {
+                variables.Add(variable);
+            }
+            else if (secretValues?.GetValueOrDefault(variable.Name) is { Length: > 0 } value)
+            {
+                variables.Add(variable with { Value = value });
+            }
+            else
+            {
+                unset.Add(variable.Name);
+            }
+        }
+
+        var resolved = VariableSet.Resolve(variables);
+        if (resolved.Cycle.Count > 0)
+        {
+            return new Error(
+                ErrorCodes.InvalidRequest,
+                $"{VariableSet.CycleMessage(resolved.Cycle)} Fix the environment '{environment.Value.Name}'.");
+        }
+
+        return new ActiveVariables(environment.Value.Name, resolved.Values, unset);
+    }
+}

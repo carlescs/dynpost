@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faCodeBranch, faFolderTree } from '@fortawesome/free-solid-svg-icons';
+import { faCodeBranch, faFolderTree, faLayerGroup } from '@fortawesome/free-solid-svg-icons';
 import { GitStore } from '../git/git-store';
 import { SidebarView, WorkspaceStore } from '../workspace/workspace-store';
 
@@ -40,6 +40,7 @@ export class ActivityBar {
 
   protected readonly items: { view: SidebarView; label: string; icon: typeof faFolderTree }[] = [
     { view: 'explorer', label: 'Explorer', icon: faFolderTree },
+    { view: 'environments', label: 'Environments', icon: faLayerGroup },
     { view: 'git', label: 'Source control', icon: faCodeBranch },
   ];
 

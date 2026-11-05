@@ -2,6 +2,7 @@ import {
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
   ERROR_CODES,
+  EnvironmentDto,
   RequestDto,
   WorkspaceDto,
   WorkspaceNodeDto,
@@ -45,6 +46,30 @@ export class MockBackend {
     ['orders/list-orders.yaml', sample('List orders', 'GET', '{{baseUrl}}/orders')],
     ['health.yaml', sample('Health check', 'GET', '{{baseUrl}}/health')],
   ]);
+  private readonly environments = new Map<string, EnvironmentDto>([
+    [
+      'dev.yaml',
+      {
+        name: 'Development',
+        variables: [
+          { name: 'host', value: 'localhost:5000', secret: false },
+          { name: 'baseUrl', value: 'http://{{host}}', secret: false },
+          { name: 'apiToken', value: 'dev-token', secret: true },
+        ],
+      },
+    ],
+    [
+      'prod.yaml',
+      {
+        name: 'Production',
+        variables: [
+          { name: 'baseUrl', value: 'https://api.example.com', secret: false },
+          { name: 'apiToken', value: '', secret: true },
+        ],
+      },
+    ],
+  ]);
+  private activeEnvironment: string | null = 'dev.yaml';
   private open = false;
   /** Sends in progress, by id: calling the function cancels it. */
   private readonly sends = new Map<string, () => void>();
@@ -81,6 +106,45 @@ export class MockBackend {
     switch (request.type) {
       case 'workspace.tree':
         return ok(this.workspace());
+      case 'environment.list':
+        return ok({
+          active: this.activeEnvironment,
+          environments: [...this.environments]
+            .map(([id, env]) => ({ id, name: env.name }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        });
+      case 'environment.load': {
+        const env = this.environments.get(payload?.['id'] as string);
+        return env ? ok(structuredClone(env)) : fail(ERROR_CODES.notFound, 'Not found.');
+      }
+      case 'environment.create':
+      case 'environment.save': {
+        const env = structuredClone(payload?.['environment'] as EnvironmentDto);
+        env.name = env.name.trim();
+        env.variables = env.variables
+          .filter((v) => v.name.trim() || v.value)
+          .map((v) => ({ ...v, name: v.name.trim() }))
+          .sort((a, b) => Number(a.secret) - Number(b.secret));
+        if (!env.name) return fail(ERROR_CODES.invalidRequest, 'The environment needs a name.');
+        const bad = env.variables.find((v) => !v.name || /[{}\s]/.test(v.name));
+        if (bad) return fail(ERROR_CODES.invalidRequest, `'${bad.name}' is not a valid name.`);
+        let id = payload?.['id'] as string | undefined;
+        if (!id) {
+          id = `${slug(env.name)}.yaml`;
+          for (let n = 2; this.environments.has(id); n++) id = `${slug(env.name)}-${n}.yaml`;
+        }
+        this.environments.set(id, env);
+        return ok({ id, environment: structuredClone(env) });
+      }
+      case 'environment.delete': {
+        const id = payload?.['id'] as string;
+        this.environments.delete(id);
+        if (this.activeEnvironment === id) this.activeEnvironment = null;
+        return ok(null);
+      }
+      case 'environment.select':
+        this.activeEnvironment = (payload?.['id'] as string | null) ?? null;
+        return ok(null);
       case 'request.load': {
         const file = this.files.get(payload?.['path'] as string);
         return file ? ok(structuredClone(file)) : fail(ERROR_CODES.notFound, 'File not found.');
@@ -174,7 +238,8 @@ export class MockBackend {
 
   /**
    * Pretends to send a request: after a short delay it answers with an echo of what would be
-   * sent. Like the host, it refuses requests with undefined variables (there are no environments).
+   * sent. Like the host, it resolves variables from the selected environment and refuses
+   * requests with undefined ones.
    */
   private async send(
     envelopeId: string,
@@ -186,6 +251,20 @@ export class MockBackend {
       ok: false,
       error: { code, message },
     });
+
+    const variables = this.variables();
+    const resolve = (text: string | null | undefined) =>
+      (text ?? '').replace(VARIABLE_PATTERN, (match, name: string) => variables.get(name) ?? match);
+    dto = {
+      ...dto,
+      url: resolve(dto.url),
+      params: dto.params.map((r) => ({ ...r, key: resolve(r.key), value: resolve(r.value) })),
+      headers: dto.headers.map((r) => ({ ...r, key: resolve(r.key), value: resolve(r.value) })),
+      auth: Object.fromEntries(
+        Object.entries(dto.auth).map(([k, v]) => [k, k === 'type' ? v : resolve(v as string)]),
+      ) as RequestDto['auth'],
+      body: { ...dto.body, content: resolve(dto.body.content) },
+    };
 
     const enabled = (rows: RequestDto['params']) => rows.filter((r) => r.enabled && r.key);
     const text = [
@@ -202,7 +281,8 @@ export class MockBackend {
     if (missing.length) {
       return fail(
         ERROR_CODES.invalidRequest,
-        `The request uses variables that aren't defined: ${missing.sort().join(', ')}.`,
+        `The request uses variables that aren't defined: ${missing.sort().join(', ')}. ` +
+          (this.activeEnvironment ? 'Add them to the environment.' : 'No environment is selected.'),
       );
     }
 
@@ -253,6 +333,28 @@ export class MockBackend {
         durationMs: Math.round(performance.now() - started),
       },
     };
+  }
+
+  /** The selected environment's values, with references between variables expanded. */
+  private variables(): Map<string, string> {
+    const env = this.activeEnvironment ? this.environments.get(this.activeEnvironment) : null;
+    const raw = new Map(
+      (env?.variables ?? []).filter((v) => v.value).map((v) => [v.name, v.value]),
+    );
+    const resolved = new Map<string, string>();
+    const resolve = (name: string, seen: Set<string>): string | undefined => {
+      if (resolved.has(name)) return resolved.get(name);
+      const value = raw.get(name);
+      if (value === undefined || seen.has(name)) return undefined;
+      const result = value.replace(
+        VARIABLE_PATTERN,
+        (match, inner: string) => resolve(inner, new Set([...seen, name])) ?? match,
+      );
+      resolved.set(name, result);
+      return result;
+    };
+    for (const name of raw.keys()) resolve(name, new Set());
+    return resolved;
   }
 
   private relocateFolder(path: string, target: string): void {
