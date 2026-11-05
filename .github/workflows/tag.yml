@@ -1,0 +1,45 @@
+name: Create tag
+
+# Run manually to bump the latest `vMAJOR.MINOR.PATCH` tag and push the new one.
+# Pushing the tag triggers the Release workflow. Tags pushed with the default
+# GITHUB_TOKEN don't trigger workflows, so add a `RELEASE_TOKEN` secret (a PAT
+# or app token with contents:write) for that to work.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to increase
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Create ${{ inputs.bump }} tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - name: Compute and push the next tag
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          latest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+          latest=${latest:-v0.0.0}
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          next="v$major.$minor.$patch"
+          echo "$latest -> $next"
+          git tag "$next"
+          git push origin "$next"
+          echo "Created tag \`$next\` (was \`$latest\`)" >> "$GITHUB_STEP_SUMMARY"
