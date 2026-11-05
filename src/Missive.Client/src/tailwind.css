@@ -4,8 +4,9 @@
  * Dark mode. Tailwind's colors are CSS variables, so the `dark` class on <html> (set by
  * settings/theme-store.ts) re-maps the palette instead of every template carrying dark: variants:
  * the slate scale is mirrored (50 <-> 950, ...), the tints and dark text shades of the status
- * colors are swapped, and `bg-white` becomes slate-900. Mid shades (buttons) and white text are
- * unchanged. `raw-slate-*` keep the original values so the mapping never refers to itself.
+ * colors are swapped, slate-500 becomes slate-400, and `bg-white` becomes slate-900. Other mid
+ * shades (buttons) and white text are unchanged. `raw-slate-*` keep the original values so the
+ * mapping never refers to itself.
  */
 :root {
   --raw-slate-50: oklch(98.4% 0.003 247.858);
@@ -36,6 +37,7 @@
   --color-slate-300: var(--raw-slate-700);
   --color-slate-700: var(--raw-slate-300);
   --color-slate-400: var(--raw-slate-600);
+  --color-slate-500: var(--raw-slate-400);
   --color-slate-600: var(--raw-slate-400);
   --color-rose-50: oklch(27.1% 0.105 12.094);
   --color-rose-100: oklch(41% 0.159 10.272);
@@ -71,6 +73,7 @@
   --color-slate-300: var(--raw-slate-300);
   --color-slate-700: var(--raw-slate-700);
   --color-slate-400: var(--raw-slate-400);
+  --color-slate-500: var(--raw-slate-500);
   --color-slate-600: var(--raw-slate-600);
 }
 
