@@ -408,7 +408,17 @@ GitHub Actions runs on every pull request and push to `main`
 (`.github/workflows/ci.yml`): it checks client formatting and builds the Angular
 app, then builds the solution and runs the tests on Windows, Linux and macOS.
 
-Pushing a version tag publishes desktop builds (`.github/workflows/release.yml`):
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org)
+(`feat:`, `fix:`, `feat!:` / `BREAKING CHANGE:`, ...). After `npm install` at the
+repo root, a [Lefthook](https://github.com/evilmartians/lefthook) `commit-msg`
+hook runs commitlint (`commitlint.config.mjs`), and CI lints pull request
+commits too. On every push to `main`, `.github/workflows/tag.yml` runs
+[semantic-release](https://semantic-release.gitbook.io) (`.releaserc.json`),
+which picks the next `vMAJOR.MINOR.PATCH` from the commits since the last tag
+(`fix` → patch, `feat` → minor, breaking → major) and pushes the tag.
+
+Pushing a version tag publishes desktop builds (`.github/workflows/release.yml`).
+semantic-release does this automatically; to do it by hand:
 
 ```sh
 git tag v0.1.0
