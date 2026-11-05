@@ -11,6 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import type { editor } from 'monaco-editor/editor/editor.api';
+import { VARIABLE_PATTERN } from '../variables';
 import { Monaco, loadMonaco } from './monaco-loader';
 
 /**
@@ -36,6 +37,8 @@ export class CodeEditor {
   readonly readOnly = input(false);
   readonly wordWrap = input(false);
   readonly ariaLabel = input('Code editor');
+  /** Whether to highlight `{{variable}}` references. */
+  readonly highlightVariables = input(false);
 
   /** Emits the text as the user edits it. */
   readonly valueChange = output<string>();
@@ -48,6 +51,7 @@ export class CodeEditor {
   private editor: editor.IStandaloneCodeEditor | null = null;
   /** Set while the text is replaced from the input, so the change isn't echoed back. */
   private applyingInput = false;
+  private variableDecorations: editor.IEditorDecorationsCollection | null = null;
   private destroyed = false;
 
   constructor() {
@@ -76,6 +80,11 @@ export class CodeEditor {
       const language = this.language();
       const model = this.editor?.getModel();
       if (model && this.monaco) this.monaco.editor.setModelLanguage(model, language);
+    });
+
+    effect(() => {
+      this.highlightVariables();
+      this.updateVariableDecorations();
     });
 
     effect(() => {
@@ -108,11 +117,38 @@ export class CodeEditor {
       fixedOverflowWidgets: true,
       theme: 'vs',
     });
+    this.variableDecorations = editor.createDecorationsCollection();
     editor.onDidChangeModelContent(() => {
+      this.updateVariableDecorations();
       if (!this.applyingInput) this.valueChange.emit(model.getValue());
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => this.submit.emit());
     this.editor = editor;
+    this.updateVariableDecorations();
     this.ready.set(true);
+  }
+
+  /** Marks every `{{variable}}` reference (styled by `.variable-highlight` in styles.scss). */
+  private updateVariableDecorations(): void {
+    const model = this.editor?.getModel();
+    if (!model || !this.monaco || !this.variableDecorations) return;
+    if (!this.highlightVariables()) {
+      this.variableDecorations.clear();
+      return;
+    }
+
+    const text = model.getValue();
+    const decorations = [...text.matchAll(VARIABLE_PATTERN)].map((match) => {
+      const start = model.getPositionAt(match.index);
+      const end = model.getPositionAt(match.index + match[0].length);
+      return {
+        range: new this.monaco!.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+        options: {
+          inlineClassName: 'variable-highlight',
+          hoverMessage: { value: `Variable \`${match[1]}\`` },
+        },
+      };
+    });
+    this.variableDecorations.set(decorations);
   }
 }

@@ -6,6 +6,7 @@ import {
   WorkspaceDto,
   WorkspaceNodeDto,
 } from './messages';
+import { VARIABLE_PATTERN } from '../editor/variables';
 
 const sample = (
   name: string,
@@ -197,7 +198,7 @@ export class MockBackend {
       dto.auth.value ?? '',
       dto.body.content,
     ].join('\n');
-    const missing = [...new Set([...text.matchAll(/\{\{\s*([^{}\s]+)\s*\}\}/g)].map((m) => m[1]))];
+    const missing = [...new Set([...text.matchAll(VARIABLE_PATTERN)].map((m) => m[1]))];
     if (missing.length) {
       return fail(
         ERROR_CODES.invalidRequest,

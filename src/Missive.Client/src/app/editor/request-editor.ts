@@ -17,6 +17,7 @@ import { WorkspaceStore } from '../workspace/workspace-store';
 import { CodeEditor } from './code/code-editor';
 import { KeyValueTable } from './key-value-table';
 import { ResponseViewer } from './response-viewer';
+import { VariableInput } from './variable-input';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body';
 
@@ -37,7 +38,7 @@ const BODY_LABELS: Record<BodyType, string> = {
 
 @Component({
   selector: 'app-request-editor',
-  imports: [FaIconComponent, KeyValueTable, ResponseViewer, CodeEditor],
+  imports: [FaIconComponent, KeyValueTable, ResponseViewer, CodeEditor, VariableInput],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     @let doc = document();
@@ -82,13 +83,12 @@ const BODY_LABELS: Record<BodyType, string> = {
             <option [value]="method" [selected]="method === doc.method">{{ method }}</option>
           }
         </select>
-        <input
-          class="min-w-0 flex-1 px-3 py-1.5 font-mono text-sm focus:outline-none"
+        <app-variable-input
+          class="flex-1"
+          ariaLabel="URL"
           [placeholder]="urlPlaceholder"
-          aria-label="URL"
-          spellcheck="false"
           [value]="doc.url"
-          (input)="patch({ url: $any($event.target).value })"
+          (valueChange)="patch({ url: $event })"
         />
       </div>
       @if (doc.sendId) {
@@ -273,6 +273,7 @@ const BODY_LABELS: Record<BodyType, string> = {
               ariaLabel="Request body"
               [value]="doc.body"
               [language]="doc.bodyType === 'json' ? 'json' : 'plaintext'"
+              [highlightVariables]="true"
               (valueChange)="patch({ body: $event })"
               (submit)="send()"
             />

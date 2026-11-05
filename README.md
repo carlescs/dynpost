@@ -140,7 +140,8 @@ rules such as CORS don't apply. When sending:
 
 - Enabled query parameters are appended to the URL, which gets `http://` if it
   has no scheme. Disabled parameters and headers are left out.
-- `{{variable}}` references are resolved first. Until environments exist no
+- `{{variable}}` references, highlighted in the URL and body editors, are
+  resolved first. Until environments exist no
   variables are defined, so a request that uses one is not sent and the
   undefined names are listed.
 - Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
