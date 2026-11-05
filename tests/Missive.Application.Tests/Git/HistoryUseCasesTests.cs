@@ -1,7 +1,9 @@
 using Missive.Application.Common;
 using Missive.Application.Git;
+using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Missive.Domain.Git;
+using Missive.Domain.Requests;
 using NSubstitute;
 using static Missive.Application.Tests.Git.GitTestData;
 
@@ -13,7 +15,15 @@ public class HistoryUseCasesTests
     private const string Parent = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     private readonly IGitService _git = Substitute.For<IGitService>();
+    private readonly IRequestFileFormat _format = Substitute.For<IRequestFileFormat>();
     private readonly CurrentWorkspace _workspace = OpenedWorkspace();
+
+    public HistoryUseCasesTests()
+    {
+        // Files named *.yaml are parsed as requests; a substitute returns no value unless set up.
+        _format.Parse(default!, default!).ReturnsForAnyArgs(Ok(
+            new HttpRequestDefinition("Get user", RequestMethod.Get, "https://x", [], [], RequestAuth.None, RequestBody.None)));
+    }
 
     private static GitCommitInfo Commit(string id, params string[] parents) =>
         new(id, parents, "Alice", "alice@example.com", DateTimeOffset.UnixEpoch, $"Commit {id[..4]}");
@@ -73,7 +83,7 @@ public class HistoryUseCasesTests
     {
         HasCommit(new GitChange("a.yaml", GitFileStatus.Modified));
 
-        var result = await new GetCommitFile(_git, _workspace).ExecuteAsync(new GetCommitFileRequest(Head, "../secret.txt"));
+        var result = await new GetCommitFile(_git, _format, _workspace).ExecuteAsync(new GetCommitFileRequest(Head, "../secret.txt"));
 
         Assert.Equal(GitErrors.FileNotInCommitCode, result.Error?.Code);
         _ = _git.DidNotReceiveWithAnyArgs().ReadFileAtCommitAsync(default!, default!, default!, default);
@@ -86,11 +96,11 @@ public class HistoryUseCasesTests
         _git.ReadFileAtCommitAsync(WorkspacePath, Parent, "a.yaml", Arg.Any<CancellationToken>()).Returns(Ok<string?>("name: A\n"));
         _git.ReadFileAtCommitAsync(WorkspacePath, Head, "a.yaml", Arg.Any<CancellationToken>()).Returns(Ok<string?>("name: B\n"));
 
-        var result = await new GetCommitFile(_git, _workspace).ExecuteAsync(new GetCommitFileRequest(Head, "a.yaml"));
+        var result = await new GetCommitFile(_git, _format, _workspace).ExecuteAsync(new GetCommitFileRequest(Head, "a.yaml"));
 
         Assert.Equal("name: A\n", result.Value.Before);
         Assert.Equal("name: B\n", result.Value.After);
-        Assert.False(result.Value.IsBinary);
+        Assert.False(result.Value.Binary);
     }
 
     [Fact]
@@ -100,7 +110,7 @@ public class HistoryUseCasesTests
         _git.ReadFileAtCommitAsync(WorkspacePath, Parent, "old.yaml", Arg.Any<CancellationToken>()).Returns(Ok<string?>("old\n"));
         _git.ReadFileAtCommitAsync(WorkspacePath, Head, "new.yaml", Arg.Any<CancellationToken>()).Returns(Ok<string?>("new\n"));
 
-        var result = await new GetCommitFile(_git, _workspace).ExecuteAsync(new GetCommitFileRequest(Head, "new.yaml"));
+        var result = await new GetCommitFile(_git, _format, _workspace).ExecuteAsync(new GetCommitFileRequest(Head, "new.yaml"));
 
         Assert.Equal("old\n", result.Value.Before);
         Assert.Equal("new\n", result.Value.After);
@@ -112,7 +122,7 @@ public class HistoryUseCasesTests
         HasCommit(new GitChange("added.yaml", GitFileStatus.Added), new GitChange("gone.yaml", GitFileStatus.Deleted));
         _git.ReadFileAtCommitAsync(WorkspacePath, Head, "added.yaml", Arg.Any<CancellationToken>()).Returns(Ok<string?>("new\n"));
         _git.ReadFileAtCommitAsync(WorkspacePath, Parent, "gone.yaml", Arg.Any<CancellationToken>()).Returns(Ok<string?>("old\n"));
-        var useCase = new GetCommitFile(_git, _workspace);
+        var useCase = new GetCommitFile(_git, _format, _workspace);
 
         var added = await useCase.ExecuteAsync(new GetCommitFileRequest(Head, "added.yaml"));
         var deleted = await useCase.ExecuteAsync(new GetCommitFileRequest(Head, "gone.yaml"));
@@ -123,5 +133,22 @@ public class HistoryUseCasesTests
         Assert.Null(deleted.Value.After);
         _ = _git.DidNotReceive().ReadFileAtCommitAsync(WorkspacePath, Parent, "added.yaml", Arg.Any<CancellationToken>());
         _ = _git.DidNotReceive().ReadFileAtCommitAsync(WorkspacePath, Head, "gone.yaml", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CommitFile_RequestFile_ParsesBothVersions()
+    {
+        HasCommit(new GitChange("users/get-user.yaml", GitFileStatus.Modified));
+        _git.ReadFileAtCommitAsync(WorkspacePath, Parent, "users/get-user.yaml", Arg.Any<CancellationToken>()).Returns(Ok<string?>("a"));
+        _git.ReadFileAtCommitAsync(WorkspacePath, Head, "users/get-user.yaml", Arg.Any<CancellationToken>()).Returns(Ok<string?>("b"));
+        _format.Parse(default!, default!).ReturnsForAnyArgs(Ok(
+            new HttpRequestDefinition("Get user", RequestMethod.Get, "https://x", [], [], RequestAuth.None, RequestBody.None)));
+
+        var result = await new GetCommitFile(_git, _format, _workspace).ExecuteAsync(new GetCommitFileRequest(Head, "users/get-user.yaml"));
+
+        Assert.True(result.Value.IsRequest);
+        Assert.Equal("GET", result.Value.OriginalRequest?.Method);
+        Assert.Equal("GET", result.Value.ModifiedRequest?.Method);
+        Assert.Null(result.Value.RequestError);
     }
 }

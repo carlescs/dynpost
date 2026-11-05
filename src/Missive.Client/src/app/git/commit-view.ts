@@ -1,23 +1,31 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
+  faCircleInfo,
   faCodeCommit,
+  faFileCode,
+  faFileLines,
   faSpinner,
   faTriangleExclamation,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { GitChange } from '../bridge/messages';
 import { CodeDiffEditor } from '../editor/code/code-diff-editor';
+import { fromRequestDto } from '../workspace/request-mapping';
 import { GitHistoryStore } from './git-history-store';
 import { STATUS_BADGES, fileName, folderOf, languageForPath } from './git-format';
+import { RequestDiff } from './request-diff';
+
+type DiffMode = 'request' | 'text';
 
 /**
  * Reviews a commit: its message and author, the workspace files it changed, and what changed in
- * each file compared with the commit before it. Read-only.
+ * each file compared with the commit before it. Request files can be compared as requests, laid
+ * out like the request editor, or as text; other files as text. Read-only.
  */
 @Component({
   selector: 'app-commit-view',
-  imports: [FaIconComponent, CodeDiffEditor],
+  imports: [FaIconComponent, CodeDiffEditor, RequestDiff],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     <header class="flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3">
@@ -119,6 +127,39 @@ import { STATUS_BADGES, fileName, folderOf, languageForPath } from './git-format
               @if (history.openingFile()) {
                 <fa-icon class="text-slate-400" [icon]="faSpinner" animation="spin" />
               }
+              @if (file.isRequest && !file.binary) {
+                <div
+                  class="flex shrink-0 overflow-hidden rounded border border-slate-300 text-sm"
+                  role="group"
+                  aria-label="Show the changes as"
+                >
+                  <button
+                    type="button"
+                    class="flex items-center gap-1.5 px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    [class]="
+                      effectiveMode() === 'request' ? 'bg-sky-600 text-white' : 'hover:bg-slate-100'
+                    "
+                    [attr.aria-pressed]="effectiveMode() === 'request'"
+                    [disabled]="!canShowRequest()"
+                    [title]="canShowRequest() ? 'Compare as a request' : (file.requestError ?? '')"
+                    (click)="mode.set('request')"
+                  >
+                    <fa-icon [icon]="faFileCode" /> Request
+                  </button>
+                  <button
+                    type="button"
+                    class="flex items-center gap-1.5 border-l border-slate-300 px-2.5 py-1"
+                    [class]="
+                      effectiveMode() === 'text' ? 'bg-sky-600 text-white' : 'hover:bg-slate-100'
+                    "
+                    [attr.aria-pressed]="effectiveMode() === 'text'"
+                    title="Compare the file's text"
+                    (click)="mode.set('text')"
+                  >
+                    <fa-icon [icon]="faFileLines" /> Text
+                  </button>
+                </div>
+              }
               <label class="flex shrink-0 items-center gap-1.5 text-xs text-slate-600">
                 <input
                   type="checkbox"
@@ -129,10 +170,29 @@ import { STATUS_BADGES, fileName, folderOf, languageForPath } from './git-format
                 Side by side
               </label>
             </div>
+            @if (file.isRequest && file.requestError && !file.binary) {
+              <p
+                class="mx-4 mt-3 flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                role="status"
+              >
+                <fa-icon class="mt-0.5" [icon]="faCircleInfo" />
+                <span class="min-w-0 flex-1 break-words">
+                  Showing the text: a version of this file can't be read as a request.
+                  {{ file.requestError }}
+                </span>
+              </p>
+            }
             @if (file.binary) {
               <p class="p-4 text-sm text-slate-500 italic">
                 This is a binary file; it isn't shown.
               </p>
+            } @else if (effectiveMode() === 'request') {
+              <app-request-diff
+                class="min-h-0 flex-1 overflow-auto"
+                [before]="requests().before"
+                [after]="requests().after"
+                [sideBySide]="sideBySide()"
+              />
             } @else {
               <app-code-diff-editor
                 class="m-4 min-h-0 flex-1 overflow-hidden rounded border border-slate-300"
@@ -164,14 +224,44 @@ export class CommitView {
   protected readonly folderOf = folderOf;
 
   protected readonly faCodeCommit = faCodeCommit;
+  protected readonly faCircleInfo = faCircleInfo;
+  protected readonly faFileCode = faFileCode;
+  protected readonly faFileLines = faFileLines;
   protected readonly faSpinner = faSpinner;
   protected readonly faTriangleExclamation = faTriangleExclamation;
   protected readonly faXmark = faXmark;
+
+  /** The mode the user picked; kept while moving between files. */
+  protected readonly mode = signal<DiffMode>('request');
 
   /** The file shown or being opened. */
   protected readonly selectedPath = computed(
     () => this.history.openingFile() ?? this.history.file()?.change.path ?? null,
   );
+
+  /** Whether every existing side of the request file could be parsed. */
+  protected readonly canShowRequest = computed(() => {
+    const file = this.history.file();
+    return (
+      !!file &&
+      file.isRequest &&
+      !file.binary &&
+      !file.requestError &&
+      !!(file.originalRequest || file.modifiedRequest)
+    );
+  });
+
+  protected readonly effectiveMode = computed<DiffMode>(() =>
+    this.canShowRequest() ? this.mode() : 'text',
+  );
+
+  protected readonly requests = computed(() => {
+    const file = this.history.file();
+    return {
+      before: file?.originalRequest ? fromRequestDto(file.originalRequest) : null,
+      after: file?.modifiedRequest ? fromRequestDto(file.modifiedRequest) : null,
+    };
+  });
 
   protected language(path: string): string {
     return languageForPath(path);
