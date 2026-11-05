@@ -185,6 +185,23 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Discard_RemovesAnUntrackedFileEvenAfterRestoringItsIgnoreRule()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, ".gitignore", "*.log\n");
+        TestGit.CommitAll(repository, "Ignore logs");
+        Write(repository, ".gitignore", string.Empty);
+        Write(repository, "debug.log", "debug\n");
+
+        var status = (await _git.GetStatusAsync(repository)).Value;
+        var result = await _git.DiscardChangesAsync(repository, status.Changes);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.False(File.Exists(Path.Combine(repository, "debug.log")));
+        Assert.Equal("*.log\n", File.ReadAllText(Path.Combine(repository, ".gitignore")));
+    }
+
+    [Fact]
     public async Task Commit_WithPaths_CommitsOnlyThosePaths()
     {
         var repository = InitRepository("repo");

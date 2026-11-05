@@ -324,7 +324,7 @@ import { GitRemotes } from './git-remotes';
                   @if (change.status !== 'conflicted' && !status.merging) {
                     <button
                       type="button"
-                      class="ml-auto hidden size-5 shrink-0 items-center justify-center rounded text-slate-500 group-hover:flex enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+                      class="ml-auto hidden size-5 shrink-0 items-center justify-center rounded text-slate-500 group-hover:flex group-focus-within:flex enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
                       [attr.aria-label]="'Discard changes in ' + change.path"
                       title="Discard changes"
                       [disabled]="git.busy() !== null"
@@ -446,7 +446,12 @@ export class GitView {
   protected readonly rows = computed<ChangeRow[]>(() => {
     const changes = this.git.status()?.changes ?? [];
     if (this.viewMode() === 'list') {
-      return changes.map((change) => ({ key: change.path, depth: 0, name: '', change }));
+      return changes.map((change) => ({
+        key: `file:${change.status}:${change.path}`,
+        depth: 0,
+        name: '',
+        change,
+      }));
     }
     return buildTree(changes, this.collapsed());
   });
@@ -553,14 +558,20 @@ function buildTree(changes: GitChange[], collapsed: Set<string>): ChangeRow[] {
   const rows: ChangeRow[] = [];
   const walk = (node: Node, prefix: string, depth: number): void => {
     for (const [name, child] of [...node.folders].sort(([a], [b]) => a.localeCompare(b))) {
-      const key = prefix + name;
+      const path = prefix + name;
+      const key = `folder:${path}`;
       rows.push({ key, depth, name });
-      if (!collapsed.has(key)) walk(child, key + '/', depth + 1);
+      if (!collapsed.has(path)) walk(child, path + '/', depth + 1);
     }
     for (const change of [...node.files].sort((a, b) =>
       fileName(a.path).localeCompare(fileName(b.path)),
     )) {
-      rows.push({ key: change.path, depth, name: fileName(change.path), change });
+      rows.push({
+        key: `file:${change.status}:${change.path}`,
+        depth,
+        name: fileName(change.path),
+        change,
+      });
     }
   };
   walk(root, '', 0);

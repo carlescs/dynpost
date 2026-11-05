@@ -103,7 +103,12 @@ public sealed class DiscardChanges(IGitService git, CurrentWorkspace workspace)
         }
 
         // Only files git reports as changed can be discarded, so a path can't point elsewhere.
-        var changes = before.Value.Changes.ToDictionary(c => c.Path, StringComparer.Ordinal);
+        var changes = before.Value.Changes
+            .GroupBy(c => c.Path, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.FirstOrDefault(c => c.Status != GitFileStatus.Untracked) ?? group.First(),
+                StringComparer.Ordinal);
         var distinct = paths.Distinct(StringComparer.Ordinal).ToList();
         var unchanged = distinct.Where(p => !changes.ContainsKey(p)).ToList();
         if (unchanged.Count > 0)

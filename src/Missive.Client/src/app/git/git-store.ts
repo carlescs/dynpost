@@ -159,6 +159,12 @@ export class GitStore {
 
   /** Throws away the uncommitted changes of `paths`. Resolves to whether it succeeded. */
   discard(paths: string[]): Promise<boolean> {
+    const affectedPaths = new Set(paths);
+    for (const change of this.status()?.changes ?? []) {
+      if (paths.includes(change.path) && change.originalPath) {
+        affectedPaths.add(change.originalPath);
+      }
+    }
     return this.run(
       'discard',
       () => this.bridge.send('git.discard', { paths }),
@@ -170,8 +176,8 @@ export class GitStore {
         });
         // Restored or deleted files may be open requests or environments.
         void this.workspace.refresh();
-        void this.workspace.reloadFromDisk();
-        void this.environments.refresh();
+        void this.workspace.reloadFromDisk([...affectedPaths]);
+        void this.environments.refresh([...affectedPaths]);
       },
     );
   }

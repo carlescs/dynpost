@@ -711,7 +711,7 @@ public sealed class GitCliService : IGitService
 
         if (untracked.Count > 0)
         {
-            var clean = await RunCheckedAsync(workspacePath, "clean", ["clean", "--force", "--quiet", "-d", "--", .. untracked], cancellationToken);
+            var clean = await RunCheckedAsync(workspacePath, "clean", ["clean", "--force", "--quiet", "-d", "-x", "--", .. untracked], cancellationToken);
             if (clean.IsFailure)
             {
                 return clean.Error!;

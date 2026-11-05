@@ -60,4 +60,23 @@ public class DiscardChangesTests
             Arg.Is<IReadOnlyList<GitChange>>(c => c.SequenceEqual(new[] { change })),
             Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task WhenAPathIsBothTrackedAndUntracked_UsesTheTrackedChange()
+    {
+        var tracked = new GitChange("same.yaml", GitFileStatus.Deleted);
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
+            .Returns(
+                Ok(Status(changes: [tracked, new GitChange("same.yaml", GitFileStatus.Untracked)])),
+                Ok(Clean()));
+        _git.DiscardChangesAsync(default!, default!, default).ReturnsForAnyArgs(Ok(Unit.Value));
+
+        var result = await new DiscardChanges(_git, _workspace).ExecuteAsync(["same.yaml"]);
+
+        Assert.True(result.IsSuccess);
+        _ = _git.Received(1).DiscardChangesAsync(
+            WorkspacePath,
+            Arg.Is<IReadOnlyList<GitChange>>(changes => changes.SequenceEqual(new[] { tracked })),
+            Arg.Any<CancellationToken>());
+    }
 }
