@@ -45,6 +45,8 @@ export class MockBackend {
     ['health.yaml', sample('Health check', 'GET', '{{baseUrl}}/health')],
   ]);
   private open = false;
+  /** Sends in progress, by id: calling the function cancels it. */
+  private readonly sends = new Map<string, () => void>();
 
   async handle(request: BridgeRequestEnvelope): Promise<BridgeResponseEnvelope> {
     const ok = (payload: unknown): BridgeResponseEnvelope => ({
@@ -59,6 +61,15 @@ export class MockBackend {
     });
     const payload = request.payload as Record<string, unknown> | undefined;
 
+    // Sending works without a workspace, like in the host.
+    if (request.type === 'request.send') {
+      return this.send(request.id, payload?.['id'] as string, payload?.['request'] as RequestDto);
+    }
+    if (request.type === 'request.cancel') {
+      const cancel = this.sends.get(payload?.['id'] as string);
+      cancel?.();
+      return ok(!!cancel);
+    }
     if (request.type === 'workspace.openLast') return ok(null);
     if (request.type === 'workspace.pick' || request.type === 'workspace.open') {
       this.open = true;
@@ -158,6 +169,89 @@ export class MockBackend {
       default:
         return fail(ERROR_CODES.unknownMessage, `Unknown message type '${request.type}'.`);
     }
+  }
+
+  /**
+   * Pretends to send a request: after a short delay it answers with an echo of what would be
+   * sent. Like the host, it refuses requests with undefined variables (there are no environments).
+   */
+  private async send(
+    envelopeId: string,
+    id: string,
+    dto: RequestDto,
+  ): Promise<BridgeResponseEnvelope> {
+    const fail = (code: string, message: string): BridgeResponseEnvelope => ({
+      id: envelopeId,
+      ok: false,
+      error: { code, message },
+    });
+
+    const enabled = (rows: RequestDto['params']) => rows.filter((r) => r.enabled && r.key);
+    const text = [
+      dto.url,
+      ...[...dto.params, ...dto.headers].flatMap((r) => (r.enabled ? [r.key, r.value] : [])),
+      dto.auth.token ?? '',
+      dto.auth.username ?? '',
+      dto.auth.password ?? '',
+      dto.auth.key ?? '',
+      dto.auth.value ?? '',
+      dto.body.content,
+    ].join('\n');
+    const missing = [...new Set([...text.matchAll(/\{\{\s*([^{}\s]+)\s*\}\}/g)].map((m) => m[1]))];
+    if (missing.length) {
+      return fail(
+        ERROR_CODES.invalidRequest,
+        `The request uses variables that aren't defined: ${missing.sort().join(', ')}.`,
+      );
+    }
+
+    let url: URL;
+    const raw = dto.url.trim();
+    try {
+      url = new URL(raw.includes('://') ? raw : `http://${raw}`);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error();
+    } catch {
+      return fail(ERROR_CODES.invalidRequest, `'${raw}' is not a valid http or https URL.`);
+    }
+    for (const param of enabled(dto.params)) url.searchParams.append(param.key, param.value);
+
+    const started = performance.now();
+    const cancelled = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), 300 + Math.random() * 500);
+      this.sends.set(id, () => {
+        clearTimeout(timer);
+        resolve(true);
+      });
+    });
+    this.sends.delete(id);
+    if (cancelled) return fail(ERROR_CODES.cancelled, 'The request was cancelled.');
+
+    const body = JSON.stringify({
+      preview: 'Browser preview: nothing was sent. This is what the host would send.',
+      method: dto.method,
+      url: url.toString(),
+      headers: Object.fromEntries(enabled(dto.headers).map((h) => [h.key, h.value])),
+      auth: dto.auth.type,
+      body: dto.body.type === 'none' ? null : dto.body.content,
+    });
+    return {
+      id: envelopeId,
+      ok: true,
+      payload: {
+        status: 200,
+        statusText: 'OK',
+        headers: [
+          { key: 'Content-Type', value: 'application/json; charset=utf-8' },
+          { key: 'Content-Length', value: String(new TextEncoder().encode(body).length) },
+        ],
+        contentType: 'application/json',
+        body,
+        bodyEncoding: 'text',
+        size: new TextEncoder().encode(body).length,
+        truncated: false,
+        durationMs: Math.round(performance.now() - started),
+      },
+    };
   }
 
   private relocateFolder(path: string, target: string): void {

@@ -1,6 +1,6 @@
 import { Component, inject, input, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { faBan, faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import {
   AUTH_TYPES,
   AuthType,
@@ -15,6 +15,7 @@ import {
 } from '../workspace/models';
 import { WorkspaceStore } from '../workspace/workspace-store';
 import { KeyValueTable } from './key-value-table';
+import { ResponseViewer } from './response-viewer';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body';
 
@@ -35,7 +36,7 @@ const BODY_LABELS: Record<BodyType, string> = {
 
 @Component({
   selector: 'app-request-editor',
-  imports: [FaIconComponent, KeyValueTable],
+  imports: [FaIconComponent, KeyValueTable, ResponseViewer],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     @let doc = document();
@@ -89,13 +90,26 @@ const BODY_LABELS: Record<BodyType, string> = {
           (input)="patch({ url: $any($event.target).value })"
         />
       </div>
-      <button
-        type="button"
-        class="flex items-center gap-2 rounded bg-sky-600 px-4 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-        [disabled]="!doc.url.trim()"
-      >
-        <fa-icon [icon]="faPaperPlane" /> Send
-      </button>
+      @if (doc.sendId) {
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded border border-slate-300 px-4 text-sm font-medium hover:bg-slate-100"
+          title="Cancel the request"
+          (click)="cancel()"
+        >
+          <fa-icon [icon]="faBan" /> Cancel
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded bg-sky-600 px-4 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          title="Send request (Ctrl+Enter)"
+          [disabled]="!doc.url.trim()"
+          (click)="send()"
+        >
+          <fa-icon [icon]="faPaperPlane" /> Send
+        </button>
+      }
     </div>
 
     <!-- Request sections -->
@@ -258,15 +272,7 @@ const BODY_LABELS: Record<BodyType, string> = {
     </section>
 
     <!-- Response -->
-    <section class="flex h-2/5 min-h-32 shrink-0 flex-col border-t border-slate-200 bg-slate-50">
-      <header class="flex h-9 items-center px-4">
-        <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Response</h2>
-      </header>
-      <div class="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-slate-400">
-        <fa-icon class="text-2xl" [icon]="faPaperPlane" />
-        Send the request to see the response here.
-      </div>
-    </section>
+    <app-response-viewer [document]="doc" />
   `,
 })
 export class RequestEditor {
@@ -292,6 +298,7 @@ export class RequestEditor {
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faFloppyDisk = faFloppyDisk;
   protected readonly faSpinner = faSpinner;
+  protected readonly faBan = faBan;
   protected readonly secretExample = '{{apiToken}}';
   protected readonly fieldClass =
     'min-w-0 rounded border border-slate-300 px-2 py-1 font-mono focus:border-sky-500 focus:outline-none';
@@ -306,6 +313,14 @@ export class RequestEditor {
 
   protected save(): void {
     void this.store.save(this.document().id);
+  }
+
+  protected send(): void {
+    void this.store.send(this.document().id);
+  }
+
+  protected cancel(): void {
+    void this.store.cancelSend(this.document().id);
   }
 
   protected count(doc: RequestDocument, tab: RequestTab): number {

@@ -101,6 +101,9 @@ export class App implements OnInit {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
       event.preventDefault();
       void this.store.saveActive();
+    } else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key === 'Enter') {
+      event.preventDefault();
+      void this.store.sendActive();
     }
   }
 }

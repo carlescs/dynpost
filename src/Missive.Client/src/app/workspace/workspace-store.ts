@@ -1,7 +1,13 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Bridge, BridgeError } from '../bridge/bridge';
-import { WorkspaceDto } from '../bridge/messages';
-import { RequestContent, RequestDocument, WorkspaceInfo, WorkspaceNode } from './models';
+import { ERROR_CODES, WorkspaceDto } from '../bridge/messages';
+import {
+  RequestContent,
+  RequestDocument,
+  ResponseState,
+  WorkspaceInfo,
+  WorkspaceNode,
+} from './models';
 import { EMPTY_AUTH, fromNodeDto, fromRequestDto, toRequestDto } from './request-mapping';
 
 export type SidebarView = 'explorer' | 'git';
@@ -40,6 +46,7 @@ export class WorkspaceStore {
   );
 
   private untitledCount = 0;
+  private sendCount = 0;
 
   /**
    * Reopens the workspace from the previous session, if it still exists. The host remembers it in
@@ -116,6 +123,8 @@ export class WorkspaceStore {
       body: '',
       dirty: true,
       saving: false,
+      sendId: null,
+      response: null,
       revision: 0,
     };
     this.documents.update((docs) => [...docs, doc]);
@@ -140,6 +149,8 @@ export class WorkspaceStore {
           folder: parentFolder(node.path),
           dirty: false,
           saving: false,
+          sendId: null,
+          response: null,
           revision: 0,
         };
         this.documents.update((docs) => [...docs, doc]);
@@ -181,6 +192,51 @@ export class WorkspaceStore {
       await this.refresh();
     } catch (error) {
       this.patchDocument(id, { saving: false });
+      this.report(error);
+    }
+  }
+
+  /**
+   * Sends a document's current content (saved or not) from the host and keeps the response with
+   * the document. Does nothing while it is already being sent.
+   */
+  async send(id: string): Promise<void> {
+    const doc = this.documents().find((d) => d.id === id);
+    if (!doc || doc.sendId) return;
+
+    const sendId = `send-${++this.sendCount}`;
+    this.patchDocument(id, { sendId });
+    let response: ResponseState;
+    try {
+      const result = await this.bridge.send('request.send', {
+        id: sendId,
+        request: toRequestDto(doc),
+      });
+      response = { kind: 'response', response: result };
+    } catch (error) {
+      response =
+        error instanceof BridgeError
+          ? { kind: 'error', code: error.code, message: error.message }
+          : { kind: 'error', code: ERROR_CODES.internal, message: String(error) };
+    }
+    // Match by send id: the document's id changes if it is saved or moved meanwhile.
+    this.documents.update((docs) =>
+      docs.map((d) => (d.sendId === sendId ? { ...d, sendId: null, response } : d)),
+    );
+  }
+
+  async sendActive(): Promise<void> {
+    const id = this.activeId();
+    if (id) await this.send(id);
+  }
+
+  /** Cancels the send in progress for a document, if any. */
+  async cancelSend(id: string): Promise<void> {
+    const sendId = this.documents().find((d) => d.id === id)?.sendId;
+    if (!sendId) return;
+    try {
+      await this.bridge.send('request.cancel', { id: sendId });
+    } catch (error) {
       this.report(error);
     }
   }
@@ -277,6 +333,9 @@ export class WorkspaceStore {
     const index = docs.findIndex((d) => d.id === id);
     if (index < 0) return;
     if (docs[index].dirty && !confirm(`Discard unsaved changes to "${docs[index].name}"?`)) return;
+
+    const sendId = docs[index].sendId;
+    if (sendId) void this.bridge.send('request.cancel', { id: sendId }).catch(() => undefined);
 
     const remaining = docs.filter((d) => d.id !== id);
     this.documents.set(remaining);
