@@ -73,6 +73,54 @@ public sealed class ResolveConflict(IGitService git, CurrentWorkspace workspace)
     }
 }
 
+/// <summary>Discards the user's uncommitted changes to the given files.</summary>
+public sealed class DiscardChanges(IGitService git, CurrentWorkspace workspace)
+{
+    public async Task<Result<GitStatus>> ExecuteAsync(
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default)
+    {
+        if (paths.Count == 0)
+        {
+            return GitErrors.NothingToDiscard();
+        }
+
+        var root = workspace.RequireRoot();
+        if (root.IsFailure)
+        {
+            return root.Error!;
+        }
+
+        var before = await git.GetStatusAsync(root.Value, cancellationToken);
+        if (before.IsFailure)
+        {
+            return before.Error!;
+        }
+
+        if (before.Value.IsMerging)
+        {
+            return GitErrors.DiscardDuringMerge();
+        }
+
+        // Only files git reports as changed can be discarded, so a path can't point elsewhere.
+        var changes = before.Value.Changes.ToDictionary(c => c.Path, StringComparer.Ordinal);
+        var distinct = paths.Distinct(StringComparer.Ordinal).ToList();
+        var unchanged = distinct.Where(p => !changes.ContainsKey(p)).ToList();
+        if (unchanged.Count > 0)
+        {
+            return GitErrors.PathsNotChanged(unchanged);
+        }
+
+        var discarded = await git.DiscardChangesAsync(root.Value, distinct.Select(p => changes[p]).ToList(), cancellationToken);
+        if (discarded.IsFailure)
+        {
+            return discarded.Error!;
+        }
+
+        return await git.GetStatusAsync(root.Value, cancellationToken);
+    }
+}
+
 /// <summary>Abandons the merge in progress, at the user's request.</summary>
 public sealed class AbortMerge(IGitService git, CurrentWorkspace workspace)
 {

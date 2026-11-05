@@ -653,6 +653,74 @@ public sealed class GitCliService : IGitService
         return head.Value.StandardOutput.Trim();
     }
 
+    public async Task<Result<Unit>> DiscardChangesAsync(
+        string workspacePath,
+        IReadOnlyList<GitChange> changes,
+        CancellationToken cancellationToken = default)
+    {
+        var unsafePath = changes
+            .SelectMany(c => c.OriginalPath is null ? [c.Path] : new[] { c.Path, c.OriginalPath })
+            .FirstOrDefault(p => !IsSafeRelativePath(p));
+        if (unsafePath is not null)
+        {
+            return GitErrors.FileNotChanged(unsafePath);
+        }
+
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        static string Literal(string path) => ":(literal)" + path;
+
+        var untracked = changes.Where(c => c.Status == GitFileStatus.Untracked).Select(c => Literal(c.Path)).ToList();
+        // New files are not in HEAD, so they are removed from the index and the disk instead of restored.
+        var added = changes
+            .Where(c => c.Status is GitFileStatus.Added or GitFileStatus.Renamed)
+            .Select(c => Literal(c.Path))
+            .ToList();
+        var restored = changes
+            .Where(c => c.Status is GitFileStatus.Modified or GitFileStatus.Deleted)
+            .Select(c => Literal(c.Path))
+            .Concat(changes.Where(c => c.Status == GitFileStatus.Renamed && c.OriginalPath is not null).Select(c => Literal(c.OriginalPath!)))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (added.Count > 0)
+        {
+            var remove = await RunCheckedAsync(workspacePath, "rm", ["rm", "--quiet", "--force", "--", .. added], cancellationToken);
+            if (remove.IsFailure)
+            {
+                return remove.Error!;
+            }
+        }
+
+        if (restored.Count > 0)
+        {
+            var restore = await RunCheckedAsync(
+                workspacePath,
+                "restore",
+                ["restore", "--source=HEAD", "--staged", "--worktree", "--", .. restored],
+                cancellationToken);
+            if (restore.IsFailure)
+            {
+                return restore.Error!;
+            }
+        }
+
+        if (untracked.Count > 0)
+        {
+            var clean = await RunCheckedAsync(workspacePath, "clean", ["clean", "--force", "--quiet", "-d", "--", .. untracked], cancellationToken);
+            if (clean.IsFailure)
+            {
+                return clean.Error!;
+            }
+        }
+
+        return Unit.Value;
+    }
+
     public async Task<Result<PullOutcome>> PullAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);

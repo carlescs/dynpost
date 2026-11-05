@@ -13,7 +13,16 @@ import { EnvironmentStore } from '../environments/environment-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 
 export type GitOperation =
-  'refresh' | 'init' | 'commit' | 'pull' | 'push' | 'conflict' | 'resolve' | 'abort' | 'remote';
+  | 'refresh'
+  | 'init'
+  | 'commit'
+  | 'discard'
+  | 'pull'
+  | 'push'
+  | 'conflict'
+  | 'resolve'
+  | 'abort'
+  | 'remote';
 
 export interface GitNotice {
   kind: 'info' | 'warning';
@@ -144,6 +153,25 @@ export class GitStore {
           kind: 'info',
           text: `${completedMerge ? 'Merge completed' : 'Committed'} (${r.commitId.slice(0, 7)}).`,
         });
+      },
+    );
+  }
+
+  /** Throws away the uncommitted changes of `paths`. Resolves to whether it succeeded. */
+  discard(paths: string[]): Promise<boolean> {
+    return this.run(
+      'discard',
+      () => this.bridge.send('git.discard', { paths }),
+      (status) => {
+        this.status.set(status);
+        this.notice.set({
+          kind: 'info',
+          text: `Discarded changes in ${paths.length} file${paths.length === 1 ? '' : 's'}.`,
+        });
+        // Restored or deleted files may be open requests or environments.
+        void this.workspace.refresh();
+        void this.workspace.reloadFromDisk();
+        void this.environments.refresh();
       },
     );
   }

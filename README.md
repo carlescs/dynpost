@@ -249,6 +249,12 @@ configuration, hooks and credential helpers apply as usual. In detail:
 - **Commit** stages and commits every change in the workspace, or only the files
   you tick in the changes list, and never touches files outside the workspace.
   Files in `.missive/` are never committed, even if they are not git-ignored.
+- **Changes view**: the changes list can be shown as a flat list or as a
+  folder tree.
+- **Discard** (the undo button on a row, or *Discard selected* / *Discard all*)
+  throws away uncommitted changes after a confirmation: edits and deletions go
+  back to the last commit, and new files are deleted. It cannot be undone and is
+  unavailable during a merge.
 - **Pull** merges the upstream branch into yours; it never rebases. If the merge
   conflicts, nothing is resolved for you: the conflicted files are listed and
   Missive walks you through them (see below).

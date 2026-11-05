@@ -84,6 +84,8 @@ internal static class BridgeHandlers
                 async (p, ct) => ParseResolution(p.Resolution) is { } resolution
                     ? (await Use<ResolveConflict>().ExecuteAsync(new ResolveConflictRequest(p.Path, resolution), ct)).Map(GitStatusDto.From)
                     : new Error(BridgeErrorCodes.BadPayload, $"Unknown resolution '{p.Resolution}'; use ours, theirs or edited."))
+            .Register<GitDiscardPayload, GitStatusDto>(BridgeMessageTypes.GitDiscard,
+                async (p, ct) => (await Use<DiscardChanges>().ExecuteAsync(p.Paths ?? [], ct)).Map(GitStatusDto.From))
             .Register(BridgeMessageTypes.GitAbortMerge,
                 async ct => (await Use<AbortMerge>().ExecuteAsync(ct)).Map(GitStatusDto.From))
             .Register<GitLogPayload, GitHistoryDto>(BridgeMessageTypes.GitLog,

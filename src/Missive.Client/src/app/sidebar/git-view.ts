@@ -6,8 +6,14 @@ import {
   faBan,
   faCheck,
   faCircleExclamation,
+  faChevronDown,
+  faChevronRight,
   faCodeBranch,
+  faFolder,
   faFolderOpen,
+  faListUl,
+  faRotateLeft,
+  faSitemap,
   faRotate,
   faSpinner,
   faTriangleExclamation,
@@ -215,68 +221,144 @@ import { GitRemotes } from './git-remotes';
         @if (tab() === 'history') {
           <app-git-history class="min-h-0 flex-1" />
         } @else {
-          <ul class="min-h-0 flex-1 overflow-y-auto py-1 text-sm">
-            @for (change of status.changes; track change.path) {
-              <li
-                class="flex items-center gap-2 px-3 py-0.5 hover:bg-slate-200"
-                [class.bg-amber-50]="change.status === 'conflicted'"
-                [class.bg-sky-100]="
-                  git.conflict()?.path === change.path || git.diff()?.path === change.path
-                "
-                [title]="describe(change)"
+          <div class="flex shrink-0 items-center justify-end gap-1 px-3 pt-1 text-slate-500">
+            @if (status.changes.length && !status.merging) {
+              <button
+                type="button"
+                class="mr-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-xs enabled:hover:bg-slate-200 enabled:hover:text-slate-800 disabled:opacity-50"
+                [disabled]="git.busy() !== null"
+                [title]="selected().size ? 'Discard the selected changes' : 'Discard all changes'"
+                (click)="discard(selectedPaths().length ? selectedPaths() : allPaths())"
               >
-                <input
-                  type="checkbox"
-                  class="shrink-0 accent-sky-600"
-                  [attr.aria-label]="'Select ' + change.path"
-                  [checked]="selected().has(change.path)"
-                  [disabled]="status.merging || change.status === 'conflicted'"
-                  (change)="toggle(change.path)"
-                />
-                @if (change.status === 'conflicted') {
-                  <button
-                    type="button"
-                    class="flex min-w-0 items-center gap-2 text-left hover:underline"
-                    [attr.aria-label]="'Resolve the conflict in ' + change.path"
-                    (click)="git.openConflict(change.path)"
-                  >
-                    <span class="truncate">{{ fileName(change.path) }}</span>
-                    <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="ml-auto shrink-0 rounded border border-amber-300 bg-white px-1.5 text-xs text-amber-800 enabled:hover:bg-amber-100 disabled:opacity-50"
-                    [disabled]="git.busy() !== null"
-                    (click)="git.openConflict(change.path)"
-                  >
-                    Resolve
-                  </button>
-                } @else {
-                  <button
-                    type="button"
-                    class="flex min-w-0 items-center gap-2 text-left hover:underline"
-                    [attr.aria-label]="'Show the changes in ' + change.path"
-                    (click)="git.openDiff(change.path)"
-                  >
-                    <span class="truncate">{{ fileName(change.path) }}</span>
-                    <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
-                  </button>
-                  @if (git.diffLoading() === change.path) {
-                    <fa-icon
-                      class="shrink-0 text-xs text-slate-400"
-                      [icon]="faSpinner"
-                      animation="spin"
-                    />
-                  }
-                }
-                <span
-                  class="font-mono text-xs font-bold"
-                  [class.ml-auto]="change.status !== 'conflicted'"
-                  [class]="badges[change.status].color"
-                  [title]="change.status"
-                  >{{ badges[change.status].letter }}</span
+                <fa-icon [icon]="busyIcon('discard', faRotateLeft)" [animation]="spin('discard')" />
+                {{ selectedPaths().length ? 'Discard selected' : 'Discard all' }}
+              </button>
+            }
+            <button
+              type="button"
+              class="flex size-6 items-center justify-center rounded hover:bg-slate-200"
+              [class.bg-slate-200]="viewMode() === 'list'"
+              title="View as list"
+              aria-label="View as list"
+              [attr.aria-pressed]="viewMode() === 'list'"
+              (click)="viewMode.set('list')"
+            >
+              <fa-icon [icon]="faListUl" />
+            </button>
+            <button
+              type="button"
+              class="flex size-6 items-center justify-center rounded hover:bg-slate-200"
+              [class.bg-slate-200]="viewMode() === 'tree'"
+              title="View as tree"
+              aria-label="View as tree"
+              [attr.aria-pressed]="viewMode() === 'tree'"
+              (click)="viewMode.set('tree')"
+            >
+              <fa-icon [icon]="faSitemap" />
+            </button>
+          </div>
+          <ul class="min-h-0 flex-1 overflow-y-auto py-1 text-sm">
+            @for (row of rows(); track row.key) {
+              @if (row.change; as change) {
+                <li
+                  class="group flex items-center gap-2 py-0.5 pr-3 hover:bg-slate-200"
+                  [style.padding-left.px]="12 + row.depth * 14"
+                  [class.bg-amber-50]="change.status === 'conflicted'"
+                  [class.bg-sky-100]="
+                    git.conflict()?.path === change.path || git.diff()?.path === change.path
+                  "
+                  [title]="describe(change)"
                 >
-              </li>
+                  <input
+                    type="checkbox"
+                    class="shrink-0 accent-sky-600"
+                    [attr.aria-label]="'Select ' + change.path"
+                    [checked]="selected().has(change.path)"
+                    [disabled]="status.merging || change.status === 'conflicted'"
+                    (change)="toggle(change.path)"
+                  />
+                  @if (change.status === 'conflicted') {
+                    <button
+                      type="button"
+                      class="flex min-w-0 items-center gap-2 text-left hover:underline"
+                      [attr.aria-label]="'Resolve the conflict in ' + change.path"
+                      (click)="git.openConflict(change.path)"
+                    >
+                      <span class="truncate">{{ fileName(change.path) }}</span>
+                      @if (viewMode() === 'list') {
+                        <span class="truncate text-xs text-slate-400">{{
+                          folder(change.path)
+                        }}</span>
+                      }
+                    </button>
+                    <button
+                      type="button"
+                      class="ml-auto shrink-0 rounded border border-amber-300 bg-white px-1.5 text-xs text-amber-800 enabled:hover:bg-amber-100 disabled:opacity-50"
+                      [disabled]="git.busy() !== null"
+                      (click)="git.openConflict(change.path)"
+                    >
+                      Resolve
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="flex min-w-0 items-center gap-2 text-left hover:underline"
+                      [attr.aria-label]="'Show the changes in ' + change.path"
+                      (click)="git.openDiff(change.path)"
+                    >
+                      <span class="truncate">{{ fileName(change.path) }}</span>
+                      @if (viewMode() === 'list') {
+                        <span class="truncate text-xs text-slate-400">{{
+                          folder(change.path)
+                        }}</span>
+                      }
+                    </button>
+                    @if (git.diffLoading() === change.path) {
+                      <fa-icon
+                        class="shrink-0 text-xs text-slate-400"
+                        [icon]="faSpinner"
+                        animation="spin"
+                      />
+                    }
+                  }
+                  @if (change.status !== 'conflicted' && !status.merging) {
+                    <button
+                      type="button"
+                      class="ml-auto hidden size-5 shrink-0 items-center justify-center rounded text-slate-500 group-hover:flex enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+                      [attr.aria-label]="'Discard changes in ' + change.path"
+                      title="Discard changes"
+                      [disabled]="git.busy() !== null"
+                      (click)="discard([change.path])"
+                    >
+                      <fa-icon [icon]="faRotateLeft" />
+                    </button>
+                  }
+                  <span
+                    class="font-mono text-xs font-bold"
+                    [class.ml-auto]="change.status === 'conflicted'"
+                    [class]="badges[change.status].color"
+                    [title]="change.status"
+                    >{{ badges[change.status].letter }}</span
+                  >
+                </li>
+              } @else {
+                <li>
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-1.5 py-0.5 pr-3 text-left text-slate-600 hover:bg-slate-200"
+                    [style.padding-left.px]="12 + row.depth * 14"
+                    [attr.aria-expanded]="!collapsed().has(row.key)"
+                    (click)="toggleFolder(row.key)"
+                  >
+                    <fa-icon
+                      class="w-3 text-xs text-slate-400"
+                      [icon]="collapsed().has(row.key) ? faChevronRight : faChevronDown"
+                    />
+                    <fa-icon class="text-slate-400" [icon]="faFolder" />
+                    <span class="truncate">{{ row.name }}</span>
+                  </button>
+                </li>
+              }
             } @empty {
               <li class="px-3 py-1 text-slate-500">No changes.</li>
             }
@@ -309,6 +391,10 @@ export class GitView {
   protected readonly message = signal('');
   /** Whether the list shows the working tree's changes or the commit history. */
   protected readonly tab = signal<'changes' | 'history'>('changes');
+  /** Whether changes are listed flat, with their folder, or grouped under folders. */
+  protected readonly viewMode = signal<'list' | 'tree'>('list');
+  /** Tree folders the user collapsed, by path. */
+  protected readonly collapsed = signal(new Set<string>());
   protected readonly fileName = fileName;
   protected readonly folder = folderOf;
 
@@ -344,7 +430,7 @@ export class GitView {
   protected readonly selected = signal(new Set<string>());
 
   /** Selected paths that still have changes. */
-  private readonly selectedPaths = computed(() => {
+  protected readonly selectedPaths = computed(() => {
     const changed = new Set(this.git.status()?.changes.map((c) => c.path));
     return [...this.selected()].filter((p) => changed.has(p));
   });
@@ -357,6 +443,22 @@ export class GitView {
       this.git.conflicts().length === 0,
   );
 
+  protected readonly rows = computed<ChangeRow[]>(() => {
+    const changes = this.git.status()?.changes ?? [];
+    if (this.viewMode() === 'list') {
+      return changes.map((change) => ({ key: change.path, depth: 0, name: '', change }));
+    }
+    return buildTree(changes, this.collapsed());
+  });
+
+  protected readonly allPaths = computed(() => this.git.status()?.changes.map((c) => c.path) ?? []);
+
+  protected readonly faChevronDown = faChevronDown;
+  protected readonly faChevronRight = faChevronRight;
+  protected readonly faFolder = faFolder;
+  protected readonly faListUl = faListUl;
+  protected readonly faRotateLeft = faRotateLeft;
+  protected readonly faSitemap = faSitemap;
   protected readonly faCodeBranch = faCodeBranch;
   protected readonly faArrowDown = faArrowDown;
   protected readonly faArrowUp = faArrowUp;
@@ -375,6 +477,29 @@ export class GitView {
       this.message.set('');
       this.selected.set(new Set());
     }
+  }
+
+  protected async discard(paths: string[]): Promise<void> {
+    const conflicted = new Set(this.git.conflicts().map((c) => c.path));
+    const targets = paths.filter((p) => !conflicted.has(p));
+    if (!targets.length || this.git.busy() !== null) return;
+    const what =
+      targets.length === 1
+        ? `your changes to ${targets[0]}`
+        : `your changes to ${targets.length} files`;
+    if (!confirm(`Discard ${what}? This cannot be undone.`)) return;
+    if (await this.git.discard(targets)) {
+      this.selected.update((set) => new Set([...set].filter((p) => !targets.includes(p))));
+    }
+  }
+
+  protected toggleFolder(key: string): void {
+    this.collapsed.update((set) => {
+      const next = new Set(set);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   protected toggle(path: string): void {
@@ -397,4 +522,47 @@ export class GitView {
   protected describe(change: GitChange): string {
     return change.originalPath ? `${change.originalPath} → ${change.path}` : change.path;
   }
+}
+
+/** A line of the changes list: a file, or (in the tree view) a folder heading. */
+interface ChangeRow {
+  key: string;
+  depth: number;
+  name: string;
+  change?: GitChange;
+}
+
+/** Groups changes under their folders, folders first, skipping the contents of collapsed ones. */
+function buildTree(changes: GitChange[], collapsed: Set<string>): ChangeRow[] {
+  interface Node {
+    folders: Map<string, Node>;
+    files: GitChange[];
+  }
+  const root: Node = { folders: new Map(), files: [] };
+  for (const change of changes) {
+    const parts = change.path.split('/');
+    let node = root;
+    for (const part of parts.slice(0, -1)) {
+      let next = node.folders.get(part);
+      if (!next) node.folders.set(part, (next = { folders: new Map(), files: [] }));
+      node = next;
+    }
+    node.files.push(change);
+  }
+
+  const rows: ChangeRow[] = [];
+  const walk = (node: Node, prefix: string, depth: number): void => {
+    for (const [name, child] of [...node.folders].sort(([a], [b]) => a.localeCompare(b))) {
+      const key = prefix + name;
+      rows.push({ key, depth, name });
+      if (!collapsed.has(key)) walk(child, key + '/', depth + 1);
+    }
+    for (const change of [...node.files].sort((a, b) =>
+      fileName(a.path).localeCompare(fileName(b.path)),
+    )) {
+      rows.push({ key: change.path, depth, name: fileName(change.path), change });
+    }
+  };
+  walk(root, '', 0);
+  return rows;
 }

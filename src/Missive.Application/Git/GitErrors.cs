@@ -20,6 +20,8 @@ public static class GitErrors
     public const string NoRemoteCode = "git.no_remote";
     public const string PushRejectedCode = "git.push_rejected";
     public const string CommandFailedCode = "git.command_failed";
+    public const string NothingToDiscardCode = "git.nothing_to_discard";
+    public const string DiscardDuringMergeCode = "git.discard_during_merge";
     public const string NotMergingCode = "git.not_merging";
     public const string NotConflictedCode = "git.not_conflicted";
     public const string ConflictMarkersRemainCode = "git.conflict_markers_remain";
@@ -50,6 +52,12 @@ public static class GitErrors
 
     public static Error PathsNotChanged(IEnumerable<string> paths) =>
         new(PathsNotChangedCode, $"These files have no changes to commit: {string.Join(", ", paths)}.");
+
+    public static Error NothingToDiscard() =>
+        new(NothingToDiscardCode, "Select the changes to discard.");
+
+    public static Error DiscardDuringMerge() =>
+        new(DiscardDuringMergeCode, "A merge is in progress; resolve the conflicts or abort the merge instead of discarding changes.");
 
     public static Error PartialCommitDuringMerge() =>
         new(PartialCommitDuringMergeCode, "A merge is in progress; commit all changes to complete it.");
