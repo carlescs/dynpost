@@ -107,7 +107,8 @@ export class WorkspaceStore {
 
   /**
    * Re-reads open documents from disk after git changed files (a pull, a resolved conflict, an
-   * aborted merge): all of them, or those at `paths`. Documents with unsaved edits are left alone.
+   * aborted merge): all of them, or those at `paths`. Unsaved edits are preserved, and removed
+   * files are detached from their open drafts.
    */
   async reloadFromDisk(paths?: string[]): Promise<void> {
     const targets = this.documents().filter(
@@ -121,8 +122,22 @@ export class WorkspaceStore {
             d.id === doc.id && !d.dirty ? { ...d, ...content, revision: d.revision + 1 } : d,
           ),
         );
-      } catch {
-        // Gone or unreadable (for example still full of conflict markers): keep what is open.
+      } catch (error) {
+        // Keep unreadable files open, but reconcile files removed by git.
+        if (!(error instanceof BridgeError) || error.code !== 'not_found') continue;
+        const current = this.documents().find((d) => d.key === doc.key);
+        if (!current || current.path !== doc.path) continue;
+        if (current.dirty) {
+          this.documents.update((docs) =>
+            docs.map((d) =>
+              d.key === current.key
+                ? { ...d, id: `untitled-${++this.untitledCount}`, path: null }
+                : d,
+            ),
+          );
+        } else {
+          this.close(current.id);
+        }
       }
     }
   }

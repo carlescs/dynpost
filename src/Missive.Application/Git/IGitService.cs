@@ -31,6 +31,15 @@ public interface IGitService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Throws away the given uncommitted changes: modified and deleted files go back to their last
+    /// committed content, new files (staged or untracked) are deleted, and a rename is undone.
+    /// </summary>
+    Task<Result<Unit>> DiscardChangesAsync(
+        string workspacePath,
+        IReadOnlyList<GitChange> changes,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Pulls the current branch from its upstream with a merge (never a rebase). Conflicts are left
     /// in the working tree for the user and reported as <see cref="PullOutcome.Conflicted"/>.
     /// </summary>

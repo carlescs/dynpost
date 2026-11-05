@@ -59,8 +59,8 @@ export class EnvironmentStore {
     });
   }
 
-  /** Re-reads the list of environments and the selected environment's variables. */
-  async refresh(): Promise<void> {
+  /** Re-reads the list, selected variables, and clean open drafts from disk. */
+  async refresh(paths?: string[]): Promise<void> {
     const root = this.root();
     if (!root) return;
     const load = ++this.loadCount;
@@ -69,6 +69,7 @@ export class EnvironmentStore {
       if (load !== this.loadCount || this.root() !== root) return;
       this.environments.set(list.environments);
       this.activeId.set(list.active);
+      await this.reloadDrafts(list.environments, paths, load, root);
       await this.loadVariables(load);
     } catch (error) {
       this.report(error);
@@ -205,6 +206,40 @@ export class EnvironmentStore {
 
   private patchDraft(key: string, change: (draft: EnvironmentDraft) => EnvironmentDraft): void {
     this.drafts.update((drafts) => drafts.map((d) => (d.key === key ? change(d) : d)));
+  }
+
+  private async reloadDrafts(
+    environments: EnvironmentSummaryDto[],
+    paths: string[] | undefined,
+    load: number,
+    root: string,
+  ): Promise<void> {
+    const available = new Set(environments.map((environment) => environment.id));
+    const targets = this.drafts().filter(
+      (draft) => draft.id && (!paths || paths.includes(`environments/${draft.id}`)),
+    );
+    for (const draft of targets) {
+      if (load !== this.loadCount || this.root() !== root) return;
+      if (!available.has(draft.id!)) {
+        const current = this.drafts().find((candidate) => candidate.key === draft.key);
+        if (!current || current.id !== draft.id) continue;
+        if (current.dirty) this.patchDraft(draft.key, (candidate) => ({ ...candidate, id: null }));
+        else this.remove(draft.key);
+        continue;
+      }
+      if (draft.dirty) continue;
+      try {
+        const environment = await this.bridge.send('environment.load', { id: draft.id! });
+        if (load !== this.loadCount || this.root() !== root) return;
+        this.patchDraft(draft.key, (current) =>
+          current.id === draft.id && !current.dirty
+            ? { ...current, ...environment, revision: current.revision + 1 }
+            : current,
+        );
+      } catch {
+        // Keep an open draft if its file exists but cannot currently be read.
+      }
+    }
   }
 
   private async loadVariables(load: number): Promise<void> {

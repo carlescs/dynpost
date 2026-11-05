@@ -154,6 +154,54 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Discard_RevertsEditsAndDeletions_AndRemovesNewFiles()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "edited.yaml", "name: Edited\n");
+        Write(repository, "deleted.yaml", "name: Deleted\n");
+        Write(repository, "old.yaml", "name: Old\n");
+        Write(repository, "keep.yaml", "name: Keep\n");
+        TestGit.CommitAll(repository, "Initial");
+        Write(repository, "edited.yaml", "name: Changed\n");
+        File.Delete(Path.Combine(repository, "deleted.yaml"));
+        TestGit.Run(repository, "mv", "old.yaml", "renamed.yaml");
+        Write(repository, "staged.yaml", "name: Staged\n");
+        TestGit.Run(repository, "add", "staged.yaml");
+        Write(repository, "untracked/new.yaml", "name: New\n");
+        Write(repository, "keep.yaml", "name: Keep changed\n");
+
+        var status = (await _git.GetStatusAsync(repository)).Value;
+        var result = await _git.DiscardChangesAsync(repository, status.Changes.Where(c => c.Path != "keep.yaml").ToList());
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal("name: Edited\n", File.ReadAllText(Path.Combine(repository, "edited.yaml")));
+        Assert.True(File.Exists(Path.Combine(repository, "deleted.yaml")));
+        Assert.True(File.Exists(Path.Combine(repository, "old.yaml")));
+        Assert.False(File.Exists(Path.Combine(repository, "renamed.yaml")));
+        Assert.False(File.Exists(Path.Combine(repository, "staged.yaml")));
+        Assert.False(File.Exists(Path.Combine(repository, "untracked", "new.yaml")));
+        var after = (await _git.GetStatusAsync(repository)).Value;
+        Assert.Equal(new[] { new GitChange("keep.yaml", GitFileStatus.Modified) }, after.Changes);
+    }
+
+    [Fact]
+    public async Task Discard_RemovesAnUntrackedFileEvenAfterRestoringItsIgnoreRule()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, ".gitignore", "*.log\n");
+        TestGit.CommitAll(repository, "Ignore logs");
+        Write(repository, ".gitignore", string.Empty);
+        Write(repository, "debug.log", "debug\n");
+
+        var status = (await _git.GetStatusAsync(repository)).Value;
+        var result = await _git.DiscardChangesAsync(repository, status.Changes);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.False(File.Exists(Path.Combine(repository, "debug.log")));
+        Assert.Equal("*.log\n", File.ReadAllText(Path.Combine(repository, ".gitignore")));
+    }
+
+    [Fact]
     public async Task Commit_WithPaths_CommitsOnlyThosePaths()
     {
         var repository = InitRepository("repo");

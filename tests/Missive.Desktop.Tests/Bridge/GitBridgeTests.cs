@@ -38,6 +38,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<GetGitStatus>()
             .AddTransient<InitRepository>()
             .AddTransient<CommitChanges>()
+            .AddTransient<DiscardChanges>()
             .AddTransient<PullChanges>()
             .AddTransient<PushChanges>()
             .AddTransient<GetConflict>()

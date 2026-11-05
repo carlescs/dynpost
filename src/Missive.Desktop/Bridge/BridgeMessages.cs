@@ -95,6 +95,9 @@ internal static class BridgeMessageTypes
     /// <summary>Resolves one conflicted file as the user chose. Payload: <see cref="GitResolvePayload"/>. Result: new status.</summary>
     public const string GitResolve = "git.resolve";
 
+    /// <summary>Discards uncommitted changes to files. Payload: <see cref="GitDiscardPayload"/>. Result: new status.</summary>
+    public const string GitDiscard = "git.discard";
+
     /// <summary>Abandons the merge in progress. Payload: none. Result: new status.</summary>
     public const string GitAbortMerge = "git.abortMerge";
 
@@ -191,6 +194,8 @@ internal sealed record SaveEnvironmentPayload(string Id, EnvironmentDto Environm
 internal sealed record SelectEnvironmentPayload(string? Id);
 
 /// <param name="Paths">Workspace-relative paths to commit; omitted or empty commits every change.</param>
+internal sealed record GitDiscardPayload(IReadOnlyList<string> Paths);
+
 internal sealed record GitCommitPayload(string Message, IReadOnlyList<string>? Paths = null);
 
 internal sealed record GitConflictPayload(string Path);

@@ -303,6 +303,8 @@ export interface BridgeMessages {
     payload: { message: string; paths?: string[] };
     result: { commitId: string; status: GitStatus };
   };
+  /** Discards the uncommitted changes of `paths`: edits are reverted and new files deleted. */
+  'git.discard': { payload: { paths: string[] }; result: GitStatus };
   /** Pulls the current branch with a merge (never a rebase). */
   'git.pull': { payload: void; result: { outcome: PullOutcome; status: GitStatus } };
   /** Pushes the current branch, or publishes it when it has no upstream. Never forces. */
