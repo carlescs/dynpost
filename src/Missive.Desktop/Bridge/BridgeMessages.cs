@@ -75,6 +75,14 @@ internal static class BridgeMessageTypes
 
     /// <summary>Abandons the merge in progress. Payload: none. Result: new status.</summary>
     public const string GitAbortMerge = "git.abortMerge";
+
+    /// <summary>
+    /// Looks for a newer version of the app and downloads it. Payload: none. Result: update status.
+    /// </summary>
+    public const string UpdateCheck = "update.check";
+
+    /// <summary>Installs the downloaded update and restarts the app. Payload: none. Result: none (the app exits).</summary>
+    public const string UpdateRestart = "update.restart";
 }
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>

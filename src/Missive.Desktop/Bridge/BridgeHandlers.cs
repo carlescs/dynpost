@@ -4,6 +4,7 @@ using Missive.Application.Git;
 using Missive.Application.Http;
 using Missive.Domain.Git;
 using Missive.Application.Requests;
+using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -69,7 +70,11 @@ internal static class BridgeHandlers
                     ? (await Use<ResolveConflict>().ExecuteAsync(new ResolveConflictRequest(p.Path, resolution), ct)).Map(GitStatusDto.From)
                     : new Error(BridgeErrorCodes.BadPayload, $"Unknown resolution '{p.Resolution}'; use ours, theirs or edited."))
             .Register(BridgeMessageTypes.GitAbortMerge,
-                async ct => (await Use<AbortMerge>().ExecuteAsync(ct)).Map(GitStatusDto.From));
+                async ct => (await Use<AbortMerge>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register(BridgeMessageTypes.UpdateCheck,
+                ct => Use<CheckForUpdate>().ExecuteAsync(ct))
+            .Register(BridgeMessageTypes.UpdateRestart,
+                _ => Task.FromResult(NoValue(Use<RestartToUpdate>().Execute())));
     }
 
     private static ConflictResolution? ParseResolution(string? value) =>

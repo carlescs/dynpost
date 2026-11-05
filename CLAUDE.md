@@ -67,8 +67,12 @@ Prettier. Before finishing, run `dotnet build Missive.sln` and
 
 CI (`.github/workflows/ci.yml`) runs the Prettier check, the client build, and
 build + test on Windows, Linux and macOS. `.github/workflows/release.yml`
-publishes self-contained desktop builds to a GitHub release when a `v*` tag is
-pushed. Add tests alongside new backend code.
+packages self-contained desktop builds with Velopack (`vpk pack`: installers,
+portable copies and update feeds) and publishes them to a GitHub release when a
+`v*` tag is pushed. The app updates itself from those releases through the
+`IAppUpdater` port (`Infrastructure/Updates/VelopackAppUpdater.cs`); keep the
+workflow's `vpk` version equal to the `Velopack` package version. Add tests
+alongside new backend code.
 
 ## Backend architecture
 

@@ -4,12 +4,14 @@ using Missive.Application.Git;
 using Missive.Application.Http;
 using Missive.Application.Requests;
 using Missive.Application.Settings;
+using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Desktop.Hosting;
 using Missive.Infrastructure.Git;
 using Missive.Infrastructure.Http;
 using Missive.Infrastructure.Settings;
+using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
 using Photino.NET;
 
@@ -17,9 +19,15 @@ namespace Missive.Desktop;
 
 internal static class Program
 {
+    /// <summary>The GitHub repository whose releases the app updates itself from.</summary>
+    private const string ReleasesRepository = "https://github.com/carlescs/missive";
+
     [STAThread]
     private static void Main()
     {
+        // Must run first: the installer and updater start the app with special arguments.
+        VelopackAppUpdater.RunInstallHooks();
+
         var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
         var indexPath = Path.Combine(wwwroot, "index.html");
 
@@ -61,6 +69,9 @@ internal static class Program
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
+            .AddSingleton<IAppUpdater>(new VelopackAppUpdater(ReleasesRepository))
+            .AddTransient<CheckForUpdate>()
+            .AddTransient<RestartToUpdate>()
             .AddTransient<OpenWorkspace>()
             .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetWorkspaceTree>()
