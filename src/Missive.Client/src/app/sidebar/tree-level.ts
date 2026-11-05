@@ -166,12 +166,13 @@ import { NameInput } from './name-input';
             [title]="node.error ?? node.path"
             (click)="state.store.openRequest(node)"
           >
+            <span class="w-3 shrink-0"></span>
             @if (node.error) {
-              <fa-icon class="w-12 shrink-0 text-right text-rose-500" [icon]="faWarning" />
+              <fa-icon class="w-8 shrink-0 text-rose-500" [icon]="faWarning" />
               <span class="truncate text-rose-700">{{ node.name }}</span>
             } @else {
               <span
-                class="w-12 shrink-0 text-right font-mono text-[10px] font-bold"
+                class="w-8 shrink-0 font-mono text-[10px] font-bold"
                 [class]="methodColor(node)"
                 >{{ node.method }}</span
               >
@@ -208,7 +209,7 @@ export class TreeLevel {
     'flex size-5 items-center justify-center rounded text-xs text-slate-500 hover:bg-slate-300 hover:text-slate-800';
 
   protected indent(): number {
-    return 12 + this.depth() * 12;
+    return 12 + this.depth() * 16;
   }
 
   protected chevron(node: WorkspaceNode) {
