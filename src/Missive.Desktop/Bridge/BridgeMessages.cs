@@ -66,6 +66,15 @@ internal static class BridgeMessageTypes
 
     /// <summary>Pushes (or publishes) the current branch, never forcing. Payload: none. Result: new status.</summary>
     public const string GitPush = "git.push";
+
+    /// <summary>Reads both sides of a conflicted file. Payload: <see cref="GitConflictPayload"/>. Result: the versions.</summary>
+    public const string GitConflict = "git.conflict";
+
+    /// <summary>Resolves one conflicted file as the user chose. Payload: <see cref="GitResolvePayload"/>. Result: new status.</summary>
+    public const string GitResolve = "git.resolve";
+
+    /// <summary>Abandons the merge in progress. Payload: none. Result: new status.</summary>
+    public const string GitAbortMerge = "git.abortMerge";
 }
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
@@ -102,6 +111,11 @@ internal sealed record DeleteFolderPayload(string Path);
 
 /// <param name="Paths">Workspace-relative paths to commit; omitted or empty commits every change.</param>
 internal sealed record GitCommitPayload(string Message, IReadOnlyList<string>? Paths = null);
+
+internal sealed record GitConflictPayload(string Path);
+
+/// <param name="Resolution"><c>ours</c>, <c>theirs</c> or <c>edited</c>.</param>
+internal sealed record GitResolvePayload(string Path, string Resolution);
 
 internal static class BridgeErrorCodes
 {

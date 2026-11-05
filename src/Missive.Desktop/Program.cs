@@ -69,5 +69,8 @@ internal static class Program
             .AddTransient<CommitChanges>()
             .AddTransient<PullChanges>()
             .AddTransient<PushChanges>()
+            .AddTransient<GetConflict>()
+            .AddTransient<ResolveConflict>()
+            .AddTransient<AbortMerge>()
             .BuildServiceProvider();
 }

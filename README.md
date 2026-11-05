@@ -179,12 +179,30 @@ configuration, hooks and credential helpers apply as usual. In detail:
   you tick in the changes list, and never touches files outside the workspace.
   Files in `.missive/` are never committed, even if they are not git-ignored.
 - **Pull** merges the upstream branch into yours; it never rebases. If the merge
-  conflicts, the conflicted files are listed and left for you to resolve and
-  mark as resolved (`git add`); committing then completes the merge.
+  conflicts, nothing is resolved for you: the conflicted files are listed and
+  Missive walks you through them (see below).
 - **Push** pushes the current branch without force. A branch with no upstream
   yet is published to `origin` (or the only remote) and tracks it from then on.
   If the remote has commits you don't have, the push is rejected and you are
   asked to pull first.
+
+### Resolving merge conflicts
+
+When a pull stops on conflicts, the Source control view shows a merge banner
+and marks each conflicted file. **Resolve** opens it side by side, your
+version (the current branch) next to the incoming one, and for each file you
+choose:
+
+- **Keep this version** — take your side or the incoming side as-is (or keep a
+  deletion, if that side deleted the file);
+- **Mark as resolved** — after editing the file yourself in any editor to
+  combine both sides. Missive refuses while the file still has
+  `<<<<<<<` / `=======` / `>>>>>>>` conflict markers.
+
+Once every file is resolved, **Commit all** completes the merge; the commit
+message is pre-filled with git's merge message. **Abort merge** abandons the
+merge instead (`git merge --abort`) and puts your branch back as it was before
+the pull, after asking you to confirm.
 
 Missive reopens the last workspace at the next launch, if its folder still
 exists. That choice is stored per user, outside any workspace, in

@@ -35,6 +35,9 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<CommitChanges>()
             .AddTransient<PullChanges>()
             .AddTransient<PushChanges>()
+            .AddTransient<GetConflict>()
+            .AddTransient<ResolveConflict>()
+            .AddTransient<AbortMerge>()
             .BuildServiceProvider();
         _router = BridgeHandlers.Create(_services, Substitute.For<IFolderPicker>());
     }
@@ -146,6 +149,65 @@ public sealed class GitBridgeTests : IDisposable
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         Assert.Equal(JsonValueKind.Null, response.GetProperty("payload").ValueKind);
+    }
+
+    [Fact]
+    public async Task GitConflict_ReturnsBothSides()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<GitStatus>.Success(
+            new GitStatus("main", "origin/main", 1, 1, true, [new GitChange("a.yaml", GitFileStatus.Conflicted)], "Merge branch 'main'")));
+        _git.GetConflictAsync(Folder, "a.yaml", Arg.Any<CancellationToken>()).Returns(Result<GitConflict>.Success(
+            new GitConflict("a.yaml", "name: A\n", "name: Bob\n", null, "name: Bob\n")));
+
+        var response = await SendAsync("git.conflict", """{ "path": "a.yaml" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var payload = response.GetProperty("payload");
+        Assert.Equal("name: Bob\n", payload.GetProperty("ours").GetString());
+        Assert.Equal(JsonValueKind.Null, payload.GetProperty("theirs").ValueKind);
+        Assert.False(payload.GetProperty("hasConflictMarkers").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("ours", ConflictResolution.Ours)]
+    [InlineData("theirs", ConflictResolution.Theirs)]
+    public async Task GitResolve_PassesTheUsersChoice(string name, ConflictResolution resolution)
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>()).Returns(
+            Result<GitStatus>.Success(new GitStatus("main", "origin/main", 1, 1, true, [new GitChange("a.yaml", GitFileStatus.Conflicted)])),
+            Result<GitStatus>.Success(new GitStatus("main", "origin/main", 1, 1, true, [new GitChange("a.yaml", GitFileStatus.Modified)], "Merge")));
+        _git.ResolveConflictAsync(default!, default!, default, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+
+        var response = await SendAsync("git.resolve", $$"""{ "path": "a.yaml", "resolution": "{{name}}" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Equal("Merge", response.GetProperty("payload").GetProperty("mergeMessage").GetString());
+        _ = _git.Received(1).ResolveConflictAsync(Folder, "a.yaml", resolution, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GitResolve_UnknownResolution_IsRejected()
+    {
+        _current.Open(Folder);
+
+        var response = await SendAsync("git.resolve", """{ "path": "a.yaml", "resolution": "both" }""");
+
+        Assert.Equal("bad_payload", ErrorCode(response));
+        _ = _git.DidNotReceiveWithAnyArgs().ResolveConflictAsync(default!, default!, default, default);
+    }
+
+    [Fact]
+    public async Task GitAbortMerge_WithoutAMerge_IsReported()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 0, 0, false, [])));
+
+        var response = await SendAsync("git.abortMerge");
+
+        Assert.Equal(GitErrors.NotMergingCode, ErrorCode(response));
     }
 
     private async Task<JsonElement> SendAsync(string type, string? payload = null)

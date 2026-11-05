@@ -2,6 +2,7 @@ using Missive.Application.Common;
 using Missive.Application.Folders;
 using Missive.Application.Git;
 using Missive.Application.Http;
+using Missive.Domain.Git;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,8 +61,25 @@ internal static class BridgeHandlers
             .Register(BridgeMessageTypes.GitPull,
                 async ct => (await Use<PullChanges>().ExecuteAsync(ct)).Map(GitPullDto.From))
             .Register(BridgeMessageTypes.GitPush,
-                async ct => (await Use<PushChanges>().ExecuteAsync(ct)).Map(GitStatusDto.From));
+                async ct => (await Use<PushChanges>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register<GitConflictPayload, GitConflictDto>(BridgeMessageTypes.GitConflict,
+                async (p, ct) => (await Use<GetConflict>().ExecuteAsync(p.Path, ct)).Map(GitConflictDto.From))
+            .Register<GitResolvePayload, GitStatusDto>(BridgeMessageTypes.GitResolve,
+                async (p, ct) => ParseResolution(p.Resolution) is { } resolution
+                    ? (await Use<ResolveConflict>().ExecuteAsync(new ResolveConflictRequest(p.Path, resolution), ct)).Map(GitStatusDto.From)
+                    : new Error(BridgeErrorCodes.BadPayload, $"Unknown resolution '{p.Resolution}'; use ours, theirs or edited."))
+            .Register(BridgeMessageTypes.GitAbortMerge,
+                async ct => (await Use<AbortMerge>().ExecuteAsync(ct)).Map(GitStatusDto.From));
     }
+
+    private static ConflictResolution? ParseResolution(string? value) =>
+        value switch
+        {
+            "ours" => ConflictResolution.Ours,
+            "theirs" => ConflictResolution.Theirs,
+            "edited" => ConflictResolution.Edited,
+            _ => null,
+        };
 
     /// <summary>Results without a value are sent as a <c>null</c> payload.</summary>
     private static Result<Unit?> NoValue(Result<Unit> result) =>
