@@ -70,8 +70,10 @@ build + test on Windows, Linux and macOS. `.github/workflows/release.yml`
 packages self-contained desktop builds with Velopack (`vpk pack`: installers,
 portable copies and update feeds) and publishes them to a GitHub release when a
 `v*` tag is pushed. The app updates itself from those releases through the
-`IAppUpdater` port (`Infrastructure/Updates/VelopackAppUpdater.cs`); keep the
-workflow's `vpk` version equal to the `Velopack` package version. Add tests
+`IAppUpdater` port (`Infrastructure/Updates/VelopackAppUpdater.cs`). Desktop
+also references `Velopack`, only because `vpk` requires `Program.Main` to call
+`VelopackApp.Build().Run()` directly. Keep the workflow's `vpk` version equal to
+the `Velopack` package version. Add tests
 alongside new backend code.
 
 ## Backend architecture

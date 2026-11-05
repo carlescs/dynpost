@@ -11,7 +11,7 @@ namespace Missive.Infrastructure.Updates;
 /// </summary>
 public sealed class VelopackAppUpdater : IAppUpdater
 {
-    /// <summary><c>null</c> when Velopack is not set up (<see cref="RunInstallHooks"/> was not called).</summary>
+    /// <summary><c>null</c> when Velopack is not set up (<c>VelopackApp.Build().Run()</c> was not called).</summary>
     private readonly UpdateManager? _manager;
     private UpdateInfo? _found;
 
@@ -32,12 +32,6 @@ public sealed class VelopackAppUpdater : IAppUpdater
             _manager = null;
         }
     }
-
-    /// <summary>
-    /// Handles Velopack's install, update and uninstall hooks, which may exit the process. Call it
-    /// first thing in <c>Main</c>.
-    /// </summary>
-    public static void RunInstallHooks() => VelopackApp.Build().Run();
 
     public bool IsSupported => _manager?.IsInstalled == true;
 

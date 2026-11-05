@@ -14,6 +14,7 @@ using Missive.Infrastructure.Settings;
 using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
 using Photino.NET;
+using Velopack;
 
 namespace Missive.Desktop;
 
@@ -25,8 +26,9 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
-        // Must run first: the installer and updater start the app with special arguments.
-        VelopackAppUpdater.RunInstallHooks();
+        // Must run first: Velopack's installer and updater start the app with special arguments,
+        // and vpk checks that Main calls this directly.
+        VelopackApp.Build().Run();
 
         var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
         var indexPath = Path.Combine(wwwroot, "index.html");
