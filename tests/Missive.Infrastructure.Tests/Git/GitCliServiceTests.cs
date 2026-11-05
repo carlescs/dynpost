@@ -262,6 +262,24 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Conflict_WithTheFileReplacedByASymbolicLink_DoesNotFollowIt()
+    {
+        var bob = await ConflictedMergeAsync();
+        var secret = _temp.Combine("secret.txt");
+        File.WriteAllText(secret, "password\n");
+        File.Delete(Path.Combine(bob, "a.yaml"));
+        if (!TryCreateSymbolicLink(Path.Combine(bob, "a.yaml"), secret))
+        {
+            return; // Creating links needs extra rights on Windows.
+        }
+
+        var conflict = await _git.GetConflictAsync(bob, "a.yaml");
+
+        Assert.True(conflict.IsSuccess, conflict.Error?.Message);
+        Assert.Equal(secret, conflict.Value.Working);
+    }
+
+    [Fact]
     public async Task ResolvingEveryFile_ThenCommitting_CompletesTheMerge()
     {
         var bob = await ConflictedMergeAsync();
@@ -320,6 +338,179 @@ public sealed class GitCliServiceTests : IDisposable
     /// Bob's clone after a pull that conflicts on <c>a.yaml</c> (both changed it) and
     /// <c>d.yaml</c> (Alice deleted it, Bob changed it).
     /// </summary>
+    [Fact]
+    public async Task Diff_ReadsTheCommittedAndWorkingVersions()
+    {
+        var repository = InitRepository("repo");
+        var workspace = Path.Combine(repository, "api");
+        Write(workspace, "users/get.yaml", "name: Get\n");
+        Write(workspace, "old.yaml", "name: Old\n");
+        TestGit.CommitAll(repository, "Initial");
+        Write(workspace, "users/get.yaml", "name: Get user\n");
+        Write(workspace, "new.yaml", "name: New\n");
+        File.Delete(Path.Combine(workspace, "old.yaml"));
+
+        var modified = await _git.GetFileDiffAsync(workspace, new GitChange("users/get.yaml", GitFileStatus.Modified));
+        var added = await _git.GetFileDiffAsync(workspace, new GitChange("new.yaml", GitFileStatus.Untracked));
+        var deleted = await _git.GetFileDiffAsync(workspace, new GitChange("old.yaml", GitFileStatus.Deleted));
+
+        Assert.True(modified.IsSuccess, modified.Error?.Message);
+        Assert.Equal("name: Get\n", modified.Value.Original);
+        Assert.Equal("name: Get user\n", modified.Value.Modified);
+        Assert.Null(added.Value.Original);
+        Assert.Equal("name: New\n", added.Value.Modified);
+        Assert.Equal("name: Old\n", deleted.Value.Original);
+        Assert.Null(deleted.Value.Modified);
+    }
+
+    [Fact]
+    public async Task Diff_OfARename_ReadsTheOriginalAtItsOldPath()
+    {
+        var workspace = InitRepository("repo");
+        Write(workspace, "a.yaml", "name: A\n");
+        TestGit.CommitAll(workspace, "Initial");
+        TestGit.Run(workspace, "mv", "a.yaml", "b.yaml");
+        Write(workspace, "b.yaml", "name: B\n");
+
+        var diff = await _git.GetFileDiffAsync(workspace, new GitChange("b.yaml", GitFileStatus.Renamed, "a.yaml"));
+
+        Assert.True(diff.IsSuccess, diff.Error?.Message);
+        Assert.Equal("name: A\n", diff.Value.Original);
+        Assert.Equal("name: B\n", diff.Value.Modified);
+    }
+
+    [Fact]
+    public async Task Diff_BeforeTheFirstCommit_HasNoOriginal()
+    {
+        var workspace = InitRepository("repo");
+        Write(workspace, "a.yaml", "name: A\n");
+
+        var diff = await _git.GetFileDiffAsync(workspace, new GitChange("a.yaml", GitFileStatus.Modified));
+
+        Assert.True(diff.IsSuccess, diff.Error?.Message);
+        Assert.Null(diff.Value.Original);
+        Assert.Equal("name: A\n", diff.Value.Modified);
+    }
+
+    [Fact]
+    public async Task Diff_OfABinaryFile_HasNoText()
+    {
+        var workspace = InitRepository("repo");
+        File.WriteAllBytes(Path.Combine(workspace, "logo.png"), [0x89, 0x50, 0x00, 0x01]);
+
+        var diff = await _git.GetFileDiffAsync(workspace, new GitChange("logo.png", GitFileStatus.Untracked));
+
+        Assert.True(diff.Value.IsBinary);
+        Assert.Null(diff.Value.Modified);
+    }
+
+    [Fact]
+    public async Task Diff_OfAPathOutsideTheWorkspace_IsRefused()
+    {
+        var workspace = InitRepository("repo");
+
+        var diff = await _git.GetFileDiffAsync(workspace, new GitChange("../secret.txt", GitFileStatus.Modified));
+
+        Assert.Equal(GitErrors.FileNotChangedCode, diff.Error?.Code);
+    }
+
+    [Fact]
+    public async Task Diff_OfAFileRemovedFromTheIndexButKept_ComparesBothVersions()
+    {
+        var workspace = InitRepository("repo");
+        Write(workspace, "a.yaml", "name: A\n");
+        TestGit.CommitAll(workspace, "Initial");
+        TestGit.Run(workspace, "rm", "--cached", "--quiet", "a.yaml");
+        Write(workspace, "a.yaml", "name: A2\n");
+
+        var deleted = await _git.GetFileDiffAsync(workspace, new GitChange("a.yaml", GitFileStatus.Deleted));
+        var untracked = await _git.GetFileDiffAsync(workspace, new GitChange("a.yaml", GitFileStatus.Untracked));
+
+        Assert.Equal(("name: A\n", "name: A2\n"), (deleted.Value.Original, deleted.Value.Modified));
+        Assert.Equal(("name: A\n", "name: A2\n"), (untracked.Value.Original, untracked.Value.Modified));
+    }
+
+    [Fact]
+    public async Task Diff_OfASymbolicLink_ShowsItsTarget_WithoutFollowingIt()
+    {
+        var workspace = InitRepository("repo");
+        var secret = _temp.Combine("secret.txt");
+        File.WriteAllText(secret, "password\n");
+        if (!TryCreateSymbolicLink(Path.Combine(workspace, "link.yaml"), secret))
+        {
+            return; // Creating links needs extra rights on Windows.
+        }
+
+        var diff = await _git.GetFileDiffAsync(workspace, new GitChange("link.yaml", GitFileStatus.Untracked));
+
+        Assert.True(diff.IsSuccess, diff.Error?.Message);
+        Assert.Equal(secret, diff.Value.Modified);
+    }
+
+    [Fact]
+    public async Task Diff_ThroughALinkedFolder_IsRefused()
+    {
+        var workspace = InitRepository("repo");
+        var outside = _temp.Combine("outside");
+        Write(outside, "secret.yaml", "password\n");
+        if (!TryCreateSymbolicLink(Path.Combine(workspace, "linked"), outside))
+        {
+            return; // Creating links needs extra rights on Windows.
+        }
+
+        var diff = await _git.GetFileDiffAsync(workspace, new GitChange("linked/secret.yaml", GitFileStatus.Untracked));
+
+        Assert.Equal(GitErrors.CommandFailedCode, diff.Error?.Code);
+        Assert.DoesNotContain("password", diff.Error!.Message);
+    }
+
+    [Fact]
+    public async Task Remotes_CanBeAddedRenamedChangedAndRemoved()
+    {
+        var workspace = InitRepository("repo");
+        Assert.Empty((await _git.ListRemotesAsync(workspace)).Value);
+
+        Assert.True((await _git.AddRemoteAsync(workspace, Name("origin"), Url("https://example.com/a.git"))).IsSuccess);
+        Assert.True((await _git.AddRemoteAsync(workspace, Name("backup"), Url("git@example.com:b.git"))).IsSuccess);
+        TestGit.Run(workspace, "remote", "set-url", "--push", "backup", "ssh://example.com/push.git");
+
+        var remotes = (await _git.ListRemotesAsync(workspace)).Value;
+        Assert.Equal(
+            [
+                new GitRemote("backup", "git@example.com:b.git", "ssh://example.com/push.git"),
+                new GitRemote("origin", "https://example.com/a.git", "https://example.com/a.git"),
+            ],
+            remotes);
+
+        Assert.True((await _git.RenameRemoteAsync(workspace, "origin", Name("upstream"))).IsSuccess);
+        Assert.True((await _git.SetRemoteUrlAsync(workspace, "upstream", Url("https://example.com/c.git"))).IsSuccess);
+        Assert.True((await _git.RemoveRemoteAsync(workspace, "backup")).IsSuccess);
+
+        remotes = (await _git.ListRemotesAsync(workspace)).Value;
+        Assert.Equal([new GitRemote("upstream", "https://example.com/c.git", "https://example.com/c.git")], remotes);
+    }
+
+    [Fact]
+    public async Task Remotes_GitFailures_AreReported()
+    {
+        var workspace = InitRepository("repo");
+
+        var result = await _git.RemoveRemoteAsync(workspace, "missing");
+
+        Assert.Equal(GitErrors.CommandFailedCode, result.Error?.Code);
+    }
+
+    [Fact]
+    public void ParseRemotes_ReadsFetchAndPushUrls()
+    {
+        var remotes = GitCliService.ParseRemotes(
+            "origin\thttps://a (fetch)\r\norigin\thttps://a (push)\nfork\t/path with spaces (fetch)\nfork\tssh://p (push)\n");
+
+        Assert.Equal(
+            [new GitRemote("fork", "/path with spaces", "ssh://p"), new GitRemote("origin", "https://a", "https://a")],
+            remotes);
+    }
+
     private async Task<string> ConflictedMergeAsync()
     {
         var (alice, bob) = InitTwoClones();
@@ -386,6 +577,33 @@ public sealed class GitCliServiceTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
     }
+
+    private static bool TryCreateSymbolicLink(string path, string target)
+    {
+        try
+        {
+            if (Directory.Exists(target))
+            {
+                Directory.CreateSymbolicLink(path, target);
+            }
+            else
+            {
+                File.CreateSymbolicLink(path, target);
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static RemoteName Name(string text) =>
+        RemoteName.TryCreate(text, out var name, out var error) ? name : throw new ArgumentException(error);
+
+    private static RemoteUrl Url(string text) =>
+        RemoteUrl.TryCreate(text, out var url, out var error) ? url : throw new ArgumentException(error);
 
     private static CommitMessage Message(string text) =>
         CommitMessage.TryCreate(text, out var message) ? message : throw new ArgumentException(text);

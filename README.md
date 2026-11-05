@@ -60,8 +60,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token and API key
 - [ ] Local response history (kept out of git)
-- [ ] Git sync: changed-file status, commit, pull, push, current branch, and
-      clear reporting of merge conflicts
+- [ ] Git sync: changed-file status and diffs, commit, pull, push, current
+      branch, remotes, and clear reporting of merge conflicts
 
 ### Non-goals
 
@@ -235,11 +235,17 @@ configuration, hooks and credential helpers apply as usual. In detail:
 - **Initialize**: if the workspace folder is not inside a git repository, the
   Source control view offers to create one there (`git init`, using your
   default branch name) and adds `.missive/` to the folder's `.gitignore`,
-  creating the file if needed. Add a remote with your git tools to push it.
+  creating the file if needed. Add a remote (see **Remotes** below) to push it.
 - **Status** lists changed files inside the workspace folder only (the
   workspace can be a subfolder of a larger repository), plus the branch, its
   upstream and how many commits it is ahead of or behind it. It refreshes when
   you come back to the window.
+- **Diff**: click a changed file to see what changed since the last commit.
+  A request file can be shown as a **Request** — laid out like the request
+  editor, read-only, with the changed name, method, URL, params, headers, auth
+  fields and body marked — or as **Text**, its YAML side by side (or inline).
+  Other files, and request files that can't be read as requests, are shown as
+  text; binary files are not shown. Viewing a diff never stages anything.
 - **Commit** stages and commits every change in the workspace, or only the files
   you tick in the changes list, and never touches files outside the workspace.
   Files in `.missive/` are never committed, even if they are not git-ignored.
@@ -250,6 +256,11 @@ configuration, hooks and credential helpers apply as usual. In detail:
   yet is published to `origin` (or the only remote) and tracks it from then on.
   If the remote has commits you don't have, the push is rejected and you are
   asked to pull first.
+- **Remotes** lists the repository's remotes with their URLs. You can add one,
+  rename it or change its URL (`git remote add`, `rename`, `set-url`), or
+  remove it after confirming (`git remote remove`, which also drops its
+  remote-tracking branches; nothing is deleted on the remote). Nothing is
+  fetched or pushed when you change remotes.
 
 ### Resolving merge conflicts
 

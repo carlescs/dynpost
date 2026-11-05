@@ -47,6 +47,11 @@ export class WorkspaceStore {
   readonly tabs = signal<string[]>([]);
   /** Key of the tab shown in the editor area, or `null`. */
   readonly activeTab = signal<string | null>(null);
+  /**
+   * Incremented whenever the user opens or selects a tab (even the one already shown), so views
+   * shown instead of the editor area can make way for it.
+   */
+  readonly shown = signal(0);
   /** The request document in the active tab; `null` when an environment tab (or none) is active. */
   readonly activeDocument = computed(
     () => this.documents().find((d) => d.key === this.activeTab()) ?? null,
@@ -368,10 +373,12 @@ export class WorkspaceStore {
   openTab(key: string): void {
     if (!this.tabs().includes(key)) this.tabs.update((tabs) => [...tabs, key]);
     this.activeTab.set(key);
+    this.shown.update((n) => n + 1);
   }
 
   activateTab(key: string): void {
     this.activeTab.set(key);
+    this.shown.update((n) => n + 1);
   }
 
   /** Removes tabs; if the active one is among them, its nearest remaining neighbour is shown. */

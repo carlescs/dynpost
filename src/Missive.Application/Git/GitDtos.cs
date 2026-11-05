@@ -1,3 +1,4 @@
+using Missive.Application.Requests;
 using Missive.Domain.Git;
 
 namespace Missive.Application.Git;
@@ -27,7 +28,7 @@ public sealed record GitStatusDto(
             status.Changes.Select(c => new GitChangeDto(c.Path, StatusName(c.Status), c.OriginalPath)).ToList(),
             status.MergeMessage);
 
-    private static string StatusName(GitFileStatus status) =>
+    internal static string StatusName(GitFileStatus status) =>
         status switch
         {
             GitFileStatus.Modified => "modified",
@@ -70,4 +71,32 @@ public sealed record GitConflictDto(
 {
     public static GitConflictDto From(GitConflict conflict) =>
         new(conflict.Path, conflict.Base, conflict.Ours, conflict.Theirs, conflict.Working, conflict.HasConflictMarkers);
+}
+
+/// <summary>
+/// The committed and working tree versions of a changed file. A text is <c>null</c> when the file
+/// doesn't exist on that side, or is binary. For request files, each existing side is also parsed.
+/// </summary>
+/// <param name="IsRequest">Whether the file is a request file of the workspace.</param>
+/// <param name="OriginalRequest">The parsed committed request, when <paramref name="IsRequest"/> and it could be read.</param>
+/// <param name="ModifiedRequest">The parsed working tree request, likewise.</param>
+/// <param name="RequestError">Why a side of a request file could not be read as a request, if it couldn't.</param>
+public sealed record GitFileDiffDto(
+    string Path,
+    string Status,
+    string? OriginalPath,
+    bool Binary,
+    string? Original,
+    string? Modified,
+    bool IsRequest,
+    RequestDto? OriginalRequest = null,
+    RequestDto? ModifiedRequest = null,
+    string? RequestError = null);
+
+/// <param name="PushUrl">The URL pushed to; equal to <paramref name="FetchUrl"/> unless a push URL is set.</param>
+public sealed record GitRemoteDto(string Name, string FetchUrl, string PushUrl)
+{
+    public static GitRemoteDto From(GitRemote remote) => new(remote.Name, remote.FetchUrl, remote.PushUrl);
+
+    public static IReadOnlyList<GitRemoteDto> From(IReadOnlyList<GitRemote> remotes) => remotes.Select(From).ToList();
 }
