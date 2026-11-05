@@ -6,7 +6,6 @@ import {
   GitCommitInfo,
   GitFileRevision,
 } from '../bridge/messages';
-import { EnvironmentStore } from '../environments/environment-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 import { GitStore } from './git-store';
 
@@ -21,7 +20,6 @@ export const HISTORY_PAGE_SIZE = 50;
 export class GitHistoryStore {
   private readonly bridge = inject(Bridge);
   private readonly workspace = inject(WorkspaceStore);
-  private readonly environments = inject(EnvironmentStore);
   private readonly git = inject(GitStore);
 
   /** The commits loaded so far, newest first; `null` until the history is first loaded. */
@@ -72,16 +70,15 @@ export class GitHistoryStore {
       });
     });
 
-    // Opening a request or an environment brings its editor back in place of the review.
-    let first = true;
+    // Opening or selecting a request or environment tab (even the one shown) shows it instead.
     effect(() => {
-      this.workspace.activeTab();
-      this.environments.draft()?.key;
-      if (first) {
-        first = false;
-        return;
-      }
+      this.workspace.shown();
       untracked(() => this.close());
+    });
+
+    // The review and a working tree diff share the main area: opening a diff closes the review.
+    effect(() => {
+      if (this.git.diff()) untracked(() => this.close());
     });
   }
 
@@ -105,6 +102,7 @@ export class GitHistoryStore {
     this.opening.set(commitId);
     this.reviewError.set(null);
     this.git.closeConflict();
+    this.git.closeDiff();
     try {
       const details = await this.bridge.send('git.show', { commitId });
       if (request !== this.reviewRequest) return;

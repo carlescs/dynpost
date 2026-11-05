@@ -129,21 +129,13 @@ public sealed class GitCliService : IGitService
             versions[stage - 1] = version.Value;
         }
 
-        var file = Path.Combine(workspacePath, path);
-        string? working = null;
-        try
+        var working = await ReadWorkingFileAsync(workspacePath, path, "show", cancellationToken);
+        if (working.IsFailure)
         {
-            if (File.Exists(file))
-            {
-                working = await File.ReadAllTextAsync(file, cancellationToken);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return GitErrors.CommandFailed("show", $"Could not read '{path}': {ex.Message}");
+            return working.Error!;
         }
 
-        return new GitConflict(path, versions[0], versions[1], versions[2], working);
+        return new GitConflict(path, versions[0], versions[1], versions[2], working.Value);
     }
 
     public async Task<Result<Unit>> ResolveConflictAsync(
@@ -206,6 +198,192 @@ public sealed class GitCliService : IGitService
 
         var abort = await RunCheckedAsync(workspacePath, "merge --abort", ["merge", "--abort"], cancellationToken);
         return Done(abort);
+    }
+
+    public async Task<Result<GitFileDiff>> GetFileDiffAsync(
+        string workspacePath,
+        GitChange change,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsSafeRelativePath(change.Path) || (change.OriginalPath is { } from && !IsSafeRelativePath(from)))
+        {
+            return GitErrors.FileNotChanged(change.Path);
+        }
+
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // Both sides are read whatever the status says: a file removed from the index but kept on
+        // disk is reported as deleted and untracked, yet exists in HEAD and in the working tree.
+        // "./" makes the path relative to the working directory (the workspace) instead of the repository root.
+        var committed = await RunAsync(workspacePath, ["show", $"HEAD:./{change.OriginalPath ?? change.Path}"], cancellationToken);
+        if (committed.IsFailure)
+        {
+            return committed.Error!;
+        }
+
+        // Fails when there is no commit yet, or the file isn't in it.
+        var original = committed.Value.Succeeded ? committed.Value.StandardOutput : null;
+
+        var modified = await ReadWorkingFileAsync(workspacePath, change.Path, "diff", cancellationToken);
+        if (modified.IsFailure)
+        {
+            return modified.Error!;
+        }
+
+        var binary = (original is not null && GitFileDiff.LooksBinary(original))
+            || (modified.Value is not null && GitFileDiff.LooksBinary(modified.Value));
+
+        return binary
+            ? new GitFileDiff(change.Path, change.Status, change.OriginalPath, null, null, IsBinary: true)
+            : new GitFileDiff(change.Path, change.Status, change.OriginalPath, original, modified.Value);
+    }
+
+    /// <summary>
+    /// The working tree version of a file, for a diff or a conflict, or <c>null</c> when it doesn't
+    /// exist. Links are never followed, so a link can't expose a file outside the workspace: a
+    /// symbolic link reads as its target path, which is also what git stores for it, and a path
+    /// through a linked folder is refused. <paramref name="command"/> names the operation in errors.
+    /// </summary>
+    private static async Task<Result<string?>> ReadWorkingFileAsync(
+        string workspacePath,
+        string path,
+        string command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var current = workspacePath;
+            var segments = path.Split('/');
+            for (var i = 0; i < segments.Length; i++)
+            {
+                current = Path.Combine(current, segments[i]);
+                var info = new FileInfo(current);
+                if (!info.Exists && !Directory.Exists(current) && info.LinkTarget is null)
+                {
+                    return Result<string?>.Success(null);
+                }
+
+                if (info.LinkTarget is { } target)
+                {
+                    return i == segments.Length - 1
+                        ? Result<string?>.Success(target)
+                        : GitErrors.CommandFailed(command, $"'{path}' is inside a linked folder, so it is not read.");
+                }
+            }
+
+            return File.Exists(current)
+                ? Result<string?>.Success(await File.ReadAllTextAsync(current, cancellationToken))
+                : Result<string?>.Success(null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return GitErrors.CommandFailed(command, $"Could not read '{path}': {ex.Message}");
+        }
+    }
+
+    public async Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(
+        string workspacePath,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var result = await RunCheckedAsync(workspacePath, "remote", ["remote", "--verbose"], cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        return Result<IReadOnlyList<GitRemote>>.Success(ParseRemotes(result.Value.StandardOutput));
+    }
+
+    public Task<Result<Unit>> AddRemoteAsync(
+        string workspacePath,
+        RemoteName name,
+        RemoteUrl url,
+        CancellationToken cancellationToken = default) =>
+        RunRemoteAsync(workspacePath, "remote add", ["remote", "add", "--", name.Value, url.Value], cancellationToken);
+
+    public Task<Result<Unit>> RenameRemoteAsync(
+        string workspacePath,
+        string name,
+        RemoteName newName,
+        CancellationToken cancellationToken = default) =>
+        RunRemoteAsync(workspacePath, "remote rename", ["remote", "rename", "--", name, newName.Value], cancellationToken);
+
+    public Task<Result<Unit>> SetRemoteUrlAsync(
+        string workspacePath,
+        string name,
+        RemoteUrl url,
+        CancellationToken cancellationToken = default) =>
+        RunRemoteAsync(workspacePath, "remote set-url", ["remote", "set-url", "--", name, url.Value], cancellationToken);
+
+    public Task<Result<Unit>> RemoveRemoteAsync(
+        string workspacePath,
+        string name,
+        CancellationToken cancellationToken = default) =>
+        RunRemoteAsync(workspacePath, "remote remove", ["remote", "remove", "--", name], cancellationToken);
+
+    private async Task<Result<Unit>> RunRemoteAsync(
+        string workspacePath,
+        string command,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // "--" keeps names and URLs from ever being read as options.
+        return Done(await RunCheckedAsync(workspacePath, command, arguments, cancellationToken));
+    }
+
+    /// <summary>
+    /// Parses <c>git remote --verbose</c>: a <c>name&lt;TAB&gt;url (fetch)</c> and a
+    /// <c>name&lt;TAB&gt;url (push)</c> line per remote.
+    /// </summary>
+    internal static IReadOnlyList<GitRemote> ParseRemotes(string output)
+    {
+        var fetch = new Dictionary<string, string>(StringComparer.Ordinal);
+        var push = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in output.ReplaceLineEndings("\n").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var tab = line.IndexOf('\t');
+            if (tab <= 0)
+            {
+                continue;
+            }
+
+            var name = line[..tab];
+            var rest = line[(tab + 1)..];
+            if (rest.EndsWith(" (fetch)", StringComparison.Ordinal))
+            {
+                fetch[name] = rest[..^" (fetch)".Length];
+            }
+            else if (rest.EndsWith(" (push)", StringComparison.Ordinal))
+            {
+                push[name] = rest[..^" (push)".Length];
+            }
+        }
+
+        return fetch.Keys
+            .Union(push.Keys, StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .Select(name =>
+            {
+                var fetchUrl = fetch.GetValueOrDefault(name) ?? push.GetValueOrDefault(name) ?? string.Empty;
+                return new GitRemote(name, fetchUrl, push.GetValueOrDefault(name) ?? fetchUrl);
+            })
+            .ToList();
     }
 
     public async Task<Result<IReadOnlyList<GitCommitInfo>>> GetLogAsync(

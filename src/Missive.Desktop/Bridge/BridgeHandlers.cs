@@ -92,6 +92,16 @@ internal static class BridgeHandlers
                 async (p, ct) => (await Use<GetCommit>().ExecuteAsync(p.CommitId, ct)).Map(GitCommitDetailsDto.From))
             .Register<GitCommitFilePayload, GitFileRevisionDto>(BridgeMessageTypes.GitCommitFile,
                 async (p, ct) => (await Use<GetCommitFile>().ExecuteAsync(new GetCommitFileRequest(p.CommitId, p.Path), ct)).Map(GitFileRevisionDto.From))
+            .Register<GitDiffPayload, GitFileDiffDto>(BridgeMessageTypes.GitDiff,
+                (p, ct) => Use<GetFileDiff>().ExecuteAsync(p.Path, ct))
+            .Register(BridgeMessageTypes.GitRemoteList,
+                async ct => (await Use<ListRemotes>().ExecuteAsync(ct)).Map(GitRemoteDto.From))
+            .Register<GitAddRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteAdd,
+                async (p, ct) => (await Use<AddRemote>().ExecuteAsync(new AddRemoteRequest(p.Name, p.Url), ct)).Map(GitRemoteDto.From))
+            .Register<GitUpdateRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteUpdate,
+                async (p, ct) => (await Use<UpdateRemote>().ExecuteAsync(new UpdateRemoteRequest(p.Name, p.NewName, p.Url), ct)).Map(GitRemoteDto.From))
+            .Register<GitRemoteNamePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteRemove,
+                async (p, ct) => (await Use<RemoveRemote>().ExecuteAsync(p.Name, ct)).Map(GitRemoteDto.From))
             .Register(BridgeMessageTypes.UpdateCheck,
                 ct => Use<CheckForUpdate>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.UpdateRestart,

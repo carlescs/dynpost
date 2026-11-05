@@ -7,9 +7,9 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { GitChange } from '../bridge/messages';
-import { DiffEditor, languageForPath } from '../editor/code/diff-editor';
+import { CodeDiffEditor } from '../editor/code/code-diff-editor';
 import { GitHistoryStore } from './git-history-store';
-import { STATUS_BADGES, fileName, folderOf } from './git-format';
+import { STATUS_BADGES, fileName, folderOf, languageForPath } from './git-format';
 
 /**
  * Reviews a commit: its message and author, the workspace files it changed, and what changed in
@@ -17,7 +17,7 @@ import { STATUS_BADGES, fileName, folderOf } from './git-format';
  */
 @Component({
   selector: 'app-commit-view',
-  imports: [FaIconComponent, DiffEditor],
+  imports: [FaIconComponent, CodeDiffEditor],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     <header class="flex shrink-0 items-start gap-3 border-b border-slate-200 px-4 py-3">
@@ -134,13 +134,14 @@ import { STATUS_BADGES, fileName, folderOf } from './git-format';
                 This is a binary file; it isn't shown.
               </p>
             } @else {
-              <app-diff-editor
-                class="flex-1"
+              <app-code-diff-editor
+                class="m-4 min-h-0 flex-1 overflow-hidden rounded border border-slate-300"
                 [original]="file.before ?? ''"
                 [modified]="file.after ?? ''"
                 [language]="language(file.change.path)"
                 [sideBySide]="sideBySide()"
                 [ariaLabel]="'Changes to ' + file.change.path"
+                [hideUnchanged]="true"
               />
             }
           } @else if (history.openingFile()) {

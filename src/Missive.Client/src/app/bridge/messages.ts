@@ -192,6 +192,33 @@ export type ConflictResolution = 'ours' | 'theirs' | 'edited';
 
 export type PullOutcome = 'upToDate' | 'updated' | 'conflicted';
 
+/**
+ * A changed file as of the last commit (`original`) and in the working tree (`modified`). A text
+ * is `null` when the file doesn't exist on that side, or when it is binary.
+ */
+export interface GitFileDiff {
+  path: string;
+  status: GitFileStatus;
+  /** For a rename, the path the file had in the last commit. */
+  originalPath?: string | null;
+  binary: boolean;
+  original: string | null;
+  modified: string | null;
+  /** Whether the file is a request file; its sides are then parsed into requests too. */
+  isRequest: boolean;
+  originalRequest?: RequestDto | null;
+  modifiedRequest?: RequestDto | null;
+  /** Why a side of a request file could not be read as a request, if it couldn't. */
+  requestError?: string | null;
+}
+
+export interface GitRemote {
+  name: string;
+  fetchUrl: string;
+  /** Equal to `fetchUrl` unless the remote has its own push URL. */
+  pushUrl: string;
+}
+
 export interface UpdateStatus {
   /**
    * `unsupported`: this copy cannot update itself (not installed). `upToDate`: no newer version.
@@ -273,6 +300,19 @@ export interface BridgeMessages {
   'git.show': { payload: { commitId: string }; result: GitCommitDetails };
   /** A file the commit changed, before and after it. */
   'git.commitFile': { payload: { commitId: string; path: string }; result: GitFileRevision };
+  /** The committed and working tree versions of a changed file. */
+  'git.diff': { payload: { path: string }; result: GitFileDiff };
+  /** The repository's remotes, sorted by name. */
+  'git.remote.list': { payload: void; result: GitRemote[] };
+  /** Adds a remote; nothing is fetched or pushed. */
+  'git.remote.add': { payload: { name: string; url: string }; result: GitRemote[] };
+  /** Renames a remote and/or changes its URL (passing the current values keeps them). */
+  'git.remote.update': {
+    payload: { name: string; newName: string; url: string };
+    result: GitRemote[];
+  };
+  /** Removes a remote and its remote-tracking branches. */
+  'git.remote.remove': { payload: { name: string }; result: GitRemote[] };
   /** Looks for a newer version of the app and downloads it, without installing it. */
   'update.check': { payload: void; result: UpdateStatus };
   /** Installs the downloaded update and restarts the app; on success no response arrives. */

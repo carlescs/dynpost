@@ -78,4 +78,20 @@ public class WorkspaceLayoutTests
     {
         Assert.Equal(expected, WorkspaceLayout.IsDisposableFile(fileName));
     }
+
+    [Theory]
+    [InlineData("health.yaml", true)]
+    [InlineData("users/get-user.yml", true)]
+    [InlineData("users/admin/create-user.yaml", true)]
+    [InlineData("missive.yaml", false)]
+    [InlineData("users/_folder.yaml", false)]
+    [InlineData("environments/dev.yaml", false)]
+    [InlineData("users/environments/get.yaml", true)]
+    [InlineData(".github/workflow.yaml", false)]
+    [InlineData("users/.hidden/get.yaml", false)]
+    [InlineData("README.md", false)]
+    public void IsRequestPath_AcceptsRequestFilesInCollectionFoldersOnly(string path, bool expected)
+    {
+        Assert.Equal(expected, WorkspaceLayout.IsRequestPath(WorkspacePath.Parse(path)));
+    }
 }

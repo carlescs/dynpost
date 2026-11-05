@@ -114,6 +114,24 @@ internal static class BridgeMessageTypes
     public const string GitCommitFile = "git.commitFile";
 
     /// <summary>
+    /// Reads the committed and working tree versions of a changed file, parsing request files.
+    /// Payload: <see cref="GitDiffPayload"/>. Result: the diff.
+    /// </summary>
+    public const string GitDiff = "git.diff";
+
+    /// <summary>Lists the repository's remotes. Payload: none. Result: remotes.</summary>
+    public const string GitRemoteList = "git.remote.list";
+
+    /// <summary>Adds a remote. Payload: <see cref="GitAddRemotePayload"/>. Result: remotes.</summary>
+    public const string GitRemoteAdd = "git.remote.add";
+
+    /// <summary>Renames a remote and/or changes its URL. Payload: <see cref="GitUpdateRemotePayload"/>. Result: remotes.</summary>
+    public const string GitRemoteUpdate = "git.remote.update";
+
+    /// <summary>Removes a remote. Payload: <see cref="GitRemoteNamePayload"/>. Result: remotes.</summary>
+    public const string GitRemoteRemove = "git.remote.remove";
+
+    /// <summary>
     /// Looks for a newer version of the app and downloads it. Payload: none. Result: update status.
     /// </summary>
     public const string UpdateCheck = "update.check";
@@ -179,6 +197,17 @@ internal sealed record GitLogPayload(int Skip = 0, int? Limit = null);
 internal sealed record GitCommitIdPayload(string CommitId);
 
 internal sealed record GitCommitFilePayload(string CommitId, string Path);
+
+internal sealed record GitDiffPayload(string Path);
+
+internal sealed record GitAddRemotePayload(string Name, string Url);
+
+/// <param name="Name">The remote to change.</param>
+/// <param name="NewName">Its new name (the same name keeps it).</param>
+/// <param name="Url">Its new URL (the current URL keeps it).</param>
+internal sealed record GitUpdateRemotePayload(string Name, string NewName, string Url);
+
+internal sealed record GitRemoteNamePayload(string Name);
 
 internal static class BridgeErrorCodes
 {

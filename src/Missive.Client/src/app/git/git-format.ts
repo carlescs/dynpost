@@ -37,3 +37,35 @@ export function relativeTime(date: string, now = Date.now()): string {
   }
   return format.format(0, 'minute');
 }
+
+/** The Monaco language for a file, from its extension. */
+export function languageForPath(path: string): string {
+  const name = path.slice(path.lastIndexOf('/') + 1).toLowerCase();
+  const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : '';
+  switch (extension) {
+    case 'yaml':
+    case 'yml':
+      return 'yaml';
+    case 'json':
+      return 'json';
+    case 'md':
+    case 'markdown':
+      return 'markdown';
+    case 'xml':
+      return 'xml';
+    case 'html':
+    case 'htm':
+      return 'html';
+    case 'css':
+      return 'css';
+    case 'js':
+    case 'mjs':
+    case 'ts':
+      return 'javascript';
+    case 'graphql':
+    case 'gql':
+      return 'graphql';
+    default:
+      return 'plaintext';
+  }
+}

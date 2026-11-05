@@ -37,6 +37,7 @@ public sealed record GitCommitDetails(GitCommitInfo Commit, string Body, IReadOn
 /// <param name="After">The file in the commit.</param>
 public sealed record GitFileRevision(string CommitId, GitChange Change, string? Before, string? After)
 {
-    /// <summary>Whether either version looks binary (contains a NUL character), so it shouldn't be shown as text.</summary>
-    public bool IsBinary => (Before?.Contains('\0') ?? false) || (After?.Contains('\0') ?? false);
+    /// <summary>Whether either version looks binary, so it shouldn't be shown as text.</summary>
+    public bool IsBinary =>
+        (Before is not null && GitFileDiff.LooksBinary(Before)) || (After is not null && GitFileDiff.LooksBinary(After));
 }

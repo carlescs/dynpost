@@ -25,6 +25,10 @@ public static class GitErrors
     public const string ConflictMarkersRemainCode = "git.conflict_markers_remain";
     public const string CommitNotFoundCode = "git.commit_not_found";
     public const string FileNotInCommitCode = "git.file_not_in_commit";
+    public const string FileNotChangedCode = "git.file_not_changed";
+    public const string InvalidRemoteCode = "git.invalid_remote";
+    public const string RemoteExistsCode = "git.remote_exists";
+    public const string RemoteNotFoundCode = "git.remote_not_found";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -85,6 +89,18 @@ public static class GitErrors
 
     public static Error FileNotInCommit(string commitId, string path) =>
         new(FileNotInCommitCode, $"'{path}' was not changed in commit '{Abbreviate(commitId)}'.");
+
+    public static Error FileNotChanged(string path) =>
+        new(FileNotChangedCode, $"'{path}' has no changes to show.");
+
+    public static Error InvalidRemote(string message) =>
+        new(InvalidRemoteCode, message);
+
+    public static Error RemoteExists(string name) =>
+        new(RemoteExistsCode, $"A remote named '{name}' already exists.");
+
+    public static Error RemoteNotFound(string name) =>
+        new(RemoteNotFoundCode, $"There is no remote named '{name}'.");
 
     public static Error CommandFailed(string command, string details) =>
         new(CommandFailedCode, WithDetails($"git {command} failed.", details));

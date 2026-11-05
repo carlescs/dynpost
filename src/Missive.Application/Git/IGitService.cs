@@ -92,4 +92,28 @@ public interface IGitService
         string commitId,
         string path,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads the committed (<c>HEAD</c>) and working tree versions of one changed file, for
+    /// showing its differences. Nothing is staged or changed.
+    /// </summary>
+    Task<Result<GitFileDiff>> GetFileDiffAsync(string workspacePath, GitChange change, CancellationToken cancellationToken = default);
+
+    /// <summary>Lists the repository's remotes, sorted by name.</summary>
+    Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a remote (<c>git remote add</c>). Nothing is fetched.</summary>
+    Task<Result<Unit>> AddRemoteAsync(string workspacePath, RemoteName name, RemoteUrl url, CancellationToken cancellationToken = default);
+
+    /// <summary>Renames a remote, with its remote-tracking branches and upstream settings (<c>git remote rename</c>).</summary>
+    Task<Result<Unit>> RenameRemoteAsync(string workspacePath, string name, RemoteName newName, CancellationToken cancellationToken = default);
+
+    /// <summary>Changes the URL a remote fetches from and pushes to (<c>git remote set-url</c>).</summary>
+    Task<Result<Unit>> SetRemoteUrlAsync(string workspacePath, string name, RemoteUrl url, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes a remote with its remote-tracking branches (<c>git remote remove</c>). Branches that
+    /// tracked it lose their upstream; no commits are lost.
+    /// </summary>
+    Task<Result<Unit>> RemoveRemoteAsync(string workspacePath, string name, CancellationToken cancellationToken = default);
 }

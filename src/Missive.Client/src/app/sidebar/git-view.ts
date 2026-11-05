@@ -19,10 +19,11 @@ import { GitHistoryStore } from '../git/git-history-store';
 import { GitOperation, GitStore } from '../git/git-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 import { GitHistoryList } from './git-history-list';
+import { GitRemotes } from './git-remotes';
 
 @Component({
   selector: 'app-git-view',
-  imports: [FaIconComponent, GitHistoryList],
+  imports: [FaIconComponent, GitHistoryList, GitRemotes],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     <header class="flex h-9 shrink-0 items-center justify-between px-3">
@@ -72,7 +73,7 @@ import { GitHistoryList } from './git-history-list';
         </button>
       </div>
     } @else {
-      @if (!git.conflict() && git.error(); as error) {
+      @if (!git.conflict() && git.failedOperation() !== 'remote' && git.error(); as error) {
         <div
           class="mx-3 mb-2 flex items-start gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-800"
           role="alert"
@@ -219,7 +220,9 @@ import { GitHistoryList } from './git-history-list';
               <li
                 class="flex items-center gap-2 px-3 py-0.5 hover:bg-slate-200"
                 [class.bg-amber-50]="change.status === 'conflicted'"
-                [class.bg-sky-100]="git.conflict()?.path === change.path"
+                [class.bg-sky-100]="
+                  git.conflict()?.path === change.path || git.diff()?.path === change.path
+                "
                 [title]="describe(change)"
               >
                 <input
@@ -249,8 +252,22 @@ import { GitHistoryList } from './git-history-list';
                     Resolve
                   </button>
                 } @else {
-                  <span class="truncate">{{ fileName(change.path) }}</span>
-                  <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
+                  <button
+                    type="button"
+                    class="flex min-w-0 items-center gap-2 text-left hover:underline"
+                    [attr.aria-label]="'Show the changes in ' + change.path"
+                    (click)="git.openDiff(change.path)"
+                  >
+                    <span class="truncate">{{ fileName(change.path) }}</span>
+                    <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
+                  </button>
+                  @if (git.diffLoading() === change.path) {
+                    <fa-icon
+                      class="shrink-0 text-xs text-slate-400"
+                      [icon]="faSpinner"
+                      animation="spin"
+                    />
+                  }
                 }
                 <span
                   class="font-mono text-xs font-bold"
@@ -265,6 +282,7 @@ import { GitHistoryList } from './git-history-list';
             }
           </ul>
         }
+        <app-git-remotes />
       } @else if (git.busy() === 'refresh') {
         <p class="px-3 text-sm text-slate-500">
           <fa-icon [icon]="faSpinner" animation="spin" /> Reading git status…
