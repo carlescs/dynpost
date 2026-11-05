@@ -24,7 +24,7 @@ public class DiscardChangesTests
     public async Task DuringAMerge_IsRejected()
     {
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
-            .Returns(Ok(Status(merging: true, changes: new GitChange("a.yaml", GitFileStatus.Modified))));
+            .Returns(Ok(Status(merging: true, changes: [new GitChange("a.yaml", GitFileStatus.Modified)])));
 
         var result = await new DiscardChanges(_git, _workspace).ExecuteAsync(["a.yaml"]);
 
@@ -36,7 +36,7 @@ public class DiscardChangesTests
     public async Task OfAFileWithoutChanges_IsRejected()
     {
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
-            .Returns(Ok(Status(changes: new GitChange("a.yaml", GitFileStatus.Modified))));
+            .Returns(Ok(Status(changes: [new GitChange("a.yaml", GitFileStatus.Modified)])));
 
         var result = await new DiscardChanges(_git, _workspace).ExecuteAsync(["b.yaml"]);
 
