@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, input, linkedSignal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faCheck,
@@ -8,20 +8,19 @@ import {
   faLock,
   faSpinner,
   faTrash,
-  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentVariableDto } from '../bridge/messages';
-import { EnvironmentStore } from './environment-store';
+import { EnvironmentDraft, EnvironmentStore } from './environment-store';
 
 const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
 
-/** Edits the environment in {@link EnvironmentStore.draft}: its name and variables. */
+/** Edits an environment open in a tab: its name and variables. */
 @Component({
   selector: 'app-environment-editor',
   imports: [FaIconComponent],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
-    @if (store.draft(); as draft) {
+    @if (draft(); as draft) {
       <div class="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
         <span class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
           Environment
@@ -30,7 +29,7 @@ const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
           class="min-w-0 flex-1 rounded px-1 text-lg font-semibold hover:bg-slate-100 focus:bg-white focus:ring-1 focus:ring-sky-500 focus:outline-none"
           aria-label="Environment name"
           [value]="draft.name"
-          (input)="store.update({ name: $any($event.target).value })"
+          (input)="store.update(draft.key, { name: $any($event.target).value })"
         />
         <span class="truncate text-xs text-slate-400">{{
           draft.id ? 'environments/' + draft.id : 'New environment — not saved yet'
@@ -55,7 +54,7 @@ const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
           [class]="buttonClass"
           title="Save environment (Ctrl+S)"
           [disabled]="!draft.dirty || draft.saving"
-          (click)="store.save()"
+          (click)="store.save(draft.key)"
         >
           <fa-icon
             [icon]="draft.saving ? faSpinner : faFloppyDisk"
@@ -67,18 +66,9 @@ const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
           type="button"
           [class]="buttonClass"
           title="Delete environment"
-          (click)="store.deleteDraft()"
+          (click)="store.deleteDraft(draft.key)"
         >
           <fa-icon [icon]="faTrash" />
-        </button>
-        <button
-          type="button"
-          class="flex size-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-          title="Close"
-          aria-label="Close environment"
-          (click)="store.close()"
-        >
-          <fa-icon [icon]="faXmark" />
         </button>
       </div>
 
@@ -173,14 +163,17 @@ const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
 })
 export class EnvironmentEditor {
   protected readonly store = inject(EnvironmentStore);
+  readonly draft = input.required<EnvironmentDraft>();
 
-  protected readonly showSecrets = signal(false);
-  protected readonly rows = computed(() => [...(this.store.draft()?.variables ?? []), BLANK]);
-  protected readonly hasSecrets = computed(
-    () => this.store.draft()?.variables.some((v) => v.secret) ?? false,
-  );
+  /** Secret values are hidden again when another environment's tab is shown. */
+  protected readonly showSecrets = linkedSignal({
+    source: () => this.draft().key,
+    computation: () => false,
+  });
+  protected readonly rows = computed(() => [...this.draft().variables, BLANK]);
+  protected readonly hasSecrets = computed(() => this.draft().variables.some((v) => v.secret));
   protected readonly isActive = computed(() => {
-    const id = this.store.draft()?.id;
+    const id = this.draft().id;
     return !!id && id === this.store.activeId();
   });
 
@@ -194,17 +187,18 @@ export class EnvironmentEditor {
   protected readonly faLock = faLock;
   protected readonly faSpinner = faSpinner;
   protected readonly faTrash = faTrash;
-  protected readonly faXmark = faXmark;
 
   protected patch(index: number, patch: Partial<EnvironmentVariableDto>): void {
-    const variables = [...(this.store.draft()?.variables ?? [])];
+    const draft = this.draft();
+    const variables = [...draft.variables];
     variables[index] = { ...(variables[index] ?? BLANK), ...patch };
-    this.store.update({ variables });
+    this.store.update(draft.key, { variables });
   }
 
   protected remove(index: number): void {
-    this.store.update({
-      variables: (this.store.draft()?.variables ?? []).filter((_, i) => i !== index),
+    const draft = this.draft();
+    this.store.update(draft.key, {
+      variables: draft.variables.filter((_, i) => i !== index),
     });
   }
 
