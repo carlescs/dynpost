@@ -185,9 +185,9 @@ evolving.
 
 Pick the environment requests are sent with from the header, or from the
 **Environments** view in the activity bar, which also lists every file in
-`environments/` and creates new ones. Clicking an environment opens it in the
-editor: its name, and a table of variables, each of which can be marked
-**Secret**. New environments are saved as a file named after them
+`environments/` and creates new ones. Clicking an environment opens it in an
+editor tab, next to the open requests: its name, and a table of variables, each
+of which can be marked **Secret**. New environments are saved as a file named after them
 (`Staging` → `staging.yaml`); renaming one renames its file too, unless the file
 name was chosen by hand, and its secret values and selection follow. Deleting an
 environment also removes its stored secret values.

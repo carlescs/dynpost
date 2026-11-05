@@ -52,6 +52,8 @@ export interface RequestDocument extends RequestContent {
   folder: string;
   /** Stable id for the open document (the path, or a generated id for unsaved requests). */
   id: string;
+  /** The document's tab key (see `WorkspaceStore.tabs`); unlike `id`, never changes. */
+  key: string;
   dirty: boolean;
   saving: boolean;
   /** The id of the send in progress, or `null` when the request isn't being sent. */
