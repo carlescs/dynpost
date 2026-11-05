@@ -177,6 +177,107 @@ public sealed class GitCliServiceTests : IDisposable
         Assert.Contains("<<<<<<<", File.ReadAllText(Path.Combine(bob, "a.yaml")));
     }
 
+    [Fact]
+    public async Task Conflict_ReportsAllVersionsAndTheMergeMessage()
+    {
+        var bob = await ConflictedMergeAsync();
+
+        var status = (await _git.GetStatusAsync(bob)).Value;
+        var conflict = await _git.GetConflictAsync(bob, "a.yaml");
+
+        Assert.StartsWith("Merge branch", status.MergeMessage);
+        Assert.DoesNotContain("#", status.MergeMessage);
+        Assert.True(conflict.IsSuccess, conflict.Error?.Message);
+        Assert.Equal("name: A\n", conflict.Value.Base);
+        Assert.Equal("name: From Bob\n", conflict.Value.Ours);
+        Assert.Equal("name: From Alice\n", conflict.Value.Theirs);
+        Assert.True(conflict.Value.HasConflictMarkers);
+
+        var deletedByThem = (await _git.GetConflictAsync(bob, "d.yaml")).Value;
+        Assert.Equal("name: Changed by Bob\n", deletedByThem.Ours);
+        Assert.Null(deletedByThem.Theirs);
+    }
+
+    [Fact]
+    public async Task ResolvingEveryFile_ThenCommitting_CompletesTheMerge()
+    {
+        var bob = await ConflictedMergeAsync();
+
+        var theirs = await _git.ResolveConflictAsync(bob, "a.yaml", ConflictResolution.Theirs);
+        var deleted = await _git.ResolveConflictAsync(bob, "d.yaml", ConflictResolution.Theirs);
+
+        Assert.True(theirs.IsSuccess, theirs.Error?.Message);
+        Assert.True(deleted.IsSuccess, deleted.Error?.Message);
+        Assert.Equal("name: From Alice\n", File.ReadAllText(Path.Combine(bob, "a.yaml")));
+        Assert.False(File.Exists(Path.Combine(bob, "d.yaml")));
+        var status = (await _git.GetStatusAsync(bob)).Value;
+        Assert.True(status.IsMerging);
+        Assert.False(status.HasConflicts);
+
+        var commit = await _git.CommitAsync(bob, Message(status.MergeMessage!), paths: null);
+
+        Assert.True(commit.IsSuccess, commit.Error?.Message);
+        var after = (await _git.GetStatusAsync(bob)).Value;
+        Assert.False(after.IsMerging);
+        Assert.Equal(2, TestGit.Run(bob, "rev-list", "--parents", "-n", "1", "HEAD").Trim().Split(' ').Length - 1);
+    }
+
+    [Fact]
+    public async Task Resolve_Ours_And_Edited()
+    {
+        var bob = await ConflictedMergeAsync();
+        Write(bob, "a.yaml", "name: From Bob and Alice\n");
+
+        var edited = await _git.ResolveConflictAsync(bob, "a.yaml", ConflictResolution.Edited);
+        var ours = await _git.ResolveConflictAsync(bob, "d.yaml", ConflictResolution.Ours);
+
+        Assert.True(edited.IsSuccess, edited.Error?.Message);
+        Assert.True(ours.IsSuccess, ours.Error?.Message);
+        Assert.Equal("name: Changed by Bob\n", File.ReadAllText(Path.Combine(bob, "d.yaml")));
+        Assert.Equal("name: From Bob and Alice\n", TestGit.Run(bob, "show", ":a.yaml"));
+        Assert.False((await _git.GetStatusAsync(bob)).Value.HasConflicts);
+    }
+
+    [Fact]
+    public async Task AbortMerge_RestoresTheBranch()
+    {
+        var bob = await ConflictedMergeAsync();
+
+        var abort = await _git.AbortMergeAsync(bob);
+
+        Assert.True(abort.IsSuccess, abort.Error?.Message);
+        var status = (await _git.GetStatusAsync(bob)).Value;
+        Assert.False(status.IsMerging);
+        Assert.Empty(status.Changes);
+        Assert.Null(status.MergeMessage);
+        Assert.Equal("name: From Bob\n", File.ReadAllText(Path.Combine(bob, "a.yaml")));
+    }
+
+    /// <summary>
+    /// Bob's clone after a pull that conflicts on <c>a.yaml</c> (both changed it) and
+    /// <c>d.yaml</c> (Alice deleted it, Bob changed it).
+    /// </summary>
+    private async Task<string> ConflictedMergeAsync()
+    {
+        var (alice, bob) = InitTwoClones();
+        Write(alice, "d.yaml", "name: D\n");
+        TestGit.CommitAll(alice, "Add D");
+        TestGit.Run(alice, "push", "--quiet");
+        TestGit.Run(bob, "pull", "--quiet", "--no-rebase");
+
+        Write(alice, "a.yaml", "name: From Alice\n");
+        File.Delete(Path.Combine(alice, "d.yaml"));
+        TestGit.CommitAll(alice, "Alice");
+        TestGit.Run(alice, "push", "--quiet");
+        Write(bob, "a.yaml", "name: From Bob\n");
+        Write(bob, "d.yaml", "name: Changed by Bob\n");
+        TestGit.CommitAll(bob, "Bob");
+
+        var pull = await _git.PullAsync(bob);
+        Assert.Equal(PullOutcome.Conflicted, pull.Value);
+        return bob;
+    }
+
     private string InitRepository(string name)
     {
         var path = _temp.Combine(name);

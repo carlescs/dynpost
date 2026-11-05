@@ -14,7 +14,8 @@ public sealed record GitStatusDto(
     int Ahead,
     int Behind,
     bool Merging,
-    IReadOnlyList<GitChangeDto> Changes)
+    IReadOnlyList<GitChangeDto> Changes,
+    string? MergeMessage = null)
 {
     public static GitStatusDto From(GitStatus status) =>
         new(
@@ -23,7 +24,8 @@ public sealed record GitStatusDto(
             status.Ahead,
             status.Behind,
             status.IsMerging,
-            status.Changes.Select(c => new GitChangeDto(c.Path, StatusName(c.Status), c.OriginalPath)).ToList());
+            status.Changes.Select(c => new GitChangeDto(c.Path, StatusName(c.Status), c.OriginalPath)).ToList(),
+            status.MergeMessage);
 
     private static string StatusName(GitFileStatus status) =>
         status switch
@@ -55,4 +57,17 @@ public sealed record GitPullDto(string Outcome, GitStatusDto Status)
                 _ => "conflicted",
             },
             GitStatusDto.From(result.Status));
+}
+
+/// <summary>Both sides of a conflicted file; a side is <c>null</c> when it deleted the file.</summary>
+public sealed record GitConflictDto(
+    string Path,
+    string? Base,
+    string? Ours,
+    string? Theirs,
+    string? Working,
+    bool HasConflictMarkers)
+{
+    public static GitConflictDto From(GitConflict conflict) =>
+        new(conflict.Path, conflict.Base, conflict.Ours, conflict.Theirs, conflict.Working, conflict.HasConflictMarkers);
 }

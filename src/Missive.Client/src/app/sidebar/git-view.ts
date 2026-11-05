@@ -1,8 +1,9 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faArrowDown,
   faArrowUp,
+  faBan,
   faCheck,
   faCircleExclamation,
   faCodeBranch,
@@ -63,7 +64,7 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
         </button>
       </div>
     } @else {
-      @if (git.error(); as error) {
+      @if (!git.conflict() && git.error(); as error) {
         <div
           class="mx-3 mb-2 flex items-start gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-800"
           role="alert"
@@ -102,17 +103,27 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
 
         @if (status.merging) {
           <div
-            class="mx-3 mb-2 flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800"
+            class="mx-3 mb-2 space-y-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800"
           >
-            <fa-icon class="mt-0.5" [icon]="faTriangleExclamation" />
-            <p>
+            <p class="flex items-start gap-2">
+              <fa-icon class="mt-0.5" [icon]="faTriangleExclamation" />
               @if (git.conflicts().length) {
-                Merge in progress. Resolve the conflicted files and mark them as resolved (git add),
-                then commit.
+                <span>
+                  Merge in progress: {{ git.conflicts().length }} conflicted file(s). Open each one
+                  below to keep a version or mark your own edit as resolved, then commit.
+                </span>
               } @else {
-                Merge in progress. Commit to complete it.
+                <span>Merge in progress. All conflicts are resolved; commit to complete it.</span>
               }
             </p>
+            <button
+              type="button"
+              class="rounded border border-amber-300 bg-white px-2 py-0.5 text-amber-800 enabled:hover:bg-amber-100 disabled:opacity-50"
+              [disabled]="git.busy() !== null"
+              (click)="abortMerge()"
+            >
+              <fa-icon [icon]="busyIcon('abort', faBan)" [animation]="spin('abort')" /> Abort merge
+            </button>
           </div>
         }
 
@@ -177,6 +188,8 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
           @for (change of status.changes; track change.path) {
             <li
               class="flex items-center gap-2 px-3 py-0.5 hover:bg-slate-200"
+              [class.bg-amber-50]="change.status === 'conflicted'"
+              [class.bg-sky-100]="git.conflict()?.path === change.path"
               [title]="describe(change)"
             >
               <input
@@ -187,10 +200,31 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
                 [disabled]="status.merging || change.status === 'conflicted'"
                 (change)="toggle(change.path)"
               />
-              <span class="truncate">{{ fileName(change.path) }}</span>
-              <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
+              @if (change.status === 'conflicted') {
+                <button
+                  type="button"
+                  class="flex min-w-0 items-center gap-2 text-left hover:underline"
+                  [attr.aria-label]="'Resolve the conflict in ' + change.path"
+                  (click)="git.openConflict(change.path)"
+                >
+                  <span class="truncate">{{ fileName(change.path) }}</span>
+                  <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="ml-auto shrink-0 rounded border border-amber-300 bg-white px-1.5 text-xs text-amber-800 enabled:hover:bg-amber-100 disabled:opacity-50"
+                  [disabled]="git.busy() !== null"
+                  (click)="git.openConflict(change.path)"
+                >
+                  Resolve
+                </button>
+              } @else {
+                <span class="truncate">{{ fileName(change.path) }}</span>
+                <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
+              }
               <span
-                class="ml-auto font-mono text-xs font-bold"
+                class="font-mono text-xs font-bold"
+                [class.ml-auto]="change.status !== 'conflicted'"
                 [class]="badges[change.status].color"
                 [title]="change.status"
                 >{{ badges[change.status].letter }}</span
@@ -223,6 +257,24 @@ export class GitView {
   protected readonly workspace = inject(WorkspaceStore);
   protected readonly badges = STATUS_BADGES;
   protected readonly message = signal('');
+
+  constructor() {
+    // Offer git's merge commit message once a merge starts, unless the user typed one already.
+    effect(() => {
+      const mergeMessage = this.git.status()?.mergeMessage;
+      if (mergeMessage && !untracked(this.message).trim()) this.message.set(mergeMessage);
+    });
+  }
+
+  protected abortMerge(): void {
+    if (
+      confirm(
+        'Abort the merge? Your branch goes back to how it was before the pull, and any conflict resolutions so far are lost.',
+      )
+    ) {
+      void this.git.abortMerge();
+    }
+  }
   /** Paths picked for a partial commit; empty commits everything. */
   protected readonly selected = signal(new Set<string>());
 
@@ -243,6 +295,7 @@ export class GitView {
   protected readonly faCodeBranch = faCodeBranch;
   protected readonly faArrowDown = faArrowDown;
   protected readonly faArrowUp = faArrowUp;
+  protected readonly faBan = faBan;
   protected readonly faCheck = faCheck;
   protected readonly faRotate = faRotate;
   protected readonly faSpinner = faSpinner;
