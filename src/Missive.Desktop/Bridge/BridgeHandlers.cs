@@ -56,6 +56,8 @@ internal static class BridgeHandlers
                 (p, _) => Task.FromResult(NoValue(Use<DeleteFolder>().Execute(p.Path))))
             .Register(BridgeMessageTypes.GitStatus,
                 async ct => (await Use<GetGitStatus>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register(BridgeMessageTypes.GitInit,
+                async ct => (await Use<InitRepository>().ExecuteAsync(ct)).Map(GitStatusDto.From))
             .Register<GitCommitPayload, GitCommitDto>(BridgeMessageTypes.GitCommit,
                 async (p, ct) => (await Use<CommitChanges>().ExecuteAsync(new CommitChangesRequest(p.Message, p.Paths), ct)).Map(GitCommitDto.From))
             .Register(BridgeMessageTypes.GitPull,
