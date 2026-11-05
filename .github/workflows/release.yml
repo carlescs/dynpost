@@ -112,12 +112,24 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # Attach only the installers plus the update feed and packages that installed copies
+      # download to update themselves; portable copies stay in the workflow artifacts.
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME" dist/*
-          --repo "$GITHUB_REPOSITORY"
-          --title "Missive $GITHUB_REF_NAME"
-          --generate-notes
-          $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)
+        shell: bash
+        run: |
+          shopt -s nullglob
+          installers=(dist/*-Setup.exe dist/*-Setup.pkg dist/*.AppImage)
+          feed=(dist/releases.*.json dist/*.nupkg)
+          if (( ${#installers[@]} != 3 )); then
+            echo "Expected 3 installers, found: ${installers[*]}" >&2
+            exit 1
+          fi
+          prerelease=()
+          [[ "$GITHUB_REF_NAME" == *-* ]] && prerelease=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" "${installers[@]}" "${feed[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Missive $GITHUB_REF_NAME" \
+            --generate-notes \
+            "${prerelease[@]}"

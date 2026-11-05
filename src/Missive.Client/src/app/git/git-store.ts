@@ -99,10 +99,9 @@ export class GitStore {
       });
     });
 
-    // Opening a request or an environment (even the one already selected) shows it instead.
+    // Opening or selecting a request or environment tab (even the one shown) shows it instead.
     effect(() => {
       this.workspace.shown();
-      this.environments.shown();
       untracked(() => this.closeDiff());
     });
   }

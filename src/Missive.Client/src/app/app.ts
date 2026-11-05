@@ -69,13 +69,13 @@ import { WorkspaceStore } from './workspace/workspace-store';
           @defer (on immediate) {
             <app-diff-view />
           }
-        } @else if (environments.draft()) {
-          <app-environment-editor />
         } @else {
-          @if (store.documents().length) {
+          @if (store.tabs().length) {
             <app-document-tabs />
           }
-          @if (store.activeDocument(); as doc) {
+          @if (environments.draft(); as draft) {
+            <app-environment-editor [draft]="draft" />
+          } @else if (store.activeDocument(); as doc) {
             <app-request-editor [document]="doc" />
           } @else {
             <div class="flex flex-1 flex-col items-center justify-center gap-4 text-slate-500">
@@ -131,8 +131,8 @@ export class App implements OnInit {
   protected onKeydown(event: KeyboardEvent): void {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      if (this.environments.draft() && !this.git.conflict() && !this.git.diff())
-        void this.environments.save();
+      const draft = this.environments.draft();
+      if (draft && !this.git.conflict() && !this.git.diff()) void this.environments.save(draft.key);
       else void this.store.saveActive();
     } else if (
       (event.ctrlKey || event.metaKey) &&

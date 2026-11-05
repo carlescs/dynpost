@@ -40,17 +40,26 @@ export class WorkspaceStore {
   readonly sidebarWidth = signal(SIDEBAR_DEFAULT_WIDTH);
 
   readonly documents = signal<RequestDocument[]>([]);
-  readonly activeId = signal<string | null>(null);
   /**
-   * Incremented whenever the user asks to see a request (opening, creating or selecting one, even
-   * the one already selected), so views shown instead of the editor can make way for it.
+   * Keys of the open tabs, in order. A tab shows a request document from {@link documents} or an
+   * environment from the `EnvironmentStore`, matched by their `key`.
+   */
+  readonly tabs = signal<string[]>([]);
+  /** Key of the tab shown in the editor area, or `null`. */
+  readonly activeTab = signal<string | null>(null);
+  /**
+   * Incremented whenever the user opens or selects a tab (even the one already shown), so views
+   * shown instead of the editor area can make way for it.
    */
   readonly shown = signal(0);
+  /** The request document in the active tab; `null` when an environment tab (or none) is active. */
   readonly activeDocument = computed(
-    () => this.documents().find((d) => d.id === this.activeId()) ?? null,
+    () => this.documents().find((d) => d.key === this.activeTab()) ?? null,
   );
+  readonly activeId = computed(() => this.activeDocument()?.id ?? null);
 
   private untitledCount = 0;
+  private tabCount = 0;
   private sendCount = 0;
 
   /**
@@ -75,8 +84,8 @@ export class WorkspaceStore {
     try {
       const workspace = await this.bridge.send('workspace.pick');
       if (workspace) {
+        this.removeTabs(this.documents().map((d) => d.key));
         this.documents.set([]);
-        this.activeId.set(null);
         this.applyWorkspace(workspace);
       }
     } catch (error) {
@@ -138,6 +147,7 @@ export class WorkspaceStore {
     this.untitledCount++;
     const doc: RequestDocument = {
       id: `untitled-${this.untitledCount}`,
+      key: this.newTabKey(),
       path: null,
       folder,
       name: `New request ${this.untitledCount}`,
@@ -155,25 +165,28 @@ export class WorkspaceStore {
       revision: 0,
     };
     this.documents.update((docs) => [...docs, doc]);
-    this.activeId.set(doc.id);
-    this.shown.update((n) => n + 1);
+    this.openTab(doc.key);
   }
 
   async openRequest(node: WorkspaceNode): Promise<void> {
     if (node.kind !== 'request') return;
-    this.shown.update((n) => n + 1);
-    if (this.documents().some((d) => d.id === node.path)) {
-      this.activeId.set(node.path);
+    const open = this.documents().find((d) => d.id === node.path);
+    if (open) {
+      this.activateTab(open.key);
       return;
     }
 
     try {
       const content = fromRequestDto(await this.bridge.send('request.load', { path: node.path }));
       // Another click may have opened it while loading.
-      if (!this.documents().some((d) => d.id === node.path)) {
+      const opened = this.documents().find((d) => d.id === node.path);
+      if (opened) {
+        this.activateTab(opened.key);
+      } else {
         const doc: RequestDocument = {
           ...content,
           id: node.path,
+          key: this.newTabKey(),
           path: node.path,
           folder: parentFolder(node.path),
           dirty: false,
@@ -183,8 +196,8 @@ export class WorkspaceStore {
           revision: 0,
         };
         this.documents.update((docs) => [...docs, doc]);
+        this.openTab(doc.key);
       }
-      this.activeId.set(node.path);
     } catch (error) {
       this.report(error);
     }
@@ -216,7 +229,6 @@ export class WorkspaceStore {
             : base;
         }),
       );
-      if (this.activeId() === id) this.activeId.set(saved.path);
       this.error.set(null);
       await this.refresh();
     } catch (error) {
@@ -337,10 +349,9 @@ export class WorkspaceStore {
 
     try {
       await this.bridge.send('folder.delete', { path });
-      const closed = new Set(open.map((d) => d.id));
-      const remaining = this.documents().filter((d) => !closed.has(d.id));
-      this.documents.set(remaining);
-      if (closed.has(this.activeId() ?? '')) this.activeId.set(remaining.at(-1)?.id ?? null);
+      const closed = new Set(open.map((d) => d.key));
+      this.documents.update((docs) => docs.filter((d) => !closed.has(d.key)));
+      this.removeTabs([...closed]);
       this.error.set(null);
       await this.refresh();
     } catch (error) {
@@ -353,26 +364,53 @@ export class WorkspaceStore {
     if (id) await this.save(id);
   }
 
-  activate(id: string): void {
-    this.activeId.set(id);
+  /** A key for a new tab, unique while the app runs. */
+  newTabKey(): string {
+    return `tab-${++this.tabCount}`;
+  }
+
+  /** Adds a tab after the others (if it isn't open yet) and shows it. */
+  openTab(key: string): void {
+    if (!this.tabs().includes(key)) this.tabs.update((tabs) => [...tabs, key]);
+    this.activeTab.set(key);
     this.shown.update((n) => n + 1);
   }
 
-  close(id: string): void {
-    const docs = this.documents();
-    const index = docs.findIndex((d) => d.id === id);
-    if (index < 0) return;
-    if (docs[index].dirty && !confirm(`Discard unsaved changes to "${docs[index].name}"?`)) return;
+  activateTab(key: string): void {
+    this.activeTab.set(key);
+    this.shown.update((n) => n + 1);
+  }
 
-    const sendId = docs[index].sendId;
-    if (sendId) void this.bridge.send('request.cancel', { id: sendId }).catch(() => undefined);
-
-    const remaining = docs.filter((d) => d.id !== id);
-    this.documents.set(remaining);
-    if (this.activeId() === id) {
-      const next = remaining[Math.min(index, remaining.length - 1)];
-      this.activeId.set(next?.id ?? null);
+  /** Removes tabs; if the active one is among them, its nearest remaining neighbour is shown. */
+  removeTabs(keys: string[]): void {
+    const removed = new Set(keys);
+    const tabs = this.tabs();
+    const active = this.activeTab();
+    if (active && removed.has(active)) {
+      const index = tabs.indexOf(active);
+      const next =
+        tabs.slice(index + 1).find((k) => !removed.has(k)) ??
+        tabs
+          .slice(0, Math.max(index, 0))
+          .reverse()
+          .find((k) => !removed.has(k)) ??
+        null;
+      this.activeTab.set(next);
     }
+    this.tabs.set(tabs.filter((k) => !removed.has(k)));
+  }
+
+  /** Closes a request document's tab, after asking if it has unsaved changes. */
+  close(id: string): void {
+    const doc = this.documents().find((d) => d.id === id);
+    if (!doc) return;
+    if (doc.dirty && !confirm(`Discard unsaved changes to "${doc.name}"?`)) return;
+
+    if (doc.sendId) {
+      void this.bridge.send('request.cancel', { id: doc.sendId }).catch(() => undefined);
+    }
+    this.documents.update((docs) => docs.filter((d) => d.key !== doc.key));
+    this.removeTabs([doc.key]);
   }
 
   update(id: string, patch: Partial<RequestContent>): void {
@@ -400,8 +438,6 @@ export class WorkspaceStore {
         return { ...d, id: path, path, folder: parentFolder(path) };
       }),
     );
-    const active = this.activeId();
-    if (active) this.activeId.set(move(active));
     this.error.set(null);
     await this.refresh();
   }
