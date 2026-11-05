@@ -22,6 +22,7 @@ import { WorkspaceStore } from '../workspace/workspace-store';
       'always-dark flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
     role: 'banner',
     '(document:click)': 'onDocumentClick($event)',
+    '(document:keydown.escape)': 'onEscape()',
   },
   template: `
     <fa-icon class="text-sky-400" [icon]="faPaperPlane" />
@@ -84,6 +85,7 @@ import { WorkspaceStore } from '../workspace/workspace-store';
           class="flex size-7 items-center justify-center rounded text-slate-300 hover:bg-slate-700 hover:text-white"
           title="Settings"
           aria-label="Settings"
+          aria-controls="settings-panel"
           [attr.aria-expanded]="menuOpen()"
           (click)="menuOpen.set(!menuOpen())"
         >
@@ -136,5 +138,11 @@ export class AppHeader {
 
   protected onDocumentClick(event: MouseEvent): void {
     if (!this.host.nativeElement.contains(event.target as Node)) this.menuOpen.set(false);
+  }
+
+  protected onEscape(): void {
+    if (!this.menuOpen()) return;
+    this.menuOpen.set(false);
+    this.host.nativeElement.querySelector<HTMLButtonElement>('[aria-label="Settings"]')?.focus();
   }
 }

@@ -15,6 +15,8 @@ export class ThemeStore {
   readonly theme = signal<Theme>('light');
   readonly isDark = computed(() => this.theme() === 'dark');
   readonly monacoTheme = computed(() => (this.isDark() ? 'vs-dark' : 'vs'));
+  private selection = 0;
+  private saveQueue: Promise<void> = Promise.resolve();
 
   constructor() {
     effect(() => {
@@ -22,26 +24,30 @@ export class ThemeStore {
     });
   }
 
-  private themeRevision = 0;
-
   async load(): Promise<void> {
-    const revision = this.themeRevision;
+    const selection = this.selection;
     try {
       const settings = await this.bridge.send('settings.get');
-      if (revision === this.themeRevision) this.theme.set(settings.theme);
+      if (selection === this.selection) this.theme.set(settings.theme);
     } catch (error) {
       console.warn('Could not load the settings', error);
     }
   }
 
   async setDark(dark: boolean): Promise<void> {
-    this.themeRevision++;
+    const theme = dark ? 'dark' : 'light';
     const previous = this.theme();
-    this.theme.set(dark ? 'dark' : 'light');
+    const selection = ++this.selection;
+    this.theme.set(theme);
+    const save = this.saveQueue.then(() => this.bridge.send('settings.setTheme', { theme }));
+    this.saveQueue = save.then(
+      () => undefined,
+      () => undefined,
+    );
     try {
-      await this.bridge.send('settings.setTheme', { theme: this.theme() });
+      await save;
     } catch (error) {
-      this.theme.set(previous);
+      if (selection === this.selection) this.theme.set(previous);
       console.warn('Could not save the theme', error);
     }
   }
