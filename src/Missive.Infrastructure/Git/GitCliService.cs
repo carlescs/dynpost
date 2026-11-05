@@ -224,43 +224,68 @@ public sealed class GitCliService : IGitService
             return prefix.Error!;
         }
 
-        string? original = null;
-        if (change.Status is not (GitFileStatus.Untracked or GitFileStatus.Added))
+        // Both sides are read whatever the status says: a file removed from the index but kept on
+        // disk is reported as deleted and untracked, yet exists in HEAD and in the working tree.
+        // "./" makes the path relative to the working directory (the workspace) instead of the repository root.
+        var committed = await RunAsync(workspacePath, ["show", $"HEAD:./{change.OriginalPath ?? change.Path}"], cancellationToken);
+        if (committed.IsFailure)
         {
-            // "./" makes the path relative to the working directory (the workspace) instead of the repository root.
-            var committed = await RunAsync(workspacePath, ["show", $"HEAD:./{change.OriginalPath ?? change.Path}"], cancellationToken);
-            if (committed.IsFailure)
-            {
-                return committed.Error!;
-            }
-
-            // Fails when there is no commit yet, or the file isn't in it.
-            original = committed.Value.Succeeded ? committed.Value.StandardOutput : null;
+            return committed.Error!;
         }
 
-        string? modified = null;
-        if (change.Status != GitFileStatus.Deleted)
+        // Fails when there is no commit yet, or the file isn't in it.
+        var original = committed.Value.Succeeded ? committed.Value.StandardOutput : null;
+
+        var modified = await ReadWorkingFileAsync(workspacePath, change.Path, cancellationToken);
+        if (modified.IsFailure)
         {
-            var file = Path.Combine(workspacePath, change.Path);
-            try
-            {
-                if (File.Exists(file))
-                {
-                    modified = await File.ReadAllTextAsync(file, cancellationToken);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return GitErrors.CommandFailed("diff", $"Could not read '{change.Path}': {ex.Message}");
-            }
+            return modified.Error!;
         }
 
         var binary = (original is not null && GitFileDiff.LooksBinary(original))
-            || (modified is not null && GitFileDiff.LooksBinary(modified));
+            || (modified.Value is not null && GitFileDiff.LooksBinary(modified.Value));
 
         return binary
             ? new GitFileDiff(change.Path, change.Status, change.OriginalPath, null, null, IsBinary: true)
-            : new GitFileDiff(change.Path, change.Status, change.OriginalPath, original, modified);
+            : new GitFileDiff(change.Path, change.Status, change.OriginalPath, original, modified.Value);
+    }
+
+    /// <summary>
+    /// The working tree version of a file, or <c>null</c> when it doesn't exist. Links are never
+    /// followed, so a link can't expose a file outside the workspace: a symbolic link reads as its
+    /// target path, which is also what git stores for it, and a path through a linked folder is refused.
+    /// </summary>
+    private static async Task<Result<string?>> ReadWorkingFileAsync(string workspacePath, string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var current = workspacePath;
+            var segments = path.Split('/');
+            for (var i = 0; i < segments.Length; i++)
+            {
+                current = Path.Combine(current, segments[i]);
+                var info = new FileInfo(current);
+                if (!info.Exists && !Directory.Exists(current) && info.LinkTarget is null)
+                {
+                    return Result<string?>.Success(null);
+                }
+
+                if (info.LinkTarget is { } target)
+                {
+                    return i == segments.Length - 1
+                        ? Result<string?>.Success(target)
+                        : GitErrors.CommandFailed("diff", $"'{path}' is inside a linked folder; its changes are not shown.");
+                }
+            }
+
+            return File.Exists(current)
+                ? Result<string?>.Success(await File.ReadAllTextAsync(current, cancellationToken))
+                : Result<string?>.Success(null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return GitErrors.CommandFailed("diff", $"Could not read '{path}': {ex.Message}");
+        }
     }
 
     public async Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(

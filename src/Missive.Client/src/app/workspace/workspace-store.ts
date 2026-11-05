@@ -41,6 +41,11 @@ export class WorkspaceStore {
 
   readonly documents = signal<RequestDocument[]>([]);
   readonly activeId = signal<string | null>(null);
+  /**
+   * Incremented whenever the user asks to see a request (opening, creating or selecting one, even
+   * the one already selected), so views shown instead of the editor can make way for it.
+   */
+  readonly shown = signal(0);
   readonly activeDocument = computed(
     () => this.documents().find((d) => d.id === this.activeId()) ?? null,
   );
@@ -151,10 +156,12 @@ export class WorkspaceStore {
     };
     this.documents.update((docs) => [...docs, doc]);
     this.activeId.set(doc.id);
+    this.shown.update((n) => n + 1);
   }
 
   async openRequest(node: WorkspaceNode): Promise<void> {
     if (node.kind !== 'request') return;
+    this.shown.update((n) => n + 1);
     if (this.documents().some((d) => d.id === node.path)) {
       this.activeId.set(node.path);
       return;
@@ -348,6 +355,7 @@ export class WorkspaceStore {
 
   activate(id: string): void {
     this.activeId.set(id);
+    this.shown.update((n) => n + 1);
   }
 
   close(id: string): void {

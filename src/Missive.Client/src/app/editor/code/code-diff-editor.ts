@@ -71,11 +71,15 @@ export class CodeDiffEditor {
     });
 
     effect(() => {
+      // Read the inputs first: before the editor exists they must still be tracked.
+      const sideBySide = this.sideBySide();
+      const hideUnchanged = this.hideUnchanged();
+      const wrap = this.wordWrap() ? 'on' : 'off';
       this.editor?.updateOptions({
-        renderSideBySide: this.sideBySide(),
-        hideUnchangedRegions: { enabled: this.hideUnchanged() },
-        wordWrap: this.wordWrap() ? 'on' : 'off',
-        diffWordWrap: this.wordWrap() ? 'on' : 'off',
+        renderSideBySide: sideBySide,
+        hideUnchangedRegions: { enabled: hideUnchanged },
+        wordWrap: wrap,
+        diffWordWrap: wrap,
       });
     });
   }

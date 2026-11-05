@@ -34,6 +34,11 @@ export class EnvironmentStore {
   readonly variables = signal<VariableLookup>(new Map());
   /** The environment shown in the main area for editing, if any. */
   readonly draft = signal<EnvironmentDraft | null>(null);
+  /**
+   * Incremented whenever the user asks to see an environment (even the one already open), so
+   * views shown instead of the editor can make way for it.
+   */
+  readonly shown = signal(0);
 
   private readonly root = computed(() => this.workspace.workspace()?.root ?? null);
   private loadCount = 0;
@@ -82,10 +87,15 @@ export class EnvironmentStore {
 
   /** Opens an environment in the editor. */
   async edit(id: string): Promise<void> {
-    if (this.draft()?.id === id || !this.confirmDiscard()) return;
+    if (this.draft()?.id === id) {
+      this.shown.update((n) => n + 1);
+      return;
+    }
+    if (!this.confirmDiscard()) return;
     try {
       const environment = await this.bridge.send('environment.load', { id });
       this.draft.set({ ...environment, id, dirty: false, saving: false, revision: 0 });
+      this.shown.update((n) => n + 1);
     } catch (error) {
       this.report(error);
     }
@@ -102,6 +112,7 @@ export class EnvironmentStore {
       saving: false,
       revision: 0,
     });
+    this.shown.update((n) => n + 1);
   }
 
   update(patch: Partial<Pick<EnvironmentDraft, 'name' | 'variables'>>): void {

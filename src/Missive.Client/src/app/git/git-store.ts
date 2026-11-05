@@ -48,6 +48,8 @@ export class GitStore {
   readonly diff = signal<GitFileDiff | null>(null);
   /** The file whose differences are being read, if any. */
   readonly diffLoading = signal<string | null>(null);
+  /** Identifies the latest diff read; a stale or abandoned read's answer is ignored. */
+  private diffToken = 0;
   /** The repository's remotes; `null` until they are read. */
   readonly remotes = signal<GitRemote[] | null>(null);
 
@@ -78,7 +80,7 @@ export class GitStore {
         this.error.set(null);
         this.notice.set(null);
         this.conflict.set(null);
-        this.diff.set(null);
+        this.closeDiff();
         this.remotes.set(null);
         if (root && this.available) void this.refresh();
       });
@@ -90,17 +92,18 @@ export class GitStore {
       const status = this.status();
       untracked(() => {
         const open = this.diff();
-        if (!open) return;
+        // A read in flight (the user opening another file) already brings the diff up to date.
+        if (!open || this.diffLoading()) return;
         if (status?.changes.some((c) => c.path === open.path)) void this.loadDiff(open.path);
-        else this.diff.set(null);
+        else this.closeDiff();
       });
     });
 
-    // Opening a request or an environment shows it instead of the diff.
+    // Opening a request or an environment (even the one already selected) shows it instead.
     effect(() => {
-      this.workspace.activeId();
-      this.environments.draft()?.id;
-      untracked(() => this.diff.set(null));
+      this.workspace.shown();
+      this.environments.shown();
+      untracked(() => this.closeDiff());
     });
   }
 
@@ -178,7 +181,7 @@ export class GitStore {
       'conflict',
       () => this.bridge.send('git.conflict', { path }),
       (conflict) => {
-        this.diff.set(null);
+        this.closeDiff();
         this.conflict.set(conflict);
       },
     );
@@ -195,23 +198,26 @@ export class GitStore {
   }
 
   closeDiff(): void {
+    this.diffToken++;
     this.diff.set(null);
+    this.diffLoading.set(null);
   }
 
-  /** Reads a diff without blocking other git operations; only the latest request is shown. */
+  /** Reads a diff without blocking other git operations; only the latest read is shown. */
   private async loadDiff(path: string, report = false): Promise<void> {
     const root = this.root();
     if (!root) return;
+    const token = ++this.diffToken;
+    const current = () => token === this.diffToken && this.root() === root;
     this.diffLoading.set(path);
     try {
       const diff = await this.bridge.send('git.diff', { path });
-      if (this.root() === root && this.diffLoading() === path) this.diff.set(diff);
+      if (current()) this.diff.set(diff);
     } catch (error) {
-      if (this.root() !== root || this.diffLoading() !== path) return;
-      if (report) this.reportError('refresh', error);
-      // The file may have just stopped being changed; the status refresh closes it then.
+      // A failed re-read means the file may have just stopped changing; the status closes it then.
+      if (current() && report) this.reportError('refresh', error);
     } finally {
-      if (this.diffLoading() === path) this.diffLoading.set(null);
+      if (current()) this.diffLoading.set(null);
     }
   }
 

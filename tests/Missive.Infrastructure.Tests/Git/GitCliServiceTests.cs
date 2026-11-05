@@ -397,6 +397,56 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Diff_OfAFileRemovedFromTheIndexButKept_ComparesBothVersions()
+    {
+        var workspace = InitRepository("repo");
+        Write(workspace, "a.yaml", "name: A\n");
+        TestGit.CommitAll(workspace, "Initial");
+        TestGit.Run(workspace, "rm", "--cached", "--quiet", "a.yaml");
+        Write(workspace, "a.yaml", "name: A2\n");
+
+        var deleted = await _git.GetFileDiffAsync(workspace, new GitChange("a.yaml", GitFileStatus.Deleted));
+        var untracked = await _git.GetFileDiffAsync(workspace, new GitChange("a.yaml", GitFileStatus.Untracked));
+
+        Assert.Equal(("name: A\n", "name: A2\n"), (deleted.Value.Original, deleted.Value.Modified));
+        Assert.Equal(("name: A\n", "name: A2\n"), (untracked.Value.Original, untracked.Value.Modified));
+    }
+
+    [Fact]
+    public async Task Diff_OfASymbolicLink_ShowsItsTarget_WithoutFollowingIt()
+    {
+        var workspace = InitRepository("repo");
+        var secret = _temp.Combine("secret.txt");
+        File.WriteAllText(secret, "password\n");
+        if (!TryCreateSymbolicLink(Path.Combine(workspace, "link.yaml"), secret))
+        {
+            return; // Creating links needs extra rights on Windows.
+        }
+
+        var diff = await _git.GetFileDiffAsync(workspace, new GitChange("link.yaml", GitFileStatus.Untracked));
+
+        Assert.True(diff.IsSuccess, diff.Error?.Message);
+        Assert.Equal(secret, diff.Value.Modified);
+    }
+
+    [Fact]
+    public async Task Diff_ThroughALinkedFolder_IsRefused()
+    {
+        var workspace = InitRepository("repo");
+        var outside = _temp.Combine("outside");
+        Write(outside, "secret.yaml", "password\n");
+        if (!TryCreateSymbolicLink(Path.Combine(workspace, "linked"), outside))
+        {
+            return; // Creating links needs extra rights on Windows.
+        }
+
+        var diff = await _git.GetFileDiffAsync(workspace, new GitChange("linked/secret.yaml", GitFileStatus.Untracked));
+
+        Assert.Equal(GitErrors.CommandFailedCode, diff.Error?.Code);
+        Assert.DoesNotContain("password", diff.Error!.Message);
+    }
+
+    [Fact]
     public async Task Remotes_CanBeAddedRenamedChangedAndRemoved()
     {
         var workspace = InitRepository("repo");
@@ -508,6 +558,27 @@ public sealed class GitCliServiceTests : IDisposable
         var path = Path.Combine(folder, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
+    }
+
+    private static bool TryCreateSymbolicLink(string path, string target)
+    {
+        try
+        {
+            if (Directory.Exists(target))
+            {
+                Directory.CreateSymbolicLink(path, target);
+            }
+            else
+            {
+                File.CreateSymbolicLink(path, target);
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static RemoteName Name(string text) =>
