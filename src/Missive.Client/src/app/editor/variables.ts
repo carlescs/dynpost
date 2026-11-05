@@ -23,3 +23,25 @@ export function splitVariables(text: string): TextSegment[] {
   if (last < text.length) segments.push({ text: text.slice(last) });
   return segments;
 }
+
+/** What the editors know about a variable of the selected environment. */
+export interface VariableInfo {
+  value: string;
+  secret: boolean;
+}
+
+/** The selected environment's variables by name; secrets without a local value are left out. */
+export type VariableLookup = ReadonlyMap<string, VariableInfo>;
+
+/** The CSS class for a `{{name}}` reference: undefined ones stand out when `variables` is known. */
+export function variableClass(name: string, variables: VariableLookup | null): string {
+  return variables && !variables.has(name) ? 'variable-undefined' : 'variable-highlight';
+}
+
+/** A one-line description of a `{{name}}` reference, for hovers. */
+export function describeVariable(name: string, variables: VariableLookup | null): string {
+  if (!variables) return `Variable ${name}`;
+  const variable = variables.get(name);
+  if (!variable) return `${name} is not defined in the selected environment`;
+  return variable.secret ? `${name}: secret value` : `${name} = ${variable.value}`;
+}

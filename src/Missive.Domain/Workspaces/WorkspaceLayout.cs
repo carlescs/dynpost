@@ -40,6 +40,20 @@ public static class WorkspaceLayout
         return attempt <= 1 ? slug + RequestExtension : $"{slug}-{attempt}{RequestExtension}";
     }
 
+    /// <summary>Whether a file in the <c>environments</c> folder is an environment file.</summary>
+    public static bool IsEnvironmentFile(string fileName) =>
+        !fileName.StartsWith('.') && HasRequestExtension(fileName) && !fileName.Contains('/') && !fileName.Contains('\\');
+
+    /// <summary>
+    /// The file name to try for an environment named <paramref name="environmentName"/>, like
+    /// <see cref="RequestFileName"/>: <c>staging.yaml</c>, then <c>staging-2.yaml</c>, …
+    /// </summary>
+    public static string EnvironmentFileName(string environmentName, int attempt = 1)
+    {
+        var slug = Slug.From(environmentName, "environment");
+        return attempt <= 1 ? slug + RequestExtension : $"{slug}-{attempt}{RequestExtension}";
+    }
+
     /// <summary>The file name without its extension, e.g. <c>get-user</c>.</summary>
     public static string FileStem(string fileName)
     {

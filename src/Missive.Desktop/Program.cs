@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Missive.Application.Environments;
 using Missive.Application.Folders;
 using Missive.Application.Git;
 using Missive.Application.Http;
@@ -7,6 +8,7 @@ using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Desktop.Hosting;
+using Missive.Infrastructure.Environments;
 using Missive.Infrastructure.Git;
 using Missive.Infrastructure.Http;
 using Missive.Infrastructure.Settings;
@@ -48,6 +50,9 @@ internal static class Program
         new ServiceCollection()
             .AddSingleton<CurrentWorkspace>()
             .AddSingleton<IWorkspaceRepository, FileSystemWorkspaceRepository>()
+            .AddSingleton<IEnvironmentStore, FileSystemEnvironmentStore>()
+            .AddSingleton<ISecretStore, YamlSecretStore>()
+            .AddSingleton<IWorkspaceStateStore, YamlWorkspaceStateStore>()
             .AddSingleton<IGitService, GitCliService>()
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
@@ -59,12 +64,19 @@ internal static class Program
             .AddTransient<CreateRequest>()
             .AddTransient<SaveRequest>()
             .AddTransient<MoveRequest>()
+            .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
             .AddTransient<CancelRequest>()
             .AddTransient<CreateFolder>()
             .AddTransient<RenameFolder>()
             .AddTransient<MoveFolder>()
             .AddTransient<DeleteFolder>()
+            .AddTransient<ListEnvironments>()
+            .AddTransient<LoadEnvironment>()
+            .AddTransient<CreateEnvironment>()
+            .AddTransient<SaveEnvironment>()
+            .AddTransient<DeleteEnvironment>()
+            .AddTransient<SelectEnvironment>()
             .AddTransient<GetGitStatus>()
             .AddTransient<CommitChanges>()
             .AddTransient<PullChanges>()

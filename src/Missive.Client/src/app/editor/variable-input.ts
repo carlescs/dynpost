@@ -1,5 +1,5 @@
 import { Component, ElementRef, computed, input, output, viewChild } from '@angular/core';
-import { splitVariables } from './variables';
+import { VariableLookup, describeVariable, splitVariables, variableClass } from './variables';
 
 /**
  * A single-line text input that highlights `{{variable}}` references. The input's own text is
@@ -18,7 +18,7 @@ import { splitVariables } from './variables';
     >
       @for (segment of segments(); track $index) {
         @if (segment.variable) {
-          <span class="variable-highlight" [attr.data-variable]="segment.variable">{{
+          <span [class]="classOf(segment.variable)" [attr.data-variable]="segment.variable">{{
             segment.text
           }}</span>
         } @else {
@@ -32,6 +32,7 @@ import { splitVariables } from './variables';
       [class]="fieldClass()"
       [placeholder]="placeholder()"
       [attr.aria-label]="ariaLabel()"
+      [title]="hover()"
       spellcheck="false"
       [value]="value()"
       (input)="changed($event)"
@@ -48,12 +49,23 @@ export class VariableInput {
   readonly ariaLabel = input<string | null>(null);
   /** Padding and font classes, applied to both the input and the highlight layer. */
   readonly fieldClass = input('px-3 py-1.5 font-mono text-sm');
+  /** The defined variables; references to others are marked. `null` marks none. */
+  readonly variables = input<VariableLookup | null>(null);
 
   readonly valueChange = output<string>();
 
   protected readonly segments = computed(() => splitVariables(this.value()));
+  /** Describes the references, since the highlight layer can't show hovers of its own. */
+  protected readonly hover = computed(() => {
+    const names = [...new Set(this.segments().flatMap((s) => (s.variable ? [s.variable] : [])))];
+    return names.map((name) => describeVariable(name, this.variables())).join('\n');
+  });
   private readonly backdrop = viewChild.required<ElementRef<HTMLElement>>('backdrop');
   private readonly field = viewChild.required<ElementRef<HTMLInputElement>>('field');
+
+  protected classOf(name: string): string {
+    return variableClass(name, this.variables());
+  }
 
   protected changed(event: Event): void {
     this.valueChange.emit((event.target as HTMLInputElement).value);

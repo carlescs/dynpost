@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Missive.Application.Common;
+using Missive.Application.Environments;
 using Missive.Application.Requests;
 
 namespace Missive.Desktop.Bridge;
@@ -55,6 +56,24 @@ internal static class BridgeMessageTypes
     /// <summary>Deletes a folder with its requests. Payload: <see cref="DeleteFolderPayload"/>. Result: none.</summary>
     public const string FolderDelete = "folder.delete";
 
+    /// <summary>Lists the environments and the selected one. Payload: none. Result: environment list.</summary>
+    public const string EnvironmentList = "environment.list";
+
+    /// <summary>Reads an environment with its secret values. Payload: <see cref="EnvironmentIdPayload"/>. Result: environment.</summary>
+    public const string EnvironmentLoad = "environment.load";
+
+    /// <summary>Saves a new environment. Payload: <see cref="CreateEnvironmentPayload"/>. Result: saved environment.</summary>
+    public const string EnvironmentCreate = "environment.create";
+
+    /// <summary>Saves an existing environment. Payload: <see cref="SaveEnvironmentPayload"/>. Result: saved environment.</summary>
+    public const string EnvironmentSave = "environment.save";
+
+    /// <summary>Deletes an environment. Payload: <see cref="EnvironmentIdPayload"/>. Result: none.</summary>
+    public const string EnvironmentDelete = "environment.delete";
+
+    /// <summary>Selects the environment used to send requests. Payload: <see cref="SelectEnvironmentPayload"/>. Result: none.</summary>
+    public const string EnvironmentSelect = "environment.select";
+
     /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
     public const string GitStatus = "git.status";
 
@@ -108,6 +127,16 @@ internal sealed record CreateFolderPayload(string Parent, string Name);
 internal sealed record RenameFolderPayload(string Path, string Name);
 
 internal sealed record DeleteFolderPayload(string Path);
+
+/// <param name="Id">The environment's file name in the <c>environments</c> folder.</param>
+internal sealed record EnvironmentIdPayload(string Id);
+
+internal sealed record CreateEnvironmentPayload(EnvironmentDto Environment);
+
+internal sealed record SaveEnvironmentPayload(string Id, EnvironmentDto Environment);
+
+/// <param name="Id">The environment to select, or <c>null</c> for none.</param>
+internal sealed record SelectEnvironmentPayload(string? Id);
 
 /// <param name="Paths">Workspace-relative paths to commit; omitted or empty commits every change.</param>
 internal sealed record GitCommitPayload(string Message, IReadOnlyList<string>? Paths = null);

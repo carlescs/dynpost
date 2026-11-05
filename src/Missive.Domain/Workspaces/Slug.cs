@@ -8,11 +8,12 @@ public static class Slug
 {
     public const string Fallback = "request";
 
-    public static string From(string? name)
+    /// <param name="fallback">The slug to use when the name has no letters or digits.</param>
+    public static string From(string? name, string fallback = Fallback)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return Fallback;
+            return fallback;
         }
 
         var builder = new StringBuilder(name.Length);
@@ -41,6 +42,6 @@ public static class Slug
             }
         }
 
-        return builder.Length == 0 ? Fallback : builder.ToString();
+        return builder.Length == 0 ? fallback : builder.ToString();
     }
 }

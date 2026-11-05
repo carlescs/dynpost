@@ -1,7 +1,7 @@
 // Global SCSS styles. Tailwind is loaded separately from tailwind.css,
 // because Tailwind v4 must be processed by PostCSS, not Sass.
 
-// {{variable}} references: the URL field's highlight layer (editor/variable-input.ts) and
+// {{variable}} references (undefined ones in red): the URL field's highlight layer (editor/variable-input.ts) and
 // Monaco decorations (editor/code/code-editor.ts). Global because Monaco renders outside
 // Angular's style encapsulation. Colors only: anything that changes width would misalign the
 // highlight layer with the input's text.
@@ -10,5 +10,12 @@
 .monaco-editor .view-line .variable-highlight {
   color: #6d28d9; // violet-700
   background-color: #ede9fe; // violet-100
+  border-radius: 2px;
+}
+
+.variable-undefined,
+.monaco-editor .view-line .variable-undefined {
+  color: #be123c; // rose-700
+  background-color: #ffe4e6; // rose-100
   border-radius: 2px;
 }

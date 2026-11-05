@@ -4,7 +4,8 @@ using Missive.Domain.Requests;
 namespace Missive.Domain.Http;
 
 /// <summary>The outcome of <see cref="RequestPreparation.Prepare"/>: a request, or why it can't be sent.</summary>
-public sealed record PreparedRequest(OutgoingRequest? Request, IReadOnlyList<string> Errors)
+/// <param name="MissingVariables">Variables the request uses that have no value, sorted.</param>
+public sealed record PreparedRequest(OutgoingRequest? Request, IReadOnlyList<string> Errors, IReadOnlyList<string> MissingVariables)
 {
     public bool IsValid => Request is not null;
 }
@@ -40,8 +41,8 @@ public static class RequestPreparation
         var uri = BuildUrl(url, query, errors, reportInvalid: missing.Count == 0);
 
         return errors.Count == 0 && uri is not null
-            ? new PreparedRequest(new OutgoingRequest(request.Method.ToName(), uri, headers, body), [])
-            : new PreparedRequest(null, errors);
+            ? new PreparedRequest(new OutgoingRequest(request.Method.ToName(), uri, headers, body), [], [])
+            : new PreparedRequest(null, errors, [.. missing]);
     }
 
     private static List<KeyValuePair<string, string>> Resolved(IReadOnlyList<KeyValueEntry> entries, Func<string, string> resolve) =>
