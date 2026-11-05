@@ -1,4 +1,4 @@
-import { Component, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, inject, input, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { faBan, faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import {
@@ -292,7 +292,20 @@ export const BODY_LABELS: Record<BodyType, string> = {
     </section>
 
     <!-- Response -->
-    <app-response-viewer [document]="doc" />
+    <div
+      class="h-1 shrink-0 cursor-row-resize bg-slate-200 hover:bg-sky-400"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize response panel"
+      tabindex="0"
+      [class.bg-sky-500]="dragging()"
+      (pointerdown)="startResize($event)"
+      (pointermove)="resize($event)"
+      (pointerup)="endResize($event)"
+      (pointercancel)="endResize($event)"
+      (keydown)="resizeByKey($event)"
+    ></div>
+    <app-response-viewer [document]="doc" [style.height.px]="responseHeight()" />
   `,
 })
 export class RequestEditor {
@@ -323,6 +336,41 @@ export class RequestEditor {
   protected readonly secretExample = '{{apiToken}}';
   protected readonly fieldClass =
     'min-w-0 rounded border border-slate-300 px-2 py-1 font-mono focus:border-sky-500 focus:outline-none';
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly responseHeight = signal<number | null>(null);
+  protected readonly dragging = signal(false);
+
+  protected startResize(event: PointerEvent): void {
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    this.dragging.set(true);
+    event.preventDefault();
+  }
+
+  protected resize(event: PointerEvent): void {
+    if (!this.dragging()) return;
+    const rect = this.host.nativeElement.getBoundingClientRect();
+    this.setResponseHeight(rect.bottom - event.clientY);
+  }
+
+  protected endResize(event: PointerEvent): void {
+    this.dragging.set(false);
+    (event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+  }
+
+  protected resizeByKey(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    const current =
+      this.responseHeight() ??
+      (this.host.nativeElement.querySelector('app-response-viewer') as HTMLElement).offsetHeight;
+    this.setResponseHeight(current + (event.key === 'ArrowUp' ? 24 : -24));
+    event.preventDefault();
+  }
+
+  private setResponseHeight(height: number): void {
+    const max = this.host.nativeElement.clientHeight - 160;
+    this.responseHeight.set(Math.round(Math.max(128, Math.min(height, max))));
+  }
 
   protected patch(patch: Partial<RequestContent>): void {
     this.store.update(this.document().id, patch);
