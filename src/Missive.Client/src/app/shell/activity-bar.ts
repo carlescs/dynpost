@@ -7,7 +7,7 @@ import { SidebarView, WorkspaceStore } from '../workspace/workspace-store';
 @Component({
   selector: 'app-activity-bar',
   imports: [FaIconComponent],
-  host: { class: 'flex w-12 shrink-0 flex-col items-center gap-1 bg-slate-800 py-2' },
+  host: { class: 'always-dark flex w-12 shrink-0 flex-col items-center gap-1 bg-slate-800 py-2' },
   template: `
     @for (item of items; track item.view) {
       <button

@@ -19,6 +19,7 @@ import { GitStore } from './git/git-store';
 import { ActivityBar } from './shell/activity-bar';
 import { AppHeader } from './shell/app-header';
 import { Sidebar } from './sidebar/sidebar';
+import { ThemeStore } from './settings/theme-store';
 import { UpdateStore } from './updates/update-store';
 import { WorkspaceStore } from './workspace/workspace-store';
 
@@ -126,6 +127,7 @@ export class App implements OnInit {
   protected readonly history = inject(GitHistoryStore);
   protected readonly environments = inject(EnvironmentStore);
   private readonly updates = inject(UpdateStore);
+  private readonly theme = inject(ThemeStore);
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faPlus = faPlus;
   protected readonly faFolderOpen = faFolderOpen;
@@ -133,6 +135,7 @@ export class App implements OnInit {
   protected readonly faCircleExclamation = faCircleExclamation;
 
   ngOnInit(): void {
+    void this.theme.load();
     void this.store.restore();
     void this.updates.check();
   }

@@ -138,6 +138,12 @@ internal static class BridgeMessageTypes
 
     /// <summary>Installs the downloaded update and restarts the app. Payload: none. Result: none (the app exits).</summary>
     public const string UpdateRestart = "update.restart";
+
+    /// <summary>Reads the user settings. Payload: none. Result: settings.</summary>
+    public const string SettingsGet = "settings.get";
+
+    /// <summary>Sets the color theme. Payload: <see cref="SetThemePayload"/>. Result: settings.</summary>
+    public const string SettingsSetTheme = "settings.setTheme";
 }
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
@@ -147,6 +153,8 @@ internal sealed record BridgeRequest(string Id, string Type, JsonElement? Payloa
 internal sealed record BridgeResponse(string Id, bool Ok, object? Payload = null, Error? Error = null);
 
 internal sealed record OpenWorkspacePayload(string Path);
+
+internal sealed record SetThemePayload(string Theme);
 
 internal sealed record LoadRequestPayload(string Path);
 

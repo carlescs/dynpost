@@ -1,12 +1,15 @@
-import { Component, inject } from '@angular/core';
+import { Component, ElementRef, inject, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faCircleArrowUp,
+  faGear,
+  faMoon,
   faFolderOpen,
   faLayerGroup,
   faPaperPlane,
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentStore } from '../environments/environment-store';
+import { ThemeStore } from '../settings/theme-store';
 import { UpdateStore } from '../updates/update-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 
@@ -15,8 +18,11 @@ import { WorkspaceStore } from '../workspace/workspace-store';
   selector: 'app-header',
   imports: [FaIconComponent],
   host: {
-    class: 'flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
+    class:
+      'always-dark flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
     role: 'banner',
+    '(document:click)': 'onDocumentClick($event)',
+    '(document:keydown.escape)': 'menuOpen.set(false)',
   },
   template: `
     <fa-icon class="text-sky-400" [icon]="faPaperPlane" />
@@ -73,6 +79,47 @@ import { WorkspaceStore } from '../workspace/workspace-store';
       >
         <fa-icon [icon]="faFolderOpen" /> Open folder
       </button>
+      <div class="relative">
+        <button
+          type="button"
+          class="flex size-7 items-center justify-center rounded text-slate-300 hover:bg-slate-700 hover:text-white"
+          title="Settings"
+          aria-label="Settings"
+          aria-haspopup="menu"
+          [attr.aria-expanded]="menuOpen()"
+          (click)="menuOpen.set(!menuOpen())"
+        >
+          <fa-icon [icon]="faGear" />
+        </button>
+        @if (menuOpen()) {
+          <div
+            class="adaptive absolute top-full right-0 z-50 mt-1 w-56 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
+            role="menu"
+            aria-label="Settings"
+          >
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+              role="menuitemcheckbox"
+              [attr.aria-checked]="theme.isDark()"
+              (click)="theme.setDark(!theme.isDark())"
+            >
+              <fa-icon class="w-4 text-slate-500" [icon]="faMoon" />
+              <span class="flex-1">Dark mode</span>
+              <span
+                class="relative h-4 w-7 shrink-0 rounded-full transition-colors"
+                [class]="theme.isDark() ? 'bg-sky-600' : 'bg-slate-300'"
+                aria-hidden="true"
+              >
+                <span
+                  class="absolute top-0.5 left-0.5 size-3 rounded-full bg-[#fff] shadow transition-transform"
+                  [class.translate-x-3]="theme.isDark()"
+                ></span>
+              </span>
+            </button>
+          </div>
+        }
+      </div>
     </div>
   `,
 })
@@ -80,8 +127,17 @@ export class AppHeader {
   protected readonly store = inject(WorkspaceStore);
   protected readonly environments = inject(EnvironmentStore);
   protected readonly updates = inject(UpdateStore);
+  protected readonly theme = inject(ThemeStore);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly menuOpen = signal(false);
+  protected readonly faGear = faGear;
+  protected readonly faMoon = faMoon;
   protected readonly faCircleArrowUp = faCircleArrowUp;
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faFolderOpen = faFolderOpen;
+
+  protected onDocumentClick(event: MouseEvent): void {
+    if (!this.host.nativeElement.contains(event.target as Node)) this.menuOpen.set(false);
+  }
 }

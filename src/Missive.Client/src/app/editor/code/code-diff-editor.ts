@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import type { editor } from 'monaco-editor/editor/editor.api';
+import { ThemeStore } from '../../settings/theme-store';
 import { Monaco, loadMonaco } from './monaco-loader';
 
 /**
@@ -44,6 +45,7 @@ export class CodeDiffEditor {
   private editor: editor.IStandaloneDiffEditor | null = null;
   private models: { original: editor.ITextModel; modified: editor.ITextModel } | null = null;
   private destroyed = false;
+  private readonly themes = inject(ThemeStore);
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -54,6 +56,11 @@ export class CodeDiffEditor {
     });
 
     afterNextRender(() => void this.create());
+
+    effect(() => {
+      const theme = this.themes.monacoTheme();
+      if (this.ready()) this.monaco?.editor.setTheme(theme);
+    });
 
     effect(() => {
       const original = this.original();
@@ -108,7 +115,7 @@ export class CodeDiffEditor {
       scrollBeyondLastLine: false,
       renderLineHighlight: 'none',
       fixedOverflowWidgets: true,
-      theme: 'vs',
+      theme: this.themes.monacoTheme(),
     });
     diffEditor.setModel({ original, modified });
     this.models = { original, modified };
