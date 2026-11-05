@@ -386,6 +386,165 @@ public sealed class GitCliService : IGitService
             .ToList();
     }
 
+    public async Task<Result<IReadOnlyList<GitCommitInfo>>> GetLogAsync(
+        string workspacePath,
+        int skip,
+        int maxCount,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var head = await GetHeadAsync(workspacePath, cancellationToken);
+        if (head.IsFailure)
+        {
+            return head.Error!;
+        }
+
+        if (head.Value.Length == 0)
+        {
+            // A branch with no commits yet.
+            return Result<IReadOnlyList<GitCommitInfo>>.Success([]);
+        }
+
+        var log = await RunCheckedAsync(
+            workspacePath,
+            "log",
+            [
+                "log",
+                "--no-show-signature",
+                "--no-color",
+                $"--format={CommitLog.Format}{CommitLog.RecordSeparator}",
+                $"--skip={Math.Max(0, skip)}",
+                $"--max-count={Math.Max(0, maxCount)}",
+                "HEAD",
+                "--",
+                ".",
+                ExcludeLocalFolder,
+            ],
+            cancellationToken);
+        if (log.IsFailure)
+        {
+            return log.Error!;
+        }
+
+        return Result<IReadOnlyList<GitCommitInfo>>.Success(CommitLog.ParseLog(log.Value.StandardOutput));
+    }
+
+    public async Task<Result<GitCommitDetails>> GetCommitAsync(
+        string workspacePath,
+        string commitId,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var id = await ResolveCommitAsync(workspacePath, commitId, cancellationToken);
+        if (id.IsFailure)
+        {
+            return id.Error!;
+        }
+
+        var show = await RunCheckedAsync(
+            workspacePath,
+            "show",
+            ["show", "--no-show-signature", "--no-color", "--no-patch", $"--format={CommitLog.Format}{CommitLog.FieldSeparator}%b", id.Value],
+            cancellationToken);
+        if (show.IsFailure)
+        {
+            return show.Error!;
+        }
+
+        var (commit, body) = CommitLog.ParseCommit(show.Value.StandardOutput);
+
+        // Compared with the first parent, like most git tools show a merge. --relative limits the
+        // diff to the workspace folder and makes its paths relative to it.
+        List<string> diffArguments = ["diff-tree", "-r", "-z", "--no-commit-id", "--name-status", "-M", "--relative"];
+        if (commit.FirstParentId is { } parent)
+        {
+            diffArguments.AddRange([parent, commit.Id]);
+        }
+        else
+        {
+            diffArguments.AddRange(["--root", commit.Id]);
+        }
+
+        var diff = await RunCheckedAsync(workspacePath, "diff-tree", diffArguments, cancellationToken);
+        if (diff.IsFailure)
+        {
+            return diff.Error!;
+        }
+
+        var files = CommitLog.ParseNameStatus(diff.Value.StandardOutput)
+            .Where(f => !IsLocalFolder(f.Path))
+            .ToList();
+        return new GitCommitDetails(commit, body, files);
+    }
+
+    public async Task<Result<string?>> ReadFileAtCommitAsync(
+        string workspacePath,
+        string commitId,
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsSafeRelativePath(path) || IsLocalFolder(path))
+        {
+            return Result<string?>.Success(null);
+        }
+
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var id = await ResolveCommitAsync(workspacePath, commitId, cancellationToken);
+        if (id.IsFailure)
+        {
+            return id.Error!;
+        }
+
+        // "./" makes the path relative to the working directory (the workspace) instead of the repository root.
+        var result = await RunAsync(workspacePath, ["show", "--no-textconv", $"{id.Value}:./{path}"], cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        return Result<string?>.Success(result.Value.Succeeded ? result.Value.StandardOutput : null);
+    }
+
+    /// <summary>
+    /// The full id of a commit given as a (possibly abbreviated) hexadecimal id. Anything else,
+    /// including ref names and options, is reported as not found.
+    /// </summary>
+    private async Task<Result<string>> ResolveCommitAsync(string workspacePath, string commitId, CancellationToken cancellationToken)
+    {
+        if (commitId.Length is < 4 or > 64 || !commitId.All(char.IsAsciiHexDigit))
+        {
+            return GitErrors.CommitNotFound(commitId);
+        }
+
+        var result = await RunAsync(workspacePath, ["rev-parse", "--quiet", "--verify", commitId + "^{commit}"], cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        return result.Value.Succeeded
+            ? result.Value.StandardOutput.Trim()
+            : GitErrors.CommitNotFound(commitId);
+    }
+
+    private static bool IsLocalFolder(string path) =>
+        path == ".missive" || path.StartsWith(".missive/", StringComparison.Ordinal);
+
     /// <summary>
     /// One version of a conflicted file from the index: stage 1 is the common ancestor, 2 the
     /// current branch, 3 the incoming branch. <c>null</c> when that side has no such file.

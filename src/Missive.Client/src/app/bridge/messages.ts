@@ -148,6 +148,45 @@ export interface GitConflict {
   hasConflictMarkers: boolean;
 }
 
+/** A commit in the workspace's history. */
+export interface GitCommitInfo {
+  /** The full commit id. */
+  id: string;
+  /** Parent commit ids: none for the first commit, two or more for a merge. */
+  parents: string[];
+  authorName: string;
+  authorEmail: string;
+  /** When it was authored, as an ISO 8601 date-time. */
+  date: string;
+  /** The first line of the commit message. */
+  subject: string;
+}
+
+export interface GitHistory {
+  /** Newest first. */
+  commits: GitCommitInfo[];
+  /** Whether older commits follow this page. */
+  hasMore: boolean;
+}
+
+export interface GitCommitDetails {
+  commit: GitCommitInfo;
+  /** The commit message after the subject line; empty when there is none. */
+  body: string;
+  /** Workspace files the commit changed, compared with its first parent. */
+  files: GitChange[];
+}
+
+/** A file before and after a commit; a version is `null` when the file didn't exist there. */
+export interface GitFileRevision {
+  commitId: string;
+  change: GitChange;
+  before: string | null;
+  after: string | null;
+  /** Whether the file is binary; its versions are then left out. */
+  binary: boolean;
+}
+
 /** How the user resolves a conflicted file: take one side, or keep their own edit. */
 export type ConflictResolution = 'ours' | 'theirs' | 'edited';
 
@@ -255,6 +294,12 @@ export interface BridgeMessages {
   'git.resolve': { payload: { path: string; resolution: ConflictResolution }; result: GitStatus };
   /** Abandons the merge in progress (`git merge --abort`). */
   'git.abortMerge': { payload: void; result: GitStatus };
+  /** A page of the commits that changed the workspace, newest first. */
+  'git.log': { payload: { skip: number; limit?: number }; result: GitHistory };
+  /** A commit with its full message and the workspace files it changed. */
+  'git.show': { payload: { commitId: string }; result: GitCommitDetails };
+  /** A file the commit changed, before and after it. */
+  'git.commitFile': { payload: { commitId: string; path: string }; result: GitFileRevision };
   /** The committed and working tree versions of a changed file. */
   'git.diff': { payload: { path: string }; result: GitFileDiff };
   /** The repository's remotes, sorted by name. */

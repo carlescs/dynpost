@@ -65,6 +65,35 @@ public interface IGitService
     Task<Result<Unit>> AbortMergeAsync(string workspacePath, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Reads the commits reachable from HEAD that changed files inside the workspace folder, newest
+    /// first, skipping the first <paramref name="skip"/> and returning at most
+    /// <paramref name="maxCount"/>. A branch with no commits yet has an empty history.
+    /// </summary>
+    Task<Result<IReadOnlyList<GitCommitInfo>>> GetLogAsync(
+        string workspacePath,
+        int skip,
+        int maxCount,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads one commit, its full message and the workspace files it changed compared with its first
+    /// parent. Fails with <see cref="GitErrors.CommitNotFoundCode"/> when there is no such commit.
+    /// </summary>
+    Task<Result<GitCommitDetails>> GetCommitAsync(
+        string workspacePath,
+        string commitId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads a workspace file as it was in a commit; <c>null</c> when the file didn't exist there.
+    /// </summary>
+    Task<Result<string?>> ReadFileAtCommitAsync(
+        string workspacePath,
+        string commitId,
+        string path,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Reads the committed (<c>HEAD</c>) and working tree versions of one changed file, for
     /// showing its differences. Nothing is staged or changed.
     /// </summary>

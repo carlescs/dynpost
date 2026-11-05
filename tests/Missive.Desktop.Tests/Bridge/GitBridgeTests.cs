@@ -43,6 +43,9 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<GetConflict>()
             .AddTransient<ResolveConflict>()
             .AddTransient<AbortMerge>()
+            .AddTransient<GetGitHistory>()
+            .AddTransient<GetCommit>()
+            .AddTransient<GetCommitFile>()
             .AddTransient<GetFileDiff>()
             .AddTransient<ListRemotes>()
             .AddTransient<AddRemote>()
@@ -233,6 +236,73 @@ public sealed class GitBridgeTests : IDisposable
         var response = await SendAsync("git.abortMerge");
 
         Assert.Equal(GitErrors.NotMergingCode, ErrorCode(response));
+    }
+
+    [Fact]
+    public async Task GitLog_ReturnsAPageOfCommits()
+    {
+        _current.Open(Folder);
+        IReadOnlyList<GitCommitInfo> log =
+        [
+            new("abc1234", ["def5678"], "Alice", "alice@example.com", new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), "Add users"),
+        ];
+        _git.GetLogAsync(Folder, 50, 51, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<GitCommitInfo>>.Success(log));
+
+        var response = await SendAsync("git.log", """{ "skip": 50 }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var payload = response.GetProperty("payload");
+        Assert.False(payload.GetProperty("hasMore").GetBoolean());
+        var commit = payload.GetProperty("commits")[0];
+        Assert.Equal("abc1234", commit.GetProperty("id").GetString());
+        Assert.Equal("def5678", commit.GetProperty("parents")[0].GetString());
+        Assert.Equal("Alice", commit.GetProperty("authorName").GetString());
+        Assert.Equal("Add users", commit.GetProperty("subject").GetString());
+        Assert.Equal(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), commit.GetProperty("date").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task GitShow_ReturnsTheMessageAndFiles()
+    {
+        _current.Open(Folder);
+        _git.GetCommitAsync(Folder, "abc1234", Arg.Any<CancellationToken>()).Returns(Result<GitCommitDetails>.Success(
+            new GitCommitDetails(
+                new GitCommitInfo("abc1234", [], "Alice", "alice@example.com", DateTimeOffset.UnixEpoch, "Initial"),
+                "Details",
+                [new GitChange("a.yaml", GitFileStatus.Added)])));
+
+        var response = await SendAsync("git.show", """{ "commitId": "abc1234" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var payload = response.GetProperty("payload");
+        Assert.Equal("Initial", payload.GetProperty("commit").GetProperty("subject").GetString());
+        Assert.Equal("Details", payload.GetProperty("body").GetString());
+        Assert.Equal("added", payload.GetProperty("files")[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task GitCommitFile_ReturnsBothVersions_AndHidesBinaryContent()
+    {
+        _current.Open(Folder);
+        _git.GetCommitAsync(Folder, "abc1234", Arg.Any<CancellationToken>()).Returns(Result<GitCommitDetails>.Success(
+            new GitCommitDetails(
+                new GitCommitInfo("abc1234", ["def5678"], "Alice", "alice@example.com", DateTimeOffset.UnixEpoch, "Change"),
+                "",
+                [new GitChange("a.yaml", GitFileStatus.Modified), new GitChange("logo.png", GitFileStatus.Modified)])));
+        _git.ReadFileAtCommitAsync(Folder, "def5678", "a.yaml", Arg.Any<CancellationToken>()).Returns(Result<string?>.Success("name: A\n"));
+        _git.ReadFileAtCommitAsync(Folder, "abc1234", "a.yaml", Arg.Any<CancellationToken>()).Returns(Result<string?>.Success("name: B\n"));
+        _git.ReadFileAtCommitAsync(Folder, "def5678", "logo.png", Arg.Any<CancellationToken>()).Returns(Result<string?>.Success("PNG\0\0"));
+        _git.ReadFileAtCommitAsync(Folder, "abc1234", "logo.png", Arg.Any<CancellationToken>()).Returns(Result<string?>.Success("PNG\0\x01"));
+
+        var text = await SendAsync("git.commitFile", """{ "commitId": "abc1234", "path": "a.yaml" }""");
+        var binary = await SendAsync("git.commitFile", """{ "commitId": "abc1234", "path": "logo.png" }""");
+
+        Assert.True(text.GetProperty("ok").GetBoolean(), text.ToString());
+        Assert.Equal("name: A\n", text.GetProperty("payload").GetProperty("before").GetString());
+        Assert.Equal("name: B\n", text.GetProperty("payload").GetProperty("after").GetString());
+        Assert.Equal("modified", text.GetProperty("payload").GetProperty("change").GetProperty("status").GetString());
+        Assert.True(binary.GetProperty("payload").GetProperty("binary").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, binary.GetProperty("payload").GetProperty("after").ValueKind);
     }
 
     [Fact]

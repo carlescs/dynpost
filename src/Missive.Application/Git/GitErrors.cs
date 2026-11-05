@@ -23,6 +23,8 @@ public static class GitErrors
     public const string NotMergingCode = "git.not_merging";
     public const string NotConflictedCode = "git.not_conflicted";
     public const string ConflictMarkersRemainCode = "git.conflict_markers_remain";
+    public const string CommitNotFoundCode = "git.commit_not_found";
+    public const string FileNotInCommitCode = "git.file_not_in_commit";
     public const string FileNotChangedCode = "git.file_not_changed";
     public const string InvalidRemoteCode = "git.invalid_remote";
     public const string RemoteExistsCode = "git.remote_exists";
@@ -82,6 +84,12 @@ public static class GitErrors
             ConflictMarkersRemainCode,
             $"'{path}' still contains conflict markers (<<<<<<<, =======, >>>>>>>). Edit them out, or keep one side's version.");
 
+    public static Error CommitNotFound(string commitId) =>
+        new(CommitNotFoundCode, $"The commit '{commitId}' was not found in this repository.");
+
+    public static Error FileNotInCommit(string commitId, string path) =>
+        new(FileNotInCommitCode, $"'{path}' was not changed in commit '{Abbreviate(commitId)}'.");
+
     public static Error FileNotChanged(string path) =>
         new(FileNotChangedCode, $"'{path}' has no changes to show.");
 
@@ -96,6 +104,8 @@ public static class GitErrors
 
     public static Error CommandFailed(string command, string details) =>
         new(CommandFailedCode, WithDetails($"git {command} failed.", details));
+
+    private static string Abbreviate(string commitId) => commitId.Length > 7 ? commitId[..7] : commitId;
 
     private static string WithDetails(string message, string details) =>
         string.IsNullOrWhiteSpace(details) ? message : $"{message}\n{details.Trim()}";

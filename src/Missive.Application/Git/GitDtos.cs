@@ -7,7 +7,11 @@ namespace Missive.Application.Git;
 // src/Missive.Client/src/app/bridge/messages.ts.
 
 /// <param name="Status">One of <c>modified</c>, <c>added</c>, <c>deleted</c>, <c>renamed</c>, <c>untracked</c>, <c>conflicted</c>.</param>
-public sealed record GitChangeDto(string Path, string Status, string? OriginalPath);
+public sealed record GitChangeDto(string Path, string Status, string? OriginalPath)
+{
+    public static GitChangeDto From(GitChange change) =>
+        new(change.Path, GitStatusDto.StatusName(change.Status), change.OriginalPath);
+}
 
 public sealed record GitStatusDto(
     string? Branch,
@@ -25,7 +29,7 @@ public sealed record GitStatusDto(
             status.Ahead,
             status.Behind,
             status.IsMerging,
-            status.Changes.Select(c => new GitChangeDto(c.Path, StatusName(c.Status), c.OriginalPath)).ToList(),
+            status.Changes.Select(GitChangeDto.From).ToList(),
             status.MergeMessage);
 
     internal static string StatusName(GitFileStatus status) =>
@@ -58,6 +62,45 @@ public sealed record GitPullDto(string Outcome, GitStatusDto Status)
                 _ => "conflicted",
             },
             GitStatusDto.From(result.Status));
+}
+
+public sealed record GitCommitInfoDto(
+    string Id,
+    IReadOnlyList<string> Parents,
+    string AuthorName,
+    string AuthorEmail,
+    DateTimeOffset Date,
+    string Subject)
+{
+    public static GitCommitInfoDto From(GitCommitInfo commit) =>
+        new(commit.Id, commit.ParentIds, commit.AuthorName, commit.AuthorEmail, commit.AuthoredAt, commit.Subject);
+}
+
+public sealed record GitHistoryDto(IReadOnlyList<GitCommitInfoDto> Commits, bool HasMore)
+{
+    public static GitHistoryDto From(GitHistoryPage page) =>
+        new(page.Commits.Select(GitCommitInfoDto.From).ToList(), page.HasMore);
+}
+
+public sealed record GitCommitDetailsDto(GitCommitInfoDto Commit, string Body, IReadOnlyList<GitChangeDto> Files)
+{
+    public static GitCommitDetailsDto From(GitCommitDetails details) =>
+        new(GitCommitInfoDto.From(details.Commit), details.Body, details.Files.Select(GitChangeDto.From).ToList());
+}
+
+/// <summary>A file before and after a commit; a version is <c>null</c> when the file didn't exist there.</summary>
+/// <param name="Binary">Whether the file looks binary; its versions are then left out.</param>
+public sealed record GitFileRevisionDto(
+    string CommitId,
+    GitChangeDto Change,
+    string? Before,
+    string? After,
+    bool Binary)
+{
+    public static GitFileRevisionDto From(GitFileRevision revision) =>
+        revision.IsBinary
+            ? new(revision.CommitId, GitChangeDto.From(revision.Change), null, null, true)
+            : new(revision.CommitId, GitChangeDto.From(revision.Change), revision.Before, revision.After, false);
 }
 
 /// <summary>Both sides of a conflicted file; a side is <c>null</c> when it deleted the file.</summary>

@@ -11,8 +11,10 @@ import { DocumentTabs } from './editor/document-tabs';
 import { EnvironmentEditor } from './environments/environment-editor';
 import { EnvironmentStore } from './environments/environment-store';
 import { RequestEditor } from './editor/request-editor';
+import { CommitView } from './git/commit-view';
 import { ConflictView } from './git/conflict-view';
 import { DiffView } from './git/diff-view';
+import { GitHistoryStore } from './git/git-history-store';
 import { GitStore } from './git/git-store';
 import { ActivityBar } from './shell/activity-bar';
 import { AppHeader } from './shell/app-header';
@@ -28,6 +30,7 @@ import { WorkspaceStore } from './workspace/workspace-store';
     DocumentTabs,
     RequestEditor,
     ConflictView,
+    CommitView,
     DiffView,
     EnvironmentEditor,
     FaIconComponent,
@@ -64,6 +67,11 @@ import { WorkspaceStore } from './workspace/workspace-store';
       <main class="flex min-w-0 flex-1 flex-col">
         @if (git.conflict()) {
           <app-conflict-view />
+        } @else if (history.reviewing()) {
+          <!-- Lazy chunk, like the diff view: only needed once a commit is opened. -->
+          @defer (on immediate) {
+            <app-commit-view />
+          }
         } @else if (git.diff()) {
           <!-- Lazy chunk: the diff views are only needed once a change is opened. -->
           @defer (on immediate) {
@@ -115,6 +123,7 @@ import { WorkspaceStore } from './workspace/workspace-store';
 export class App implements OnInit {
   protected readonly store = inject(WorkspaceStore);
   protected readonly git = inject(GitStore);
+  protected readonly history = inject(GitHistoryStore);
   protected readonly environments = inject(EnvironmentStore);
   private readonly updates = inject(UpdateStore);
   protected readonly faPaperPlane = faPaperPlane;

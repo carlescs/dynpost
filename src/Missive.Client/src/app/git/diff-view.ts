@@ -11,6 +11,7 @@ import {
 import { GitFileDiff, GitFileStatus } from '../bridge/messages';
 import { CodeDiffEditor } from '../editor/code/code-diff-editor';
 import { fromRequestDto } from '../workspace/request-mapping';
+import { languageForPath } from './git-format';
 import { GitStore } from './git-store';
 import { RequestDiff } from './request-diff';
 
@@ -24,38 +25,6 @@ const STATUS_LABELS: Record<GitFileStatus, string> = {
   deleted: 'Deleted',
   conflicted: 'Conflicted',
 };
-
-/** The Monaco language for a file, from its extension. */
-function languageForPath(path: string): string {
-  const name = path.slice(path.lastIndexOf('/') + 1).toLowerCase();
-  const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : '';
-  switch (extension) {
-    case 'yaml':
-    case 'yml':
-      return 'yaml';
-    case 'json':
-      return 'json';
-    case 'md':
-    case 'markdown':
-      return 'markdown';
-    case 'xml':
-      return 'xml';
-    case 'html':
-    case 'htm':
-      return 'html';
-    case 'css':
-      return 'css';
-    case 'js':
-    case 'mjs':
-    case 'ts':
-      return 'javascript';
-    case 'graphql':
-    case 'gql':
-      return 'graphql';
-    default:
-      return 'plaintext';
-  }
-}
 
 /**
  * What changed in a file since the last commit. Request files can be compared as requests, laid
