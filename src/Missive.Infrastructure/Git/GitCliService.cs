@@ -129,21 +129,13 @@ public sealed class GitCliService : IGitService
             versions[stage - 1] = version.Value;
         }
 
-        var file = Path.Combine(workspacePath, path);
-        string? working = null;
-        try
+        var working = await ReadWorkingFileAsync(workspacePath, path, "show", cancellationToken);
+        if (working.IsFailure)
         {
-            if (File.Exists(file))
-            {
-                working = await File.ReadAllTextAsync(file, cancellationToken);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return GitErrors.CommandFailed("show", $"Could not read '{path}': {ex.Message}");
+            return working.Error!;
         }
 
-        return new GitConflict(path, versions[0], versions[1], versions[2], working);
+        return new GitConflict(path, versions[0], versions[1], versions[2], working.Value);
     }
 
     public async Task<Result<Unit>> ResolveConflictAsync(
@@ -236,7 +228,7 @@ public sealed class GitCliService : IGitService
         // Fails when there is no commit yet, or the file isn't in it.
         var original = committed.Value.Succeeded ? committed.Value.StandardOutput : null;
 
-        var modified = await ReadWorkingFileAsync(workspacePath, change.Path, cancellationToken);
+        var modified = await ReadWorkingFileAsync(workspacePath, change.Path, "diff", cancellationToken);
         if (modified.IsFailure)
         {
             return modified.Error!;
@@ -251,11 +243,16 @@ public sealed class GitCliService : IGitService
     }
 
     /// <summary>
-    /// The working tree version of a file, or <c>null</c> when it doesn't exist. Links are never
-    /// followed, so a link can't expose a file outside the workspace: a symbolic link reads as its
-    /// target path, which is also what git stores for it, and a path through a linked folder is refused.
+    /// The working tree version of a file, for a diff or a conflict, or <c>null</c> when it doesn't
+    /// exist. Links are never followed, so a link can't expose a file outside the workspace: a
+    /// symbolic link reads as its target path, which is also what git stores for it, and a path
+    /// through a linked folder is refused. <paramref name="command"/> names the operation in errors.
     /// </summary>
-    private static async Task<Result<string?>> ReadWorkingFileAsync(string workspacePath, string path, CancellationToken cancellationToken)
+    private static async Task<Result<string?>> ReadWorkingFileAsync(
+        string workspacePath,
+        string path,
+        string command,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -274,7 +271,7 @@ public sealed class GitCliService : IGitService
                 {
                     return i == segments.Length - 1
                         ? Result<string?>.Success(target)
-                        : GitErrors.CommandFailed("diff", $"'{path}' is inside a linked folder; its changes are not shown.");
+                        : GitErrors.CommandFailed(command, $"'{path}' is inside a linked folder, so it is not read.");
                 }
             }
 
@@ -284,7 +281,7 @@ public sealed class GitCliService : IGitService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return GitErrors.CommandFailed("diff", $"Could not read '{path}': {ex.Message}");
+            return GitErrors.CommandFailed(command, $"Could not read '{path}': {ex.Message}");
         }
     }
 

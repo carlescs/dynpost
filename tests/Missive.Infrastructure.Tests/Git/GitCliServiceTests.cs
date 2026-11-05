@@ -262,6 +262,24 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Conflict_WithTheFileReplacedByASymbolicLink_DoesNotFollowIt()
+    {
+        var bob = await ConflictedMergeAsync();
+        var secret = _temp.Combine("secret.txt");
+        File.WriteAllText(secret, "password\n");
+        File.Delete(Path.Combine(bob, "a.yaml"));
+        if (!TryCreateSymbolicLink(Path.Combine(bob, "a.yaml"), secret))
+        {
+            return; // Creating links needs extra rights on Windows.
+        }
+
+        var conflict = await _git.GetConflictAsync(bob, "a.yaml");
+
+        Assert.True(conflict.IsSuccess, conflict.Error?.Message);
+        Assert.Equal(secret, conflict.Value.Working);
+    }
+
+    [Fact]
     public async Task ResolvingEveryFile_ThenCommitting_CompletesTheMerge()
     {
         var bob = await ConflictedMergeAsync();
