@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Bridge } from '../bridge/bridge';
-import { BridgeErrorShape } from '../bridge/messages';
+import { WorkspaceStore } from '../workspace/workspace-store';
 
 /**
  * App updates. The host looks for a newer version once at startup and downloads it in the
@@ -9,12 +9,11 @@ import { BridgeErrorShape } from '../bridge/messages';
 @Injectable({ providedIn: 'root' })
 export class UpdateStore {
   private readonly bridge = inject(Bridge);
+  private readonly workspace = inject(WorkspaceStore);
 
   /** The downloaded version waiting to be installed, if any. */
   readonly readyVersion = signal<string | null>(null);
   readonly restarting = signal(false);
-  /** Why the last restart failed, until the next attempt. */
-  readonly error = signal<BridgeErrorShape | null>(null);
 
   async check(): Promise<void> {
     if (!this.bridge.isDesktop) return;
@@ -29,12 +28,11 @@ export class UpdateStore {
 
   async restart(): Promise<void> {
     this.restarting.set(true);
-    this.error.set(null);
     try {
       // On success the app exits and restarts into the new version.
       await this.bridge.send('update.restart');
     } catch (error) {
-      this.error.set(error as BridgeErrorShape);
+      this.workspace.error.set(`Could not install the update: ${(error as Error).message}`);
     } finally {
       this.restarting.set(false);
     }

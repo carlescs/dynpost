@@ -25,9 +25,7 @@ import { WorkspaceStore } from '../workspace/workspace-store';
         <button
           type="button"
           class="flex items-center gap-2 rounded bg-emerald-600 px-2 py-1 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
-          [title]="
-            updates.error()?.message ?? 'Missive ' + version + ' is ready. Restart to install it.'
-          "
+          [title]="'Missive ' + version + ' is ready. Restart to install it.'"
           [disabled]="updates.restarting()"
           (click)="updates.restart()"
         >

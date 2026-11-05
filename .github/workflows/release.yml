@@ -47,7 +47,8 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            version="0.0.0-ci.${GITHUB_RUN_NUMBER}"
+            # Velopack needs a version of at least 0.0.1.
+            version="0.0.1-ci.${GITHUB_RUN_NUMBER}"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
