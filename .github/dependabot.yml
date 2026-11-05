@@ -23,3 +23,7 @@ updates:
       npm:
         patterns: ['*']
         exclude-patterns: ['@angular/*', '@angular-devkit/*']
+    ignore:
+      # Angular pins TypeScript to >=6.0 <6.1; drop this once Angular supports newer releases.
+      - dependency-name: typescript
+        versions: ['>=6.1']
