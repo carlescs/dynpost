@@ -23,9 +23,6 @@ Download the file for your system from the
 | macOS (Apple silicon) | `Missive-osx-Setup.pkg` | Open it and follow the installer. |
 | Linux (x64) | `Missive.AppImage` | Make it executable (`chmod +x Missive.AppImage`) and run it; keep it wherever you like. |
 
-Each system also has a portable copy (`Missive-win-Portable.zip`,
-`Missive-osx-Portable.zip`) that runs without installing.
-
 Missive checks for a new version at startup and downloads it in the background;
 when one is ready, a **Restart to update** button appears in the header. Nothing
 is installed until you click it. Builds run from source don't update
@@ -398,9 +395,11 @@ machine) and packages it with [Velopack](https://velopack.io) (`vpk pack`) into
 an installer, a portable copy and an update feed: `Missive-win-Setup.exe` and
 `Missive-win-Portable.zip` for `win-x64`, `Missive.AppImage` for `linux-x64`,
 and `Missive-osx-Setup.pkg` and `Missive-osx-Portable.zip` for `osx-arm64`.
-They are attached to a GitHub release for the tag together with the `.nupkg`
+The GitHub release for the tag gets only the installers (`Missive-win-Setup.exe`,
+`Missive.AppImage`, `Missive-osx-Setup.pkg`), together with the `.nupkg`
 packages and `releases.<channel>.json` feeds (channels `win`, `linux`, `osx`)
-that installed copies read to update themselves. Tags with a suffix such as
+that installed copies read to update themselves; the portable copies are kept
+in the workflow artifacts only. Tags with a suffix such as
 `v0.2.0-beta.1` are marked as pre-releases; only pre-release builds update to
 pre-releases. Running the workflow manually produces the same files as workflow
 artifacts without creating a release. Keep the `vpk` version in the workflow
