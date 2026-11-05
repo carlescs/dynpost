@@ -9,6 +9,7 @@ public static class GitErrors
     public const string WorkspaceNotFoundCode = "git.workspace_not_found";
     public const string GitNotInstalledCode = "git.not_installed";
     public const string NotARepositoryCode = "git.not_a_repository";
+    public const string AlreadyARepositoryCode = "git.already_a_repository";
     public const string InvalidCommitMessageCode = "git.invalid_commit_message";
     public const string NothingToCommitCode = "git.nothing_to_commit";
     public const string PathsNotChangedCode = "git.paths_not_changed";
@@ -31,6 +32,9 @@ public static class GitErrors
 
     public static Error NotARepository(string path) =>
         new(NotARepositoryCode, $"The workspace folder '{path}' is not inside a git repository.");
+
+    public static Error AlreadyARepository(string path) =>
+        new(AlreadyARepositoryCode, $"The workspace folder '{path}' is already inside a git repository.");
 
     public static Error InvalidCommitMessage() =>
         new(InvalidCommitMessageCode, "Enter a commit message.");

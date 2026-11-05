@@ -57,6 +57,39 @@ export interface ResponseDto {
   durationMs: number;
 }
 
+export interface EnvironmentVariableDto {
+  name: string;
+  value: string;
+  /** Whether the value is kept on this computer only (in `.missive/`) instead of in the file. */
+  secret: boolean;
+}
+
+export interface EnvironmentDto {
+  name: string;
+  variables: EnvironmentVariableDto[];
+}
+
+export interface SavedEnvironmentDto {
+  /** The environment's file name in the `environments` folder, e.g. `dev.yaml`. */
+  id: string;
+  environment: EnvironmentDto;
+}
+
+export interface EnvironmentSummaryDto {
+  id: string;
+  /** The environment's name, or its file name when the file can't be read. */
+  name: string;
+  /** Why the file can't be read, if it can't. */
+  error?: string | null;
+}
+
+export interface EnvironmentListDto {
+  /** The selected environment's id, or `null` when none is selected. */
+  active: string | null;
+  /** Sorted by name. */
+  environments: EnvironmentSummaryDto[];
+}
+
 export interface FolderDto {
   path: string;
 }
@@ -162,8 +195,25 @@ export interface BridgeMessages {
   'folder.move': { payload: { path: string; parent: string }; result: FolderDto };
   /** Deletes a folder with its requests; refused if it holds other files. */
   'folder.delete': { payload: { path: string }; result: null };
+  /** The workspace's environments and the selected one. */
+  'environment.list': { payload: void; result: EnvironmentListDto };
+  /** Reads an environment, with the values of its secrets from this computer. */
+  'environment.load': { payload: { id: string }; result: EnvironmentDto };
+  /** Saves a new environment as a file named after it. */
+  'environment.create': { payload: { environment: EnvironmentDto }; result: SavedEnvironmentDto };
+  /** Saves an environment; the result id differs if the file was renamed. */
+  'environment.save': {
+    payload: { id: string; environment: EnvironmentDto };
+    result: SavedEnvironmentDto;
+  };
+  /** Deletes an environment file and its stored secrets. */
+  'environment.delete': { payload: { id: string }; result: null };
+  /** Selects the environment requests are sent with; `null` selects none. */
+  'environment.select': { payload: { id: string | null }; result: null };
   /** The open workspace's git status. */
   'git.status': { payload: void; result: GitStatus };
+  /** Creates a git repository in the open workspace folder (`git init`). */
+  'git.init': { payload: void; result: GitStatus };
   /** Commits `paths`, or every change in the workspace when `paths` is omitted. */
   'git.commit': {
     payload: { message: string; paths?: string[] };

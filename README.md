@@ -8,9 +8,9 @@ No account, no cloud workspace, no proprietary export format.
 > **Status:** early development. You can open a workspace folder, browse its
 > request files in the explorer (a sidebar you can resize by dragging its edge),
 > edit them in the tabbed request editor and save changes or new requests back
-> to disk, send them and inspect the response, and sync the folder with git
-> from the Source control view (status, commit, pull, push). Environments (and
-> so `{{variable}}` values) are not implemented yet.
+> to disk, send them with `{{variable}}` values from the selected environment
+> and inspect the response, and sync the folder with git from the Source
+> control view (status, commit, pull, push).
 
 ## Install
 
@@ -60,7 +60,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Sending requests
 - [x] Response viewer: status, time, size, headers and a pretty-printed body
 - [ ] Collections as folders, with optional folder-level defaults
-- [ ] Environments with `{{variable}}` substitution
+- [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token and API key
 - [ ] Local response history (kept out of git)
 - [ ] Git sync: changed-file status, commit, pull, push, current branch, and
@@ -154,12 +154,47 @@ An environment file (`environments/dev.yaml`):
 ```yaml
 name: Development
 variables:
-  baseUrl: http://localhost:5000
+  host: localhost:5000
+  baseUrl: http://{{host}}
+secrets:
+  - apiToken
 ```
 
-Secret values such as `apiToken` belong in `.missive/secrets.yaml`, which
-Missive keeps out of git. Files are written with stable key order and minimal
-noise so diffs stay small and merges stay easy. The format is still evolving.
+Keys are written in the order `name`, `variables`, `secrets`, and empty
+sections are left out. Variable names can't contain spaces or braces, and a
+value can use other variables (`{{host}}` above); variables that refer to each
+other in a loop are refused. `secrets` lists only the *names* of secret
+variables: their values stay on each computer, in `.missive/secrets.yaml`, so
+they are never committed. After cloning or pulling, each person enters their own
+secret values in Missive:
+
+```yaml
+# .missive/secrets.yaml — local only
+dev.yaml:
+  apiToken: s3cr3t
+```
+
+The selected environment is remembered per workspace in `.missive/state.yaml`.
+Whenever Missive writes to `.missive/`, it makes sure the workspace's
+`.gitignore` contains `.missive/` (creating the file if needed), and git
+operations skip `.missive/` regardless. Files are written with stable key order
+and minimal noise so diffs stay small and merges stay easy. The format is still
+evolving.
+
+## Environments
+
+Pick the environment requests are sent with from the header, or from the
+**Environments** view in the activity bar, which also lists every file in
+`environments/` and creates new ones. Clicking an environment opens it in the
+editor: its name, and a table of variables, each of which can be marked
+**Secret**. New environments are saved as a file named after them
+(`Staging` → `staging.yaml`); renaming one renames its file too, unless the file
+name was chosen by hand, and its secret values and selection follow. Deleting an
+environment also removes its stored secret values.
+
+In the request editor, `{{variable}}` references are highlighted in the URL and
+body: in violet when the selected environment defines them, in red when it
+doesn't. Hover over one to see its value (secret values are not shown).
 
 ## Sending requests
 
@@ -169,10 +204,10 @@ rules such as CORS don't apply. When sending:
 
 - Enabled query parameters are appended to the URL, which gets `http://` if it
   has no scheme. Disabled parameters and headers are left out.
-- `{{variable}}` references, highlighted in the URL and body editors, are
-  resolved first. Until environments exist no
-  variables are defined, so a request that uses one is not sent and the
-  undefined names are listed.
+- `{{variable}}` references in the URL, parameters, headers, auth and body are
+  resolved first with the selected environment. A request that uses a variable
+  the environment doesn't define (or a secret with no value on this computer)
+  is not sent; the undefined names are listed with a hint on where to set them.
 - Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
   query parameter; a header you set yourself takes precedence. JSON, text and
   `urlencoded` bodies get a matching `Content-Type` unless you set one.
@@ -200,6 +235,10 @@ reported so you can resolve them (in Missive's editor or your own tools).
 Missive runs your installed `git` command-line client, so your git
 configuration, hooks and credential helpers apply as usual. In detail:
 
+- **Initialize**: if the workspace folder is not inside a git repository, the
+  Source control view offers to create one there (`git init`, using your
+  default branch name) and adds `.missive/` to the folder's `.gitignore`,
+  creating the file if needed. Add a remote with your git tools to push it.
 - **Status** lists changed files inside the workspace folder only (the
   workspace can be a subfolder of a larger repository), plus the branch, its
   upstream and how many commits it is ahead of or behind it. It refreshes when

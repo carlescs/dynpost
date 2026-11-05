@@ -1,17 +1,15 @@
-using System.Text;
 using Missive.Application.Common;
 using Missive.Application.Workspaces;
 using Missive.Domain.Requests;
 using Missive.Domain.Workspaces;
 using Missive.Infrastructure.Yaml;
+using static Missive.Infrastructure.Workspaces.WorkspaceFiles;
 
 namespace Missive.Infrastructure.Workspaces;
 
 /// <summary>Stores a workspace as plain YAML files in a folder on disk.</summary>
 public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
 {
-    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
-
     public bool FolderExists(string root) => Directory.Exists(root);
 
     public async Task<Result<IReadOnlyList<WorkspaceEntry>>> ListAsync(string root, CancellationToken cancellationToken = default)
@@ -242,21 +240,6 @@ public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
     {
         var parsed = Parse(existing, path);
         return parsed.IsSuccess && RequestYamlSerializer.Serialize(parsed.Value) == content;
-    }
-
-    /// <summary>Resolves a workspace path to a full path, guarding against escaping the root.</summary>
-    private static string FullPath(string root, WorkspacePath path)
-    {
-        var fullRoot = Path.GetFullPath(root);
-        var fullPath = Path.GetFullPath(Path.Combine([fullRoot, .. path.Segments]));
-        var rootWithSeparator = Path.EndsInDirectorySeparator(fullRoot) ? fullRoot : fullRoot + Path.DirectorySeparatorChar;
-
-        if (fullPath != fullRoot && !fullPath.StartsWith(rootWithSeparator, StringComparison.Ordinal))
-        {
-            throw new UnauthorizedAccessException($"'{path}' is outside the workspace.");
-        }
-
-        return fullPath;
     }
 
     private static Error IoError(string message) => new(ErrorCodes.Io, message);

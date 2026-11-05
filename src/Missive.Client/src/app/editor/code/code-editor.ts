@@ -11,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import type { editor } from 'monaco-editor/editor/editor.api';
-import { VARIABLE_PATTERN } from '../variables';
+import { VARIABLE_PATTERN, VariableLookup, describeVariable, variableClass } from '../variables';
 import { Monaco, loadMonaco } from './monaco-loader';
 
 /**
@@ -39,6 +39,8 @@ export class CodeEditor {
   readonly ariaLabel = input('Code editor');
   /** Whether to highlight `{{variable}}` references. */
   readonly highlightVariables = input(false);
+  /** The defined variables; references to others are marked. `null` marks none. */
+  readonly variables = input<VariableLookup | null>(null);
 
   /** Emits the text as the user edits it. */
   readonly valueChange = output<string>();
@@ -84,6 +86,7 @@ export class CodeEditor {
 
     effect(() => {
       this.highlightVariables();
+      this.variables();
       this.updateVariableDecorations();
     });
 
@@ -138,17 +141,23 @@ export class CodeEditor {
     }
 
     const text = model.getValue();
+    const variables = this.variables();
     const decorations = [...text.matchAll(VARIABLE_PATTERN)].map((match) => {
       const start = model.getPositionAt(match.index);
       const end = model.getPositionAt(match.index + match[0].length);
       return {
         range: new this.monaco!.Range(start.lineNumber, start.column, end.lineNumber, end.column),
         options: {
-          inlineClassName: 'variable-highlight',
-          hoverMessage: { value: `Variable \`${match[1]}\`` },
+          inlineClassName: variableClass(match[1], variables),
+          hoverMessage: { value: escapeMarkdown(describeVariable(match[1], variables)) },
         },
       };
     });
     this.variableDecorations.set(decorations);
   }
+}
+
+/** Monaco renders hover messages as Markdown; variable values are plain text. */
+function escapeMarkdown(text: string): string {
+  return text.replace(/[\\`*_{}[\]()#+\-.!<>|~]/g, '\\$&');
 }

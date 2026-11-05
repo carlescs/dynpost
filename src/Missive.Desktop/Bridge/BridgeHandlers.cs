@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Environments;
 using Missive.Application.Folders;
 using Missive.Application.Git;
 using Missive.Application.Http;
@@ -55,8 +56,22 @@ internal static class BridgeHandlers
                 (p, _) => Task.FromResult(Use<MoveFolder>().Execute(p.Path, p.Parent)))
             .Register<DeleteFolderPayload, Unit?>(BridgeMessageTypes.FolderDelete,
                 (p, _) => Task.FromResult(NoValue(Use<DeleteFolder>().Execute(p.Path))))
+            .Register(BridgeMessageTypes.EnvironmentList,
+                ct => Use<ListEnvironments>().ExecuteAsync(ct))
+            .Register<EnvironmentIdPayload, EnvironmentDto>(BridgeMessageTypes.EnvironmentLoad,
+                (p, ct) => Use<LoadEnvironment>().ExecuteAsync(p.Id, ct))
+            .Register<CreateEnvironmentPayload, SavedEnvironmentDto>(BridgeMessageTypes.EnvironmentCreate,
+                (p, ct) => Use<CreateEnvironment>().ExecuteAsync(p.Environment, ct))
+            .Register<SaveEnvironmentPayload, SavedEnvironmentDto>(BridgeMessageTypes.EnvironmentSave,
+                (p, ct) => Use<SaveEnvironment>().ExecuteAsync(p.Id, p.Environment, ct))
+            .Register<EnvironmentIdPayload, Unit?>(BridgeMessageTypes.EnvironmentDelete,
+                async (p, ct) => NoValue(await Use<DeleteEnvironment>().ExecuteAsync(p.Id, ct)))
+            .Register<SelectEnvironmentPayload, Unit?>(BridgeMessageTypes.EnvironmentSelect,
+                async (p, ct) => NoValue(await Use<SelectEnvironment>().ExecuteAsync(p.Id, ct)))
             .Register(BridgeMessageTypes.GitStatus,
                 async ct => (await Use<GetGitStatus>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register(BridgeMessageTypes.GitInit,
+                async ct => (await Use<InitRepository>().ExecuteAsync(ct)).Map(GitStatusDto.From))
             .Register<GitCommitPayload, GitCommitDto>(BridgeMessageTypes.GitCommit,
                 async (p, ct) => (await Use<CommitChanges>().ExecuteAsync(new CommitChangesRequest(p.Message, p.Paths), ct)).Map(GitCommitDto.From))
             .Register(BridgeMessageTypes.GitPull,

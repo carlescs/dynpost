@@ -7,10 +7,11 @@ import {
   GitStatus,
   PullOutcome,
 } from '../bridge/messages';
+import { EnvironmentStore } from '../environments/environment-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 
 export type GitOperation =
-  'refresh' | 'commit' | 'pull' | 'push' | 'conflict' | 'resolve' | 'abort';
+  'refresh' | 'init' | 'commit' | 'pull' | 'push' | 'conflict' | 'resolve' | 'abort';
 
 export interface GitNotice {
   kind: 'info' | 'warning';
@@ -25,6 +26,7 @@ export interface GitNotice {
 export class GitStore {
   private readonly bridge = inject(Bridge);
   private readonly workspace = inject(WorkspaceStore);
+  private readonly environments = inject(EnvironmentStore);
 
   /** Whether git is reachable: the browser dev server has no git backend. */
   readonly available = this.bridge.isDesktop;
@@ -38,6 +40,11 @@ export class GitStore {
   readonly notice = signal<GitNotice | null>(null);
   /** The conflicted file being compared in the main area, if any. */
   readonly conflict = signal<GitConflict | null>(null);
+
+  /** Whether the last status read found that the workspace folder is not inside a git repository. */
+  readonly notARepository = computed(
+    () => this.status() === null && this.error()?.code === 'git.not_a_repository',
+  );
 
   readonly changeCount = computed(() => this.status()?.changes.length ?? 0);
   readonly conflicts = computed(
@@ -74,6 +81,20 @@ export class GitStore {
     );
   }
 
+  /** Turns the workspace folder into a git repository. */
+  async init(): Promise<void> {
+    await this.run(
+      'init',
+      () => this.bridge.send('git.init'),
+      (status) => {
+        this.status.set(status);
+        this.notice.set({ kind: 'info', text: 'Initialized a git repository.' });
+        // git init may have added a .gitignore.
+        void this.workspace.refresh();
+      },
+    );
+  }
+
   /** Commits `paths`, or every change when `paths` is empty. Resolves to whether it succeeded. */
   commit(message: string, paths: string[] = []): Promise<boolean> {
     return this.run(
@@ -97,9 +118,10 @@ export class GitStore {
       (r) => {
         this.status.set(r.status);
         this.notice.set(PULL_NOTICES[r.outcome]);
-        // A pull can add, change or remove request files.
+        // A pull can add, change or remove request and environment files.
         void this.workspace.refresh();
         void this.workspace.reloadFromDisk();
+        void this.environments.refresh();
       },
     );
   }
@@ -145,6 +167,7 @@ export class GitStore {
         });
         void this.workspace.refresh();
         void this.workspace.reloadFromDisk([path]);
+        void this.environments.refresh();
       },
     );
   }
@@ -160,6 +183,7 @@ export class GitStore {
         this.notice.set({ kind: 'info', text: 'The merge was aborted.' });
         void this.workspace.refresh();
         void this.workspace.reloadFromDisk();
+        void this.environments.refresh();
       },
     );
   }

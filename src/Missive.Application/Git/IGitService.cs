@@ -15,6 +15,12 @@ public interface IGitService
     Task<Result<GitStatus>> GetStatusAsync(string workspacePath, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Creates a new repository in the workspace folder (<c>git init</c>) and makes sure its
+    /// <c>.gitignore</c> ignores <c>.missive/</c>. Fails if the folder is already inside a repository.
+    /// </summary>
+    Task<Result<Unit>> InitAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stages and commits changes inside the workspace: the given <paramref name="paths"/>, or every
     /// change when <paramref name="paths"/> is <c>null</c>. Returns the new commit id.
     /// </summary>

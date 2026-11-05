@@ -8,6 +8,8 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { DocumentTabs } from './editor/document-tabs';
+import { EnvironmentEditor } from './environments/environment-editor';
+import { EnvironmentStore } from './environments/environment-store';
 import { RequestEditor } from './editor/request-editor';
 import { ConflictView } from './git/conflict-view';
 import { GitStore } from './git/git-store';
@@ -25,6 +27,7 @@ import { WorkspaceStore } from './workspace/workspace-store';
     DocumentTabs,
     RequestEditor,
     ConflictView,
+    EnvironmentEditor,
     FaIconComponent,
   ],
   selector: 'app-root',
@@ -59,6 +62,8 @@ import { WorkspaceStore } from './workspace/workspace-store';
       <main class="flex min-w-0 flex-1 flex-col">
         @if (git.conflict()) {
           <app-conflict-view />
+        } @else if (environments.draft()) {
+          <app-environment-editor />
         } @else {
           @if (store.documents().length) {
             <app-document-tabs />
@@ -103,6 +108,7 @@ import { WorkspaceStore } from './workspace/workspace-store';
 export class App implements OnInit {
   protected readonly store = inject(WorkspaceStore);
   protected readonly git = inject(GitStore);
+  protected readonly environments = inject(EnvironmentStore);
   private readonly updates = inject(UpdateStore);
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faPlus = faPlus;
@@ -118,8 +124,14 @@ export class App implements OnInit {
   protected onKeydown(event: KeyboardEvent): void {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      void this.store.saveActive();
-    } else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key === 'Enter') {
+      if (this.environments.draft() && !this.git.conflict()) void this.environments.save();
+      else void this.store.saveActive();
+    } else if (
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      event.key === 'Enter' &&
+      !this.environments.draft()
+    ) {
       event.preventDefault();
       void this.store.sendActive();
     }

@@ -2,7 +2,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Missive.Application.Common;
+using Missive.Application.Environments;
 using Missive.Application.Http;
+using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Http;
 using NSubstitute;
@@ -29,6 +31,11 @@ public sealed class SendBridgeTests : IDisposable
         _services = new ServiceCollection()
             .AddSingleton(_sender)
             .AddSingleton<InFlightRequests>()
+            .AddSingleton<CurrentWorkspace>()
+            .AddSingleton(Substitute.For<IEnvironmentStore>())
+            .AddSingleton(Substitute.For<ISecretStore>())
+            .AddSingleton(Substitute.For<IWorkspaceStateStore>())
+            .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
             .AddTransient<CancelRequest>()
             .BuildServiceProvider();
