@@ -3,6 +3,7 @@ using Missive.Application.Environments;
 using Missive.Application.Folders;
 using Missive.Application.Git;
 using Missive.Application.Http;
+using Missive.Application.Interchange;
 using Missive.Domain.Git;
 using Missive.Application.Requests;
 using Missive.Application.Settings;
@@ -15,14 +16,14 @@ namespace Missive.Desktop.Bridge;
 /// <summary>Maps each bridge message type to the use case that handles it.</summary>
 internal static class BridgeHandlers
 {
-    public static BridgeRouter Create(IServiceProvider services, IFolderPicker folderPicker)
+    public static BridgeRouter Create(IServiceProvider services, IFileDialogs dialogs)
     {
         T Use<T>() where T : notnull => services.GetRequiredService<T>();
 
         return new BridgeRouter()
             .Register(BridgeMessageTypes.WorkspacePick, async ct =>
             {
-                var folder = await folderPicker.PickFolderAsync("Open workspace folder");
+                var folder = await dialogs.PickFolderAsync("Open workspace folder");
                 if (folder is null)
                 {
                     return Result<WorkspaceDto?>.Success(null);
@@ -37,6 +38,37 @@ internal static class BridgeHandlers
                 ct => Use<OpenLastWorkspace>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.WorkspaceTree,
                 ct => Use<GetWorkspaceTree>().ExecuteAsync(ct))
+            .Register(BridgeMessageTypes.WorkspaceExportFormats,
+                _ => Task.FromResult(Result<IReadOnlyList<ExportFormatDto>>.Success(Use<ExportWorkspace>().Formats())))
+            .Register<ExportWorkspacePayload, ExportResultDto?>(BridgeMessageTypes.WorkspaceExport, async (p, ct) =>
+            {
+                var exporter = Use<ExportWorkspace>();
+                var format = exporter.Formats().FirstOrDefault(f => string.Equals(f.Id, p.Format, StringComparison.OrdinalIgnoreCase));
+                if (format is null)
+                {
+                    return new Error(ErrorCodes.InvalidRequest, $"Unknown export format '{p.Format}'.");
+                }
+
+                var destination = await dialogs.PickSaveFileAsync($"Export as {format.Name}", [new FileFilter(format.Name, ["*.json"])]);
+                if (destination is null)
+                {
+                    return Result<ExportResultDto?>.Success(null);
+                }
+
+                var exported = await exporter.ExecuteAsync(new ExportWorkspaceRequest(format.Id, destination, p.IncludeEnvironments), ct);
+                return exported.IsSuccess ? exported.Value : Result<ExportResultDto?>.Failure(exported.Error!);
+            })
+            .Register<ImportCollectionPayload, ImportResultDto?>(BridgeMessageTypes.WorkspaceImport, async (p, ct) =>
+            {
+                var source = await dialogs.PickFileAsync("Import requests", ImportFilters);
+                if (source is null)
+                {
+                    return Result<ImportResultDto?>.Success(null);
+                }
+
+                var imported = await Use<ImportCollection>().ExecuteAsync(new ImportCollectionRequest(source, p.Folder), ct);
+                return imported.IsSuccess ? imported.Value : Result<ImportResultDto?>.Failure(imported.Error!);
+            })
             .Register<LoadRequestPayload, RequestDto>(BridgeMessageTypes.RequestLoad,
                 (p, ct) => Use<LoadRequest>().ExecuteAsync(p.Path, ct))
             .Register<CreateRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestCreate,
@@ -114,6 +146,13 @@ internal static class BridgeHandlers
             .Register(BridgeMessageTypes.UpdateRestart,
                 _ => Task.FromResult(NoValue(Use<RestartToUpdate>().Execute())));
     }
+
+    /// <summary>The files the import dialog offers: Postman, Insomnia and HAR files are JSON; OpenAPI can be YAML.</summary>
+    private static readonly IReadOnlyList<FileFilter> ImportFilters =
+    [
+        new("Collections and API descriptions", ["*.json", "*.har", "*.yaml", "*.yml"]),
+        new("All files", ["*"]),
+    ];
 
     private static ConflictResolution? ParseResolution(string? value) =>
         value switch
