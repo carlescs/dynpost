@@ -25,7 +25,14 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   through PostCSS (`.postcssrc.json`) from its own entry, `src/tailwind.css`. Icons with Font Awesome
   (`@fortawesome/angular-fontawesome`, free solid icons). Drag and drop uses
   Angular CDK (`@angular/cdk/drag-drop`); the explorer tree's nested drop
-  lists are explained in `sidebar/explorer-state.ts`.
+  lists are explained in `sidebar/explorer-state.ts`. Request and response bodies
+  use the Monaco editor (`monaco-editor`, ESM build) through
+  `editor/code/code-editor.ts`. Monaco is lazy-loaded by
+  `editor/code/monaco-loader.ts`: its code is a lazy chunk, its workers are
+  bundled from local entry points, and its stylesheet is the non-injected
+  `monaco` style bundle in `angular.json`. Import it only through the loader
+  so it stays out of the initial bundle, and register new languages in
+  `editor/code/monaco.ts`.
 - Backend (.NET 10), clean architecture — see "Backend architecture" below:
   - `src/Missive.Domain` — entities, value objects, pure rules.
   - `src/Missive.Application` — use cases and port interfaces.

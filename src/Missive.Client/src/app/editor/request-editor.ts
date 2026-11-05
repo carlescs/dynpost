@@ -14,6 +14,7 @@ import {
   RequestDocument,
 } from '../workspace/models';
 import { WorkspaceStore } from '../workspace/workspace-store';
+import { CodeEditor } from './code/code-editor';
 import { KeyValueTable } from './key-value-table';
 import { ResponseViewer } from './response-viewer';
 
@@ -36,7 +37,7 @@ const BODY_LABELS: Record<BodyType, string> = {
 
 @Component({
   selector: 'app-request-editor',
-  imports: [FaIconComponent, KeyValueTable, ResponseViewer],
+  imports: [FaIconComponent, KeyValueTable, ResponseViewer, CodeEditor],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     @let doc = document();
@@ -133,7 +134,7 @@ const BODY_LABELS: Record<BodyType, string> = {
       }
     </div>
 
-    <section class="min-h-32 flex-1 overflow-y-auto px-4 py-2">
+    <section class="flex min-h-32 flex-1 flex-col overflow-y-auto px-4 py-2">
       @switch (activeTab()) {
         @case ('params') {
           <app-key-value-table
@@ -259,13 +260,22 @@ const BODY_LABELS: Record<BodyType, string> = {
           @if (doc.bodyType === 'none') {
             <p class="mt-3 text-sm text-slate-500">This request does not have a body.</p>
           } @else {
-            <textarea
-              class="mt-2 block h-48 w-full rounded border border-slate-300 p-2 font-mono text-sm focus:border-sky-500 focus:outline-none"
-              aria-label="Request body"
-              spellcheck="false"
+            @if (doc.bodyType === 'form' || doc.bodyType === 'urlencoded') {
+              <p class="mt-2 text-xs text-slate-500">
+                One <code>name=value</code> pair per line.
+                @if (doc.bodyType === 'urlencoded') {
+                  Values are sent as written, so percent-encode them.
+                }
+              </p>
+            }
+            <app-code-editor
+              class="mt-2 min-h-24 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
+              ariaLabel="Request body"
               [value]="doc.body"
-              (input)="patch({ body: $any($event.target).value })"
-            ></textarea>
+              [language]="doc.bodyType === 'json' ? 'json' : 'plaintext'"
+              (valueChange)="patch({ body: $event })"
+              (submit)="send()"
+            />
           }
         }
       }

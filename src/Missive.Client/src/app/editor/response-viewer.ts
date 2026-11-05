@@ -10,13 +10,15 @@ import {
 import { ERROR_CODES, ResponseDto } from '../bridge/messages';
 import { RequestDocument } from '../workspace/models';
 import { WorkspaceStore } from '../workspace/workspace-store';
+import { CodeEditor } from './code/code-editor';
+import { languageForMediaType } from './code/monaco-loader';
 
 type ResponseTab = 'body' | 'headers';
 
 /** Shows the last response of a request: status, time, size, headers and the (pretty) body. */
 @Component({
   selector: 'app-response-viewer',
-  imports: [FaIconComponent],
+  imports: [FaIconComponent, CodeEditor],
   host: {
     class: 'flex h-2/5 min-h-32 shrink-0 flex-col border-t border-slate-200 bg-slate-50',
   },
@@ -134,9 +136,14 @@ type ResponseTab = 'body' | 'headers';
                   </button>
                 </div>
               }
-              <pre
-                class="min-h-0 flex-1 overflow-auto px-4 py-2 font-mono text-xs break-all whitespace-pre-wrap text-slate-800 select-text"
-                >{{ raw() ? r.body : (prettyBody() ?? r.body) }}</pre>
+              <app-code-editor
+                class="mt-1 flex-1 border-t border-slate-200"
+                ariaLabel="Response body"
+                [value]="raw() ? r.body : (prettyBody() ?? r.body)"
+                [language]="language()"
+                [readOnly]="true"
+                [wordWrap]="true"
+              />
             }
           }
           @case ('headers') {
@@ -196,6 +203,14 @@ export class ResponseViewer {
     } catch {
       return null;
     }
+  });
+
+  /** The Monaco language for the body; JSON sent with a generic content type counts as JSON. */
+  protected readonly language = computed(() => {
+    const r = this.response();
+    if (!r) return 'plaintext';
+    const language = languageForMediaType(r.contentType);
+    return language === 'plaintext' && looksLikeJson(r) ? 'json' : language;
   });
 
   protected readonly cancelledCode = ERROR_CODES.cancelled;

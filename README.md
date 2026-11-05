@@ -151,9 +151,12 @@ rules such as CORS don't apply. When sending:
   between requests. A request times out after 60 seconds.
 
 The response pane shows the status, the time until the whole body was read, the
-body size and the headers. JSON bodies are pretty-printed (switch to **Raw** for
-the original text), images are previewed, and other binary bodies are not
-shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
+body size and the headers. Request and response bodies are shown in the Monaco
+editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,
+GraphQL and Markdown, chosen from the body type or the response's
+`Content-Type`); JSON request bodies are also validated as you type. JSON
+responses are pretty-printed (switch to **Raw** for the original text), images
+are previewed, and other binary bodies are not shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
 request only; nothing is written to the workspace.
 
 ## Git sync
@@ -273,7 +276,7 @@ runtime and the platform webview prerequisites above, but not Node.js.
 - `src/Missive.Desktop`: Photino window, bridge, composition root, and
   build/publish integration.
 - `src/Missive.Client`: standalone Angular app with SCSS styles, Tailwind
-  CSS, Font Awesome icons and Angular CDK drag and drop.
+  CSS, Font Awesome icons, Angular CDK drag and drop and the Monaco editor.
 - `src/Missive.Domain`, `src/Missive.Application`, `src/Missive.Infrastructure`:
   backend layers (see [Architecture](#architecture)).
 - `tests/Missive.Domain.Tests`, `tests/Missive.Application.Tests`: fast unit
