@@ -32,6 +32,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<OpenWorkspace>()
             .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetGitStatus>()
+            .AddTransient<InitRepository>()
             .AddTransient<CommitChanges>()
             .AddTransient<PullChanges>()
             .AddTransient<PushChanges>()
@@ -138,6 +139,21 @@ public sealed class GitBridgeTests : IDisposable
         var response = await SendAsync("git.push");
 
         Assert.Equal(GitErrors.PushRejectedCode, ErrorCode(response));
+    }
+
+    [Fact]
+    public async Task GitInit_InitializesTheWorkspaceAndReturnsTheStatus()
+    {
+        _current.Open(Folder);
+        _git.InitAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<Unit>.Success(Unit.Value));
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", null, 0, 0, false, [])));
+
+        var response = await SendAsync("git.init");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Equal("main", response.GetProperty("payload").GetProperty("branch").GetString());
+        await _git.Received(1).InitAsync(Folder, Arg.Any<CancellationToken>());
     }
 
     [Fact]

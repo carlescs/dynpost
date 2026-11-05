@@ -10,7 +10,7 @@ import {
 import { WorkspaceStore } from '../workspace/workspace-store';
 
 export type GitOperation =
-  'refresh' | 'commit' | 'pull' | 'push' | 'conflict' | 'resolve' | 'abort';
+  'refresh' | 'init' | 'commit' | 'pull' | 'push' | 'conflict' | 'resolve' | 'abort';
 
 export interface GitNotice {
   kind: 'info' | 'warning';
@@ -38,6 +38,11 @@ export class GitStore {
   readonly notice = signal<GitNotice | null>(null);
   /** The conflicted file being compared in the main area, if any. */
   readonly conflict = signal<GitConflict | null>(null);
+
+  /** Whether the last status read found that the workspace folder is not inside a git repository. */
+  readonly notARepository = computed(
+    () => this.status() === null && this.error()?.code === 'git.not_a_repository',
+  );
 
   readonly changeCount = computed(() => this.status()?.changes.length ?? 0);
   readonly conflicts = computed(
@@ -71,6 +76,20 @@ export class GitStore {
       'refresh',
       () => this.bridge.send('git.status'),
       (status) => this.status.set(status),
+    );
+  }
+
+  /** Turns the workspace folder into a git repository. */
+  async init(): Promise<void> {
+    await this.run(
+      'init',
+      () => this.bridge.send('git.init'),
+      (status) => {
+        this.status.set(status);
+        this.notice.set({ kind: 'info', text: 'Initialized a git repository.' });
+        // git init may have added a .gitignore.
+        void this.workspace.refresh();
+      },
     );
   }
 

@@ -66,6 +66,7 @@ internal static class Program
             .AddTransient<MoveFolder>()
             .AddTransient<DeleteFolder>()
             .AddTransient<GetGitStatus>()
+            .AddTransient<InitRepository>()
             .AddTransient<CommitChanges>()
             .AddTransient<PullChanges>()
             .AddTransient<PushChanges>()
