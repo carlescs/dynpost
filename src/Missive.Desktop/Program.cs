@@ -38,6 +38,15 @@ internal static class Program
             .Center()
             .RegisterCustomSchemeHandler(BundledAssets.Scheme, assets.Handle);
 
+        // Windows title bars need an .ico; GTK loads a PNG reliably. macOS takes the
+        // icon from the app bundle instead.
+        var iconPath = Path.Combine(
+            AppContext.BaseDirectory, "Assets", OperatingSystem.IsWindows() ? "missive.ico" : "missive.png");
+        if (!OperatingSystem.IsMacOS() && File.Exists(iconPath))
+        {
+            window.SetIconFile(iconPath);
+        }
+
         var bridge = new PhotinoBridge(window);
         bridge.Attach(BridgeHandlers.Create(services, bridge));
 

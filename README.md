@@ -285,9 +285,9 @@ dotnet build Missive.sln
 dotnet publish src/Missive.Desktop -c Release -o artifacts/publish
 ```
 
-Run the `Missive.Desktop` executable (`Missive.Desktop.exe` on Windows) in
-`artifacts/publish`. Keep its `wwwroot` directory and native libraries alongside
-it. This is a framework-dependent publish: the target machine needs the .NET 10
+Run the `Missive` executable (`Missive.exe` on Windows) in
+`artifacts/publish`. Keep its `wwwroot` and `Assets` directories and native
+libraries alongside it. This is a framework-dependent publish: the target machine needs the .NET 10
 runtime and the platform webview prerequisites above, but not Node.js.
 
 ## Repository layout
