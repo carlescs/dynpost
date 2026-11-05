@@ -16,6 +16,7 @@ import { GitStore } from './git/git-store';
 import { ActivityBar } from './shell/activity-bar';
 import { AppHeader } from './shell/app-header';
 import { Sidebar } from './sidebar/sidebar';
+import { UpdateStore } from './updates/update-store';
 import { WorkspaceStore } from './workspace/workspace-store';
 
 @Component({
@@ -108,6 +109,7 @@ export class App implements OnInit {
   protected readonly store = inject(WorkspaceStore);
   protected readonly git = inject(GitStore);
   protected readonly environments = inject(EnvironmentStore);
+  private readonly updates = inject(UpdateStore);
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faPlus = faPlus;
   protected readonly faFolderOpen = faFolderOpen;
@@ -116,6 +118,7 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     void this.store.restore();
+    void this.updates.check();
   }
 
   protected onKeydown(event: KeyboardEvent): void {

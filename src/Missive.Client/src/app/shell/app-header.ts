@@ -1,7 +1,13 @@
 import { Component, inject } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faFolderOpen, faLayerGroup, faPaperPlane } from '@fortawesome/free-solid-svg-icons';
+import {
+  faCircleArrowUp,
+  faFolderOpen,
+  faLayerGroup,
+  faPaperPlane,
+} from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentStore } from '../environments/environment-store';
+import { UpdateStore } from '../updates/update-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 
 /** Main application header: app name, open workspace and global options. */
@@ -21,6 +27,17 @@ import { WorkspaceStore } from '../workspace/workspace-store';
       </span>
     }
     <div class="ml-auto flex items-center gap-1">
+      @if (updates.readyVersion(); as version) {
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded bg-emerald-600 px-2 py-1 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+          [title]="'Missive ' + version + ' is ready. Restart to install it.'"
+          [disabled]="updates.restarting()"
+          (click)="updates.restart()"
+        >
+          <fa-icon [icon]="faCircleArrowUp" /> Restart to update
+        </button>
+      }
       @if (store.workspace()) {
         <label
           class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300"
@@ -62,6 +79,8 @@ import { WorkspaceStore } from '../workspace/workspace-store';
 export class AppHeader {
   protected readonly store = inject(WorkspaceStore);
   protected readonly environments = inject(EnvironmentStore);
+  protected readonly updates = inject(UpdateStore);
+  protected readonly faCircleArrowUp = faCircleArrowUp;
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faFolderOpen = faFolderOpen;

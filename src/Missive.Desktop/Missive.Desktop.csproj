@@ -1,16 +1,34 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- WinExe: no console window on Windows (no effect on Linux/macOS). -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The executable is "Missive"; the project and namespaces keep their names. -->
+    <AssemblyName>Missive</AssemblyName>
+    <RootNamespace>Missive.Desktop</RootNamespace>
+    <Product>Missive</Product>
+    <AssemblyTitle>Missive</AssemblyTitle>
+    <Description>A simple, git-friendly HTTP client.</Description>
+    <ApplicationIcon>Assets/missive.ico</ApplicationIcon>
     <ClientRoot>$(MSBuildProjectDirectory)/../Missive.Client/</ClientRoot>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Window icon at runtime (the embedded ApplicationIcon only covers the Windows .exe). -->
+    <Content Include="Assets/missive.ico;Assets/missive.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <PackageReference Include="Photino.NET" Version="4.0.16" />
+    <!-- Only for VelopackApp.Build().Run() in Main; updating lives in Infrastructure. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>

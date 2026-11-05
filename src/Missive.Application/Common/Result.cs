@@ -11,6 +11,7 @@ public static class ErrorCodes
     public const string AlreadyExists = "already_exists";
     public const string FolderNotEmpty = "folder_not_empty";
     public const string Io = "io_error";
+    public const string UpdateFailed = "update_failed";
 }
 
 public sealed record Error(string Code, string Message);
