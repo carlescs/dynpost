@@ -6,6 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 

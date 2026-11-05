@@ -180,6 +180,17 @@ export interface GitRemote {
   pushUrl: string;
 }
 
+export interface UpdateStatus {
+  /**
+   * `unsupported`: this copy cannot update itself (not installed). `upToDate`: no newer version.
+   * `ready`: a newer version is downloaded and installs on restart.
+   */
+  state: 'unsupported' | 'upToDate' | 'ready';
+  currentVersion?: string | null;
+  /** The downloaded version, when `state` is `ready`. */
+  version?: string | null;
+}
+
 /** Every message type with its payload and result. */
 export interface BridgeMessages {
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
@@ -257,6 +268,10 @@ export interface BridgeMessages {
   };
   /** Removes a remote and its remote-tracking branches. */
   'git.remote.remove': { payload: { name: string }; result: GitRemote[] };
+  /** Looks for a newer version of the app and downloads it, without installing it. */
+  'update.check': { payload: void; result: UpdateStatus };
+  /** Installs the downloaded update and restarts the app; on success no response arrives. */
+  'update.restart': { payload: void; result: null };
 }
 
 export type BridgeMessageType = keyof BridgeMessages;
@@ -285,6 +300,7 @@ export const ERROR_CODES = {
   alreadyExists: 'already_exists',
   folderNotEmpty: 'folder_not_empty',
   io: 'io_error',
+  updateFailed: 'update_failed',
   networkError: 'http.network_error',
   timeout: 'http.timeout',
   cancelled: 'http.cancelled',

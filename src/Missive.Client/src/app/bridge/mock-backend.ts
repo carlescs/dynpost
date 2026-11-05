@@ -97,6 +97,11 @@ export class MockBackend {
       return ok(!!cancel);
     }
     if (request.type === 'workspace.openLast') return ok(null);
+    // The browser preview is never installed, so it cannot update itself.
+    if (request.type === 'update.check') return ok({ state: 'unsupported' });
+    if (request.type === 'update.restart') {
+      return fail(ERROR_CODES.updateFailed, 'The browser preview cannot update itself.');
+    }
     if (request.type === 'workspace.pick' || request.type === 'workspace.open') {
       this.open = true;
       return ok(this.workspace());

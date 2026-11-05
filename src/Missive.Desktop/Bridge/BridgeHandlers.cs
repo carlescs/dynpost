@@ -5,6 +5,7 @@ using Missive.Application.Git;
 using Missive.Application.Http;
 using Missive.Domain.Git;
 using Missive.Application.Requests;
+using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -94,7 +95,11 @@ internal static class BridgeHandlers
             .Register<GitUpdateRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteUpdate,
                 async (p, ct) => (await Use<UpdateRemote>().ExecuteAsync(new UpdateRemoteRequest(p.Name, p.NewName, p.Url), ct)).Map(GitRemoteDto.From))
             .Register<GitRemoteNamePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteRemove,
-                async (p, ct) => (await Use<RemoveRemote>().ExecuteAsync(p.Name, ct)).Map(GitRemoteDto.From));
+                async (p, ct) => (await Use<RemoveRemote>().ExecuteAsync(p.Name, ct)).Map(GitRemoteDto.From))
+            .Register(BridgeMessageTypes.UpdateCheck,
+                ct => Use<CheckForUpdate>().ExecuteAsync(ct))
+            .Register(BridgeMessageTypes.UpdateRestart,
+                _ => Task.FromResult(NoValue(Use<RestartToUpdate>().Execute())));
     }
 
     private static ConflictResolution? ParseResolution(string? value) =>

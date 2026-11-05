@@ -5,6 +5,7 @@ using Missive.Application.Git;
 using Missive.Application.Http;
 using Missive.Application.Requests;
 using Missive.Application.Settings;
+using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Desktop.Hosting;
@@ -12,17 +13,26 @@ using Missive.Infrastructure.Environments;
 using Missive.Infrastructure.Git;
 using Missive.Infrastructure.Http;
 using Missive.Infrastructure.Settings;
+using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
 using Missive.Infrastructure.Yaml;
 using Photino.NET;
+using Velopack;
 
 namespace Missive.Desktop;
 
 internal static class Program
 {
+    /// <summary>The GitHub repository whose releases the app updates itself from.</summary>
+    private const string ReleasesRepository = "https://github.com/carlescs/missive";
+
     [STAThread]
     private static void Main()
     {
+        // Must run first: Velopack's installer and updater start the app with special arguments,
+        // and vpk checks that Main calls this directly.
+        VelopackApp.Build().Run();
+
         var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
         var indexPath = Path.Combine(wwwroot, "index.html");
 
@@ -40,6 +50,15 @@ internal static class Program
             .SetSize(1024, 768)
             .Center()
             .RegisterCustomSchemeHandler(BundledAssets.Scheme, assets.Handle);
+
+        // Windows title bars need an .ico; GTK loads a PNG reliably. macOS takes the
+        // icon from the app bundle instead.
+        var iconPath = Path.Combine(
+            AppContext.BaseDirectory, "Assets", OperatingSystem.IsWindows() ? "missive.ico" : "missive.png");
+        if (!OperatingSystem.IsMacOS() && File.Exists(iconPath))
+        {
+            window.SetIconFile(iconPath);
+        }
 
         var bridge = new PhotinoBridge(window);
         bridge.Attach(BridgeHandlers.Create(services, bridge));
@@ -59,6 +78,9 @@ internal static class Program
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
+            .AddSingleton<IAppUpdater>(new VelopackAppUpdater(ReleasesRepository))
+            .AddTransient<CheckForUpdate>()
+            .AddTransient<RestartToUpdate>()
             .AddTransient<OpenWorkspace>()
             .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetWorkspaceTree>()

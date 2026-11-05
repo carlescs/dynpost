@@ -12,6 +12,35 @@ No account, no cloud workspace, no proprietary export format.
 > and inspect the response, and sync the folder with git from the Source
 > control view (status, commit, pull, push).
 
+## Install
+
+Download the file for your system from the
+[latest release](https://github.com/carlescs/missive/releases/latest):
+
+| System | File | How to install |
+|---|---|---|
+| Windows (x64) | `Missive-win-Setup.exe` | Run it. Missive installs for your user (no admin rights) and adds Start menu and desktop shortcuts; uninstall it from *Installed apps*. |
+| macOS (Apple silicon) | `Missive-osx-Setup.pkg` | Open it and follow the installer. |
+| Linux (x64) | `Missive.AppImage` | Make it executable (`chmod +x Missive.AppImage`) and run it; keep it wherever you like. |
+
+Each system also has a portable copy (`Missive-win-Portable.zip`,
+`Missive-osx-Portable.zip`) that runs without installing.
+
+Missive checks for a new version at startup and downloads it in the background;
+when one is ready, a **Restart to update** button appears in the header. Nothing
+is installed until you click it. Builds run from source don't update
+themselves.
+
+Missive needs [git](https://git-scm.com/downloads) for workspace sync, plus the
+system webview: Windows 10 and 11 normally include the Microsoft Edge WebView2
+Runtime, macOS includes WebKit, and Linux needs GTK 3, WebKitGTK 4.1 and
+libnotify (on Ubuntu 24.04:
+`sudo apt-get install libgtk-3-0t64 libwebkit2gtk-4.1-0 libnotify4`).
+
+The builds are not code-signed yet, so Windows SmartScreen may warn about an
+unrecognized app (*More info* → *Run anyway*), and macOS may refuse to open it
+until you allow it in *System Settings* → *Privacy & Security*.
+
 ## Why Missive
 
 - **Files first.** A collection is just a folder. Each request is one readable
@@ -335,9 +364,9 @@ dotnet build Missive.sln
 dotnet publish src/Missive.Desktop -c Release -o artifacts/publish
 ```
 
-Run the `Missive.Desktop` executable (`Missive.Desktop.exe` on Windows) in
-`artifacts/publish`. Keep its `wwwroot` directory and native libraries alongside
-it. This is a framework-dependent publish: the target machine needs the .NET 10
+Run the `Missive` executable (`Missive.exe` on Windows) in
+`artifacts/publish`. Keep its `wwwroot` and `Assets` directories and native
+libraries alongside it. This is a framework-dependent publish: the target machine needs the .NET 10
 runtime and the platform webview prerequisites above, but not Node.js.
 
 ## Repository layout
@@ -375,10 +404,16 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Each build is a self-contained publish (no .NET runtime needed on the target
-machine; the platform webview prerequisites above still apply) for `win-x64`
-(`.zip`), `linux-x64` and `osx-arm64` (`.tar.gz`), attached to a GitHub release
-for the tag. Tags with a suffix such as `v0.2.0-beta.1` are marked as
-pre-releases. Running the workflow manually produces the same builds as workflow
-artifacts without creating a release. The macOS build is not signed or
-notarized yet.
+Each OS builds a self-contained publish (no .NET runtime needed on the target
+machine) and packages it with [Velopack](https://velopack.io) (`vpk pack`) into
+an installer, a portable copy and an update feed: `Missive-win-Setup.exe` and
+`Missive-win-Portable.zip` for `win-x64`, `Missive.AppImage` for `linux-x64`,
+and `Missive-osx-Setup.pkg` and `Missive-osx-Portable.zip` for `osx-arm64`.
+They are attached to a GitHub release for the tag together with the `.nupkg`
+packages and `releases.<channel>.json` feeds (channels `win`, `linux`, `osx`)
+that installed copies read to update themselves. Tags with a suffix such as
+`v0.2.0-beta.1` are marked as pre-releases; only pre-release builds update to
+pre-releases. Running the workflow manually produces the same files as workflow
+artifacts without creating a release. Keep the `vpk` version in the workflow
+equal to the `Velopack` package version in `Missive.Infrastructure`. The builds
+are not code-signed or notarized yet.

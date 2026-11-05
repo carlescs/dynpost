@@ -47,7 +47,8 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            version="0.0.0-ci.${GITHUB_RUN_NUMBER}"
+            # Velopack needs a version of at least 0.0.1.
+            version="0.0.1-ci.${GITHUB_RUN_NUMBER}"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -62,25 +63,40 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           -o artifacts/publish/${{ matrix.rid }}
 
-      - name: Package
-        id: package
+      - name: Install packaging tools
         shell: bash
         run: |
-          name="missive-${{ steps.version.outputs.version }}-${{ matrix.rid }}"
-          cd artifacts/publish/${{ matrix.rid }}
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            7z a -tzip "../../$name.zip" . > /dev/null
-            echo "file=artifacts/$name.zip" >> "$GITHUB_OUTPUT"
-          else
-            # tar keeps the executable bit.
-            tar -czf "../../$name.tar.gz" .
-            echo "file=artifacts/$name.tar.gz" >> "$GITHUB_OUTPUT"
+          dotnet tool install vpk --version 1.2.161 --tool-path artifacts/tools
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            # vpk needs mksquashfs to build the AppImage.
+            sudo apt-get update && sudo apt-get install -y squashfs-tools
           fi
+
+      # Velopack builds the installer, a portable copy and the update feed that installed
+      # copies check (releases.<channel>.json), one channel per OS: win, linux, osx.
+      - name: Package
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Windows) exe=Missive.exe; icon=missive.ico; extra=() ;;
+            macOS) exe=Missive; icon=missive.icns; extra=(--bundleId io.github.carlescs.missive) ;;
+            Linux) exe=Missive; icon=missive.png; extra=(--categories Development) ;;
+          esac
+          artifacts/tools/vpk pack \
+            --packId Missive \
+            --packTitle Missive \
+            --packAuthors "${{ github.repository_owner }}" \
+            --packVersion "${{ steps.version.outputs.version }}" \
+            --packDir "artifacts/publish/${{ matrix.rid }}" \
+            --mainExe "$exe" \
+            --icon "src/Missive.Desktop/Assets/$icon" \
+            --outputDir artifacts/releases \
+            "${extra[@]}"
 
       - uses: actions/upload-artifact@v7
         with:
           name: missive-${{ matrix.rid }}
-          path: ${{ steps.package.outputs.file }}
+          path: artifacts/releases/*
           if-no-files-found: error
 
   release:
