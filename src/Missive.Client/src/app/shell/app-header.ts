@@ -22,7 +22,6 @@ import { WorkspaceStore } from '../workspace/workspace-store';
       'always-dark flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
     role: 'banner',
     '(document:click)': 'onDocumentClick($event)',
-    '(document:keydown.escape)': 'menuOpen.set(false)',
   },
   template: `
     <fa-icon class="text-sky-400" [icon]="faPaperPlane" />
@@ -85,7 +84,6 @@ import { WorkspaceStore } from '../workspace/workspace-store';
           class="flex size-7 items-center justify-center rounded text-slate-300 hover:bg-slate-700 hover:text-white"
           title="Settings"
           aria-label="Settings"
-          aria-haspopup="menu"
           [attr.aria-expanded]="menuOpen()"
           (click)="menuOpen.set(!menuOpen())"
         >
@@ -93,14 +91,13 @@ import { WorkspaceStore } from '../workspace/workspace-store';
         </button>
         @if (menuOpen()) {
           <div
+            id="settings-panel"
             class="adaptive absolute top-full right-0 z-50 mt-1 w-56 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
-            role="menu"
-            aria-label="Settings"
           >
             <button
               type="button"
               class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
-              role="menuitemcheckbox"
+              role="switch"
               [attr.aria-checked]="theme.isDark()"
               (click)="theme.setDark(!theme.isDark())"
             >
