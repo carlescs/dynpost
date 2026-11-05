@@ -4,6 +4,8 @@ import {
   BridgeErrorShape,
   ConflictResolution,
   GitConflict,
+  GitFileDiff,
+  GitRemote,
   GitStatus,
   PullOutcome,
 } from '../bridge/messages';
@@ -11,7 +13,7 @@ import { EnvironmentStore } from '../environments/environment-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
 
 export type GitOperation =
-  'refresh' | 'init' | 'commit' | 'pull' | 'push' | 'conflict' | 'resolve' | 'abort';
+  'refresh' | 'init' | 'commit' | 'pull' | 'push' | 'conflict' | 'resolve' | 'abort' | 'remote';
 
 export interface GitNotice {
   kind: 'info' | 'warning';
@@ -36,10 +38,18 @@ export class GitStore {
   readonly busy = signal<GitOperation | null>(null);
   /** The error of the last operation, until the next one starts or it is dismissed. */
   readonly error = signal<BridgeErrorShape | null>(null);
+  /** The operation that failed with {@link error}. */
+  readonly failedOperation = signal<GitOperation | null>(null);
   /** The outcome of the last commit, pull or push. */
   readonly notice = signal<GitNotice | null>(null);
   /** The conflicted file being compared in the main area, if any. */
   readonly conflict = signal<GitConflict | null>(null);
+  /** The changed file whose differences are shown in the main area, if any. */
+  readonly diff = signal<GitFileDiff | null>(null);
+  /** The file whose differences are being read, if any. */
+  readonly diffLoading = signal<string | null>(null);
+  /** The repository's remotes; `null` until they are read. */
+  readonly remotes = signal<GitRemote[] | null>(null);
 
   /** Whether the last status read found that the workspace folder is not inside a git repository. */
   readonly notARepository = computed(
@@ -68,8 +78,29 @@ export class GitStore {
         this.error.set(null);
         this.notice.set(null);
         this.conflict.set(null);
+        this.diff.set(null);
+        this.remotes.set(null);
         if (root && this.available) void this.refresh();
       });
+    });
+
+    // Keep the open diff current: close it once the file has no changes (e.g. after a commit),
+    // otherwise read it again, since the status is re-read after anything that can change it.
+    effect(() => {
+      const status = this.status();
+      untracked(() => {
+        const open = this.diff();
+        if (!open) return;
+        if (status?.changes.some((c) => c.path === open.path)) void this.loadDiff(open.path);
+        else this.diff.set(null);
+      });
+    });
+
+    // Opening a request or an environment shows it instead of the diff.
+    effect(() => {
+      this.workspace.activeId();
+      this.environments.draft()?.id;
+      untracked(() => this.diff.set(null));
     });
   }
 
@@ -77,7 +108,10 @@ export class GitStore {
     await this.run(
       'refresh',
       () => this.bridge.send('git.status'),
-      (status) => this.status.set(status),
+      (status) => {
+        this.status.set(status);
+        void this.loadRemotes();
+      },
     );
   }
 
@@ -88,6 +122,7 @@ export class GitStore {
       () => this.bridge.send('git.init'),
       (status) => {
         this.status.set(status);
+        void this.loadRemotes();
         this.notice.set({ kind: 'info', text: 'Initialized a git repository.' });
         // git init may have added a .gitignore.
         void this.workspace.refresh();
@@ -142,12 +177,93 @@ export class GitStore {
     await this.run(
       'conflict',
       () => this.bridge.send('git.conflict', { path }),
-      (conflict) => this.conflict.set(conflict),
+      (conflict) => {
+        this.diff.set(null);
+        this.conflict.set(conflict);
+      },
     );
   }
 
   closeConflict(): void {
     this.conflict.set(null);
+  }
+
+  /** Shows what changed in a file since the last commit. */
+  async openDiff(path: string): Promise<void> {
+    this.conflict.set(null);
+    await this.loadDiff(path, true);
+  }
+
+  closeDiff(): void {
+    this.diff.set(null);
+  }
+
+  /** Reads a diff without blocking other git operations; only the latest request is shown. */
+  private async loadDiff(path: string, report = false): Promise<void> {
+    const root = this.root();
+    if (!root) return;
+    this.diffLoading.set(path);
+    try {
+      const diff = await this.bridge.send('git.diff', { path });
+      if (this.root() === root && this.diffLoading() === path) this.diff.set(diff);
+    } catch (error) {
+      if (this.root() !== root || this.diffLoading() !== path) return;
+      if (report) this.reportError('refresh', error);
+      // The file may have just stopped being changed; the status refresh closes it then.
+    } finally {
+      if (this.diffLoading() === path) this.diffLoading.set(null);
+    }
+  }
+
+  /** Reads the remotes; failures leave the last list (the status shows git errors). */
+  async loadRemotes(): Promise<void> {
+    const root = this.root();
+    if (!root) return;
+    try {
+      const remotes = await this.bridge.send('git.remote.list');
+      if (this.root() === root) this.remotes.set(remotes);
+    } catch {
+      if (this.root() === root) this.remotes.set(null);
+    }
+  }
+
+  /** Adds a remote. Resolves to whether it succeeded. */
+  addRemote(name: string, url: string): Promise<boolean> {
+    return this.runRemote(
+      () => this.bridge.send('git.remote.add', { name, url }),
+      `Added the remote ${name.trim()}.`,
+    );
+  }
+
+  /** Renames a remote and/or changes its URL. Resolves to whether it succeeded. */
+  updateRemote(name: string, newName: string, url: string): Promise<boolean> {
+    return this.runRemote(
+      () => this.bridge.send('git.remote.update', { name, newName, url }),
+      `Updated the remote ${newName.trim()}.`,
+    );
+  }
+
+  /** Removes a remote. Resolves to whether it succeeded. */
+  removeRemote(name: string): Promise<boolean> {
+    return this.runRemote(
+      () => this.bridge.send('git.remote.remove', { name }),
+      `Removed the remote ${name}.`,
+    );
+  }
+
+  private async runRemote(call: () => Promise<GitRemote[]>, text: string): Promise<boolean> {
+    const ok = await this.run('remote', call, (remotes) => {
+      this.remotes.set(remotes);
+      this.notice.set({ kind: 'info', text });
+    });
+    // Renaming or removing a remote changes the branch's upstream.
+    if (ok)
+      await this.run(
+        'refresh',
+        () => this.bridge.send('git.status'),
+        (s) => this.status.set(s),
+      );
+    return ok;
   }
 
   /** Resolves one conflicted file the way the user chose. */
@@ -190,6 +306,16 @@ export class GitStore {
 
   dismissError(): void {
     this.error.set(null);
+    this.failedOperation.set(null);
+  }
+
+  private reportError(operation: GitOperation, error: unknown): void {
+    this.failedOperation.set(operation);
+    this.error.set(
+      error instanceof BridgeError
+        ? { code: error.code, message: error.message }
+        : { code: 'internal_error', message: String(error) },
+    );
   }
 
   private async run<T>(
@@ -202,6 +328,7 @@ export class GitStore {
 
     this.busy.set(operation);
     this.error.set(null);
+    this.failedOperation.set(null);
     if (operation !== 'refresh') this.notice.set(null);
 
     try {
@@ -212,11 +339,7 @@ export class GitStore {
       return true;
     } catch (error) {
       if (this.root() !== root) return false;
-      this.error.set(
-        error instanceof BridgeError
-          ? { code: error.code, message: error.message }
-          : { code: 'internal_error', message: String(error) },
-      );
+      this.reportError(operation, error);
       if (operation === 'refresh') this.status.set(null);
       return false;
     } finally {

@@ -13,6 +13,7 @@ using Missive.Infrastructure.Git;
 using Missive.Infrastructure.Http;
 using Missive.Infrastructure.Settings;
 using Missive.Infrastructure.Workspaces;
+using Missive.Infrastructure.Yaml;
 using Photino.NET;
 
 namespace Missive.Desktop;
@@ -54,6 +55,7 @@ internal static class Program
             .AddSingleton<ISecretStore, YamlSecretStore>()
             .AddSingleton<IWorkspaceStateStore, YamlWorkspaceStateStore>()
             .AddSingleton<IGitService, GitCliService>()
+            .AddSingleton<IRequestFileFormat, YamlRequestFileFormat>()
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
@@ -85,5 +87,10 @@ internal static class Program
             .AddTransient<GetConflict>()
             .AddTransient<ResolveConflict>()
             .AddTransient<AbortMerge>()
+            .AddTransient<GetFileDiff>()
+            .AddTransient<ListRemotes>()
+            .AddTransient<AddRemote>()
+            .AddTransient<UpdateRemote>()
+            .AddTransient<RemoveRemote>()
             .BuildServiceProvider();
 }

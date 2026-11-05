@@ -21,6 +21,31 @@ public static class WorkspaceLayout
             && !string.Equals(fileName, FolderDefaultsFile, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Whether <paramref name="path"/> is a request file shown in the explorer: a request file
+    /// inside collection folders only (not in <c>environments</c> or a hidden folder).
+    /// </summary>
+    public static bool IsRequestPath(WorkspacePath path)
+    {
+        if (path.IsRoot || !IsRequestFile(path.Parent, path.FileName))
+        {
+            return false;
+        }
+
+        var parent = WorkspacePath.Root;
+        foreach (var segment in path.Parent.Segments)
+        {
+            if (!IsCollectionFolder(parent, segment))
+            {
+                return false;
+            }
+
+            parent = parent.Combine(segment);
+        }
+
+        return true;
+    }
+
     /// <summary>Whether a sub-folder of <paramref name="parent"/> is a collection shown in the explorer.</summary>
     public static bool IsCollectionFolder(WorkspacePath parent, string folderName) =>
         !folderName.StartsWith('.')

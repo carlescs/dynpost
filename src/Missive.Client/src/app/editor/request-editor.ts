@@ -22,14 +22,14 @@ import { VariableInput } from './variable-input';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body';
 
-const AUTH_LABELS: Record<AuthType, string> = {
+export const AUTH_LABELS: Record<AuthType, string> = {
   none: 'No auth',
   basic: 'Basic',
   bearer: 'Bearer token',
   apiKey: 'API key',
 };
 
-const BODY_LABELS: Record<BodyType, string> = {
+export const BODY_LABELS: Record<BodyType, string> = {
   none: 'None',
   json: 'JSON',
   text: 'Raw text',

@@ -2,10 +2,12 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Missive.Application.Common;
 using Missive.Application.Git;
+using Missive.Application.Requests;
 using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Git;
+using Missive.Domain.Requests;
 using NSubstitute;
 
 namespace Missive.Desktop.Tests.Bridge;
@@ -18,6 +20,7 @@ public sealed class GitBridgeTests : IDisposable
     private readonly IGitService _git = Substitute.For<IGitService>();
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
+    private readonly IRequestFileFormat _format = Substitute.For<IRequestFileFormat>();
     private readonly CurrentWorkspace _current = new();
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
@@ -29,6 +32,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddSingleton(_repository)
             .AddSingleton(_settings)
             .AddSingleton(_current)
+            .AddSingleton(_format)
             .AddTransient<OpenWorkspace>()
             .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetGitStatus>()
@@ -39,6 +43,11 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<GetConflict>()
             .AddTransient<ResolveConflict>()
             .AddTransient<AbortMerge>()
+            .AddTransient<GetFileDiff>()
+            .AddTransient<ListRemotes>()
+            .AddTransient<AddRemote>()
+            .AddTransient<UpdateRemote>()
+            .AddTransient<RemoveRemote>()
             .BuildServiceProvider();
         _router = BridgeHandlers.Create(_services, Substitute.For<IFolderPicker>());
     }
@@ -224,6 +233,74 @@ public sealed class GitBridgeTests : IDisposable
         var response = await SendAsync("git.abortMerge");
 
         Assert.Equal(GitErrors.NotMergingCode, ErrorCode(response));
+    }
+
+    [Fact]
+    public async Task GitDiff_ReturnsBothVersions_AndTheParsedRequests()
+    {
+        _current.Open(Folder);
+        var change = new GitChange("users/get-user.yaml", GitFileStatus.Modified);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", null, 0, 0, false, [change])));
+        _git.GetFileDiffAsync(Folder, change, Arg.Any<CancellationToken>())
+            .Returns(Result<GitFileDiff>.Success(new GitFileDiff(change.Path, change.Status, null, "a", "b")));
+        _format.Parse(default!, default!).ReturnsForAnyArgs(
+            new HttpRequestDefinition("Get user", RequestMethod.Get, "https://x", [], [], RequestAuth.None, RequestBody.None));
+
+        var response = await SendAsync("git.diff", """{ "path": "users/get-user.yaml" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var payload = response.GetProperty("payload");
+        Assert.Equal("modified", payload.GetProperty("status").GetString());
+        Assert.Equal("a", payload.GetProperty("original").GetString());
+        Assert.Equal("b", payload.GetProperty("modified").GetString());
+        Assert.False(payload.GetProperty("binary").GetBoolean());
+        Assert.True(payload.GetProperty("isRequest").GetBoolean());
+        Assert.Equal("GET", payload.GetProperty("modifiedRequest").GetProperty("method").GetString());
+    }
+
+    [Fact]
+    public async Task GitRemoteList_ReturnsTheRemotes()
+    {
+        _current.Open(Folder);
+        _git.ListRemotesAsync(Folder, Arg.Any<CancellationToken>()).Returns(
+            Result<IReadOnlyList<GitRemote>>.Success([new GitRemote("origin", "https://a", "ssh://b")]));
+
+        var response = await SendAsync("git.remote.list");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var remote = Assert.Single(response.GetProperty("payload").EnumerateArray());
+        Assert.Equal("origin", remote.GetProperty("name").GetString());
+        Assert.Equal("https://a", remote.GetProperty("fetchUrl").GetString());
+        Assert.Equal("ssh://b", remote.GetProperty("pushUrl").GetString());
+    }
+
+    [Fact]
+    public async Task GitRemoteAdd_AddsTheRemote()
+    {
+        _current.Open(Folder);
+        _git.ListRemotesAsync(Folder, Arg.Any<CancellationToken>()).Returns(
+            Result<IReadOnlyList<GitRemote>>.Success([]),
+            Result<IReadOnlyList<GitRemote>>.Success([new GitRemote("origin", "https://a", "https://a")]));
+        _git.AddRemoteAsync(default!, default!, default!).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+
+        var response = await SendAsync("git.remote.add", """{ "name": "origin", "url": "https://a" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Single(response.GetProperty("payload").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task GitRemoteUpdate_AndRemove_ReportUnknownRemotes()
+    {
+        _current.Open(Folder);
+        _git.ListRemotesAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<GitRemote>>.Success([]));
+
+        var update = await SendAsync("git.remote.update", """{ "name": "origin", "newName": "up", "url": "https://a" }""");
+        var remove = await SendAsync("git.remote.remove", """{ "name": "origin" }""");
+
+        Assert.Equal(GitErrors.RemoteNotFoundCode, ErrorCode(update));
+        Assert.Equal(GitErrors.RemoteNotFoundCode, ErrorCode(remove));
     }
 
     private async Task<JsonElement> SendAsync(string type, string? payload = null)

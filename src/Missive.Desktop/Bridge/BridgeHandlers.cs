@@ -84,7 +84,17 @@ internal static class BridgeHandlers
                     ? (await Use<ResolveConflict>().ExecuteAsync(new ResolveConflictRequest(p.Path, resolution), ct)).Map(GitStatusDto.From)
                     : new Error(BridgeErrorCodes.BadPayload, $"Unknown resolution '{p.Resolution}'; use ours, theirs or edited."))
             .Register(BridgeMessageTypes.GitAbortMerge,
-                async ct => (await Use<AbortMerge>().ExecuteAsync(ct)).Map(GitStatusDto.From));
+                async ct => (await Use<AbortMerge>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register<GitDiffPayload, GitFileDiffDto>(BridgeMessageTypes.GitDiff,
+                (p, ct) => Use<GetFileDiff>().ExecuteAsync(p.Path, ct))
+            .Register(BridgeMessageTypes.GitRemoteList,
+                async ct => (await Use<ListRemotes>().ExecuteAsync(ct)).Map(GitRemoteDto.From))
+            .Register<GitAddRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteAdd,
+                async (p, ct) => (await Use<AddRemote>().ExecuteAsync(new AddRemoteRequest(p.Name, p.Url), ct)).Map(GitRemoteDto.From))
+            .Register<GitUpdateRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteUpdate,
+                async (p, ct) => (await Use<UpdateRemote>().ExecuteAsync(new UpdateRemoteRequest(p.Name, p.NewName, p.Url), ct)).Map(GitRemoteDto.From))
+            .Register<GitRemoteNamePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteRemove,
+                async (p, ct) => (await Use<RemoveRemote>().ExecuteAsync(p.Name, ct)).Map(GitRemoteDto.From));
     }
 
     private static ConflictResolution? ParseResolution(string? value) =>

@@ -153,6 +153,33 @@ export type ConflictResolution = 'ours' | 'theirs' | 'edited';
 
 export type PullOutcome = 'upToDate' | 'updated' | 'conflicted';
 
+/**
+ * A changed file as of the last commit (`original`) and in the working tree (`modified`). A text
+ * is `null` when the file doesn't exist on that side, or when it is binary.
+ */
+export interface GitFileDiff {
+  path: string;
+  status: GitFileStatus;
+  /** For a rename, the path the file had in the last commit. */
+  originalPath?: string | null;
+  binary: boolean;
+  original: string | null;
+  modified: string | null;
+  /** Whether the file is a request file; its sides are then parsed into requests too. */
+  isRequest: boolean;
+  originalRequest?: RequestDto | null;
+  modifiedRequest?: RequestDto | null;
+  /** Why a side of a request file could not be read as a request, if it couldn't. */
+  requestError?: string | null;
+}
+
+export interface GitRemote {
+  name: string;
+  fetchUrl: string;
+  /** Equal to `fetchUrl` unless the remote has its own push URL. */
+  pushUrl: string;
+}
+
 /** Every message type with its payload and result. */
 export interface BridgeMessages {
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
@@ -217,6 +244,19 @@ export interface BridgeMessages {
   'git.resolve': { payload: { path: string; resolution: ConflictResolution }; result: GitStatus };
   /** Abandons the merge in progress (`git merge --abort`). */
   'git.abortMerge': { payload: void; result: GitStatus };
+  /** The committed and working tree versions of a changed file. */
+  'git.diff': { payload: { path: string }; result: GitFileDiff };
+  /** The repository's remotes, sorted by name. */
+  'git.remote.list': { payload: void; result: GitRemote[] };
+  /** Adds a remote; nothing is fetched or pushed. */
+  'git.remote.add': { payload: { name: string; url: string }; result: GitRemote[] };
+  /** Renames a remote and/or changes its URL (passing the current values keeps them). */
+  'git.remote.update': {
+    payload: { name: string; newName: string; url: string };
+    result: GitRemote[];
+  };
+  /** Removes a remote and its remote-tracking branches. */
+  'git.remote.remove': { payload: { name: string }; result: GitRemote[] };
 }
 
 export type BridgeMessageType = keyof BridgeMessages;

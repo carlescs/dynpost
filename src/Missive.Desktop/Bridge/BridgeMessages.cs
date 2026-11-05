@@ -97,6 +97,24 @@ internal static class BridgeMessageTypes
 
     /// <summary>Abandons the merge in progress. Payload: none. Result: new status.</summary>
     public const string GitAbortMerge = "git.abortMerge";
+
+    /// <summary>
+    /// Reads the committed and working tree versions of a changed file, parsing request files.
+    /// Payload: <see cref="GitDiffPayload"/>. Result: the diff.
+    /// </summary>
+    public const string GitDiff = "git.diff";
+
+    /// <summary>Lists the repository's remotes. Payload: none. Result: remotes.</summary>
+    public const string GitRemoteList = "git.remote.list";
+
+    /// <summary>Adds a remote. Payload: <see cref="GitAddRemotePayload"/>. Result: remotes.</summary>
+    public const string GitRemoteAdd = "git.remote.add";
+
+    /// <summary>Renames a remote and/or changes its URL. Payload: <see cref="GitUpdateRemotePayload"/>. Result: remotes.</summary>
+    public const string GitRemoteUpdate = "git.remote.update";
+
+    /// <summary>Removes a remote. Payload: <see cref="GitRemoteNamePayload"/>. Result: remotes.</summary>
+    public const string GitRemoteRemove = "git.remote.remove";
 }
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
@@ -148,6 +166,17 @@ internal sealed record GitConflictPayload(string Path);
 
 /// <param name="Resolution"><c>ours</c>, <c>theirs</c> or <c>edited</c>.</param>
 internal sealed record GitResolvePayload(string Path, string Resolution);
+
+internal sealed record GitDiffPayload(string Path);
+
+internal sealed record GitAddRemotePayload(string Name, string Url);
+
+/// <param name="Name">The remote to change.</param>
+/// <param name="NewName">Its new name (the same name keeps it).</param>
+/// <param name="Url">Its new URL (the current URL keeps it).</param>
+internal sealed record GitUpdateRemotePayload(string Name, string NewName, string Url);
+
+internal sealed record GitRemoteNamePayload(string Name);
 
 internal static class BridgeErrorCodes
 {

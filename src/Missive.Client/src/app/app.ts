@@ -12,6 +12,7 @@ import { EnvironmentEditor } from './environments/environment-editor';
 import { EnvironmentStore } from './environments/environment-store';
 import { RequestEditor } from './editor/request-editor';
 import { ConflictView } from './git/conflict-view';
+import { DiffView } from './git/diff-view';
 import { GitStore } from './git/git-store';
 import { ActivityBar } from './shell/activity-bar';
 import { AppHeader } from './shell/app-header';
@@ -26,6 +27,7 @@ import { WorkspaceStore } from './workspace/workspace-store';
     DocumentTabs,
     RequestEditor,
     ConflictView,
+    DiffView,
     EnvironmentEditor,
     FaIconComponent,
   ],
@@ -61,6 +63,11 @@ import { WorkspaceStore } from './workspace/workspace-store';
       <main class="flex min-w-0 flex-1 flex-col">
         @if (git.conflict()) {
           <app-conflict-view />
+        } @else if (git.diff()) {
+          <!-- Lazy chunk: the diff views are only needed once a change is opened. -->
+          @defer (on immediate) {
+            <app-diff-view />
+          }
         } @else if (environments.draft()) {
           <app-environment-editor />
         } @else {
@@ -121,7 +128,8 @@ export class App implements OnInit {
   protected onKeydown(event: KeyboardEvent): void {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      if (this.environments.draft() && !this.git.conflict()) void this.environments.save();
+      if (this.environments.draft() && !this.git.conflict() && !this.git.diff())
+        void this.environments.save();
       else void this.store.saveActive();
     } else if (
       (event.ctrlKey || event.metaKey) &&
