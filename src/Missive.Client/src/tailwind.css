@@ -76,7 +76,9 @@
 
 /* ...except `adaptive` popups inside them, which follow the theme again (rule above). */
 
-.dark .bg-white,
-.dark .focus\:bg-white:focus {
-  background-color: var(--raw-slate-900);
+@layer utilities {
+  :where(.dark) .bg-white,
+  :where(.dark) .focus\:bg-white:focus {
+    background-color: var(--raw-slate-900);
+  }
 }
