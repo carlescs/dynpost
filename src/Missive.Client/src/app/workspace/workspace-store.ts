@@ -84,6 +84,28 @@ export class WorkspaceStore {
     }
   }
 
+  /**
+   * Re-reads open documents from disk after git changed files (a pull, a resolved conflict, an
+   * aborted merge): all of them, or those at `paths`. Documents with unsaved edits are left alone.
+   */
+  async reloadFromDisk(paths?: string[]): Promise<void> {
+    const targets = this.documents().filter(
+      (d) => d.path && !d.dirty && (!paths || paths.includes(d.path)),
+    );
+    for (const doc of targets) {
+      try {
+        const content = fromRequestDto(await this.bridge.send('request.load', { path: doc.path! }));
+        this.documents.update((docs) =>
+          docs.map((d) =>
+            d.id === doc.id && !d.dirty ? { ...d, ...content, revision: d.revision + 1 } : d,
+          ),
+        );
+      } catch {
+        // Gone or unreadable (for example still full of conflict markers): keep what is open.
+      }
+    }
+  }
+
   showView(view: SidebarView): void {
     if (this.sidebarView() === view) {
       this.sidebarOpen.update((open) => !open);

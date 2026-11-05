@@ -19,6 +19,9 @@ public static class GitErrors
     public const string NoRemoteCode = "git.no_remote";
     public const string PushRejectedCode = "git.push_rejected";
     public const string CommandFailedCode = "git.command_failed";
+    public const string NotMergingCode = "git.not_merging";
+    public const string NotConflictedCode = "git.not_conflicted";
+    public const string ConflictMarkersRemainCode = "git.conflict_markers_remain";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -59,6 +62,17 @@ public static class GitErrors
 
     public static Error PushRejected(string details) =>
         new(PushRejectedCode, WithDetails("The remote rejected the push. Pull the latest changes and try again.", details));
+
+    public static Error NotMerging() =>
+        new(NotMergingCode, "No merge is in progress.");
+
+    public static Error NotConflicted(string path) =>
+        new(NotConflictedCode, $"'{path}' has no merge conflict to resolve.");
+
+    public static Error ConflictMarkersRemain(string path) =>
+        new(
+            ConflictMarkersRemainCode,
+            $"'{path}' still contains conflict markers (<<<<<<<, =======, >>>>>>>). Edit them out, or keep one side's version.");
 
     public static Error CommandFailed(string command, string details) =>
         new(CommandFailedCode, WithDetails($"git {command} failed.", details));

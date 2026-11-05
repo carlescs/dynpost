@@ -79,7 +79,26 @@ export interface GitStatus {
   /** Whether a merge is in progress. */
   merging: boolean;
   changes: GitChange[];
+  /** During a merge, git's proposed commit message. */
+  mergeMessage?: string | null;
 }
+
+/** Both sides of a conflicted file; a side is `null` when it deleted the file. */
+export interface GitConflict {
+  path: string;
+  /** The common ancestor; `null` when both sides added the file. */
+  base: string | null;
+  /** The current branch's version. */
+  ours: string | null;
+  /** The incoming version. */
+  theirs: string | null;
+  /** The file on disk, usually with conflict markers; `null` if it was deleted. */
+  working: string | null;
+  hasConflictMarkers: boolean;
+}
+
+/** How the user resolves a conflicted file: take one side, or keep their own edit. */
+export type ConflictResolution = 'ours' | 'theirs' | 'edited';
 
 export type PullOutcome = 'upToDate' | 'updated' | 'conflicted';
 
@@ -118,6 +137,11 @@ export interface BridgeMessages {
   'git.pull': { payload: void; result: { outcome: PullOutcome; status: GitStatus } };
   /** Pushes the current branch, or publishes it when it has no upstream. Never forces. */
   'git.push': { payload: void; result: GitStatus };
+  'git.conflict': { payload: { path: string }; result: GitConflict };
+  /** Resolves one conflicted file; `edited` is refused while it still has conflict markers. */
+  'git.resolve': { payload: { path: string; resolution: ConflictResolution }; result: GitStatus };
+  /** Abandons the merge in progress (`git merge --abort`). */
+  'git.abortMerge': { payload: void; result: GitStatus };
 }
 
 export type BridgeMessageType = keyof BridgeMessages;

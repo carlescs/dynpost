@@ -7,13 +7,15 @@ namespace Missive.Domain.Git;
 /// <param name="Behind">Upstream commits not yet pulled, as of the last fetch.</param>
 /// <param name="IsMerging">Whether a merge is in progress (for example after a pull that conflicted).</param>
 /// <param name="Changes">Changed files inside the workspace folder.</param>
+/// <param name="MergeMessage">During a merge, git's proposed commit message (without comment lines).</param>
 public sealed record GitStatus(
     string? Branch,
     string? Upstream,
     int Ahead,
     int Behind,
     bool IsMerging,
-    IReadOnlyList<GitChange> Changes)
+    IReadOnlyList<GitChange> Changes,
+    string? MergeMessage = null)
 {
     public bool IsDetached => Branch is null;
 

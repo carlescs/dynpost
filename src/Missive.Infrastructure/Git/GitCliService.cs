@@ -53,8 +53,180 @@ public sealed class GitCliService : IGitService
             return merging.Error!;
         }
 
-        return PorcelainStatusParser.Parse(status.Value.StandardOutput, prefix.Value, merging.Value);
+        var parsed = PorcelainStatusParser.Parse(status.Value.StandardOutput, prefix.Value, merging.Value);
+        if (!merging.Value)
+        {
+            return parsed;
+        }
+
+        var mergeMessage = await ReadMergeMessageAsync(workspacePath, cancellationToken);
+        if (mergeMessage.IsFailure)
+        {
+            return mergeMessage.Error!;
+        }
+
+        return parsed with { MergeMessage = mergeMessage.Value };
     }
+
+    public async Task<Result<GitConflict>> GetConflictAsync(
+        string workspacePath,
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsSafeRelativePath(path))
+        {
+            return GitErrors.NotConflicted(path);
+        }
+
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var versions = new string?[3];
+        for (var stage = 1; stage <= 3; stage++)
+        {
+            var version = await ReadStageAsync(workspacePath, path, stage, cancellationToken);
+            if (version.IsFailure)
+            {
+                return version.Error!;
+            }
+
+            versions[stage - 1] = version.Value;
+        }
+
+        var file = Path.Combine(workspacePath, path);
+        string? working = null;
+        try
+        {
+            if (File.Exists(file))
+            {
+                working = await File.ReadAllTextAsync(file, cancellationToken);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return GitErrors.CommandFailed("show", $"Could not read '{path}': {ex.Message}");
+        }
+
+        return new GitConflict(path, versions[0], versions[1], versions[2], working);
+    }
+
+    public async Task<Result<Unit>> ResolveConflictAsync(
+        string workspacePath,
+        string path,
+        ConflictResolution resolution,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsSafeRelativePath(path))
+        {
+            return GitErrors.NotConflicted(path);
+        }
+
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var pathspec = ":(literal)" + path;
+        if (resolution == ConflictResolution.Edited)
+        {
+            // Stages the file as it is now, or its deletion if the user deleted it.
+            var added = await RunCheckedAsync(workspacePath, "add", ["add", "--all", "--", pathspec], cancellationToken);
+            return Done(added);
+        }
+
+        var stage = resolution == ConflictResolution.Ours ? 2 : 3;
+        var version = await ReadStageAsync(workspacePath, path, stage, cancellationToken);
+        if (version.IsFailure)
+        {
+            return version.Error!;
+        }
+
+        if (version.Value is null)
+        {
+            // The chosen side deleted the file: resolving to it means deleting it.
+            var removed = await RunCheckedAsync(workspacePath, "rm", ["rm", "--quiet", "--force", "--", pathspec], cancellationToken);
+            return Done(removed);
+        }
+
+        var side = resolution == ConflictResolution.Ours ? "--ours" : "--theirs";
+        var checkout = await RunCheckedAsync(workspacePath, "checkout", ["checkout", side, "--", pathspec], cancellationToken);
+        if (checkout.IsFailure)
+        {
+            return checkout.Error!;
+        }
+
+        var add = await RunCheckedAsync(workspacePath, "add", ["add", "--", pathspec], cancellationToken);
+        return Done(add);
+    }
+
+    public async Task<Result<Unit>> AbortMergeAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var abort = await RunCheckedAsync(workspacePath, "merge --abort", ["merge", "--abort"], cancellationToken);
+        return Done(abort);
+    }
+
+    /// <summary>
+    /// One version of a conflicted file from the index: stage 1 is the common ancestor, 2 the
+    /// current branch, 3 the incoming branch. <c>null</c> when that side has no such file.
+    /// </summary>
+    private async Task<Result<string?>> ReadStageAsync(string workspacePath, string path, int stage, CancellationToken cancellationToken)
+    {
+        // "./" makes the path relative to the working directory (the workspace) instead of the repository root.
+        var result = await RunAsync(workspacePath, ["show", $":{stage}:./{path}"], cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        return Result<string?>.Success(result.Value.Succeeded ? result.Value.StandardOutput : null);
+    }
+
+    /// <summary>git's proposed merge commit message, without its comment lines; <c>null</c> if there is none.</summary>
+    private async Task<Result<string?>> ReadMergeMessageAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        var gitPath = await RunCheckedAsync(workspacePath, "rev-parse", ["rev-parse", "--git-path", "MERGE_MSG"], cancellationToken);
+        if (gitPath.IsFailure)
+        {
+            return gitPath.Error!;
+        }
+
+        var file = Path.Combine(workspacePath, gitPath.Value.StandardOutput.TrimEnd('\r', '\n'));
+        try
+        {
+            if (!File.Exists(file))
+            {
+                return Result<string?>.Success(null);
+            }
+
+            var lines = (await File.ReadAllLinesAsync(file, cancellationToken)).Where(line => !line.StartsWith('#'));
+            var message = string.Join('\n', lines).Trim();
+            return Result<string?>.Success(message.Length == 0 ? null : message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The message is only a suggestion; the merge can be committed without it.
+            return Result<string?>.Success(null);
+        }
+    }
+
+    private static Result<Unit> Done(Result<GitCommandResult> result) =>
+        result.IsFailure ? Result<Unit>.Failure(result.Error!) : Result<Unit>.Success(Unit.Value);
+
+    /// <summary>Defense in depth: a workspace-relative path that can't leave the workspace.</summary>
+    private static bool IsSafeRelativePath(string path) =>
+        !string.IsNullOrWhiteSpace(path)
+        && !Path.IsPathRooted(path)
+        && !path.Replace('\\', '/').Split('/').Any(segment => segment is "" or "." or "..");
 
     public async Task<Result<string>> CommitAsync(
         string workspacePath,
