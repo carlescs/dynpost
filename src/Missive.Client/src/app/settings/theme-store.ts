@@ -22,15 +22,20 @@ export class ThemeStore {
     });
   }
 
+  private themeRevision = 0;
+
   async load(): Promise<void> {
+    const revision = this.themeRevision;
     try {
-      this.theme.set((await this.bridge.send('settings.get')).theme);
+      const settings = await this.bridge.send('settings.get');
+      if (revision === this.themeRevision) this.theme.set(settings.theme);
     } catch (error) {
       console.warn('Could not load the settings', error);
     }
   }
 
   async setDark(dark: boolean): Promise<void> {
+    this.themeRevision++;
     const previous = this.theme();
     this.theme.set(dark ? 'dark' : 'light');
     try {
