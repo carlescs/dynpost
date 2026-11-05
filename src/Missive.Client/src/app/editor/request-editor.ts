@@ -80,7 +80,13 @@ const BODY_LABELS: Record<BodyType, string> = {
           (change)="patch({ method: $any($event.target).value })"
         >
           @for (method of methods; track method) {
-            <option [value]="method" [selected]="method === doc.method">{{ method }}</option>
+            <option
+              [value]="method"
+              [selected]="method === doc.method"
+              [class]="methodColors[method]"
+            >
+              {{ method }}
+            </option>
           }
         </select>
         <app-variable-input
