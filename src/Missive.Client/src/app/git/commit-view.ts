@@ -130,17 +130,16 @@ type DiffMode = 'request' | 'text';
               @if (file.isRequest && !file.binary) {
                 <div
                   class="flex shrink-0 overflow-hidden rounded border border-slate-300 text-sm"
-                  role="radiogroup"
+                  role="group"
                   aria-label="Show the changes as"
                 >
                   <button
                     type="button"
-                    role="radio"
                     class="flex items-center gap-1.5 px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50"
                     [class]="
                       effectiveMode() === 'request' ? 'bg-sky-600 text-white' : 'hover:bg-slate-100'
                     "
-                    [attr.aria-checked]="effectiveMode() === 'request'"
+                    [attr.aria-pressed]="effectiveMode() === 'request'"
                     [disabled]="!canShowRequest()"
                     [title]="canShowRequest() ? 'Compare as a request' : (file.requestError ?? '')"
                     (click)="mode.set('request')"
@@ -149,12 +148,11 @@ type DiffMode = 'request' | 'text';
                   </button>
                   <button
                     type="button"
-                    role="radio"
                     class="flex items-center gap-1.5 border-l border-slate-300 px-2.5 py-1"
                     [class]="
                       effectiveMode() === 'text' ? 'bg-sky-600 text-white' : 'hover:bg-slate-100'
                     "
-                    [attr.aria-checked]="effectiveMode() === 'text'"
+                    [attr.aria-pressed]="effectiveMode() === 'text'"
                     title="Compare the file's text"
                     (click)="mode.set('text')"
                   >
