@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Missive.Domain.Git;
 
@@ -71,11 +72,12 @@ public sealed record GetCommitFileRequest(string CommitId, string Path);
 
 /// <summary>
 /// Reads a file before and after a commit, to review what the commit changed in it. Only files the
-/// commit changed can be read, so paths can't point elsewhere.
+/// commit changed can be read, so paths can't point elsewhere. Request files are also parsed on both
+/// sides, so the UI can compare them field by field.
 /// </summary>
-public sealed class GetCommitFile(IGitService git, CurrentWorkspace workspace)
+public sealed class GetCommitFile(IGitService git, IRequestFileFormat requestFormat, CurrentWorkspace workspace)
 {
-    public async Task<Result<GitFileRevision>> ExecuteAsync(
+    public async Task<Result<GitFileRevisionDto>> ExecuteAsync(
         GetCommitFileRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -127,7 +129,12 @@ public sealed class GetCommitFile(IGitService git, CurrentWorkspace workspace)
             after = read.Value;
         }
 
-        return new GitFileRevision(commit.Id, change, before, after);
+        var revision = new GitFileRevision(commit.Id, change, before, after);
+        var requests = revision.IsBinary
+            ? GitRequestSides.NotRequest
+            : GitRequestSides.Parse(requestFormat, change.Path, change.OriginalPath, before, after);
+
+        return GitFileRevisionDto.From(revision, requests);
     }
 }
 

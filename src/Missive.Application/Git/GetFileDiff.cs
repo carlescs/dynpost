@@ -2,8 +2,6 @@ using Missive.Application.Common;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Missive.Domain.Git;
-using Missive.Domain.Requests;
-using Missive.Domain.Workspaces;
 
 namespace Missive.Application.Git;
 
@@ -45,35 +43,20 @@ public sealed class GetFileDiff(IGitService git, IRequestFileFormat requestForma
 
     private GitFileDiffDto ToDto(GitFileDiff diff)
     {
-        var dto = new GitFileDiffDto(
+        var requests = diff.IsBinary
+            ? GitRequestSides.NotRequest
+            : GitRequestSides.Parse(requestFormat, diff.Path, diff.OriginalPath, diff.Original, diff.Modified);
+
+        return new GitFileDiffDto(
             diff.Path,
             GitStatusDto.StatusName(diff.Status),
             diff.OriginalPath,
             diff.IsBinary,
             diff.Original,
             diff.Modified,
-            IsRequest: false);
-
-        if (diff.IsBinary
-            || !WorkspacePath.TryParse(diff.Path, out var path)
-            || !WorkspaceLayout.IsRequestPath(path))
-        {
-            return dto;
-        }
-
-        var originalPath = diff.OriginalPath is { } from && WorkspacePath.TryParse(from, out var parsed) ? parsed : path;
-        var original = Parse(diff.Original, originalPath);
-        var modified = Parse(diff.Modified, path);
-
-        return dto with
-        {
-            IsRequest = true,
-            OriginalRequest = original?.IsSuccess == true ? RequestMapper.ToDto(original.Value.Value) : null,
-            ModifiedRequest = modified?.IsSuccess == true ? RequestMapper.ToDto(modified.Value.Value) : null,
-            RequestError = original?.Error?.Message ?? modified?.Error?.Message,
-        };
+            requests.IsRequest,
+            requests.OriginalRequest,
+            requests.ModifiedRequest,
+            requests.RequestError);
     }
-
-    private Result<HttpRequestDefinition>? Parse(string? text, WorkspacePath path) =>
-        text is null ? null : (Result<HttpRequestDefinition>?)requestFormat.Parse(text, path);
 }

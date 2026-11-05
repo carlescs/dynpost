@@ -88,19 +88,39 @@ public sealed record GitCommitDetailsDto(GitCommitInfoDto Commit, string Body, I
         new(GitCommitInfoDto.From(details.Commit), details.Body, details.Files.Select(GitChangeDto.From).ToList());
 }
 
-/// <summary>A file before and after a commit; a version is <c>null</c> when the file didn't exist there.</summary>
+/// <summary>
+/// A file before and after a commit; a version is <c>null</c> when the file didn't exist there. For
+/// request files, each existing side is also parsed.
+/// </summary>
 /// <param name="Binary">Whether the file looks binary; its versions are then left out.</param>
+/// <param name="IsRequest">Whether the file is a request file of the workspace.</param>
+/// <param name="OriginalRequest">The parsed version before the commit, when <paramref name="IsRequest"/> and it could be read.</param>
+/// <param name="ModifiedRequest">The parsed version in the commit, likewise.</param>
+/// <param name="RequestError">Why a side of a request file could not be read as a request, if it couldn't.</param>
 public sealed record GitFileRevisionDto(
     string CommitId,
     GitChangeDto Change,
     string? Before,
     string? After,
-    bool Binary)
+    bool Binary,
+    bool IsRequest = false,
+    RequestDto? OriginalRequest = null,
+    RequestDto? ModifiedRequest = null,
+    string? RequestError = null)
 {
-    public static GitFileRevisionDto From(GitFileRevision revision) =>
+    internal static GitFileRevisionDto From(GitFileRevision revision, GitRequestSides requests) =>
         revision.IsBinary
             ? new(revision.CommitId, GitChangeDto.From(revision.Change), null, null, true)
-            : new(revision.CommitId, GitChangeDto.From(revision.Change), revision.Before, revision.After, false);
+            : new(
+                revision.CommitId,
+                GitChangeDto.From(revision.Change),
+                revision.Before,
+                revision.After,
+                false,
+                requests.IsRequest,
+                requests.OriginalRequest,
+                requests.ModifiedRequest,
+                requests.RequestError);
 }
 
 /// <summary>Both sides of a conflicted file; a side is <c>null</c> when it deleted the file.</summary>

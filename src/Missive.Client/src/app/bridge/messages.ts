@@ -185,6 +185,13 @@ export interface GitFileRevision {
   after: string | null;
   /** Whether the file is binary; its versions are then left out. */
   binary: boolean;
+  /** Whether the file is a request file, so it can also be compared as a request. */
+  isRequest: boolean;
+  /** The before and after versions parsed as requests, when they could be. */
+  originalRequest?: RequestDto | null;
+  modifiedRequest?: RequestDto | null;
+  /** Why a version couldn't be read as a request. */
+  requestError?: string | null;
 }
 
 /** How the user resolves a conflicted file: take one side, or keep their own edit. */

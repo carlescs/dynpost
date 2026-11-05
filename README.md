@@ -260,7 +260,9 @@ configuration, hooks and credential helpers apply as usual. In detail:
   changed files in the workspace, newest first, 50 at a time (**Load more** for
   older ones). Choosing a commit opens it for review: its message, author and
   date, the workspace files it changed, and a diff of each file against the
-  commit before it (the first parent, for a merge). Reviewing history is
+  commit before it (the first parent, for a merge). A request file can be shown
+  as a **Request** or as **Text**, just like in the diff view, and the same
+  fallback to text applies. Reviewing history is
   read-only; it never checks out or changes anything.
 - **Remotes** lists the repository's remotes with their URLs. You can add one,
   rename it or change its URL (`git remote add`, `rename`, `set-url`), or

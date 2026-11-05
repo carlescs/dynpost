@@ -293,6 +293,8 @@ public sealed class GitBridgeTests : IDisposable
         _git.ReadFileAtCommitAsync(Folder, "abc1234", "a.yaml", Arg.Any<CancellationToken>()).Returns(Result<string?>.Success("name: B\n"));
         _git.ReadFileAtCommitAsync(Folder, "def5678", "logo.png", Arg.Any<CancellationToken>()).Returns(Result<string?>.Success("PNG\0\0"));
         _git.ReadFileAtCommitAsync(Folder, "abc1234", "logo.png", Arg.Any<CancellationToken>()).Returns(Result<string?>.Success("PNG\0\x01"));
+        _format.Parse(default!, default!).ReturnsForAnyArgs(
+            new HttpRequestDefinition("Get user", RequestMethod.Get, "https://x", [], [], RequestAuth.None, RequestBody.None));
 
         var text = await SendAsync("git.commitFile", """{ "commitId": "abc1234", "path": "a.yaml" }""");
         var binary = await SendAsync("git.commitFile", """{ "commitId": "abc1234", "path": "logo.png" }""");

@@ -91,7 +91,7 @@ internal static class BridgeHandlers
             .Register<GitCommitIdPayload, GitCommitDetailsDto>(BridgeMessageTypes.GitShow,
                 async (p, ct) => (await Use<GetCommit>().ExecuteAsync(p.CommitId, ct)).Map(GitCommitDetailsDto.From))
             .Register<GitCommitFilePayload, GitFileRevisionDto>(BridgeMessageTypes.GitCommitFile,
-                async (p, ct) => (await Use<GetCommitFile>().ExecuteAsync(new GetCommitFileRequest(p.CommitId, p.Path), ct)).Map(GitFileRevisionDto.From))
+                async (p, ct) => (await Use<GetCommitFile>().ExecuteAsync(new GetCommitFileRequest(p.CommitId, p.Path), ct)))
             .Register<GitDiffPayload, GitFileDiffDto>(BridgeMessageTypes.GitDiff,
                 (p, ct) => Use<GetFileDiff>().ExecuteAsync(p.Path, ct))
             .Register(BridgeMessageTypes.GitRemoteList,
