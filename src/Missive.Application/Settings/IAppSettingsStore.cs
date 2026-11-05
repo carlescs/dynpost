@@ -9,4 +9,8 @@ public interface IAppSettingsStore
     Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default);
 
     Task<Result<Unit>> SaveAsync(AppSettings settings, CancellationToken cancellationToken = default);
+
+    Task<Result<AppSettings>> UpdateAsync(
+        Func<AppSettings, AppSettings> update,
+        CancellationToken cancellationToken = default);
 }

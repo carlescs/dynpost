@@ -30,10 +30,6 @@ public sealed class OpenWorkspace(IWorkspaceRepository repository, CurrentWorksp
     /// <summary>Best effort: failing to remember the folder must not stop the user from opening it.</summary>
     private async Task RememberAsync(string folder, CancellationToken cancellationToken)
     {
-        var saved = await settings.LoadAsync(cancellationToken);
-        if (saved.LastWorkspacePath != folder)
-        {
-            await settings.SaveAsync(saved with { LastWorkspacePath = folder }, cancellationToken);
-        }
+        await settings.UpdateAsync(saved => saved with { LastWorkspacePath = folder }, cancellationToken);
     }
 }

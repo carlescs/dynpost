@@ -1,4 +1,5 @@
 import {
+  Theme,
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
   ERROR_CODES,
@@ -71,6 +72,7 @@ export class MockBackend {
   ]);
   private activeEnvironment: string | null = 'dev.yaml';
   private open = false;
+  private theme: Theme = 'light';
   /** Sends in progress, by id: calling the function cancels it. */
   private readonly sends = new Map<string, () => void>();
 
@@ -97,6 +99,11 @@ export class MockBackend {
       return ok(!!cancel);
     }
     if (request.type === 'workspace.openLast') return ok(null);
+    if (request.type === 'settings.get') return ok({ theme: this.theme });
+    if (request.type === 'settings.setTheme') {
+      this.theme = payload?.['theme'] as Theme;
+      return ok({ theme: this.theme });
+    }
     // The browser preview is never installed, so it cannot update itself.
     if (request.type === 'update.check') return ok({ state: 'unsupported' });
     if (request.type === 'update.restart') {

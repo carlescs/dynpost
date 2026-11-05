@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import type { editor } from 'monaco-editor/editor/editor.api';
 import { VARIABLE_PATTERN, VariableLookup, describeVariable, variableClass } from '../variables';
+import { ThemeStore } from '../../settings/theme-store';
 import { Monaco, loadMonaco } from './monaco-loader';
 
 /**
@@ -55,6 +56,7 @@ export class CodeEditor {
   private applyingInput = false;
   private variableDecorations: editor.IEditorDecorationsCollection | null = null;
   private destroyed = false;
+  private readonly themes = inject(ThemeStore);
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -64,6 +66,11 @@ export class CodeEditor {
     });
 
     afterNextRender(() => void this.create());
+
+    effect(() => {
+      const theme = this.themes.monacoTheme();
+      if (this.ready()) this.monaco?.editor.setTheme(theme);
+    });
 
     effect(() => {
       const value = this.value();
@@ -118,7 +125,7 @@ export class CodeEditor {
       renderLineHighlight: this.readOnly() ? 'none' : 'line',
       tabSize: 2,
       fixedOverflowWidgets: true,
-      theme: 'vs',
+      theme: this.themes.monacoTheme(),
     });
     this.variableDecorations = editor.createDecorationsCollection();
     editor.onDidChangeModelContent(() => {

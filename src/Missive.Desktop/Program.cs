@@ -79,6 +79,8 @@ internal static class Program
             .AddSingleton<InFlightRequests>()
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
             .AddSingleton<IAppUpdater>(new VelopackAppUpdater(ReleasesRepository))
+            .AddTransient<GetAppSettings>()
+            .AddTransient<SetTheme>()
             .AddTransient<CheckForUpdate>()
             .AddTransient<RestartToUpdate>()
             .AddTransient<OpenWorkspace>()

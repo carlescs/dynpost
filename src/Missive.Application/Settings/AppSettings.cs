@@ -5,7 +5,17 @@ namespace Missive.Application.Settings;
 /// never end up in a repository).
 /// </summary>
 /// <param name="LastWorkspacePath">The workspace folder to reopen at startup.</param>
-public sealed record AppSettings(string? LastWorkspacePath = null)
+/// <param name="Theme">The color theme, <see cref="AppThemes.Light"/> or <see cref="AppThemes.Dark"/>; <c>null</c> is light.</param>
+public sealed record AppSettings(string? LastWorkspacePath = null, string? Theme = null)
 {
     public static AppSettings Default { get; } = new();
+}
+
+/// <summary>The color themes the UI supports.</summary>
+public static class AppThemes
+{
+    public const string Light = "light";
+    public const string Dark = "dark";
+
+    public static bool IsValid(string? theme) => theme is Light or Dark;
 }

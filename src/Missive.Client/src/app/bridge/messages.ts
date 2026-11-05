@@ -237,9 +237,20 @@ export interface UpdateStatus {
   version?: string | null;
 }
 
+export type Theme = 'light' | 'dark';
+
+/** The per-user settings the UI can change. */
+export interface AppSettingsDto {
+  theme: Theme;
+}
+
 /** Every message type with its payload and result. */
 export interface BridgeMessages {
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
+  /** Reads the per-user settings (kept in the host's settings file). */
+  'settings.get': { payload: void; result: AppSettingsDto };
+  /** Remembers the color theme. */
+  'settings.setTheme': { payload: { theme: Theme }; result: AppSettingsDto };
   'workspace.pick': { payload: void; result: WorkspaceDto | null };
   'workspace.open': { payload: { path: string }; result: WorkspaceDto };
   /** Reopens the workspace from the previous session; `null` when there is none. */
