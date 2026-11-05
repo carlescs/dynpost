@@ -77,6 +77,9 @@ internal static class BridgeMessageTypes
     /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
     public const string GitStatus = "git.status";
 
+    /// <summary>Creates a git repository in the open workspace folder. Payload: none. Result: new status.</summary>
+    public const string GitInit = "git.init";
+
     /// <summary>Commits changes. Payload: <see cref="GitCommitPayload"/>. Result: commit id and new status.</summary>
     public const string GitCommit = "git.commit";
 

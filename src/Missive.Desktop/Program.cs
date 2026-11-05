@@ -78,6 +78,7 @@ internal static class Program
             .AddTransient<DeleteEnvironment>()
             .AddTransient<SelectEnvironment>()
             .AddTransient<GetGitStatus>()
+            .AddTransient<InitRepository>()
             .AddTransient<CommitChanges>()
             .AddTransient<PullChanges>()
             .AddTransient<PushChanges>()

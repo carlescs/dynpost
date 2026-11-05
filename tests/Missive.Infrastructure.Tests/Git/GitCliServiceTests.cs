@@ -29,6 +29,69 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Init_CreatesARepositoryThatIgnoresTheLocalFolder()
+    {
+        var workspace = _temp.Combine("new");
+        Write(workspace, "health.yaml", "name: Health\n");
+        Write(workspace, ".missive/secrets.yaml", "apiToken: secret\n");
+
+        var result = await _git.InitAsync(workspace);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.True(Directory.Exists(Path.Combine(workspace, ".git")));
+        Assert.Equal(".missive/\n", File.ReadAllText(Path.Combine(workspace, ".gitignore")));
+        var status = await _git.GetStatusAsync(workspace);
+        Assert.True(status.IsSuccess, status.Error?.Message);
+        Assert.Equal([".gitignore", "health.yaml"], status.Value.Changes.Select(c => c.Path).Order());
+    }
+
+    [Fact]
+    public async Task Init_AppendsToAnExistingGitIgnore()
+    {
+        var workspace = _temp.Combine("new");
+        Write(workspace, ".gitignore", "*.log");
+
+        var result = await _git.InitAsync(workspace);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal("*.log\n.missive/\n", File.ReadAllText(Path.Combine(workspace, ".gitignore")));
+    }
+
+    [Fact]
+    public async Task Init_LeavesAGitIgnoreThatAlreadyIgnoresTheLocalFolder()
+    {
+        var workspace = _temp.Combine("new");
+        Write(workspace, ".gitignore", "/.missive\r\nbin/\r\n");
+
+        var result = await _git.InitAsync(workspace);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal("/.missive\r\nbin/\r\n", File.ReadAllText(Path.Combine(workspace, ".gitignore")));
+    }
+
+    [Fact]
+    public async Task Init_InsideARepository_IsRefused()
+    {
+        var repository = InitRepository("repo");
+        var workspace = Path.Combine(repository, "api");
+        Directory.CreateDirectory(workspace);
+
+        var result = await _git.InitAsync(workspace);
+
+        Assert.Equal(GitErrors.AlreadyARepositoryCode, result.Error?.Code);
+        Assert.False(Directory.Exists(Path.Combine(workspace, ".git")));
+        Assert.False(File.Exists(Path.Combine(workspace, ".gitignore")));
+    }
+
+    [Fact]
+    public async Task Init_MissingFolder_IsReported()
+    {
+        var result = await _git.InitAsync(_temp.Combine("missing"));
+
+        Assert.Equal(GitErrors.WorkspaceNotFoundCode, result.Error?.Code);
+    }
+
+    [Fact]
     public async Task MissingGitExecutable_IsReported()
     {
         var git = new GitCliService("missive-no-such-git-executable");

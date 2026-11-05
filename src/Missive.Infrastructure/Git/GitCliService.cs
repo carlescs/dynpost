@@ -68,6 +68,39 @@ public sealed class GitCliService : IGitService
         return parsed with { MergeMessage = mergeMessage.Value };
     }
 
+    public async Task<Result<Unit>> InitAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsSuccess)
+        {
+            return GitErrors.AlreadyARepository(workspacePath);
+        }
+
+        // Only a folder git positively reports as outside any repository is initialized; any other
+        // failure (git missing, unsafe ownership...) is passed on rather than nesting a repository.
+        if (prefix.Error!.Code != GitErrors.NotARepositoryCode)
+        {
+            return prefix.Error!;
+        }
+
+        var init = await RunCheckedAsync(workspacePath, "init", ["init", "--quiet"], cancellationToken);
+        if (init.IsFailure)
+        {
+            return init.Error!;
+        }
+
+        try
+        {
+            await GitIgnoreFile.EnsureIgnoredAsync(workspacePath, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return GitErrors.CommandFailed("init", $"The repository was created, but .gitignore could not be updated: {ex.Message}");
+        }
+
+        return Unit.Value;
+    }
+
     public async Task<Result<GitConflict>> GetConflictAsync(
         string workspacePath,
         string path,

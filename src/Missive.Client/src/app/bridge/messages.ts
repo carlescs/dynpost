@@ -201,6 +201,8 @@ export interface BridgeMessages {
   'environment.select': { payload: { id: string | null }; result: null };
   /** The open workspace's git status. */
   'git.status': { payload: void; result: GitStatus };
+  /** Creates a git repository in the open workspace folder (`git init`). */
+  'git.init': { payload: void; result: GitStatus };
   /** Commits `paths`, or every change in the workspace when `paths` is omitted. */
   'git.commit': {
     payload: { message: string; paths?: string[] };

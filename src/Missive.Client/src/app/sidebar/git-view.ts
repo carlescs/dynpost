@@ -63,6 +63,20 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
           <fa-icon [icon]="faFolderOpen" /> Open folder
         </button>
       </div>
+    } @else if (git.notARepository()) {
+      <div class="space-y-2 px-3 text-sm text-slate-500">
+        <p>This workspace folder is not a git repository yet.</p>
+        <p>Initialize one to track changes and sync them with a remote.</p>
+        <button
+          type="button"
+          class="flex w-full items-center justify-center gap-2 rounded bg-sky-600 px-3 py-1 text-sm text-white enabled:hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+          [disabled]="git.busy() !== null"
+          (click)="git.init()"
+        >
+          <fa-icon [icon]="busyIcon('init', faCodeBranch)" [animation]="spin('init')" />
+          Initialize repository
+        </button>
+      </div>
     } @else {
       @if (!git.conflict() && git.error(); as error) {
         <div

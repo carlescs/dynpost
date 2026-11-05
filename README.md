@@ -206,6 +206,10 @@ reported so you can resolve them (in Missive's editor or your own tools).
 Missive runs your installed `git` command-line client, so your git
 configuration, hooks and credential helpers apply as usual. In detail:
 
+- **Initialize**: if the workspace folder is not inside a git repository, the
+  Source control view offers to create one there (`git init`, using your
+  default branch name) and adds `.missive/` to the folder's `.gitignore`,
+  creating the file if needed. Add a remote with your git tools to push it.
 - **Status** lists changed files inside the workspace folder only (the
   workspace can be a subfolder of a larger repository), plus the branch, its
   upstream and how many commits it is ahead of or behind it. It refreshes when
