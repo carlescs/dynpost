@@ -34,6 +34,6 @@
     "postcss": "^8.5.32",
     "prettier": "^3.8.1",
     "tailwindcss": "^4.3.4",
-    "typescript": "~6.0.2"
+    "typescript": "~7.0.2"
   }
 }
