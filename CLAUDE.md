@@ -68,8 +68,9 @@ Prettier. Before finishing, run `dotnet build Missive.sln` and
 CI (`.github/workflows/ci.yml`) runs the Prettier check, the client build, and
 build + test on Windows, Linux and macOS. `.github/workflows/release.yml`
 packages self-contained desktop builds with Velopack (`vpk pack`: installers,
-portable copies and update feeds) and publishes them to a GitHub release when a
-`v*` tag is pushed. The app updates itself from those releases through the
+portable copies and update feeds) and, when a `v*` tag is pushed, publishes only
+the installers plus the update feeds and `.nupkg` packages to a GitHub release
+(portable copies stay in the workflow artifacts). The app updates itself from those releases through the
 `IAppUpdater` port (`Infrastructure/Updates/VelopackAppUpdater.cs`). Desktop
 also references `Velopack`, only because `vpk` requires `Program.Main` to call
 `VelopackApp.Build().Run()` directly. Keep the workflow's `vpk` version equal to
