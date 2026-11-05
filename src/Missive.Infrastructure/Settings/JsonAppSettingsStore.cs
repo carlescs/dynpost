@@ -37,6 +37,54 @@ public sealed class JsonAppSettingsStore(string filePath) : IAppSettingsStore
         await _lock.WaitAsync(cancellationToken);
         try
         {
+            return await LoadUnlockedAsync(cancellationToken);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task<Result<Unit>> SaveAsync(AppSettings settings, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            return await SaveUnlockedAsync(settings, cancellationToken);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task<Result<AppSettings>> UpdateAsync(
+        Func<AppSettings, AppSettings> update,
+        CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            var settings = await LoadUnlockedAsync(cancellationToken);
+            var updated = update(settings);
+            if (updated == settings)
+            {
+                return updated;
+            }
+
+            var saved = await SaveUnlockedAsync(updated, cancellationToken);
+            return saved.IsSuccess ? updated : saved.Error!;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private async Task<AppSettings> LoadUnlockedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
             if (!File.Exists(filePath))
             {
                 return AppSettings.Default;
@@ -51,15 +99,10 @@ public sealed class JsonAppSettingsStore(string filePath) : IAppSettingsStore
             // Unreadable settings are not worth failing the app over; start from the defaults.
             return AppSettings.Default;
         }
-        finally
-        {
-            _lock.Release();
-        }
     }
 
-    public async Task<Result<Unit>> SaveAsync(AppSettings settings, CancellationToken cancellationToken = default)
+    private async Task<Result<Unit>> SaveUnlockedAsync(AppSettings settings, CancellationToken cancellationToken)
     {
-        await _lock.WaitAsync(cancellationToken);
         var temporaryPath = filePath + ".tmp";
         try
         {
@@ -72,10 +115,6 @@ public sealed class JsonAppSettingsStore(string filePath) : IAppSettingsStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new Error(SaveFailedCode, $"Could not save the settings to '{filePath}': {ex.Message}");
-        }
-        finally
-        {
-            _lock.Release();
         }
     }
 }

@@ -40,4 +40,17 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
 
         Assert.Equal(AppSettings.Default, await new JsonAppSettingsStore(file).LoadAsync());
     }
+
+    [Fact]
+    public async Task ConcurrentUpdates_PreserveBothChanges()
+    {
+        var store = new JsonAppSettingsStore(_temp.Combine("settings.json"));
+
+        var updates = await Task.WhenAll(
+            store.UpdateAsync(settings => settings with { Theme = AppThemes.Dark }),
+            store.UpdateAsync(settings => settings with { LastWorkspacePath = "/work/my-api" }));
+
+        Assert.All(updates, result => Assert.True(result.IsSuccess, result.Error?.Message));
+        Assert.Equal(new AppSettings("/work/my-api", AppThemes.Dark), await store.LoadAsync());
+    }
 }

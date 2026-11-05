@@ -14,8 +14,7 @@ public sealed class SetTheme(IAppSettingsStore store)
             return new Error(InvalidThemeCode, $"Unknown theme '{theme}'; use light or dark.");
         }
 
-        var settings = (await store.LoadAsync(cancellationToken)) with { Theme = theme };
-        var saved = await store.SaveAsync(settings, cancellationToken);
-        return saved.IsSuccess ? AppSettingsDto.From(settings) : saved.Error!;
+        var saved = await store.UpdateAsync(settings => settings with { Theme = theme }, cancellationToken);
+        return saved.IsSuccess ? AppSettingsDto.From(saved.Value) : saved.Error!;
     }
 }

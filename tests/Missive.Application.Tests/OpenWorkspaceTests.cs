@@ -12,11 +12,16 @@ public class OpenWorkspaceTests
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly CurrentWorkspace _current = new();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
+    private AppSettings _storedSettings = AppSettings.Default;
 
     public OpenWorkspaceTests()
     {
-        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(AppSettings.Default);
-        _settings.SaveAsync(default!, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+        _settings.UpdateAsync(Arg.Any<Func<AppSettings, AppSettings>>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                _storedSettings = call.Arg<Func<AppSettings, AppSettings>>()(_storedSettings);
+                return Task.FromResult<Result<AppSettings>>(_storedSettings);
+            });
     }
 
     [Fact]

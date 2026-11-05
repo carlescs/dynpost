@@ -11,7 +11,12 @@ public class ThemeTests
     public ThemeTests()
     {
         _store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new AppSettings("/work/api"));
-        _store.SaveAsync(default!, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+        _store.UpdateAsync(Arg.Any<Func<AppSettings, AppSettings>>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var update = call.Arg<Func<AppSettings, AppSettings>>();
+                return Task.FromResult<Result<AppSettings>>(update(new AppSettings("/work/api")));
+            });
     }
 
     [Fact]
@@ -28,8 +33,9 @@ public class ThemeTests
         var result = await new SetTheme(_store).ExecuteAsync("dark");
 
         Assert.Equal("dark", result.Value!.Theme);
-        _ = _store.Received(1).SaveAsync(
-            Arg.Is<AppSettings>(s => s.Theme == "dark" && s.LastWorkspacePath == "/work/api"),
+        _ = _store.Received(1).UpdateAsync(
+            Arg.Is<Func<AppSettings, AppSettings>>(update =>
+                update(new AppSettings("/work/api")) == new AppSettings("/work/api", "dark")),
             Arg.Any<CancellationToken>());
     }
 
@@ -39,6 +45,6 @@ public class ThemeTests
         var result = await new SetTheme(_store).ExecuteAsync("neon");
 
         Assert.Equal(SetTheme.InvalidThemeCode, result.Error!.Code);
-        _ = _store.DidNotReceiveWithAnyArgs().SaveAsync(default!, default);
+        _ = _store.DidNotReceiveWithAnyArgs().UpdateAsync(default!, default);
     }
 }
