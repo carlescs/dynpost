@@ -57,6 +57,7 @@
   --color-emerald-900: oklch(95% 0.052 163.051);
   --color-sky-50: oklch(29.3% 0.066 243.157);
   --color-sky-100: oklch(39.1% 0.09 240.876);
+  --color-sky-700: oklch(82.8% 0.111 230.318);
 }
 
 /* Elements marked `always-dark` (header, activity bar) keep the light-theme palette... */
