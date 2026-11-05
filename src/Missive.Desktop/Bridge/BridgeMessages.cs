@@ -99,6 +99,21 @@ internal static class BridgeMessageTypes
     public const string GitAbortMerge = "git.abortMerge";
 
     /// <summary>
+    /// Reads a page of the commits that changed the workspace, newest first. Payload:
+    /// <see cref="GitLogPayload"/>. Result: commits and whether more follow.
+    /// </summary>
+    public const string GitLog = "git.log";
+
+    /// <summary>Reads a commit with its message and changed files. Payload: <see cref="GitCommitIdPayload"/>. Result: commit details.</summary>
+    public const string GitShow = "git.show";
+
+    /// <summary>
+    /// Reads a file before and after a commit. Payload: <see cref="GitCommitFilePayload"/>. Result:
+    /// both versions.
+    /// </summary>
+    public const string GitCommitFile = "git.commitFile";
+
+    /// <summary>
     /// Looks for a newer version of the app and downloads it. Payload: none. Result: update status.
     /// </summary>
     public const string UpdateCheck = "update.check";
@@ -156,6 +171,14 @@ internal sealed record GitConflictPayload(string Path);
 
 /// <param name="Resolution"><c>ours</c>, <c>theirs</c> or <c>edited</c>.</param>
 internal sealed record GitResolvePayload(string Path, string Resolution);
+
+/// <param name="Skip">How many of the newest commits to skip; 0 for the first page.</param>
+/// <param name="Limit">The page size; omitted uses the default.</param>
+internal sealed record GitLogPayload(int Skip = 0, int? Limit = null);
+
+internal sealed record GitCommitIdPayload(string CommitId);
+
+internal sealed record GitCommitFilePayload(string CommitId, string Path);
 
 internal static class BridgeErrorCodes
 {

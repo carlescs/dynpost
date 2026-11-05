@@ -13,22 +13,16 @@ import {
   faTriangleExclamation,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
-import { GitChange, GitFileStatus } from '../bridge/messages';
+import { GitChange } from '../bridge/messages';
+import { STATUS_BADGES, fileName, folderOf } from '../git/git-format';
+import { GitHistoryStore } from '../git/git-history-store';
 import { GitOperation, GitStore } from '../git/git-store';
 import { WorkspaceStore } from '../workspace/workspace-store';
-
-const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = {
-  modified: { letter: 'M', color: 'text-amber-600' },
-  added: { letter: 'A', color: 'text-emerald-600' },
-  untracked: { letter: 'U', color: 'text-emerald-600' },
-  renamed: { letter: 'R', color: 'text-sky-600' },
-  deleted: { letter: 'D', color: 'text-rose-600' },
-  conflicted: { letter: '!', color: 'text-rose-700' },
-};
+import { GitHistoryList } from './git-history-list';
 
 @Component({
   selector: 'app-git-view',
-  imports: [FaIconComponent],
+  imports: [FaIconComponent, GitHistoryList],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     <header class="flex h-9 shrink-0 items-center justify-between px-3">
@@ -195,59 +189,82 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
           }
         </div>
 
-        <h3 class="px-3 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-          Changes ({{ status.changes.length }})
-        </h3>
-        <ul class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm">
-          @for (change of status.changes; track change.path) {
-            <li
-              class="flex items-center gap-2 px-3 py-0.5 hover:bg-slate-200"
-              [class.bg-amber-50]="change.status === 'conflicted'"
-              [class.bg-sky-100]="git.conflict()?.path === change.path"
-              [title]="describe(change)"
-            >
-              <input
-                type="checkbox"
-                class="shrink-0 accent-sky-600"
-                [attr.aria-label]="'Select ' + change.path"
-                [checked]="selected().has(change.path)"
-                [disabled]="status.merging || change.status === 'conflicted'"
-                (change)="toggle(change.path)"
-              />
-              @if (change.status === 'conflicted') {
-                <button
-                  type="button"
-                  class="flex min-w-0 items-center gap-2 text-left hover:underline"
-                  [attr.aria-label]="'Resolve the conflict in ' + change.path"
-                  (click)="git.openConflict(change.path)"
-                >
+        <div class="flex shrink-0 gap-3 border-b border-slate-200 px-3" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            class="-mb-px border-b-2 pb-1 text-xs font-semibold tracking-wide uppercase"
+            [class]="tabClass('changes')"
+            [attr.aria-selected]="tab() === 'changes'"
+            (click)="tab.set('changes')"
+          >
+            Changes ({{ status.changes.length }})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="-mb-px border-b-2 pb-1 text-xs font-semibold tracking-wide uppercase"
+            [class]="tabClass('history')"
+            [attr.aria-selected]="tab() === 'history'"
+            (click)="showHistory()"
+          >
+            History
+          </button>
+        </div>
+        @if (tab() === 'history') {
+          <app-git-history class="min-h-0 flex-1" />
+        } @else {
+          <ul class="min-h-0 flex-1 overflow-y-auto py-1 text-sm">
+            @for (change of status.changes; track change.path) {
+              <li
+                class="flex items-center gap-2 px-3 py-0.5 hover:bg-slate-200"
+                [class.bg-amber-50]="change.status === 'conflicted'"
+                [class.bg-sky-100]="git.conflict()?.path === change.path"
+                [title]="describe(change)"
+              >
+                <input
+                  type="checkbox"
+                  class="shrink-0 accent-sky-600"
+                  [attr.aria-label]="'Select ' + change.path"
+                  [checked]="selected().has(change.path)"
+                  [disabled]="status.merging || change.status === 'conflicted'"
+                  (change)="toggle(change.path)"
+                />
+                @if (change.status === 'conflicted') {
+                  <button
+                    type="button"
+                    class="flex min-w-0 items-center gap-2 text-left hover:underline"
+                    [attr.aria-label]="'Resolve the conflict in ' + change.path"
+                    (click)="git.openConflict(change.path)"
+                  >
+                    <span class="truncate">{{ fileName(change.path) }}</span>
+                    <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="ml-auto shrink-0 rounded border border-amber-300 bg-white px-1.5 text-xs text-amber-800 enabled:hover:bg-amber-100 disabled:opacity-50"
+                    [disabled]="git.busy() !== null"
+                    (click)="git.openConflict(change.path)"
+                  >
+                    Resolve
+                  </button>
+                } @else {
                   <span class="truncate">{{ fileName(change.path) }}</span>
                   <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
-                </button>
-                <button
-                  type="button"
-                  class="ml-auto shrink-0 rounded border border-amber-300 bg-white px-1.5 text-xs text-amber-800 enabled:hover:bg-amber-100 disabled:opacity-50"
-                  [disabled]="git.busy() !== null"
-                  (click)="git.openConflict(change.path)"
+                }
+                <span
+                  class="font-mono text-xs font-bold"
+                  [class.ml-auto]="change.status !== 'conflicted'"
+                  [class]="badges[change.status].color"
+                  [title]="change.status"
+                  >{{ badges[change.status].letter }}</span
                 >
-                  Resolve
-                </button>
-              } @else {
-                <span class="truncate">{{ fileName(change.path) }}</span>
-                <span class="truncate text-xs text-slate-400">{{ folder(change.path) }}</span>
-              }
-              <span
-                class="font-mono text-xs font-bold"
-                [class.ml-auto]="change.status !== 'conflicted'"
-                [class]="badges[change.status].color"
-                [title]="change.status"
-                >{{ badges[change.status].letter }}</span
-              >
-            </li>
-          } @empty {
-            <li class="px-3 py-1 text-slate-500">No changes.</li>
-          }
-        </ul>
+              </li>
+            } @empty {
+              <li class="px-3 py-1 text-slate-500">No changes.</li>
+            }
+          </ul>
+        }
       } @else if (git.busy() === 'refresh') {
         <p class="px-3 text-sm text-slate-500">
           <fa-icon [icon]="faSpinner" animation="spin" /> Reading git status…
@@ -269,8 +286,24 @@ const STATUS_BADGES: Record<GitFileStatus, { letter: string; color: string }> = 
 export class GitView {
   protected readonly git = inject(GitStore);
   protected readonly workspace = inject(WorkspaceStore);
+  private readonly history = inject(GitHistoryStore);
   protected readonly badges = STATUS_BADGES;
   protected readonly message = signal('');
+  /** Whether the list shows the working tree's changes or the commit history. */
+  protected readonly tab = signal<'changes' | 'history'>('changes');
+  protected readonly fileName = fileName;
+  protected readonly folder = folderOf;
+
+  protected showHistory(): void {
+    this.tab.set('history');
+    if (this.history.commits() === null) void this.history.load();
+  }
+
+  protected tabClass(tab: 'changes' | 'history'): string {
+    return this.tab() === tab
+      ? 'border-sky-600 text-slate-800'
+      : 'border-transparent text-slate-500 hover:text-slate-800';
+  }
 
   constructor() {
     // Offer git's merge commit message once a merge starts, unless the user typed one already.
@@ -345,14 +378,5 @@ export class GitView {
 
   protected describe(change: GitChange): string {
     return change.originalPath ? `${change.originalPath} → ${change.path}` : change.path;
-  }
-
-  protected fileName(path: string): string {
-    return path.slice(path.lastIndexOf('/') + 1);
-  }
-
-  protected folder(path: string): string {
-    const index = path.lastIndexOf('/');
-    return index < 0 ? '' : path.slice(0, index);
   }
 }

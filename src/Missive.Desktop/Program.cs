@@ -107,5 +107,8 @@ internal static class Program
             .AddTransient<GetConflict>()
             .AddTransient<ResolveConflict>()
             .AddTransient<AbortMerge>()
+            .AddTransient<GetGitHistory>()
+            .AddTransient<GetCommit>()
+            .AddTransient<GetCommitFile>()
             .BuildServiceProvider();
 }

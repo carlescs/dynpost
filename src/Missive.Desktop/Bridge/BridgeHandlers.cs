@@ -86,6 +86,12 @@ internal static class BridgeHandlers
                     : new Error(BridgeErrorCodes.BadPayload, $"Unknown resolution '{p.Resolution}'; use ours, theirs or edited."))
             .Register(BridgeMessageTypes.GitAbortMerge,
                 async ct => (await Use<AbortMerge>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register<GitLogPayload, GitHistoryDto>(BridgeMessageTypes.GitLog,
+                async (p, ct) => (await Use<GetGitHistory>().ExecuteAsync(new GetGitHistoryRequest(p.Skip, p.Limit), ct)).Map(GitHistoryDto.From))
+            .Register<GitCommitIdPayload, GitCommitDetailsDto>(BridgeMessageTypes.GitShow,
+                async (p, ct) => (await Use<GetCommit>().ExecuteAsync(p.CommitId, ct)).Map(GitCommitDetailsDto.From))
+            .Register<GitCommitFilePayload, GitFileRevisionDto>(BridgeMessageTypes.GitCommitFile,
+                async (p, ct) => (await Use<GetCommitFile>().ExecuteAsync(new GetCommitFileRequest(p.CommitId, p.Path), ct)).Map(GitFileRevisionDto.From))
             .Register(BridgeMessageTypes.UpdateCheck,
                 ct => Use<CheckForUpdate>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.UpdateRestart,
