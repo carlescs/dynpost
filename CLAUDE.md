@@ -42,7 +42,7 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   suffixes, one folder per component). A component's template and styles are
   separate files next to it — `<name>.html` (`templateUrl`) and, when it needs
   custom styles, `<name>.scss` (`styleUrl`); `ng generate component` is set up
-  to emit the same (SCSS, no inline template or styles, no spec):
+  to emit the same (SCSS, no inline template or styles, plus a `.spec.ts`):
   - `components/<name>/<name>.ts` — the shell (header, activity bar, sidebar,
     document tabs) and UI shared by several modules (code and diff editors, PDF
     viewer, key/value table, variable input).
