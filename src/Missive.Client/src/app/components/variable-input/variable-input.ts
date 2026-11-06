@@ -14,39 +14,7 @@ import {
 @Component({
   selector: 'app-variable-input',
   host: { class: 'relative block min-w-0' },
-  template: `
-    <div
-      #backdrop
-      class="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre text-slate-800"
-      [class]="fieldClass()"
-      aria-hidden="true"
-    >
-      @for (segment of segments(); track $index) {
-        @if (segment.variable) {
-          <span [class]="classOf(segment.variable)" [attr.data-variable]="segment.variable">{{
-            segment.text
-          }}</span>
-        } @else {
-          <span>{{ segment.text }}</span>
-        }
-      }
-    </div>
-    <input
-      #field
-      class="relative w-full bg-transparent text-transparent caret-slate-800 placeholder:text-slate-400 focus:outline-none"
-      [class]="fieldClass()"
-      [placeholder]="placeholder()"
-      [attr.aria-label]="ariaLabel()"
-      [title]="hover()"
-      spellcheck="false"
-      [value]="value()"
-      (input)="changed($event)"
-      (scroll)="syncScroll()"
-      (keyup)="syncScroll()"
-      (click)="syncScroll()"
-      (select)="syncScroll()"
-    />
-  `,
+  templateUrl: './variable-input.html',
 })
 export class VariableInput {
   readonly value = input.required<string>();

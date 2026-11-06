@@ -7,20 +7,7 @@ import { Component, ElementRef, afterNextRender, input, output, viewChild } from
 @Component({
   selector: 'app-name-input',
   host: { class: 'flex min-w-0 flex-1' },
-  template: `
-    <input
-      #box
-      class="min-w-0 flex-1 rounded-sm border border-sky-500 bg-white px-1 text-sm focus:outline-none disabled:opacity-60"
-      spellcheck="false"
-      [attr.aria-label]="label()"
-      [value]="initial()"
-      [disabled]="busy()"
-      (keydown.enter)="$event.preventDefault(); submit(box.value, false)"
-      (keydown.escape)="$event.preventDefault(); cancelled.emit()"
-      (blur)="submit(box.value, true)"
-      (click)="$event.stopPropagation()"
-    />
-  `,
+  templateUrl: './name-input.html',
 })
 export class NameInput {
   readonly initial = input('');

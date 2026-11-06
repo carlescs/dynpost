@@ -30,19 +30,7 @@ export function previewKind(r: ResponseDto): PreviewKind | null {
   selector: 'app-response-preview',
   imports: [PdfViewer],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
-  template: `
-    @if (kind() === 'html') {
-      <iframe
-        class="min-h-0 flex-1 border-0 bg-white"
-        title="Response preview"
-        sandbox=""
-        referrerpolicy="no-referrer"
-        [srcdoc]="html()"
-      ></iframe>
-    } @else if (pdf(); as data) {
-      <app-pdf-viewer [data]="data" />
-    }
-  `,
+  templateUrl: './response-preview.html',
 })
 export class ResponsePreview {
   readonly response = input.required<ResponseDto>();

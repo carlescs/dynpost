@@ -447,14 +447,21 @@ Run the backend tests (xUnit, with NSubstitute for mocking) with:
 dotnet test Missive.sln
 ```
 
+Run the client unit tests (Vitest, through `ng test`) from `src/Missive.Client`;
+`npm test` watches for changes, and this runs them once:
+
+```sh
+npm test -- --watch=false
+```
+
 Format the client with Prettier (`npm run format`, or `npm run format:check`
 to verify) from `src/Missive.Client`. No other linter is configured yet.
 
 ## CI and releases
 
 GitHub Actions runs on every pull request and push to `main`
-(`.github/workflows/ci.yml`): it checks client formatting and builds the Angular
-app, then builds the solution and runs the tests on Windows, Linux and macOS.
+(`.github/workflows/ci.yml`): it checks client formatting, runs the client unit tests
+and builds the Angular app, then builds the solution and runs the tests on Windows, Linux and macOS.
 
 Pushing a version tag publishes desktop builds (`.github/workflows/release.yml`):
 

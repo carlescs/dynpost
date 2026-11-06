@@ -1,0 +1,21 @@
+<!-- The routed module's panel: explorer, environments or source control. -->
+<router-outlet />
+<div
+  class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize touch-none select-none focus:outline-none"
+  [class.resizing]="dragging"
+  role="separator"
+  aria-orientation="vertical"
+  aria-label="Resize sidebar"
+  tabindex="0"
+  [attr.aria-valuemin]="minWidth"
+  [attr.aria-valuemax]="maxWidth"
+  [attr.aria-valuenow]="store.sidebarWidth()"
+  title="Drag to resize, double-click to reset"
+  (pointerdown)="startResize($event)"
+  (pointermove)="resize($event)"
+  (pointerup)="endResize($event)"
+  (pointercancel)="endResize($event)"
+  (lostpointercapture)="dragging = false"
+  (dblclick)="store.setSidebarWidth(defaultWidth)"
+  (keydown)="onKeydown($event)"
+></div>

@@ -27,14 +27,7 @@ import { Monaco, loadMonaco } from './monaco-loader';
 @Component({
   selector: 'app-code-editor',
   host: { class: 'relative block min-h-0' },
-  template: `
-    <div #container class="absolute inset-0"></div>
-    @if (!ready()) {
-      <pre
-        class="absolute inset-0 overflow-auto p-2 font-mono text-xs whitespace-pre-wrap text-slate-800"
-        >{{ value() }}</pre>
-    }
-  `,
+  templateUrl: './code-editor.html',
 })
 export class CodeEditor {
   readonly value = input.required<string>();

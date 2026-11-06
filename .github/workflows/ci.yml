@@ -19,7 +19,7 @@ env:
 
 jobs:
   client:
-    name: Client (format + build)
+    name: Client (format, test, build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,6 +35,7 @@ jobs:
 
       - run: npm ci --no-audit --no-fund
       - run: npm run format:check
+      - run: npm test -- --watch=false
       - run: npm run build
 
   backend:

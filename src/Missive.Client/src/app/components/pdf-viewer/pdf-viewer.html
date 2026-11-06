@@ -1,0 +1,64 @@
+<div
+  class="flex h-8 shrink-0 items-center gap-1 border-b border-slate-200 px-4 text-xs text-slate-600"
+>
+  @if (pageCount(); as count) {
+    <span>{{ count }} {{ count === 1 ? 'page' : 'pages' }}</span>
+  }
+  <div class="ml-auto flex items-center gap-1">
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="Zoom out"
+      aria-label="Zoom out"
+      [disabled]="!document() || scale() <= zoomSteps[0]"
+      (click)="zoomBy(-1)"
+    >
+      <fa-icon [icon]="faMagnifyingGlassMinus" />
+    </button>
+    <span class="w-10 text-center tabular-nums">{{ percent() }}</span>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="Zoom in"
+      aria-label="Zoom in"
+      [disabled]="!document() || scale() >= zoomSteps[zoomSteps.length - 1]"
+      (click)="zoomBy(1)"
+    >
+      <fa-icon [icon]="faMagnifyingGlassPlus" />
+    </button>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="Fit to width"
+      aria-label="Fit to width"
+      [class.bg-slate-200]="zoom() === 'fit'"
+      [attr.aria-pressed]="zoom() === 'fit'"
+      [disabled]="!document()"
+      (click)="zoom.set('fit')"
+    >
+      <fa-icon [icon]="faLeftRight" />
+    </button>
+  </div>
+</div>
+
+@if (error(); as message) {
+  <div
+    class="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-rose-700"
+    role="alert"
+  >
+    <fa-icon class="text-2xl" [icon]="faCircleExclamation" />
+    <p class="max-w-xl break-words">{{ message }}</p>
+  </div>
+} @else if (!document()) {
+  <div class="flex flex-1 items-center justify-center gap-2 text-sm text-slate-500">
+    <fa-icon [icon]="faSpinner" animation="spin" /> Loading PDF…
+  </div>
+}
+<div
+  #scroller
+  class="min-h-0 flex-1 overflow-auto bg-slate-200 p-4"
+  [class.hidden]="!document() || error()"
+  role="region"
+  tabindex="0"
+  aria-label="PDF document"
+></div>

@@ -20,12 +20,7 @@ import { Monaco, loadMonaco } from '../code-editor/monaco-loader';
 @Component({
   selector: 'app-code-diff-editor',
   host: { class: 'relative block min-h-0' },
-  template: `
-    <div #container class="absolute inset-0"></div>
-    @if (!ready()) {
-      <p class="absolute inset-0 p-2 text-xs text-slate-400">Loading the editor…</p>
-    }
-  `,
+  templateUrl: './code-diff-editor.html',
 })
 export class CodeDiffEditor {
   readonly original = input.required<string>();

@@ -39,7 +39,10 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   `angular.json` copies its data files (cmaps, fonts, ICC profiles, wasm) to `pdfjs/`.
 - Client code layout (`src/Missive.Client/src/app`), following the Angular style
   guide (kebab-case file named after its class, no `.component`/`.service`
-  suffixes, one folder per component):
+  suffixes, one folder per component). A component's template and styles are
+  separate files next to it — `<name>.html` (`templateUrl`) and, when it needs
+  custom styles, `<name>.scss` (`styleUrl`); `ng generate component` is set up
+  to emit the same (SCSS, no inline template or styles, plus a `.spec.ts`):
   - `components/<name>/<name>.ts` — the shell (header, activity bar, sidebar,
     document tabs) and UI shared by several modules (code and diff editors, PDF
     viewer, key/value table, variable input).
@@ -83,15 +86,20 @@ dotnet test Missive.sln                       # runs xUnit tests
 dotnet run --project src/Missive.Desktop      # run the desktop app (needs a GUI)
 cd src/Missive.Client && npm ci && npm run build   # client only
 cd src/Missive.Client && npm start            # browser dev server on :4200
+cd src/Missive.Client && npm test             # client unit tests (Vitest; --watch=false to run once)
 cd src/Missive.Client && npm run format:check # Prettier check (CI enforces it)
 ```
 
 Test projects use xUnit with NSubstitute for mocking; there is no linter beyond
-Prettier. Before finishing, run `dotnet build Missive.sln` and
+Prettier. Client unit tests run on Vitest with jsdom through Angular's
+`@angular/build:unit-test` builder (`ng test`, `tsconfig.spec.json`): each
+`<name>.spec.ts` sits next to the file it tests, uses `TestBed` for components
+and services, and fakes the `Bridge` with `vi.fn()` rather than talking to the
+`MockBackend`. Before finishing, run `dotnet build Missive.sln` and
 `dotnet test Missive.sln` (or `npm run build` for client-only changes), and
-`npm run format:check` when you touch the client.
+`npm test -- --watch=false` and `npm run format:check` when you touch the client.
 
-CI (`.github/workflows/ci.yml`) runs the Prettier check, the client build, and
+CI (`.github/workflows/ci.yml`) runs the Prettier check, the client unit tests and build, and
 build + test on Windows, Linux and macOS. `.github/workflows/release.yml`
 packages self-contained desktop builds with Velopack (`vpk pack`: installers,
 portable copies and update feeds) and, when a `v*` tag is pushed, publishes only
@@ -101,7 +109,7 @@ the installers plus the update feeds and `.nupkg` packages to a GitHub release
 also references `Velopack`, only because `vpk` requires `Program.Main` to call
 `VelopackApp.Build().Run()` directly. Keep the workflow's `vpk` version equal to
 the `Velopack` package version. Add tests
-alongside new backend code.
+alongside new backend and client code.
 
 ## Backend architecture
 
@@ -192,9 +200,9 @@ Desktop → Application
 - C#: nullable enabled, implicit usings, file-scoped namespaces, async for I/O.
 - TypeScript: strict mode, standalone components, signals for local state;
   format with Prettier.
-- Styling: Tailwind utility classes in templates first. When custom styles are
-  needed, write SCSS (component `styles` are compiled as SCSS; global styles go
-  in `src/styles.scss`). Keep Tailwind-specific CSS (`@import 'tailwindcss'`,
+- Styling: SCSS is the stylesheet language. Tailwind utility classes in
+  templates first; when custom styles are needed, put them in the component's
+  `<name>.scss` (global styles go in `src/styles.scss`). Keep Tailwind-specific CSS (`@import 'tailwindcss'`,
   `@theme` tokens, `@utility`) in `src/tailwind.css` only. Tailwind v4 doesn't
   support being run through Sass, so don't `@use`/`@import` Tailwind from SCSS.
 - Icons: Font Awesome only. Import individual icons
