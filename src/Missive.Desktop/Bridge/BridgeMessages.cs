@@ -50,6 +50,9 @@ internal static class BridgeMessageTypes
     /// <summary>Moves a request file into another folder. Payload: <see cref="MoveRequestPayload"/>. Result: its new path.</summary>
     public const string RequestMove = "request.move";
 
+    /// <summary>Deletes a request file. Payload: <see cref="DeleteRequestPayload"/>. Result: none.</summary>
+    public const string RequestDelete = "request.delete";
+
     /// <summary>
     /// Sends a request (saved or not) and waits for the response. Payload: <see cref="SendRequestPayload"/>.
     /// Result: response.
@@ -202,6 +205,8 @@ internal sealed record MoveFolderPayload(string Path, string Parent);
 internal sealed record CreateFolderPayload(string Parent, string Name);
 
 internal sealed record RenameFolderPayload(string Path, string Name);
+
+internal sealed record DeleteRequestPayload(string Path);
 
 internal sealed record DeleteFolderPayload(string Path);
 

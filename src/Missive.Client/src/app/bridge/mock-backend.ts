@@ -282,6 +282,12 @@ export class MockBackend {
         this.files.set(target, dto);
         return ok({ path: target });
       }
+      case 'request.delete': {
+        const path = payload?.['path'] as string;
+        if (!this.files.delete(path))
+          return fail(ERROR_CODES.notFound, `The request file '${path}' does not exist.`);
+        return ok(null);
+      }
       case 'folder.delete': {
         const path = payload?.['path'] as string;
         for (const folder of [...this.folders])

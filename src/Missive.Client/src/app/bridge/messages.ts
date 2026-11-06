@@ -312,6 +312,8 @@ export interface BridgeMessages {
   'request.save': { payload: { path: string; request: RequestDto }; result: SavedRequestDto };
   /** Moves a request file into `folder` (`''` is the root), keeping its file name. */
   'request.move': { payload: { path: string; folder: string }; result: { path: string } };
+  /** Deletes a request file. */
+  'request.delete': { payload: { path: string }; result: null };
   /**
    * Sends a request (saved or not) from the host and waits for the response. `id` is chosen by
    * the UI and can be passed to `request.cancel`.

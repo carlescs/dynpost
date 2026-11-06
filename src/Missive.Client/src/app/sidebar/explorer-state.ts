@@ -22,6 +22,25 @@ export class ExplorerState {
   readonly busy = signal(false);
   private readonly collapsed = signal(new Set<string>());
 
+  /** The explorer entry whose context menu is open, with the pointer position. */
+  readonly menu = signal<{ node: WorkspaceNode; x: number; y: number } | null>(null);
+
+  openMenu(node: WorkspaceNode, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.menu.set({ node, x: event.clientX, y: event.clientY });
+  }
+
+  closeMenu(): void {
+    this.menu.set(null);
+  }
+
+  deleteNode(node: WorkspaceNode): void {
+    this.closeMenu();
+    if (node.kind === 'folder') void this.store.deleteFolder(node.path);
+    else void this.store.deleteRequest(node.path);
+  }
+
   /** The node being dragged, or `null`. */
   readonly dragged = signal<WorkspaceNode | null>(null);
   /** The folder path (`''` for the root) whose drop list is under the pointer, or `null`. */

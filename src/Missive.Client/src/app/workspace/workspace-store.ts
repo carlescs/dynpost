@@ -348,6 +348,27 @@ export class WorkspaceStore {
     }
   }
 
+  /** Deletes a request file, after asking the user, and closes its tab. */
+  async deleteRequest(path: string): Promise<void> {
+    const doc = this.documents().find((d) => d.path === path);
+    const name = doc?.name || path;
+    const question =
+      `Delete the request "${name}"?` + (doc?.dirty ? ' Its unsaved changes will be lost.' : '');
+    if (!confirm(question)) return;
+
+    try {
+      await this.bridge.send('request.delete', { path });
+      if (doc) {
+        this.documents.update((docs) => docs.filter((d) => d.key !== doc.key));
+        this.removeTabs([doc.key]);
+      }
+      this.error.set(null);
+      await this.refresh();
+    } catch (error) {
+      this.report(error);
+    }
+  }
+
   /**
    * Deletes a folder with the requests in it, after asking the user. Open requests from the folder
    * are closed.
