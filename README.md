@@ -466,8 +466,9 @@ and builds the Angular app, then builds the solution and runs the tests on Windo
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org)
 (`feat:`, `fix:`, `feat!:` / `BREAKING CHANGE:`, ...). After `npm install` at the
 repo root, a [Lefthook](https://github.com/evilmartians/lefthook) `commit-msg`
-hook runs commitlint (`commitlint.config.mjs`), and CI lints pull request
-commits too. On every push to `main`, `.github/workflows/tag.yml` runs
+hook runs commitlint (`commitlint.config.mjs`). Pull requests are squash-merged,
+so the PR title becomes the commit on `main`: `.github/workflows/pr-title.yml`
+lints it the same way (e.g. `feat: add OAuth2 auth helper`). On every push to `main`, `.github/workflows/tag.yml` runs
 [semantic-release](https://semantic-release.gitbook.io) (`.releaserc.json`),
 which picks the next `vMAJOR.MINOR.PATCH` from the commits since the last tag
 (`fix` → patch, `feat` → minor, breaking → major) and pushes the tag.
