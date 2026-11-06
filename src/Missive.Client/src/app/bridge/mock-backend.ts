@@ -118,6 +118,53 @@ export class MockBackend {
     switch (request.type) {
       case 'workspace.tree':
         return ok(this.workspace());
+      case 'workspace.exportFormats':
+        return ok([
+          { id: 'postman', name: 'Postman collection v2.1', extension: '.postman_collection.json' },
+          { id: 'insomnia', name: 'Insomnia v4', extension: '.insomnia.json' },
+        ]);
+      case 'workspace.export': {
+        // No save dialog in a browser: pretend the user picked a file next to the workspace.
+        const insomnia = payload?.['format'] === 'insomnia';
+        const path = `${this.root}${insomnia ? '.insomnia.json' : '.postman_collection.json'}`;
+        const envFiles =
+          payload?.['includeEnvironments'] && !insomnia
+            ? [...this.environments.keys()].map((id) =>
+                id.replace(/\.yaml$/, '.postman_environment.json'),
+              )
+            : [];
+        return ok({
+          path,
+          files: [path, ...envFiles],
+          requests: this.files.size,
+          environments: payload?.['includeEnvironments'] ? this.environments.size : 0,
+          warnings: ['Browser preview: nothing was written to disk.'],
+        });
+      }
+      case 'workspace.import': {
+        // No open dialog in a browser: import a small sample collection.
+        const parent = (payload?.['folder'] as string) ?? '';
+        let name = 'Imported sample';
+        for (let n = 2; this.exists(parent ? `${parent}/${name}` : name); n++) {
+          name = `Imported sample ${n}`;
+        }
+        const folder = parent ? `${parent}/${name}` : name;
+        this.folders.add(folder);
+        this.files.set(
+          `${folder}/list-products.yaml`,
+          sample('List products', 'GET', '{{baseUrl}}/products', {
+            params: [{ key: 'limit', value: '20', enabled: false }],
+          }),
+        );
+        return ok({
+          format: 'Postman collection v2.1',
+          folder,
+          requests: 1,
+          folders: 1,
+          environments: [],
+          warnings: ['Browser preview: a sample collection was imported instead of a file.'],
+        });
+      }
       case 'environment.list':
         return ok({
           active: this.activeEnvironment,

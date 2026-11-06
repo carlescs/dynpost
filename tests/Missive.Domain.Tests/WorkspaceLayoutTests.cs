@@ -94,4 +94,28 @@ public class WorkspaceLayoutTests
     {
         Assert.Equal(expected, WorkspaceLayout.IsRequestPath(WorkspacePath.Parse(path)));
     }
+
+    [Theory]
+    [InlineData("Users", "Users")]
+    [InlineData("  Shop: API / v2 ", "Shop- API - v2")]
+    [InlineData("...hidden.", "hidden")]
+    [InlineData("CON", "CON_")]
+    [InlineData("line\nbreak", "line break")]
+    [InlineData("", "Folder")]
+    [InlineData("???", "---")]
+    public void ToFolderName_MakesAValidFolderName(string name, string expected)
+    {
+        var folder = WorkspaceLayout.ToFolderName(name);
+
+        Assert.Equal(expected, folder);
+        Assert.Null(WorkspaceLayout.ValidateFolderName(WorkspacePath.Parse("users"), folder));
+    }
+
+    [Fact]
+    public void ToFolderName_ShortensLongNames()
+    {
+        var folder = WorkspaceLayout.ToFolderName(new string('a', 300));
+
+        Assert.Equal(100, folder.Length);
+    }
 }

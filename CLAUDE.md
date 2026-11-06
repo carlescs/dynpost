@@ -43,6 +43,11 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
     `dist/missive-client/browser` into `wwwroot`.
   - `tests/Missive.<Layer>.Tests` — one test project per backend layer
     (Desktop tests drive the bridge router with real use cases and mocked ports).
+- Import/export of other tools' formats: the interchange model, ports and use
+  cases are in `Application/Interchange`; each format (Postman, Insomnia, HAR,
+  OpenAPI) is a reader/writer of a JSON tree in `Infrastructure/Interchange`
+  (YAML input is converted to the same tree). The host shows the native file
+  dialogs (`Desktop/Bridge/IFileDialogs.cs`).
 - All projects are in `Missive.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual

@@ -23,6 +23,21 @@ internal static class BridgeMessageTypes
     /// <summary>Re-reads the open workspace. Payload: none. Result: workspace.</summary>
     public const string WorkspaceTree = "workspace.tree";
 
+    /// <summary>Lists the formats the workspace can be exported to. Payload: none. Result: formats.</summary>
+    public const string WorkspaceExportFormats = "workspace.exportFormats";
+
+    /// <summary>
+    /// Asks where to save, then exports the workspace for other apps. Payload:
+    /// <see cref="ExportWorkspacePayload"/>. Result: what was written, or null if cancelled.
+    /// </summary>
+    public const string WorkspaceExport = "workspace.export";
+
+    /// <summary>
+    /// Asks for a file exported by another app and imports it into a folder. Payload:
+    /// <see cref="ImportCollectionPayload"/>. Result: what was imported, or null if cancelled.
+    /// </summary>
+    public const string WorkspaceImport = "workspace.import";
+
     /// <summary>Reads a request file. Payload: <see cref="LoadRequestPayload"/>. Result: request.</summary>
     public const string RequestLoad = "request.load";
 
@@ -158,6 +173,13 @@ internal sealed record BridgeResponse(string Id, bool Ok, object? Payload = null
 internal sealed record OpenWorkspacePayload(string Path);
 
 internal sealed record SetThemePayload(string Theme);
+
+/// <param name="Format">The id of an export format, e.g. <c>postman</c> or <c>insomnia</c>.</param>
+/// <param name="IncludeEnvironments">Whether to export the environments (secret values never are).</param>
+internal sealed record ExportWorkspacePayload(string Format, bool IncludeEnvironments = true);
+
+/// <param name="Folder">The folder to import into; <c>""</c> is the workspace root.</param>
+internal sealed record ImportCollectionPayload(string Folder = "");
 
 internal sealed record LoadRequestPayload(string Path);
 
