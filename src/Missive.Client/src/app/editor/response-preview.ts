@@ -51,16 +51,39 @@ export class ResponsePreview {
 
   protected readonly kind = computed(() => previewKind(this.response()));
 
-  // Trusting the markup is safe because the frame is sandboxed: it can't run scripts or reach
-  // the app, so the body is only displayed.
+  // Trusting the markup is safe because the frame is sandboxed (it can't run scripts or reach
+  // the app) and the policy stops it from loading anything, so the body is only displayed.
   protected readonly html = computed<SafeHtml>(() =>
-    this.sanitizer.bypassSecurityTrustHtml(this.kind() === 'html' ? this.response().body : ''),
+    this.sanitizer.bypassSecurityTrustHtml(
+      this.kind() === 'html' ? withPreviewPolicy(this.response().body) : '',
+    ),
   );
 
   /** The PDF's bytes, decoded once per response. */
   protected readonly pdf = computed(() =>
     this.kind() === 'pdf' ? decodeBase64(this.response().body) : null,
   );
+}
+
+/**
+ * Blocks every request the previewed page could make (images, styles, fonts, frames, forms):
+ * all network work belongs to the backend, and a response must not reach other services from
+ * the webview. Inline styles and `data:` images and fonts still work.
+ */
+const PREVIEW_POLICY =
+  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'";
+
+/**
+ * Puts the policy first in the document so it applies before any of the markup. It goes after a
+ * doctype, if there is one, so the page keeps its rendering mode; the parser places the `<meta>`
+ * in the head even when the markup has its own `<html>` and `<head>`.
+ */
+export function withPreviewPolicy(html: string): string {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_POLICY}">`;
+  const doctype = /^\s*<!doctype[^>]*>/i.exec(html);
+  return doctype
+    ? doctype[0] + meta + html.slice(doctype[0].length)
+    : meta + html.replace(/^\uFEFF/, '');
 }
 
 function decodeBase64(base64: string): Uint8Array<ArrayBuffer> {
