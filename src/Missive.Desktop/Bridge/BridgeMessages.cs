@@ -107,6 +107,15 @@ internal static class BridgeMessageTypes
     /// <summary>Pushes (or publishes) the current branch, never forcing. Payload: none. Result: new status.</summary>
     public const string GitPush = "git.push";
 
+    /// <summary>Downloads the remotes' latest commits without changing files. Payload: none. Result: new status.</summary>
+    public const string GitFetch = "git.fetch";
+
+    /// <summary>Reads the configured commit name and email. Payload: none. Result: the identity (parts may be missing).</summary>
+    public const string GitIdentity = "git.identity";
+
+    /// <summary>Sets the commit name and email. Payload: <see cref="GitSetIdentityPayload"/>. Result: the identity.</summary>
+    public const string GitSetIdentity = "git.identity.set";
+
     /// <summary>Reads both sides of a conflicted file. Payload: <see cref="GitConflictPayload"/>. Result: the versions.</summary>
     public const string GitConflict = "git.conflict";
 
@@ -226,6 +235,9 @@ internal sealed record GitDiscardPayload(IReadOnlyList<string> Paths);
 internal sealed record GitCommitPayload(string Message, IReadOnlyList<string>? Paths = null);
 
 internal sealed record GitConflictPayload(string Path);
+
+/// <param name="Global">Whether to use it in all of the user's repositories, not only the workspace's.</param>
+internal sealed record GitSetIdentityPayload(string Name, string Email, bool Global = true);
 
 /// <param name="Resolution"><c>ours</c>, <c>theirs</c> or <c>edited</c>.</param>
 internal sealed record GitResolvePayload(string Path, string Resolution);

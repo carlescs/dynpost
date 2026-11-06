@@ -559,6 +559,206 @@ public sealed class GitCliServiceTests : IDisposable
             remotes);
     }
 
+    [Fact]
+    public async Task Pull_OverUncommittedChanges_NamesTheFiles()
+    {
+        var (alice, bob) = InitTwoClones();
+        Write(alice, "a.yaml", "name: From Alice\n");
+        TestGit.CommitAll(alice, "Alice");
+        TestGit.Run(alice, "push", "--quiet");
+        Write(bob, "a.yaml", "name: Unsaved work\n");
+
+        var pull = await _git.PullAsync(bob);
+
+        Assert.Equal(GitErrors.LocalChangesOverwrittenCode, pull.Error?.Code);
+        Assert.Contains("a.yaml", pull.Error!.Message);
+        Assert.Equal("name: Unsaved work\n", File.ReadAllText(Path.Combine(bob, "a.yaml")));
+    }
+
+    [Fact]
+    public async Task TrackRemoteBranch_ThenPull_JoinsALocalRepositoryWithAnExistingRemote()
+    {
+        var (alice, _) = InitTwoClones();
+        var remote = _temp.Combine("remote.git");
+        var local = InitRepository("local");
+        Write(local, "b.yaml", "name: B\n");
+        TestGit.CommitAll(local, "Local start");
+        TestGit.Run(local, "remote", "add", "origin", remote);
+
+        var tracked = await _git.TrackRemoteBranchAsync(local, "main");
+        var pull = await _git.PullAsync(local, allowUnrelatedHistories: true);
+
+        Assert.True(tracked.IsSuccess, tracked.Error?.Message);
+        Assert.True(tracked.Value);
+        Assert.True(pull.IsSuccess, pull.Error?.Message);
+        Assert.Equal(PullOutcome.Updated, pull.Value);
+        Assert.True(File.Exists(Path.Combine(local, "a.yaml")));
+        var status = (await _git.GetStatusAsync(local)).Value;
+        Assert.Equal("origin/main", status.Upstream);
+        Assert.Equal(2, status.Ahead);
+        Assert.Equal(0, status.Behind);
+        Assert.True(Directory.Exists(alice));
+    }
+
+    [Fact]
+    public async Task Pull_UnrelatedHistories_WithoutPermission_IsExplained()
+    {
+        InitTwoClones();
+        var local = InitRepository("local");
+        Write(local, "b.yaml", "name: B\n");
+        TestGit.CommitAll(local, "Local start");
+        TestGit.Run(local, "remote", "add", "origin", _temp.Combine("remote.git"));
+        await _git.TrackRemoteBranchAsync(local, "main");
+
+        var pull = await _git.PullAsync(local);
+
+        Assert.Equal(GitErrors.UnrelatedHistoriesCode, pull.Error?.Code);
+    }
+
+    [Fact]
+    public async Task TrackRemoteBranch_BranchNotOnTheRemote_ReturnsFalse()
+    {
+        InitTwoClones();
+        var local = InitRepository("local");
+        TestGit.Run(local, "remote", "add", "origin", _temp.Combine("remote.git"));
+        TestGit.Run(local, "checkout", "--quiet", "-b", "feature");
+
+        var tracked = await _git.TrackRemoteBranchAsync(local, "feature");
+
+        Assert.True(tracked.IsSuccess, tracked.Error?.Message);
+        Assert.False(tracked.Value);
+        Assert.Null((await _git.GetStatusAsync(local)).Value.Upstream);
+    }
+
+    [Fact]
+    public async Task TrackRemoteBranch_WithoutRemotes_IsReported()
+    {
+        var local = InitRepository("local");
+
+        var tracked = await _git.TrackRemoteBranchAsync(local, "main");
+
+        Assert.Equal(GitErrors.NoRemoteCode, tracked.Error?.Code);
+    }
+
+    [Fact]
+    public async Task Status_OfANewRepository_IsUnborn()
+    {
+        var repository = InitRepository("repo");
+
+        var status = (await _git.GetStatusAsync(repository)).Value;
+
+        Assert.True(status.IsUnborn);
+        Assert.False(status.IsUpstreamGone);
+    }
+
+    [Fact]
+    public async Task Push_ToAnUpstreamWithAnotherName_PushesThere()
+    {
+        var (alice, _) = InitTwoClones();
+        TestGit.Run(alice, "checkout", "--quiet", "-b", "work", "--track", "origin/main");
+        Write(alice, "b.yaml", "name: B\n");
+        TestGit.CommitAll(alice, "Add B");
+
+        var push = await _git.PushAsync(alice, setUpstream: false);
+
+        Assert.True(push.IsSuccess, push.Error?.Message);
+        Assert.Equal(TestGit.Head(alice), TestGit.Run(_temp.Combine("remote.git"), "rev-parse", "main").Trim());
+    }
+
+    [Fact]
+    public async Task Fetch_ReportsADeletedUpstream_AndPushCreatesItAgain()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "checkout", "--quiet", "-b", "feature");
+        TestGit.Run(alice, "push", "--quiet", "--set-upstream", "origin", "feature");
+        TestGit.Run(bob, "push", "--quiet", "origin", "--delete", "feature");
+
+        var fetch = await _git.FetchAsync(alice);
+        var gone = (await _git.GetStatusAsync(alice)).Value;
+        var push = await _git.PushAsync(alice, setUpstream: false);
+        var after = (await _git.GetStatusAsync(alice)).Value;
+
+        Assert.True(fetch.IsSuccess, fetch.Error?.Message);
+        Assert.True(gone.IsUpstreamGone);
+        Assert.True(push.IsSuccess, push.Error?.Message);
+        Assert.False(after.IsUpstreamGone);
+        Assert.Equal("origin/feature", after.Upstream);
+    }
+
+    [Fact]
+    public async Task Fetch_UpdatesTheCommitsToPull()
+    {
+        var (alice, bob) = InitTwoClones();
+        Write(alice, "a.yaml", "name: From Alice\n");
+        TestGit.CommitAll(alice, "Alice");
+        TestGit.Run(alice, "push", "--quiet");
+
+        var fetch = await _git.FetchAsync(bob);
+
+        Assert.True(fetch.IsSuccess, fetch.Error?.Message);
+        Assert.Equal(1, (await _git.GetStatusAsync(bob)).Value.Behind);
+        Assert.Equal("name: A\n", File.ReadAllText(Path.Combine(bob, "a.yaml")));
+    }
+
+    [Fact]
+    public async Task Commit_WhileAnotherProcessHoldsTheIndexLock_IsRetried()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        var lockFile = Path.Combine(repository, ".git", "index.lock");
+        File.WriteAllText(lockFile, string.Empty);
+        _ = Task.Delay(100).ContinueWith(_ => File.Delete(lockFile));
+
+        var result = await _git.CommitAsync(repository, Message("Add A"), null);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+    }
+
+    [Fact]
+    public async Task Commit_WhileTheIndexStaysLocked_IsReported()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        File.WriteAllText(Path.Combine(repository, ".git", "index.lock"), string.Empty);
+
+        var result = await _git.CommitAsync(repository, Message("Add A"), null);
+
+        Assert.Equal(GitErrors.RepositoryLockedCode, result.Error?.Code);
+        Assert.Contains("index.lock", result.Error!.Message);
+    }
+
+    [Fact]
+    public async Task Commit_WithoutAnIdentity_AsksForOne()
+    {
+        var repository = InitRepository("repo");
+        // Blank local values override any identity in the machine's global configuration.
+        TestGit.Run(repository, "config", "user.name", "");
+        TestGit.Run(repository, "config", "user.email", "");
+        Write(repository, "a.yaml", "name: A\n");
+
+        var commit = await _git.CommitAsync(repository, Message("Add A"), null);
+        var identity = await _git.GetIdentityAsync(repository);
+
+        Assert.Equal(GitErrors.IdentityUnknownCode, commit.Error?.Code);
+        Assert.False(identity.Value.IsComplete);
+    }
+
+    [Fact]
+    public async Task SetIdentity_ForTheRepository_IsUsedByCommits()
+    {
+        var repository = InitRepository("repo");
+        Assert.True(GitIdentity.TryCreate("Ada Lovelace", "ada@example.com", out var identity));
+
+        var set = await _git.SetIdentityAsync(repository, identity, global: false);
+        var read = await _git.GetIdentityAsync(repository);
+        Write(repository, "a.yaml", "name: A\n");
+        await _git.CommitAsync(repository, Message("Add A"), null);
+
+        Assert.True(set.IsSuccess, set.Error?.Message);
+        Assert.Equal(new GitIdentitySettings("Ada Lovelace", "ada@example.com"), read.Value);
+        Assert.Equal("Ada Lovelace <ada@example.com>", TestGit.Run(repository, "log", "-1", "--format=%an <%ae>").Trim());
+    }
+
     private async Task<string> ConflictedMergeAsync()
     {
         var (alice, bob) = InitTwoClones();

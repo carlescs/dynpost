@@ -29,6 +29,26 @@ public class PorcelainStatusParserTests
     }
 
     [Fact]
+    public void NewBranch_IsUnborn()
+    {
+        var status = PorcelainStatusParser.Parse(Output("# branch.oid (initial)", "# branch.head main"), "", false);
+
+        Assert.True(status.IsUnborn);
+    }
+
+    [Fact]
+    public void UpstreamWithoutCounts_IsGone()
+    {
+        var status = PorcelainStatusParser.Parse(
+            Output($"# branch.oid {Hash}", "# branch.head main", "# branch.upstream origin/main"),
+            "",
+            false);
+
+        Assert.True(status.IsUpstreamGone);
+        Assert.False(status.IsUnborn);
+    }
+
+    [Fact]
     public void DetachedHead_HasNoBranch()
     {
         var status = PorcelainStatusParser.Parse(Output($"# branch.oid {Hash}", "# branch.head (detached)"), "", true);
