@@ -39,7 +39,7 @@ public sealed class SendBridgeTests : IDisposable
             .AddTransient<SendRequest>()
             .AddTransient<CancelRequest>()
             .BuildServiceProvider();
-        _router = BridgeHandlers.Create(_services, Substitute.For<IFolderPicker>());
+        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>());
     }
 
     public void Dispose() => _services.Dispose();

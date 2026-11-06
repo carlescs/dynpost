@@ -4,6 +4,7 @@ import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faChevronDown,
   faChevronRight,
+  faFileImport,
   faFolder,
   faFolderOpen,
   faFolderPlus,
@@ -12,6 +13,7 @@ import {
   faTrash,
   faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons';
+import { InterchangeStore } from '../workspace/interchange-store';
 import { METHOD_COLORS, WorkspaceNode } from '../workspace/models';
 import { ExplorerState } from './explorer-state';
 import { FolderDrop } from './folder-drop';
@@ -129,6 +131,16 @@ import { NameInput } from './name-input';
                   <button
                     type="button"
                     [class]="rowButton"
+                    [title]="'Import into ' + node.name"
+                    [attr.aria-label]="'Import into ' + node.name"
+                    [disabled]="interchange.busy()"
+                    (click)="interchange.importInto(node.path)"
+                  >
+                    <fa-icon [icon]="faFileImport" />
+                  </button>
+                  <button
+                    type="button"
+                    [class]="rowButton"
                     [title]="'Rename ' + node.name + ' (F2)'"
                     [attr.aria-label]="'Rename ' + node.name"
                     (click)="state.startRename(node)"
@@ -198,8 +210,10 @@ export class TreeLevel {
   readonly parent = input('');
 
   protected readonly state = inject(ExplorerState);
+  protected readonly interchange = inject(InterchangeStore);
 
   protected readonly faPlus = faPlus;
+  protected readonly faFileImport = faFileImport;
   protected readonly faFolder = faFolder;
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faFolderPlus = faFolderPlus;

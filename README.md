@@ -62,6 +62,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [ ] Local response history (kept out of git)
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, current
       branch, remotes, and clear reporting of merge conflicts
+- [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
+      Postman and Insomnia
 
 ### Non-goals
 
@@ -220,6 +222,48 @@ GraphQL and Markdown, chosen from the body type or the response's
 responses are pretty-printed (switch to **Raw** for the original text), images
 are previewed, and other binary bodies are not shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
 request only; nothing is written to the workspace.
+
+## Import and export
+
+Missive doesn't need its own exchange format — the workspace *is* plain files —
+but you can bring requests in from other tools and take them out again.
+
+**Import** (the import button in the explorer header, or on a folder row to
+import into that folder) reads a file and recognizes its format from the
+content, in JSON or YAML:
+
+| Format | What is imported |
+| --- | --- |
+| Postman collection v2.0 / v2.1 | Folders, requests, auth (inherited from folders and the collection), bodies; collection variables become an environment. Path variables (`/users/:id`) become their value, or `{{id}}` if they have none. |
+| Postman environment | An environment; `secret` variables stay secret (their values go to `.missive/secrets.yaml`). |
+| Insomnia export v4 | Folders, requests and environments: each sub-environment becomes an environment that includes the base environment's variables. `{{ _.name }}` references become `{{name}}`. |
+| HAR 1.2 (browser dev tools) | One request per entry, in a folder per host, without connection headers such as `Host`. |
+| OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer or API key auth using secret `{{username}}`/`{{password}}`, `{{token}}` or `{{apiKey}}` variables, which you fill in. Path parameters without an example become `{{variables}}`. |
+
+Imported requests are saved as ordinary request files in a new folder named
+after the collection (`Shop`, or `Shop 2` if that name is taken), and
+environments as new environment files; nothing that already exists is changed.
+What Missive can't represent is skipped and listed after the import: other auth
+types (OAuth 2, digest, …), file uploads, scripts, and HTTP methods other than
+`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` and `OPTIONS`. Repeated query
+parameters or headers keep their first value, and a GraphQL body becomes the
+equivalent JSON body.
+
+**Export** (the export button in the explorer header) writes the whole
+workspace to a file you choose:
+
+- **Postman collection v2.1** (`.postman_collection.json`), which Postman,
+  Insomnia, Bruno, Hoppscotch and most other clients import. Each environment
+  is written next to it as a Postman environment file
+  (`dev.postman_environment.json`; a name that is taken gets a number).
+- **Insomnia v4** (`.insomnia.json`), a single file with the requests and the
+  environments, using Insomnia's `{{ _.name }}` references.
+
+Untick **Include environments** to export only the requests. Secret values are
+never exported: secret variables are exported with empty values (as `secret`
+variables in Postman). Request files that can't be read are skipped and
+reported. Exporting the same workspace again produces the same file, so
+exports diff cleanly.
 
 ## Git sync
 

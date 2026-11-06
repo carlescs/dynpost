@@ -109,6 +109,39 @@ export interface WorkspaceDto {
   nodes: WorkspaceNodeDto[];
 }
 
+/** A format the workspace can be exported to. */
+export interface ExportFormatDto {
+  /** Passed to `workspace.export`, e.g. `postman`. */
+  id: string;
+  name: string;
+  /** The main file's extension, with its dot. */
+  extension: string;
+}
+
+export interface ExportResultDto {
+  /** The main file written. */
+  path: string;
+  /** Every file written, the main one first (Postman environments are separate files). */
+  files: string[];
+  requests: number;
+  environments: number;
+  /** What was skipped or could not be represented. */
+  warnings: string[];
+}
+
+export interface ImportResultDto {
+  /** The format the file was read as, e.g. `Postman collection v2.1`. */
+  format: string;
+  /** The folder created for the imported requests; `null` when the file had none. */
+  folder: string | null;
+  requests: number;
+  folders: number;
+  /** Ids of the environments created. */
+  environments: string[];
+  /** What was skipped or imported only approximately. */
+  warnings: string[];
+}
+
 export type GitFileStatus =
   'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted';
 
@@ -257,6 +290,21 @@ export interface BridgeMessages {
   'workspace.openLast': { payload: void; result: WorkspaceDto | null };
   /** Re-reads the open workspace from disk. */
   'workspace.tree': { payload: void; result: WorkspaceDto };
+  /** The formats `workspace.export` can write. */
+  'workspace.exportFormats': { payload: void; result: ExportFormatDto[] };
+  /**
+   * Asks where to save, then exports the workspace's requests (and environments, without secret
+   * values) for other apps; `null` when cancelled.
+   */
+  'workspace.export': {
+    payload: { format: string; includeEnvironments: boolean };
+    result: ExportResultDto | null;
+  };
+  /**
+   * Asks for a file exported by another app (Postman, Insomnia, HAR, OpenAPI) and imports it into
+   * a new folder inside `folder` (`''` is the root); `null` when cancelled.
+   */
+  'workspace.import': { payload: { folder: string }; result: ImportResultDto | null };
   'request.load': { payload: { path: string }; result: RequestDto };
   /** Saves a new request in a folder (`''` is the workspace root). */
   'request.create': { payload: { folder: string; request: RequestDto }; result: SavedRequestDto };

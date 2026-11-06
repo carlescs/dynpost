@@ -27,7 +27,7 @@ internal static class WorkspaceTreeBuilder
         _ => throw new ArgumentOutOfRangeException(nameof(entry)),
     };
 
-    private static string WorkspaceName(string root)
+    internal static string WorkspaceName(string root)
     {
         var trimmed = root.TrimEnd('/', '\\');
         var index = trimmed.LastIndexOfAny(['/', '\\']);

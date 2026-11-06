@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
+  faCircleCheck,
   faCircleExclamation,
   faFolderOpen,
   faPaperPlane,
@@ -21,6 +22,7 @@ import { AppHeader } from './shell/app-header';
 import { Sidebar } from './sidebar/sidebar';
 import { ThemeStore } from './settings/theme-store';
 import { UpdateStore } from './updates/update-store';
+import { InterchangeStore } from './workspace/interchange-store';
 import { WorkspaceStore } from './workspace/workspace-store';
 
 @Component({
@@ -55,6 +57,37 @@ import { WorkspaceStore } from './workspace/workspace-store';
           class="flex size-5 shrink-0 items-center justify-center rounded hover:bg-rose-100"
           aria-label="Dismiss"
           (click)="store.dismissError()"
+        >
+          <fa-icon [icon]="faXmark" />
+        </button>
+      </div>
+    }
+    @if (interchange.notice(); as notice) {
+      <div
+        class="flex shrink-0 items-start gap-2 border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+        role="status"
+      >
+        <fa-icon class="mt-0.5" [icon]="faCircleCheck" />
+        <div class="min-w-0 flex-1 break-words">
+          <p>{{ notice.message }}</p>
+          @if (notice.warnings.length) {
+            <details class="mt-1">
+              <summary class="cursor-pointer text-emerald-800">
+                {{ notice.warnings.length }} note(s)
+              </summary>
+              <ul class="mt-1 max-h-40 list-disc overflow-y-auto pl-5 text-emerald-800">
+                @for (warning of notice.warnings; track $index) {
+                  <li>{{ warning }}</li>
+                }
+              </ul>
+            </details>
+          }
+        </div>
+        <button
+          type="button"
+          class="flex size-5 shrink-0 items-center justify-center rounded hover:bg-emerald-100"
+          aria-label="Dismiss"
+          (click)="interchange.dismiss()"
         >
           <fa-icon [icon]="faXmark" />
         </button>
@@ -126,6 +159,7 @@ export class App implements OnInit {
   protected readonly git = inject(GitStore);
   protected readonly history = inject(GitHistoryStore);
   protected readonly environments = inject(EnvironmentStore);
+  protected readonly interchange = inject(InterchangeStore);
   private readonly updates = inject(UpdateStore);
   private readonly theme = inject(ThemeStore);
   protected readonly faPaperPlane = faPaperPlane;
@@ -133,6 +167,7 @@ export class App implements OnInit {
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faXmark = faXmark;
   protected readonly faCircleExclamation = faCircleExclamation;
+  protected readonly faCircleCheck = faCircleCheck;
 
   ngOnInit(): void {
     void this.theme.load();

@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Missive.Domain.Workspaces;
 
 /// <summary>Rules for which files and folders of a workspace hold requests.</summary>
@@ -155,6 +157,46 @@ public static class WorkspaceLayout
 
         return null;
     }
+
+    /// <summary>
+    /// Turns any name (such as a folder imported from another app) into a folder name that passes
+    /// <see cref="ValidateFolderName"/> for a sub-folder: characters that aren't allowed become
+    /// <c>-</c>, leading and trailing dots and spaces are removed, Windows device names get a
+    /// <c>_</c> suffix and long names are shortened. Returns <paramref name="fallback"/> when
+    /// nothing usable is left. A folder at the workspace root can still clash with
+    /// <see cref="EnvironmentsFolder"/>; check it with <see cref="ValidateFolderName"/>.
+    /// </summary>
+    public static string ToFolderName(string? name, string fallback = "Folder")
+    {
+        var builder = new StringBuilder();
+        foreach (var c in name ?? string.Empty)
+        {
+            if (char.IsControl(c))
+            {
+                builder.Append(' ');
+            }
+            else
+            {
+                builder.Append("/\\<>:\"|?*".Contains(c) ? '-' : c);
+            }
+        }
+
+        var cleaned = builder.ToString().Trim().Trim('.').Trim();
+        if (cleaned.Length > SuggestedNameLength)
+        {
+            cleaned = cleaned[..SuggestedNameLength].TrimEnd().TrimEnd('.').TrimEnd();
+        }
+
+        if (cleaned.Length == 0)
+        {
+            return fallback;
+        }
+
+        return ReservedDeviceNames.Contains(cleaned.Split('.')[0]) ? cleaned + "_" : cleaned;
+    }
+
+    /// <summary>The longest folder name <see cref="ToFolderName"/> makes, to keep paths short.</summary>
+    private const int SuggestedNameLength = 100;
 
     /// <summary>
     /// Whether a file can be deleted together with the collection folder holding it: request files

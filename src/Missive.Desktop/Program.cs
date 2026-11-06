@@ -3,6 +3,7 @@ using Missive.Application.Environments;
 using Missive.Application.Folders;
 using Missive.Application.Git;
 using Missive.Application.Http;
+using Missive.Application.Interchange;
 using Missive.Application.Requests;
 using Missive.Application.Settings;
 using Missive.Application.Updates;
@@ -12,6 +13,7 @@ using Missive.Desktop.Hosting;
 using Missive.Infrastructure.Environments;
 using Missive.Infrastructure.Git;
 using Missive.Infrastructure.Http;
+using Missive.Infrastructure.Interchange;
 using Missive.Infrastructure.Settings;
 using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
@@ -77,6 +79,10 @@ internal static class Program
             .AddSingleton<IRequestFileFormat, YamlRequestFileFormat>()
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
+            .AddSingleton<IExternalFiles, LocalExternalFiles>()
+            .AddSingleton<ICollectionImporter, CollectionImporter>()
+            .AddSingleton<ICollectionExporter, PostmanCollectionExporter>()
+            .AddSingleton<ICollectionExporter, InsomniaExporter>()
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
             .AddSingleton<IAppUpdater>(new VelopackAppUpdater(ReleasesRepository))
             .AddTransient<GetAppSettings>()
@@ -86,6 +92,8 @@ internal static class Program
             .AddTransient<OpenWorkspace>()
             .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetWorkspaceTree>()
+            .AddTransient<ExportWorkspace>()
+            .AddTransient<ImportCollection>()
             .AddTransient<LoadRequest>()
             .AddTransient<CreateRequest>()
             .AddTransient<SaveRequest>()
