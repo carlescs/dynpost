@@ -1,0 +1,15 @@
+{
+  "name": "missive-repo",
+  "private": true,
+  "description": "Repository tooling: commit linting, git hooks and semantic releases.",
+  "scripts": {
+    "prepare": "lefthook install",
+    "release": "semantic-release"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
+    "lefthook": "^1.11.0",
+    "semantic-release": "^24.2.0"
+  }
+}
