@@ -8,22 +8,22 @@ import {
   faPlus,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
-import { DocumentTabs } from './editor/document-tabs';
-import { EnvironmentEditor } from './environments/environment-editor';
-import { EnvironmentStore } from './environments/environment-store';
-import { RequestEditor } from './editor/request-editor';
-import { CommitView } from './git/commit-view';
-import { ConflictView } from './git/conflict-view';
-import { DiffView } from './git/diff-view';
-import { GitHistoryStore } from './git/git-history-store';
-import { GitStore } from './git/git-store';
-import { ActivityBar } from './shell/activity-bar';
-import { AppHeader } from './shell/app-header';
-import { Sidebar } from './sidebar/sidebar';
-import { ThemeStore } from './settings/theme-store';
-import { UpdateStore } from './updates/update-store';
-import { InterchangeStore } from './workspace/interchange-store';
-import { WorkspaceStore } from './workspace/workspace-store';
+import { DocumentTabs } from './components/document-tabs/document-tabs';
+import { EnvironmentEditor } from './modules/environments/components/environment-editor/environment-editor';
+import { EnvironmentStore } from './services/environment-store';
+import { RequestEditor } from './modules/explorer/components/request-editor/request-editor';
+import { CommitView } from './modules/git/components/commit-view/commit-view';
+import { ConflictView } from './modules/git/components/conflict-view/conflict-view';
+import { DiffView } from './modules/git/components/diff-view/diff-view';
+import { GitHistoryStore } from './services/git-history-store';
+import { GitStore } from './services/git-store';
+import { ActivityBar } from './components/activity-bar/activity-bar';
+import { AppHeader } from './components/app-header/app-header';
+import { Sidebar } from './components/sidebar/sidebar';
+import { ThemeStore } from './services/theme-store';
+import { UpdateStore } from './services/update-store';
+import { InterchangeStore } from './services/interchange-store';
+import { WorkspaceStore } from './services/workspace-store';
 
 @Component({
   imports: [

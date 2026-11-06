@@ -7,7 +7,7 @@ namespace Missive.Desktop.Bridge;
 
 /// <summary>
 /// The message types the UI can send. Keep in sync with
-/// <c>src/Missive.Client/src/app/bridge/messages.ts</c>.
+/// <c>src/Missive.Client/src/app/models/messages.ts</c>.
 /// </summary>
 internal static class BridgeMessageTypes
 {
