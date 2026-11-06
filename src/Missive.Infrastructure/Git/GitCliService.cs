@@ -630,7 +630,16 @@ public sealed class GitCliService : IGitService
             ? [".", ExcludeLocalFolder]
             : [.. paths.Select(p => ":(literal)" + p), ExcludeLocalFolder];
 
-        var add = await RunCheckedAsync(workspacePath, "add", ["add", "--all", "--", .. pathspecs], cancellationToken);
+        // git add refuses any pathspec that names an ignored path, the exclusion included, so it is
+        // only passed when it is needed: when the folder is not git-ignored already.
+        var ignored = await IsLocalFolderIgnoredAsync(workspacePath, cancellationToken);
+        if (ignored.IsFailure)
+        {
+            return ignored.Error!;
+        }
+
+        var addPathspecs = ignored.Value ? pathspecs.Where(p => p != ExcludeLocalFolder).ToList() : pathspecs;
+        var add = await RunCheckedAsync(workspacePath, "add", ["add", "--all", "--", .. addPathspecs], cancellationToken);
         if (add.IsFailure)
         {
             return add.Error!;
@@ -1054,6 +1063,24 @@ public sealed class GitCliService : IGitService
         }
 
         return result.Value.StandardOutput.TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Whether git ignores the workspace's <c>.missive/</c> folder (its <c>.gitignore</c> entry is in place).</summary>
+    private async Task<Result<bool>> IsLocalFolderIgnoredAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        // Exit code 0: ignored; 1: not ignored; anything else is an error.
+        var result = await RunAsync(workspacePath, ["check-ignore", "--quiet", "--", ".missive"], cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        return result.Value.ExitCode switch
+        {
+            0 => true,
+            1 => false,
+            _ => GitFailure.Classify("check-ignore", Details(result.Value)),
+        };
     }
 
     private async Task<Result<bool>> IsMergingAsync(string workspacePath, CancellationToken cancellationToken)

@@ -201,6 +201,37 @@ public sealed class GitCliServiceTests : IDisposable
         Assert.Equal("*.log\n", File.ReadAllText(Path.Combine(repository, ".gitignore")));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Commit_WithAGitIgnoredLocalFolder_Succeeds(bool selectedPaths)
+    {
+        // The usual setup: Missive's init adds .missive/ to .gitignore, and the folder holds secrets.
+        var workspace = _temp.Combine("repo");
+        Write(workspace, "a.yaml", "name: A\n");
+        Write(workspace, ".missive/secrets.yaml", "token: secret\n");
+        Assert.True((await _git.InitAsync(workspace)).IsSuccess);
+        TestGit.Configure(workspace);
+
+        var result = await _git.CommitAsync(workspace, Message("Add A"), selectedPaths ? ["a.yaml", ".gitignore"] : null);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(".gitignore\na.yaml\n", CommittedFiles(workspace));
+    }
+
+    [Fact]
+    public async Task Commit_WithAnUnignoredLocalFolder_LeavesItOut()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        Write(repository, ".missive/secrets.yaml", "token: secret\n");
+
+        var result = await _git.CommitAsync(repository, Message("Add A"), null);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal("a.yaml\n", CommittedFiles(repository));
+    }
+
     [Fact]
     public async Task Commit_WithPaths_CommitsOnlyThosePaths()
     {
