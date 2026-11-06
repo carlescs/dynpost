@@ -55,7 +55,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
 - [x] Sending requests
-- [x] Response viewer: status, time, size, headers and a pretty-printed body
+- [x] Response viewer: status, time, size, headers and a pretty-printed body,
+      with HTML and PDF previews
 - [ ] Collections as folders, with optional folder-level defaults
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token and API key
@@ -219,8 +220,11 @@ body size and the headers. Request and response bodies are shown in the Monaco
 editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,
 GraphQL and Markdown, chosen from the body type or the response's
 `Content-Type`); JSON request bodies are also validated as you type. JSON
-responses are pretty-printed (switch to **Raw** for the original text), images
-are previewed, and other binary bodies are not shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
+responses are pretty-printed (switch to **Raw** for the original text). HTML
+responses are previewed rendered in a sandboxed frame that runs no scripts and
+loads nothing from the network
+(switch to **Source** for the markup), PDFs are rendered with pdf.js (fit to width
+or zoomed, with selectable text), images are previewed, and other binary bodies are not shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
 request only; nothing is written to the workspace.
 
 ## Import and export

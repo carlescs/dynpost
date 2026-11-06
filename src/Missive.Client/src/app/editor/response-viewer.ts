@@ -12,13 +12,16 @@ import { RequestDocument } from '../workspace/models';
 import { WorkspaceStore } from '../workspace/workspace-store';
 import { CodeEditor } from './code/code-editor';
 import { languageForMediaType } from './code/monaco-loader';
+import { previewKind, ResponsePreview } from './response-preview';
 
 type ResponseTab = 'body' | 'headers';
+/** How a text body is shown: re-indented, as received, or rendered (HTML). */
+type BodyView = 'pretty' | 'raw' | 'preview';
 
 /** Shows the last response of a request: status, time, size, headers and the (pretty) body. */
 @Component({
   selector: 'app-response-viewer',
-  imports: [FaIconComponent, CodeEditor],
+  imports: [FaIconComponent, CodeEditor, ResponsePreview],
   host: {
     class: 'flex h-2/5 min-h-32 shrink-0 flex-col border-t border-slate-200 bg-slate-50',
   },
@@ -98,7 +101,9 @@ type ResponseTab = 'body' | 'headers';
         @switch (activeTab()) {
           @case ('body') {
             @if (r.bodyEncoding === 'base64') {
-              @if (isImage(r)) {
+              @if (isPdf()) {
+                <app-response-preview class="border-t border-slate-200" [response]="r" />
+              } @else if (isImage(r)) {
                 <div class="flex-1 overflow-auto p-4">
                   <img
                     class="max-w-full border border-slate-200 bg-white"
@@ -116,34 +121,33 @@ type ResponseTab = 'body' | 'headers';
                 The response has no body.
               </p>
             } @else {
-              @if (prettyBody() !== null) {
+              @if (bodyViews().length > 1) {
                 <div class="flex shrink-0 gap-1 px-4 pt-2 text-xs">
-                  <button
-                    type="button"
-                    class="rounded px-2 py-0.5 hover:bg-slate-200"
-                    [class.bg-slate-200]="!raw()"
-                    (click)="raw.set(false)"
-                  >
-                    Pretty
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded px-2 py-0.5 hover:bg-slate-200"
-                    [class.bg-slate-200]="raw()"
-                    (click)="raw.set(true)"
-                  >
-                    Raw
-                  </button>
+                  @for (option of bodyViews(); track option.id) {
+                    <button
+                      type="button"
+                      class="rounded px-2 py-0.5 hover:bg-slate-200"
+                      [class.bg-slate-200]="bodyView() === option.id"
+                      [attr.aria-pressed]="bodyView() === option.id"
+                      (click)="selectedView.set(option.id)"
+                    >
+                      {{ option.label }}
+                    </button>
+                  }
                 </div>
               }
-              <app-code-editor
-                class="mt-1 flex-1 border-t border-slate-200"
-                ariaLabel="Response body"
-                [value]="raw() ? r.body : (prettyBody() ?? r.body)"
-                [language]="language()"
-                [readOnly]="true"
-                [wordWrap]="true"
-              />
+              @if (bodyView() === 'preview') {
+                <app-response-preview class="mt-1 border-t border-slate-200" [response]="r" />
+              } @else {
+                <app-code-editor
+                  class="mt-1 flex-1 border-t border-slate-200"
+                  ariaLabel="Response body"
+                  [value]="bodyView() === 'pretty' ? (prettyBody() ?? r.body) : r.body"
+                  [language]="language()"
+                  [readOnly]="true"
+                  [wordWrap]="true"
+                />
+              }
             }
           }
           @case ('headers') {
@@ -178,7 +182,8 @@ export class ResponseViewer {
   private readonly store = inject(WorkspaceStore);
 
   protected readonly activeTab = signal<ResponseTab>('body');
-  protected readonly raw = signal(false);
+  /** The view last picked; kept across responses and used whenever the body offers it. */
+  protected readonly selectedView = signal<BodyView | null>(null);
   protected readonly tabs: { id: ResponseTab; label: string }[] = [
     { id: 'body', label: 'Body' },
     { id: 'headers', label: 'Headers' },
@@ -203,6 +208,36 @@ export class ResponseViewer {
     } catch {
       return null;
     }
+  });
+
+  /** The ways the text body can be shown; the first is the default. */
+  protected readonly bodyViews = computed<{ id: BodyView; label: string }[]>(() => {
+    const r = this.response();
+    if (!r) return [];
+    if (previewKind(r) === 'html') {
+      return [
+        { id: 'preview', label: 'Preview' },
+        { id: 'raw', label: 'Source' },
+      ];
+    }
+    if (this.prettyBody() !== null) {
+      return [
+        { id: 'pretty', label: 'Pretty' },
+        { id: 'raw', label: 'Raw' },
+      ];
+    }
+    return [];
+  });
+
+  protected readonly bodyView = computed<BodyView>(() => {
+    const views = this.bodyViews();
+    const selected = this.selectedView();
+    return views.find((v) => v.id === selected)?.id ?? views[0]?.id ?? 'raw';
+  });
+
+  protected readonly isPdf = computed(() => {
+    const r = this.response();
+    return !!r && previewKind(r) === 'pdf';
   });
 
   /** The Monaco language for the body; JSON sent with a generic content type counts as JSON. */
