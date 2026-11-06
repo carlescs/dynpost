@@ -113,6 +113,12 @@ internal static class BridgeHandlers
                 async ct => (await Use<PullChanges>().ExecuteAsync(ct)).Map(GitPullDto.From))
             .Register(BridgeMessageTypes.GitPush,
                 async ct => (await Use<PushChanges>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register(BridgeMessageTypes.GitFetch,
+                async ct => (await Use<FetchChanges>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .Register(BridgeMessageTypes.GitIdentity,
+                async ct => (await Use<GetGitIdentity>().ExecuteAsync(ct)).Map(GitIdentityDto.From))
+            .Register<GitSetIdentityPayload, GitIdentityDto>(BridgeMessageTypes.GitSetIdentity,
+                async (p, ct) => (await Use<SetGitIdentity>().ExecuteAsync(new SetGitIdentityRequest(p.Name, p.Email, p.Global), ct)).Map(GitIdentityDto.From))
             .Register<GitConflictPayload, GitConflictDto>(BridgeMessageTypes.GitConflict,
                 async (p, ct) => (await Use<GetConflict>().ExecuteAsync(p.Path, ct)).Map(GitConflictDto.From))
             .Register<GitResolvePayload, GitStatusDto>(BridgeMessageTypes.GitResolve,

@@ -1,16 +1,30 @@
 <header class="flex h-9 shrink-0 items-center justify-between px-3">
   <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Source control</h2>
   @if (workspace.workspace()) {
-    <button
-      type="button"
-      class="flex size-6 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-200 enabled:hover:text-slate-800 disabled:opacity-50"
-      title="Refresh"
-      aria-label="Refresh"
-      [disabled]="git.busy() !== null"
-      (click)="git.refresh()"
-    >
-      <fa-icon [icon]="faRotate" [animation]="git.busy() === 'refresh' ? 'spin' : undefined" />
-    </button>
+    <span class="flex items-center gap-1">
+      @if (git.hasRemotes()) {
+        <button
+          type="button"
+          class="flex size-6 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-200 enabled:hover:text-slate-800 disabled:opacity-50"
+          title="Fetch: check the remote for new commits without changing your files"
+          aria-label="Fetch"
+          [disabled]="git.busy() !== null"
+          (click)="git.fetch()"
+        >
+          <fa-icon [icon]="faCloudArrowDown" [animation]="spin('fetch')" />
+        </button>
+      }
+      <button
+        type="button"
+        class="flex size-6 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-200 enabled:hover:text-slate-800 disabled:opacity-50"
+        title="Refresh"
+        aria-label="Refresh"
+        [disabled]="git.busy() !== null"
+        (click)="git.refresh()"
+      >
+        <fa-icon [icon]="faRotate" [animation]="git.busy() === 'refresh' ? 'spin' : undefined" />
+      </button>
+    </span>
   }
 </header>
 
@@ -68,7 +82,13 @@
       <span class="truncate font-medium" [title]="status.upstream ?? 'No upstream branch'">{{
         status.branch ?? 'Detached HEAD'
       }}</span>
-      @if (status.upstream) {
+      @if (status.upstreamGone) {
+        <span
+          class="ml-auto shrink-0 text-xs text-amber-700"
+          [title]="status.upstream + ' was deleted on the remote'"
+          >Upstream deleted</span
+        >
+      } @else if (status.upstream) {
         <span class="ml-auto flex shrink-0 gap-2 text-xs text-slate-500">
           <span title="Commits to pull"><fa-icon [icon]="faArrowDown" /> {{ status.behind }}</span>
           <span title="Commits to push"><fa-icon [icon]="faArrowUp" /> {{ status.ahead }}</span>
@@ -104,6 +124,71 @@
       </div>
     }
 
+    @if (git.needsIdentity()) {
+      <form
+        class="mx-3 mb-2 space-y-1.5 rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-xs text-slate-700"
+        (submit)="$event.preventDefault(); saveIdentity()"
+      >
+        <p class="flex items-start gap-2">
+          <fa-icon class="mt-0.5 text-sky-700" [icon]="faUser" />
+          <span>Enter the name and email git records on your commits.</span>
+        </p>
+        <input
+          class="block w-full rounded border border-slate-300 bg-white px-2 py-0.5 focus:border-sky-500 focus:outline-none"
+          placeholder="Your name"
+          aria-label="Your name"
+          autocomplete="name"
+          [value]="identityName()"
+          (input)="identityName.set($any($event.target).value)"
+        />
+        <input
+          class="block w-full rounded border border-slate-300 bg-white px-2 py-0.5 focus:border-sky-500 focus:outline-none"
+          type="email"
+          placeholder="you@example.com"
+          aria-label="Your email"
+          autocomplete="email"
+          [value]="identityEmail()"
+          (input)="identityEmail.set($any($event.target).value)"
+        />
+        <label class="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            class="accent-sky-600"
+            [checked]="identityGlobal()"
+            (change)="identityGlobal.set($any($event.target).checked)"
+          />
+          Use for all my git repositories
+        </label>
+        <button
+          type="submit"
+          class="rounded bg-sky-600 px-2 py-0.5 text-white enabled:hover:bg-sky-700 disabled:opacity-50"
+          [disabled]="git.busy() !== null || !identityName().trim() || !identityEmail().trim()"
+        >
+          <fa-icon [icon]="busyIcon('identity', faCheck)" [animation]="spin('identity')" /> Save
+        </button>
+      </form>
+    }
+
+    @if (git.unsavedCount(); as unsaved) {
+      <div
+        class="mx-3 mb-2 flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800"
+      >
+        <fa-icon class="mt-0.5" [icon]="faTriangleExclamation" />
+        <span class="min-w-0 flex-1">
+          {{ unsaved }} open tab{{ unsaved === 1 ? ' has' : 's have' }} unsaved changes. Git only
+          sees saved files, so they won't be committed or pushed.
+        </span>
+        <button
+          type="button"
+          class="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 enabled:hover:bg-amber-100 disabled:opacity-50"
+          [disabled]="git.busy() !== null"
+          (click)="git.saveAll()"
+        >
+          <fa-icon [icon]="faFloppyDisk" /> Save all
+        </button>
+      </div>
+    }
+
     <div class="space-y-2 px-3 pb-3">
       <textarea
         class="block w-full resize-none rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none"
@@ -128,23 +213,21 @@
         <button
           type="button"
           class="flex items-center justify-center gap-2 rounded px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 flex-1 border border-slate-300 bg-white enabled:hover:bg-slate-100"
-          [disabled]="git.busy() !== null || !status.upstream"
-          [title]="
-            status.upstream ? 'Pull from ' + status.upstream : 'The branch has no upstream yet'
-          "
-          (click)="git.pull()"
+          [disabled]="git.busy() !== null || !canPull()"
+          [title]="pullTitle()"
+          (click)="pull()"
         >
           <fa-icon [icon]="busyIcon('pull', faArrowDown)" [animation]="spin('pull')" /> Pull
         </button>
         <button
           type="button"
           class="flex items-center justify-center gap-2 rounded px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50 flex-1 border border-slate-300 bg-white enabled:hover:bg-slate-100"
-          [disabled]="git.busy() !== null || status.branch === undefined"
-          [title]="status.upstream ? 'Push to ' + status.upstream : 'Publish the branch'"
+          [disabled]="git.busy() !== null || !status.branch || status.unborn"
+          [title]="pushTitle()"
           (click)="git.push()"
         >
           <fa-icon [icon]="busyIcon('push', faArrowUp)" [animation]="spin('push')" />
-          {{ status.upstream ? 'Push' : 'Publish' }}
+          {{ status.upstream && !status.upstreamGone ? 'Push' : 'Publish' }}
         </button>
       </div>
       @if (git.notice(); as notice) {

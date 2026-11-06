@@ -43,11 +43,45 @@ public interface IGitService
     /// Pulls the current branch from its upstream with a merge (never a rebase). Conflicts are left
     /// in the working tree for the user and reported as <see cref="PullOutcome.Conflicted"/>.
     /// </summary>
-    Task<Result<PullOutcome>> PullAsync(string workspacePath, CancellationToken cancellationToken = default);
+    /// <param name="allowUnrelatedHistories">
+    /// Merge even when the upstream shares no commit with the branch: for the first pull of a
+    /// repository that was created locally and linked to an existing remote branch.
+    /// </param>
+    Task<Result<PullOutcome>> PullAsync(
+        string workspacePath,
+        bool allowUnrelatedHistories = false,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Pushes the current branch without force. With <paramref name="setUpstream"/>, publishes the
-    /// branch to the workspace's remote and makes it the upstream.
+    /// Downloads the latest commits of every remote without changing the working tree, so the
+    /// status's ahead/behind counts are current. Remote-tracking branches deleted on the remote are pruned.
+    /// </summary>
+    Task<Result<Unit>> FetchAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches the workspace's remote (<c>origin</c>, or the only one) and, when it has a branch named
+    /// <paramref name="branch"/>, makes it the branch's upstream. Returns whether it did.
+    /// </summary>
+    Task<Result<bool>> TrackRemoteBranchAsync(string workspacePath, string branch, CancellationToken cancellationToken = default);
+
+    /// <summary>The commit identity git would use in the workspace; either part may be missing.</summary>
+    Task<Result<GitIdentitySettings>> GetIdentityAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the commit identity, for every repository of the user (<paramref name="global"/>) or only
+    /// the workspace's repository.
+    /// </summary>
+    Task<Result<Unit>> SetIdentityAsync(
+        string workspacePath,
+        GitIdentity identity,
+        bool global,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pushes the current branch without force: to its upstream branch (re-creating it if it was
+    /// deleted on the remote), unless the user configured a separate push remote. With
+    /// <paramref name="setUpstream"/>, publishes the branch to the workspace's remote and makes it
+    /// the upstream.
     /// </summary>
     Task<Result<Unit>> PushAsync(string workspacePath, bool setUpstream, CancellationToken cancellationToken = default);
 
@@ -125,4 +159,10 @@ public interface IGitService
     /// tracked it lose their upstream; no commits are lost.
     /// </summary>
     Task<Result<Unit>> RemoveRemoteAsync(string workspacePath, string name, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The configured commit identity; a part is <c>null</c> when it is not set.</summary>
+public sealed record GitIdentitySettings(string? Name, string? Email)
+{
+    public bool IsComplete => Name is not null && Email is not null;
 }

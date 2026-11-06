@@ -5,6 +5,7 @@ import {
   ConflictResolution,
   GitConflict,
   GitFileDiff,
+  GitIdentity,
   GitRemote,
   GitStatus,
   PullOutcome,
@@ -19,6 +20,8 @@ export type GitOperation =
   | 'discard'
   | 'pull'
   | 'push'
+  | 'fetch'
+  | 'identity'
   | 'conflict'
   | 'resolve'
   | 'abort'
@@ -61,6 +64,26 @@ export class GitStore {
   private diffToken = 0;
   /** The repository's remotes; `null` until they are read. */
   readonly remotes = signal<GitRemote[] | null>(null);
+  /** The commit identity git uses here; `null` until it is read. */
+  readonly identity = signal<GitIdentity | null>(null);
+
+  /** Whether git has no complete name and email to record on commits, so the user must enter them. */
+  readonly needsIdentity = computed(() => {
+    const identity = this.identity();
+    return identity !== null && (!identity.name || !identity.email);
+  });
+
+  readonly hasRemotes = computed(() => (this.remotes()?.length ?? 0) > 0);
+
+  /**
+   * Open tabs with edits that are not saved to disk yet. Git only sees files, so these are not
+   * committed, and a pull doesn't load newer versions into them.
+   */
+  readonly unsavedCount = computed(
+    () =>
+      this.workspace.documents().filter((d) => d.dirty).length +
+      this.environments.drafts().filter((d) => d.dirty).length,
+  );
 
   /** Whether the last status read found that the workspace folder is not inside a git repository. */
   readonly notARepository = computed(
@@ -91,6 +114,7 @@ export class GitStore {
         this.conflict.set(null);
         this.closeDiff();
         this.remotes.set(null);
+        this.identity.set(null);
         if (root && this.available) void this.refresh();
       });
     });
@@ -122,8 +146,66 @@ export class GitStore {
       (status) => {
         this.status.set(status);
         void this.loadRemotes();
+        void this.loadIdentity();
       },
     );
+  }
+
+  /** Downloads the remotes' latest commits, so the status shows what a pull would bring in. */
+  async fetch(): Promise<void> {
+    await this.run(
+      'fetch',
+      () => this.bridge.send('git.fetch'),
+      (status) => {
+        this.status.set(status);
+        this.notice.set({
+          kind: 'info',
+          text: status.upstreamGone
+            ? `The upstream branch ${status.upstream} was deleted on the remote. Publish to create it again.`
+            : status.behind
+              ? `${status.behind} new commit${status.behind === 1 ? '' : 's'} to pull.`
+              : 'No new commits on the remote.',
+        });
+      },
+    );
+  }
+
+  /** Reads the commit identity; failures leave the last one (the status shows git errors). */
+  async loadIdentity(): Promise<void> {
+    const root = this.root();
+    if (!root) return;
+    try {
+      const identity = await this.bridge.send('git.identity');
+      if (this.root() === root) this.identity.set(identity);
+    } catch {
+      // Not knowing it only hides the identity form; a commit still reports a missing identity.
+    }
+  }
+
+  /** Sets the name and email recorded on commits. Resolves to whether it succeeded. */
+  setIdentity(name: string, email: string, global: boolean): Promise<boolean> {
+    return this.run(
+      'identity',
+      () => this.bridge.send('git.identity.set', { name, email, global }),
+      (identity) => {
+        this.identity.set(identity);
+        this.notice.set({
+          kind: 'info',
+          text: `Commits will be recorded as ${identity.name} <${identity.email}>.`,
+        });
+      },
+    );
+  }
+
+  /** Saves every open tab with unsaved edits, so the files git sees match the editor. */
+  async saveAll(): Promise<void> {
+    for (const doc of this.workspace.documents().filter((d) => d.dirty)) {
+      await this.workspace.save(doc.id);
+    }
+    for (const draft of this.environments.drafts().filter((d) => d.dirty)) {
+      await this.environments.save(draft.key);
+    }
+    await this.refresh();
   }
 
   /** Turns the workspace folder into a git repository. */
@@ -142,8 +224,8 @@ export class GitStore {
   }
 
   /** Commits `paths`, or every change when `paths` is empty. Resolves to whether it succeeded. */
-  commit(message: string, paths: string[] = []): Promise<boolean> {
-    return this.run(
+  async commit(message: string, paths: string[] = []): Promise<boolean> {
+    const ok = await this.run(
       'commit',
       () => this.bridge.send('git.commit', { message, ...(paths.length ? { paths } : {}) }),
       (r) => {
@@ -155,6 +237,9 @@ export class GitStore {
         });
       },
     );
+    // Show the identity form, filled with whatever part git already knows.
+    if (!ok && this.error()?.code === 'git.identity_unknown') await this.loadIdentity();
+    return ok;
   }
 
   /** Throws away the uncommitted changes of `paths`. Resolves to whether it succeeded. */
@@ -198,7 +283,7 @@ export class GitStore {
   }
 
   async push(): Promise<void> {
-    await this.run(
+    const ok = await this.run(
       'push',
       () => this.bridge.send('git.push'),
       (status) => {
@@ -206,6 +291,20 @@ export class GitStore {
         this.notice.set({ kind: 'info', text: `Pushed to ${status.upstream ?? 'the remote'}.` });
       },
     );
+    // The remote has commits this clone hasn't seen: fetch them, so the count of commits to pull
+    // is right and the user can pull straight away. The rejection stays on screen.
+    if (!ok && this.error()?.code === 'git.push_rejected' && !this.busy()) {
+      const root = this.root();
+      this.busy.set('fetch');
+      try {
+        const status = await this.bridge.send('git.fetch');
+        if (this.root() === root) this.status.set(status);
+      } catch {
+        // Keep the rejection; a pull fetches anyway.
+      } finally {
+        this.busy.set(null);
+      }
+    }
   }
 
   /** Shows both sides of a conflicted file. */

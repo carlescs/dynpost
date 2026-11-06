@@ -20,7 +20,9 @@ public sealed record GitStatusDto(
     int Behind,
     bool Merging,
     IReadOnlyList<GitChangeDto> Changes,
-    string? MergeMessage = null)
+    string? MergeMessage = null,
+    bool Unborn = false,
+    bool UpstreamGone = false)
 {
     public static GitStatusDto From(GitStatus status) =>
         new(
@@ -30,7 +32,9 @@ public sealed record GitStatusDto(
             status.Behind,
             status.IsMerging,
             status.Changes.Select(GitChangeDto.From).ToList(),
-            status.MergeMessage);
+            status.MergeMessage,
+            status.IsUnborn,
+            status.IsUpstreamGone);
 
     internal static string StatusName(GitFileStatus status) =>
         status switch
@@ -162,4 +166,9 @@ public sealed record GitRemoteDto(string Name, string FetchUrl, string PushUrl)
     public static GitRemoteDto From(GitRemote remote) => new(remote.Name, remote.FetchUrl, remote.PushUrl);
 
     public static IReadOnlyList<GitRemoteDto> From(IReadOnlyList<GitRemote> remotes) => remotes.Select(From).ToList();
+}
+
+public sealed record GitIdentityDto(string? Name, string? Email)
+{
+    public static GitIdentityDto From(GitIdentitySettings identity) => new(identity.Name, identity.Email);
 }

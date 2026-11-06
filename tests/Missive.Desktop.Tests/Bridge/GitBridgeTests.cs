@@ -41,6 +41,9 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<DiscardChanges>()
             .AddTransient<PullChanges>()
             .AddTransient<PushChanges>()
+            .AddTransient<FetchChanges>()
+            .AddTransient<GetGitIdentity>()
+            .AddTransient<SetGitIdentity>()
             .AddTransient<GetConflict>()
             .AddTransient<ResolveConflict>()
             .AddTransient<AbortMerge>()
@@ -133,11 +136,57 @@ public sealed class GitBridgeTests : IDisposable
         _current.Open(Folder);
         _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
             .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 0, 0, false, [])));
-        _git.PullAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<PullOutcome>.Success(PullOutcome.UpToDate));
+        _git.PullAsync(Folder, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Result<PullOutcome>.Success(PullOutcome.UpToDate));
 
         var response = await SendAsync("git.pull");
 
         Assert.Equal("upToDate", response.GetProperty("payload").GetProperty("outcome").GetString());
+    }
+
+    [Fact]
+    public async Task GitStatus_ReportsUnbornBranchesAndDeletedUpstreams()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<GitStatus>.Success(
+            new GitStatus("main", "origin/main", 0, 0, false, [], IsUnborn: true, IsUpstreamGone: true)));
+
+        var payload = (await SendAsync("git.status")).GetProperty("payload");
+
+        Assert.True(payload.GetProperty("unborn").GetBoolean());
+        Assert.True(payload.GetProperty("upstreamGone").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GitFetch_ReturnsTheNewStatus()
+    {
+        _current.Open(Folder);
+        _git.ListRemotesAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<GitRemote>>.Success([new GitRemote("origin", "u", "u")]));
+        _git.FetchAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<Unit>.Success(Unit.Value));
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 0, 3, false, [])));
+
+        var response = await SendAsync("git.fetch");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Equal(3, response.GetProperty("payload").GetProperty("behind").GetInt32());
+    }
+
+    [Fact]
+    public async Task GitIdentity_CanBeReadAndSet()
+    {
+        _current.Open(Folder);
+        _git.GetIdentityAsync(Folder, Arg.Any<CancellationToken>()).Returns(
+            Result<GitIdentitySettings>.Success(new GitIdentitySettings(null, null)),
+            Result<GitIdentitySettings>.Success(new GitIdentitySettings("Ada", "ada@example.com")));
+        _git.SetIdentityAsync(default!, default!, default, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+
+        var read = await SendAsync("git.identity");
+        var set = await SendAsync("git.identity.set", """{ "name": "Ada", "email": "ada@example.com", "global": false }""");
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, read.GetProperty("payload").GetProperty("name").ValueKind);
+        Assert.Equal("Ada", set.GetProperty("payload").GetProperty("name").GetString());
+        _ = _git.Received(1).SetIdentityAsync(Folder, Arg.Any<GitIdentity>(), false, Arg.Any<CancellationToken>());
     }
 
     [Fact]

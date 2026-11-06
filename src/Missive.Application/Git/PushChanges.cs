@@ -36,6 +36,11 @@ public sealed class PushChanges(IGitService git, CurrentWorkspace workspace)
             return GitErrors.UnresolvedConflicts(status.Conflicts);
         }
 
+        if (status.IsUnborn)
+        {
+            return GitErrors.NoCommits();
+        }
+
         var push = await git.PushAsync(workspacePath, setUpstream: !status.HasUpstream, cancellationToken);
         if (push.IsFailure)
         {

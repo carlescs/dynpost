@@ -48,6 +48,9 @@ internal sealed class GitCommandRunner(string executable)
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
         // Never open an editor for merge commit messages.
         startInfo.Environment["GIT_MERGE_AUTOEDIT"] = "no";
+        // Don't take locks that are only an optimization (such as the index refresh of a status
+        // read), so background refreshes never block the user's other git tools, nor they Missive.
+        startInfo.Environment["GIT_OPTIONAL_LOCKS"] = "0";
         // Untranslated messages, so error output can be recognized.
         startInfo.Environment["LC_ALL"] = "C";
 
