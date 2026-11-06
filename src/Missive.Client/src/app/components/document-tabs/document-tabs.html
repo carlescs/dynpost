@@ -1,0 +1,53 @@
+<div class="flex min-w-0 overflow-x-auto" role="tablist">
+  @for (tab of tabs(); track tab.key) {
+    @let active = tab.key === store.activeTab();
+    @let name = tab.kind === 'request' ? tab.doc.name : tab.draft.name || 'Untitled';
+    @let dirty = tab.kind === 'request' ? tab.doc.dirty : tab.draft.dirty;
+    <div
+      class="group flex max-w-56 shrink-0 items-center gap-2 border-r border-slate-200 pr-1 pl-3 text-sm"
+      [class.bg-white]="active"
+      [class.text-slate-500]="!active"
+    >
+      <button
+        type="button"
+        role="tab"
+        class="flex min-w-0 items-center gap-2"
+        [attr.aria-selected]="active"
+        [title]="tabTitle(tab)"
+        (click)="store.activateTab(tab.key)"
+      >
+        @if (tab.kind === 'request') {
+          <span class="font-mono text-[10px] font-bold" [class]="methodColors[tab.doc.method]">{{
+            tab.doc.method
+          }}</span>
+          <span class="truncate" [class.italic]="!tab.doc.path">{{ name }}</span>
+        } @else {
+          <fa-icon class="text-xs text-emerald-600" [icon]="faLayerGroup" />
+          <span class="truncate" [class.italic]="!tab.draft.id">{{ name }}</span>
+        }
+      </button>
+      <button
+        type="button"
+        class="relative flex size-5 shrink-0 items-center justify-center rounded text-xs text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+        [attr.aria-label]="'Close ' + name"
+        (click)="close(tab)"
+      >
+        @if (dirty) {
+          <span class="size-2 rounded-full bg-slate-400 group-hover:hidden"></span>
+          <fa-icon class="hidden group-hover:inline" [icon]="faXmark" />
+        } @else {
+          <fa-icon [icon]="faXmark" />
+        }
+      </button>
+    </div>
+  }
+</div>
+<button
+  type="button"
+  class="flex w-9 shrink-0 items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+  title="New request"
+  aria-label="New request"
+  (click)="store.newRequest()"
+>
+  <fa-icon [icon]="faPlus" />
+</button>

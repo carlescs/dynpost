@@ -2,7 +2,7 @@
 
 /*
  * Dark mode. Tailwind's colors are CSS variables, so the `dark` class on <html> (set by
- * settings/theme-store.ts) re-maps the palette instead of every template carrying dark: variants:
+ * services/theme-store.ts) re-maps the palette instead of every template carrying dark: variants:
  * the slate scale is mirrored (50 <-> 950, ...), the tints and dark text shades of the status
  * colors are swapped, slate-500 becomes slate-400, and `bg-white` becomes slate-900. Other mid
  * shades (buttons) and white text are unchanged. `raw-slate-*` keep the original values so the

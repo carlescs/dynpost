@@ -1,0 +1,6 @@
+<div #container class="absolute inset-0"></div>
+@if (!ready()) {
+  <pre
+    class="absolute inset-0 overflow-auto p-2 font-mono text-xs whitespace-pre-wrap text-slate-800"
+    >{{ value() }}</pre>
+}

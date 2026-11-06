@@ -1,0 +1,101 @@
+<header class="flex h-9 shrink-0 items-center justify-between px-3">
+  <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Environments</h2>
+  @if (workspace.workspace()) {
+    <div class="flex gap-0.5">
+      <button
+        type="button"
+        [class]="headerButton"
+        title="New environment"
+        aria-label="New environment"
+        (click)="store.create()"
+      >
+        <fa-icon [icon]="faPlus" />
+      </button>
+      <button
+        type="button"
+        [class]="headerButton"
+        title="Reload from disk"
+        aria-label="Reload from disk"
+        (click)="store.refresh()"
+      >
+        <fa-icon [icon]="faArrowsRotate" />
+      </button>
+    </div>
+  }
+</header>
+
+@if (!workspace.workspace()) {
+  <p class="px-3 py-1 text-sm text-slate-500">Open a workspace folder to use its environments.</p>
+} @else {
+  <ul class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm" role="listbox" aria-label="Environments">
+    <li
+      class="flex items-center gap-2 px-3 py-1"
+      role="option"
+      [attr.aria-selected]="!store.activeId()"
+    >
+      <button
+        type="button"
+        class="flex min-w-0 items-center gap-2 text-left text-slate-400 hover:text-sky-600"
+        title="Send requests without an environment"
+        (click)="store.select(null)"
+      >
+        @if (store.activeId()) {
+          <span [class]="ring"></span>
+        } @else {
+          <fa-icon class="text-sky-600" [icon]="faCircleCheck" />
+        }
+        <span class="truncate text-slate-500 italic">No environment</span>
+      </button>
+    </li>
+    @for (env of store.environments(); track env.id) {
+      <li
+        class="group flex items-center gap-1 px-3 py-1 hover:bg-slate-200/60"
+        role="option"
+        [class.bg-sky-100]="store.draft()?.id === env.id"
+        [attr.aria-selected]="store.activeId() === env.id"
+      >
+        <button
+          type="button"
+          class="flex shrink-0 items-center text-slate-400 hover:text-sky-600 disabled:cursor-not-allowed"
+          [title]="env.error ? 'This environment can\'t be read' : 'Send requests with ' + env.name"
+          [attr.aria-label]="'Use ' + env.name"
+          [disabled]="!!env.error"
+          (click)="store.select(env.id)"
+        >
+          @if (store.activeId() === env.id) {
+            <fa-icon class="text-sky-600" [icon]="faCircleCheck" />
+          } @else {
+            <span [class]="ring"></span>
+          }
+        </button>
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 text-left"
+          [title]="env.error ?? 'Edit environments/' + env.id"
+          [disabled]="!!env.error"
+          (click)="store.edit(env.id)"
+        >
+          <span class="truncate" [class.text-rose-700]="env.error">{{ env.name }}</span>
+          @if (env.error) {
+            <fa-icon class="shrink-0 text-rose-600" [icon]="faCircleExclamation" />
+          }
+        </button>
+      </li>
+    }
+  </ul>
+  @if (!store.environments().length) {
+    <div class="flex flex-col gap-2 px-3 pb-3 text-sm text-slate-500">
+      <p>
+        No environments yet. An environment holds values for <code>{{ example }}</code>
+        variables, such as a base URL or a token.
+      </p>
+      <button
+        type="button"
+        class="flex items-center justify-center gap-2 rounded bg-sky-600 px-3 py-1.5 text-white hover:bg-sky-700"
+        (click)="store.create()"
+      >
+        <fa-icon [icon]="faPlus" /> New environment
+      </button>
+    </div>
+  }
+}

@@ -39,7 +39,10 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   `angular.json` copies its data files (cmaps, fonts, ICC profiles, wasm) to `pdfjs/`.
 - Client code layout (`src/Missive.Client/src/app`), following the Angular style
   guide (kebab-case file named after its class, no `.component`/`.service`
-  suffixes, one folder per component):
+  suffixes, one folder per component). A component's template and styles are
+  separate files next to it — `<name>.html` (`templateUrl`) and, when it needs
+  custom styles, `<name>.scss` (`styleUrl`); `ng generate component` is set up
+  to emit the same (SCSS, no inline template or styles, no spec):
   - `components/<name>/<name>.ts` — the shell (header, activity bar, sidebar,
     document tabs) and UI shared by several modules (code and diff editors, PDF
     viewer, key/value table, variable input).
@@ -192,9 +195,9 @@ Desktop → Application
 - C#: nullable enabled, implicit usings, file-scoped namespaces, async for I/O.
 - TypeScript: strict mode, standalone components, signals for local state;
   format with Prettier.
-- Styling: Tailwind utility classes in templates first. When custom styles are
-  needed, write SCSS (component `styles` are compiled as SCSS; global styles go
-  in `src/styles.scss`). Keep Tailwind-specific CSS (`@import 'tailwindcss'`,
+- Styling: SCSS is the stylesheet language. Tailwind utility classes in
+  templates first; when custom styles are needed, put them in the component's
+  `<name>.scss` (global styles go in `src/styles.scss`). Keep Tailwind-specific CSS (`@import 'tailwindcss'`,
   `@theme` tokens, `@utility`) in `src/tailwind.css` only. Tailwind v4 doesn't
   support being run through Sass, so don't `@use`/`@import` Tailwind from SCSS.
 - Icons: Font Awesome only. Import individual icons

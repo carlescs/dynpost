@@ -17,49 +17,8 @@ const KEYBOARD_STEP = 16;
     role: 'complementary',
     '[style.width.px]': 'store.sidebarWidth()',
   },
-  template: `
-    <!-- The routed module's panel: explorer, environments or source control. -->
-    <router-outlet />
-    <div
-      class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize touch-none select-none focus:outline-none"
-      [class.resizing]="dragging"
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize sidebar"
-      tabindex="0"
-      [attr.aria-valuemin]="minWidth"
-      [attr.aria-valuemax]="maxWidth"
-      [attr.aria-valuenow]="store.sidebarWidth()"
-      title="Drag to resize, double-click to reset"
-      (pointerdown)="startResize($event)"
-      (pointermove)="resize($event)"
-      (pointerup)="endResize($event)"
-      (pointercancel)="endResize($event)"
-      (lostpointercapture)="dragging = false"
-      (dblclick)="store.setSidebarWidth(defaultWidth)"
-      (keydown)="onKeydown($event)"
-    ></div>
-  `,
-  styles: `
-    [role='separator'] {
-      &::after {
-        content: '';
-        position: absolute;
-        inset-block: 0;
-        left: 50%;
-        width: 2px;
-        transform: translateX(-50%);
-        background: transparent;
-        transition: background-color 0.15s;
-      }
-
-      &:hover::after,
-      &:focus-visible::after,
-      &.resizing::after {
-        background: var(--color-sky-500, #0ea5e9);
-      }
-    }
-  `,
+  templateUrl: './sidebar.html',
+  styleUrl: './sidebar.scss',
 })
 export class Sidebar {
   protected readonly store = inject(WorkspaceStore);
