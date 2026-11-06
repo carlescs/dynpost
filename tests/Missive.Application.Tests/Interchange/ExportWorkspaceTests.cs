@@ -74,12 +74,13 @@ public class ExportWorkspaceTests
     [Fact]
     public async Task WritesCompanionFilesUnderFreeNames()
     {
-        var taken = Path.Combine("/out", "dev.env.json");
-        _files.Exists(taken).Returns(true);
+        // Companions go in the destination's folder, in the platform's path form.
+        var folder = Path.GetDirectoryName("/out/api.test.json")!;
+        _files.Exists(Path.Combine(folder, "dev.env.json")).Returns(true);
 
         var result = await UseCase().ExecuteAsync(new ExportWorkspaceRequest("test", "/out/api.test.json"));
 
-        var companion = Path.Combine("/out", "dev-2.env.json");
+        var companion = Path.Combine(folder, "dev-2.env.json");
         Assert.Equal(["/out/api.test.json", companion], result.Value.Files);
         await _files.Received(1).WriteTextAsync(companion, "env", Arg.Any<CancellationToken>());
     }
