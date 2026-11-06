@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
@@ -6,6 +6,7 @@ import {
   faFolderOpen,
   faFolderPlus,
   faPlus,
+  faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 import { WorkspaceStore } from '../workspace/workspace-store';
 import { ExplorerState } from './explorer-state';
@@ -71,6 +72,26 @@ import { TreeLevel } from './tree-level';
           <p class="px-3 py-1 text-sm text-slate-500">No requests yet.</p>
         }
       </div>
+      @if (state.menu(); as menu) {
+        <div
+          role="menu"
+          class="fixed z-50 min-w-40 rounded border border-slate-300 bg-white py-1 text-sm shadow-lg"
+          [style.left.px]="menu.x"
+          [style.top.px]="menu.y"
+          (click)="$event.stopPropagation()"
+          (contextmenu)="$event.preventDefault()"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-700 hover:bg-slate-100"
+            (click)="state.deleteNode(menu.node)"
+          >
+            <fa-icon [icon]="faTrash" />
+            Delete {{ menu.node.kind === 'folder' ? 'folder' : 'request' }}
+          </button>
+        </div>
+      }
     } @else {
       <div class="flex flex-col gap-3 px-3 py-2 text-sm text-slate-500">
         <p>No folder open. Open a folder to see its requests.</p>
@@ -92,7 +113,16 @@ export class ExplorerView {
   protected readonly faPlus = faPlus;
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faFolderPlus = faFolderPlus;
+  protected readonly faTrash = faTrash;
   protected readonly faArrowsRotate = faArrowsRotate;
+
+  @HostListener('document:click')
+  @HostListener('document:contextmenu')
+  @HostListener('document:keydown.escape')
+  @HostListener('window:blur')
+  protected closeMenu(): void {
+    this.state.closeMenu();
+  }
 
   protected readonly headerButton =
     'flex size-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800';

@@ -77,7 +77,7 @@ import { NameInput } from './name-input';
         </div>
 
         @if (node.kind === 'folder') {
-          <div [appFolderDrop]="node.path">
+          <div [appFolderDrop]="node.path" (contextmenu)="state.openMenu(node, $event)">
             @if (state.isRenaming(node)) {
               <div class="flex items-center gap-1.5 py-0.5 pr-2" [style.padding-left.px]="indent()">
                 <fa-icon class="w-3 text-[10px] text-slate-400" [icon]="chevron(node)" />
@@ -165,6 +165,8 @@ import { NameInput } from './name-input';
             [style.padding-left.px]="indent()"
             [title]="node.error ?? node.path"
             (click)="state.store.openRequest(node)"
+            (contextmenu)="state.openMenu(node, $event)"
+            (keydown)="onRequestKeydown($event, node)"
           >
             <span class="w-3 shrink-0"></span>
             @if (node.error) {
@@ -222,6 +224,13 @@ export class TreeLevel {
 
   protected dragStarted(node: WorkspaceNode, event: CdkDragStart<WorkspaceNode>): void {
     this.state.startDrag(node, event.event);
+  }
+
+  protected onRequestKeydown(event: KeyboardEvent, node: WorkspaceNode): void {
+    if (event.key === 'Delete') {
+      event.preventDefault();
+      void this.state.store.deleteRequest(node.path);
+    }
   }
 
   protected onFolderKeydown(event: KeyboardEvent, node: WorkspaceNode): void {

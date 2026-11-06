@@ -87,6 +87,19 @@ public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
         }
     }
 
+    public Result<Unit> DeleteFile(string root, WorkspacePath path)
+    {
+        try
+        {
+            File.Delete(FullPath(root, path));
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return IoError($"Could not delete '{path}': {ex.Message}");
+        }
+    }
+
     public bool EntryExists(string root, WorkspacePath path) => Path.Exists(FullPath(root, path));
 
     public bool DirectoryExists(string root, WorkspacePath path) => Directory.Exists(FullPath(root, path));

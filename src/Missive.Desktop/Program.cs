@@ -90,6 +90,7 @@ internal static class Program
             .AddTransient<CreateRequest>()
             .AddTransient<SaveRequest>()
             .AddTransient<MoveRequest>()
+            .AddTransient<DeleteRequest>()
             .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
             .AddTransient<CancelRequest>()

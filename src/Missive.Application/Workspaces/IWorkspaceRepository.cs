@@ -43,6 +43,9 @@ public interface IWorkspaceRepository
     /// <summary>Renames or moves a file. Fails if the destination already exists.</summary>
     Result<Unit> MoveFile(string root, WorkspacePath from, WorkspacePath to);
 
+    /// <summary>Deletes a file.</summary>
+    Result<Unit> DeleteFile(string root, WorkspacePath path);
+
     /// <summary>Whether a file or a folder exists at <paramref name="path"/>.</summary>
     bool EntryExists(string root, WorkspacePath path);
 

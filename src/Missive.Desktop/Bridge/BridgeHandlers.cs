@@ -55,6 +55,8 @@ internal static class BridgeHandlers
                 (p, _) => Task.FromResult(Use<RenameFolder>().Execute(p.Path, p.Name)))
             .Register<MoveFolderPayload, FolderDto>(BridgeMessageTypes.FolderMove,
                 (p, _) => Task.FromResult(Use<MoveFolder>().Execute(p.Path, p.Parent)))
+            .Register<DeleteRequestPayload, Unit?>(BridgeMessageTypes.RequestDelete,
+                (p, _) => Task.FromResult(NoValue(Use<DeleteRequest>().Execute(p.Path))))
             .Register<DeleteFolderPayload, Unit?>(BridgeMessageTypes.FolderDelete,
                 (p, _) => Task.FromResult(NoValue(Use<DeleteFolder>().Execute(p.Path))))
             .Register(BridgeMessageTypes.EnvironmentList,
