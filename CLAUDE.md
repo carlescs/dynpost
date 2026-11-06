@@ -86,15 +86,20 @@ dotnet test Missive.sln                       # runs xUnit tests
 dotnet run --project src/Missive.Desktop      # run the desktop app (needs a GUI)
 cd src/Missive.Client && npm ci && npm run build   # client only
 cd src/Missive.Client && npm start            # browser dev server on :4200
+cd src/Missive.Client && npm test             # client unit tests (Vitest; --watch=false to run once)
 cd src/Missive.Client && npm run format:check # Prettier check (CI enforces it)
 ```
 
 Test projects use xUnit with NSubstitute for mocking; there is no linter beyond
-Prettier. Before finishing, run `dotnet build Missive.sln` and
+Prettier. Client unit tests run on Vitest with jsdom through Angular's
+`@angular/build:unit-test` builder (`ng test`, `tsconfig.spec.json`): each
+`<name>.spec.ts` sits next to the file it tests, uses `TestBed` for components
+and services, and fakes the `Bridge` with `vi.fn()` rather than talking to the
+`MockBackend`. Before finishing, run `dotnet build Missive.sln` and
 `dotnet test Missive.sln` (or `npm run build` for client-only changes), and
-`npm run format:check` when you touch the client.
+`npm test -- --watch=false` and `npm run format:check` when you touch the client.
 
-CI (`.github/workflows/ci.yml`) runs the Prettier check, the client build, and
+CI (`.github/workflows/ci.yml`) runs the Prettier check, the client unit tests and build, and
 build + test on Windows, Linux and macOS. `.github/workflows/release.yml`
 packages self-contained desktop builds with Velopack (`vpk pack`: installers,
 portable copies and update feeds) and, when a `v*` tag is pushed, publishes only
@@ -104,7 +109,7 @@ the installers plus the update feeds and `.nupkg` packages to a GitHub release
 also references `Velopack`, only because `vpk` requires `Program.Main` to call
 `VelopackApp.Build().Run()` directly. Keep the workflow's `vpk` version equal to
 the `Velopack` package version. Add tests
-alongside new backend code.
+alongside new backend and client code.
 
 ## Backend architecture
 
