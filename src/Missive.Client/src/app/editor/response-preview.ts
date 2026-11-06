@@ -1,6 +1,7 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
-import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-browser';
+import { Component, computed, inject, input } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ResponseDto } from '../bridge/messages';
+import { PdfViewer } from './pdf/pdf-viewer';
 
 /** The kind of preview a response body can be shown as, or `null` when it has none. */
 export type PreviewKind = 'html' | 'pdf';
@@ -22,10 +23,12 @@ export function previewKind(r: ResponseDto): PreviewKind | null {
 
 /**
  * Renders an HTML or PDF response body. HTML goes into a fully sandboxed frame (no scripts,
- * forms, popups or access to the app); a PDF is shown by the webview's built-in viewer.
+ * forms, popups or access to the app); a PDF is rendered
+ * with pdf.js.
  */
 @Component({
   selector: 'app-response-preview',
+  imports: [PdfViewer],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   template: `
     @if (kind() === 'html') {
@@ -36,12 +39,8 @@ export function previewKind(r: ResponseDto): PreviewKind | null {
         referrerpolicy="no-referrer"
         [srcdoc]="html()"
       ></iframe>
-    } @else if (pdfUrl(); as url) {
-      <object class="min-h-0 flex-1 bg-white" type="application/pdf" [data]="url">
-        <p class="flex h-full items-center justify-center text-sm text-slate-500">
-          This view can't display PDF documents.
-        </p>
-      </object>
+    } @else if (pdf(); as data) {
+      <app-pdf-viewer [data]="data" />
     }
   `,
 })
@@ -58,23 +57,10 @@ export class ResponsePreview {
     this.sanitizer.bypassSecurityTrustHtml(this.kind() === 'html' ? this.response().body : ''),
   );
 
-  protected readonly pdfUrl = signal<SafeResourceUrl | null>(null);
-
-  constructor() {
-    // A blob URL keeps large PDFs out of the DOM; it is revoked when the response changes.
-    effect((onCleanup) => {
-      const r = this.response();
-      if (this.kind() !== 'pdf') {
-        this.pdfUrl.set(null);
-        return;
-      }
-      const url = URL.createObjectURL(
-        new Blob([decodeBase64(r.body)], { type: 'application/pdf' }),
-      );
-      this.pdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
-      onCleanup(() => URL.revokeObjectURL(url));
-    });
-  }
+  /** The PDF's bytes, decoded once per response. */
+  protected readonly pdf = computed(() =>
+    this.kind() === 'pdf' ? decodeBase64(this.response().body) : null,
+  );
 }
 
 function decodeBase64(base64: string): Uint8Array<ArrayBuffer> {

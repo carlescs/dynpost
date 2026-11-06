@@ -222,8 +222,8 @@ GraphQL and Markdown, chosen from the body type or the response's
 `Content-Type`); JSON request bodies are also validated as you type. JSON
 responses are pretty-printed (switch to **Raw** for the original text). HTML
 responses are previewed rendered in a sandboxed frame that runs no scripts
-(switch to **Source** for the markup), PDFs are shown in the webview's built-in
-viewer, images are previewed, and other binary bodies are not shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
+(switch to **Source** for the markup), PDFs are rendered with pdf.js (fit to width
+or zoomed, with selectable text), images are previewed, and other binary bodies are not shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
 request only; nothing is written to the workspace.
 
 ## Import and export

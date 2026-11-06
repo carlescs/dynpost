@@ -32,7 +32,11 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   bundled from local entry points, and its stylesheet is the non-injected
   `monaco` style bundle in `angular.json`. Import it only through the loader
   so it stays out of the initial bundle, and register new languages in
-  `editor/code/monaco.ts`.
+  `editor/code/monaco.ts`. PDF responses are rendered with pdf.js (`pdfjs-dist`, its
+  `legacy` build, which polyfills APIs older system webviews lack) in
+  `editor/pdf/pdf-viewer.ts`; like Monaco it is lazy-loaded
+  (`editor/pdf/pdf-loader.ts`) with its worker bundled from a local entry point, and
+  `angular.json` copies its data files (cmaps, fonts, ICC profiles, wasm) to `pdfjs/`.
 - Backend (.NET 10), clean architecture — see "Backend architecture" below:
   - `src/Missive.Domain` — entities, value objects, pure rules.
   - `src/Missive.Application` — use cases and port interfaces.
