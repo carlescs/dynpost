@@ -25,18 +25,35 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   through PostCSS (`.postcssrc.json`) from its own entry, `src/tailwind.css`. Icons with Font Awesome
   (`@fortawesome/angular-fontawesome`, free solid icons). Drag and drop uses
   Angular CDK (`@angular/cdk/drag-drop`); the explorer tree's nested drop
-  lists are explained in `sidebar/explorer-state.ts`. Request and response bodies
+  lists are explained in `modules/explorer/services/explorer-state.ts`. Request and response bodies
   use the Monaco editor (`monaco-editor`, ESM build) through
-  `editor/code/code-editor.ts`. Monaco is lazy-loaded by
-  `editor/code/monaco-loader.ts`: its code is a lazy chunk, its workers are
+  `components/code-editor/code-editor.ts`. Monaco is lazy-loaded by
+  `components/code-editor/monaco-loader.ts`: its code is a lazy chunk, its workers are
   bundled from local entry points, and its stylesheet is the non-injected
   `monaco` style bundle in `angular.json`. Import it only through the loader
   so it stays out of the initial bundle, and register new languages in
-  `editor/code/monaco.ts`. PDF responses are rendered with pdf.js (`pdfjs-dist`, its
+  `components/code-editor/monaco.ts`. PDF responses are rendered with pdf.js (`pdfjs-dist`, its
   `legacy` build, which polyfills APIs older system webviews lack) in
-  `editor/pdf/pdf-viewer.ts`; like Monaco it is lazy-loaded
-  (`editor/pdf/pdf-loader.ts`) with its worker bundled from a local entry point, and
+  `components/pdf-viewer/pdf-viewer.ts`; like Monaco it is lazy-loaded
+  (`components/pdf-viewer/pdf-loader.ts`) with its worker bundled from a local entry point, and
   `angular.json` copies its data files (cmaps, fonts, ICC profiles, wasm) to `pdfjs/`.
+- Client code layout (`src/Missive.Client/src/app`), following the Angular style
+  guide (kebab-case file named after its class, no `.component`/`.service`
+  suffixes, one folder per component):
+  - `components/<name>/<name>.ts` — the shell (header, activity bar, sidebar,
+    document tabs) and UI shared by several modules (code and diff editors, PDF
+    viewer, key/value table, variable input).
+  - `services/` — root-provided stores and the `Bridge` (with its `MockBackend`).
+  - `models/` — bridge message types (`messages.ts`), the client model
+    (`workspace.ts`), DTO mapping and other pure helpers.
+  - `modules/<name>/` — one lazy-loaded, routable feature per activity-bar view
+    (`explorer`, `environments`, `git`), with the same `components/`,
+    `services/` and `models/` folders inside and a `<name>.routes.ts` loaded by
+    `app.routes.ts`. The route selects the sidebar panel (`#/explorer`,
+    `#/environments`, `#/git`); the editor area is shared and rendered by the
+    shell (`app.ts`), which uses the modules' editor components. Modules may
+    import from the top-level folders, but not from each other — move shared
+    code up instead.
 - Backend (.NET 10), clean architecture — see "Backend architecture" below:
   - `src/Missive.Domain` — entities, value objects, pure rules.
   - `src/Missive.Application` — use cases and port interfaces.
@@ -130,9 +147,9 @@ Desktop → Application
   request/response envelope with a correlation id and an explicit error shape;
   keep message types defined in one place on each side and keep them in sync:
   `src/Missive.Desktop/Bridge/BridgeMessages.cs` (handlers in
-  `BridgeHandlers.cs`) and `src/Missive.Client/src/app/bridge/messages.ts`.
+  `BridgeHandlers.cs`) and `src/Missive.Client/src/app/models/messages.ts`.
   Outside the desktop host the client's `Bridge` falls back to an in-memory
-  `MockBackend` (`bridge/mock-backend.ts`) so `npm start` works; keep it
+  `MockBackend` (`services/mock-backend.ts`) so `npm start` works; keep it
   roughly in step with new message types.
 - The bundled frontend is served by `Missive.Desktop/Hosting/BundledAssets.cs`
   through a Photino custom scheme: `app://localhost/` on Linux/macOS and an

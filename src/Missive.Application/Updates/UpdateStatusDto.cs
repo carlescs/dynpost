@@ -1,7 +1,7 @@
 namespace Missive.Application.Updates;
 
 // Wire format of the update messages, sent to the UI by the bridge. Keep in sync with
-// src/Missive.Client/src/app/bridge/messages.ts.
+// src/Missive.Client/src/app/models/messages.ts.
 
 /// <param name="State">
 /// <c>unsupported</c> (this copy cannot update itself), <c>upToDate</c>, or <c>ready</c> (an update

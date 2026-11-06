@@ -4,7 +4,7 @@ using Missive.Domain.Git;
 namespace Missive.Application.Git;
 
 // Wire format of the git messages, sent to the UI by the bridge. Keep in sync with
-// src/Missive.Client/src/app/bridge/messages.ts.
+// src/Missive.Client/src/app/models/messages.ts.
 
 /// <param name="Status">One of <c>modified</c>, <c>added</c>, <c>deleted</c>, <c>renamed</c>, <c>untracked</c>, <c>conflicted</c>.</param>
 public sealed record GitChangeDto(string Path, string Status, string? OriginalPath)
