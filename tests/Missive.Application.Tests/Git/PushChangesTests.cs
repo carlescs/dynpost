@@ -39,6 +39,18 @@ public class PushChangesTests
         _ = _git.DidNotReceiveWithAnyArgs().PushAsync(default!, default, default);
     }
 
+    [Fact]
+    public async Task BranchWithoutCommits_IsRejected()
+    {
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
+            .Returns(Ok(Status(upstream: null) with { IsUnborn = true }));
+
+        var result = await _useCase.ExecuteAsync();
+
+        Assert.Equal(GitErrors.NoCommitsCode, result.Error?.Code);
+        _ = _git.DidNotReceiveWithAnyArgs().PushAsync(default!, default, default);
+    }
+
     [Theory]
     [InlineData("origin/main", false)]
     [InlineData(null, true)]

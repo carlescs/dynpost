@@ -12,6 +12,10 @@ public sealed class GitCliService : IGitService
     /// <summary>Keeps the workspace's local-only folder out of status and commits, even if it is not git-ignored.</summary>
     private const string ExcludeLocalFolder = ":(exclude).missive";
 
+    /// <summary>How long to wait before each new try of a command that found the repository locked.</summary>
+    private static readonly TimeSpan[] LockRetryDelays =
+        [TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1)];
+
     private readonly GitCommandRunner _runner;
 
     public GitCliService()
@@ -44,7 +48,7 @@ public sealed class GitCliService : IGitService
 
         if (!status.Value.Succeeded)
         {
-            return GitErrors.CommandFailed("status", status.Value.StandardError);
+            return GitFailure.Classify("status", status.Value.StandardError);
         }
 
         var merging = await IsMergingAsync(workspacePath, cancellationToken);
@@ -626,7 +630,16 @@ public sealed class GitCliService : IGitService
             ? [".", ExcludeLocalFolder]
             : [.. paths.Select(p => ":(literal)" + p), ExcludeLocalFolder];
 
-        var add = await RunCheckedAsync(workspacePath, "add", ["add", "--all", "--", .. pathspecs], cancellationToken);
+        // git add refuses any pathspec that names an ignored path, the exclusion included, so it is
+        // only passed when it is needed: when the folder is not git-ignored already.
+        var ignored = await IsLocalFolderIgnoredAsync(workspacePath, cancellationToken);
+        if (ignored.IsFailure)
+        {
+            return ignored.Error!;
+        }
+
+        var addPathspecs = ignored.Value ? pathspecs.Where(p => p != ExcludeLocalFolder).ToList() : pathspecs;
+        var add = await RunCheckedAsync(workspacePath, "add", ["add", "--all", "--", .. addPathspecs], cancellationToken);
         if (add.IsFailure)
         {
             return add.Error!;
@@ -721,7 +734,10 @@ public sealed class GitCliService : IGitService
         return Unit.Value;
     }
 
-    public async Task<Result<PullOutcome>> PullAsync(string workspacePath, CancellationToken cancellationToken = default)
+    public async Task<Result<PullOutcome>> PullAsync(
+        string workspacePath,
+        bool allowUnrelatedHistories = false,
+        CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
         if (prefix.IsFailure)
@@ -736,7 +752,13 @@ public sealed class GitCliService : IGitService
         }
 
         // Always merge: rebasing would rewrite the user's local commits.
-        var pull = await RunAsync(workspacePath, ["pull", "--no-rebase", "--no-edit"], cancellationToken);
+        List<string> arguments = ["pull", "--no-rebase", "--no-edit"];
+        if (allowUnrelatedHistories)
+        {
+            arguments.Add("--allow-unrelated-histories");
+        }
+
+        var pull = await RunAsync(workspacePath, arguments, cancellationToken);
         if (pull.IsFailure)
         {
             return pull.Error!;
@@ -758,7 +780,7 @@ public sealed class GitCliService : IGitService
                 return PullOutcome.Conflicted;
             }
 
-            return GitErrors.CommandFailed("pull", Details(pull.Value));
+            return GitFailure.Classify("pull", Details(pull.Value));
         }
 
         var headAfter = await GetHeadAsync(workspacePath, cancellationToken);
@@ -792,6 +814,19 @@ public sealed class GitCliService : IGitService
 
             arguments.AddRange(["--set-upstream", remote.Value, "HEAD"]);
         }
+        else
+        {
+            var target = await GetPushTargetAsync(workspacePath, cancellationToken);
+            if (target.IsFailure)
+            {
+                return target.Error!;
+            }
+
+            if (target.Value is var (remoteName, mergeRef))
+            {
+                arguments.AddRange([remoteName, "HEAD:" + mergeRef]);
+            }
+        }
 
         var push = await RunAsync(workspacePath, arguments, cancellationToken);
         if (push.IsFailure)
@@ -811,10 +846,193 @@ public sealed class GitCliService : IGitService
 
         if (!push.Value.Succeeded)
         {
-            return GitErrors.CommandFailed("push", Details(push.Value));
+            return GitFailure.Classify("push", Details(push.Value));
         }
 
         return Unit.Value;
+    }
+
+    /// <summary>
+    /// Where a plain <c>git push</c> of a branch with an upstream should go: its upstream branch, even
+    /// when it is named differently from the local one (which <c>push.default=simple</c> refuses) or
+    /// was deleted on the remote. <c>null</c> leaves it to git: when the user configured a separate
+    /// push remote, or the upstream is a local branch.
+    /// </summary>
+    private async Task<Result<(string Remote, string MergeRef)?>> GetPushTargetAsync(
+        string workspacePath,
+        CancellationToken cancellationToken)
+    {
+        var branch = await RunAsync(workspacePath, ["symbolic-ref", "--quiet", "--short", "HEAD"], cancellationToken);
+        if (branch.IsFailure)
+        {
+            return branch.Error!;
+        }
+
+        if (!branch.Value.Succeeded)
+        {
+            return Result<(string, string)?>.Success(null);
+        }
+
+        var name = branch.Value.StandardOutput.Trim();
+        var remote = await ReadConfigAsync(workspacePath, $"branch.{name}.remote", cancellationToken);
+        var merge = await ReadConfigAsync(workspacePath, $"branch.{name}.merge", cancellationToken);
+        var pushRemote = await ReadConfigAsync(workspacePath, $"branch.{name}.pushRemote", cancellationToken);
+        var pushDefault = await ReadConfigAsync(workspacePath, "remote.pushDefault", cancellationToken);
+        foreach (var read in new[] { remote, merge, pushRemote, pushDefault })
+        {
+            if (read.IsFailure)
+            {
+                return read.Error!;
+            }
+        }
+
+        if (remote.Value is not { Length: > 0 } remoteName
+            || remoteName == "."
+            || merge.Value is not { } mergeRef
+            || !mergeRef.StartsWith("refs/heads/", StringComparison.Ordinal)
+            || pushRemote.Value is not null
+            || pushDefault.Value is not null)
+        {
+            return Result<(string, string)?>.Success(null);
+        }
+
+        return Result<(string, string)?>.Success((remoteName, mergeRef));
+    }
+
+    /// <summary>A git configuration value as git resolves it for the workspace, or <c>null</c> when it is not set.</summary>
+    private async Task<Result<string?>> ReadConfigAsync(string workspacePath, string key, CancellationToken cancellationToken)
+    {
+        var result = await RunAsync(workspacePath, ["config", "--get", key], cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        // Exit code 1 means the key is not set.
+        if (result.Value.ExitCode == 1)
+        {
+            return Result<string?>.Success(null);
+        }
+
+        if (!result.Value.Succeeded)
+        {
+            return GitFailure.Classify("config", Details(result.Value));
+        }
+
+        var value = result.Value.StandardOutput.TrimEnd('\r', '\n');
+        return Result<string?>.Success(value);
+    }
+
+    public async Task<Result<Unit>> FetchAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // --prune drops remote-tracking branches deleted on the remote, so a deleted upstream shows up.
+        return Done(await RunCheckedAsync(workspacePath, "fetch", ["fetch", "--all", "--prune", "--quiet"], cancellationToken));
+    }
+
+    public async Task<Result<bool>> TrackRemoteBranchAsync(
+        string workspacePath,
+        string branch,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var remote = await GetDefaultRemoteAsync(workspacePath, cancellationToken);
+        if (remote.IsFailure)
+        {
+            return remote.Error!;
+        }
+
+        var fetch = await RunCheckedAsync(workspacePath, "fetch", ["fetch", "--quiet", "--", remote.Value], cancellationToken);
+        if (fetch.IsFailure)
+        {
+            return fetch.Error!;
+        }
+
+        var exists = await RunAsync(
+            workspacePath,
+            ["rev-parse", "--quiet", "--verify", $"refs/remotes/{remote.Value}/{branch}^{{commit}}"],
+            cancellationToken);
+        if (exists.IsFailure)
+        {
+            return exists.Error!;
+        }
+
+        if (!exists.Value.Succeeded)
+        {
+            return false;
+        }
+
+        // Set directly rather than with "git branch --set-upstream-to", which needs the branch to
+        // have a commit: a new, empty repository can start from the remote's branch.
+        var setRemote = await RunCheckedAsync(workspacePath, "config", ["config", $"branch.{branch}.remote", remote.Value], cancellationToken);
+        if (setRemote.IsFailure)
+        {
+            return setRemote.Error!;
+        }
+
+        var setMerge = await RunCheckedAsync(workspacePath, "config", ["config", $"branch.{branch}.merge", $"refs/heads/{branch}"], cancellationToken);
+        if (setMerge.IsFailure)
+        {
+            return setMerge.Error!;
+        }
+
+        return true;
+    }
+
+    public async Task<Result<GitIdentitySettings>> GetIdentityAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var name = await ReadConfigAsync(workspacePath, "user.name", cancellationToken);
+        if (name.IsFailure)
+        {
+            return name.Error!;
+        }
+
+        var email = await ReadConfigAsync(workspacePath, "user.email", cancellationToken);
+        if (email.IsFailure)
+        {
+            return email.Error!;
+        }
+
+        static string? NonBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        return new GitIdentitySettings(NonBlank(name.Value), NonBlank(email.Value));
+    }
+
+    public async Task<Result<Unit>> SetIdentityAsync(
+        string workspacePath,
+        GitIdentity identity,
+        bool global,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        string[] scope = global ? ["--global"] : ["--local"];
+        var name = await RunCheckedAsync(workspacePath, "config", ["config", .. scope, "user.name", identity.Name], cancellationToken);
+        if (name.IsFailure)
+        {
+            return name.Error!;
+        }
+
+        return Done(await RunCheckedAsync(workspacePath, "config", ["config", .. scope, "user.email", identity.Email], cancellationToken));
     }
 
     /// <summary>
@@ -841,10 +1059,28 @@ public sealed class GitCliService : IGitService
                 StringComparison.OrdinalIgnoreCase);
             return notARepository
                 ? GitErrors.NotARepository(workspacePath)
-                : GitErrors.CommandFailed("rev-parse", result.Value.StandardError);
+                : GitFailure.Classify("rev-parse", result.Value.StandardError);
         }
 
         return result.Value.StandardOutput.TrimEnd('\r', '\n');
+    }
+
+    /// <summary>Whether git ignores the workspace's <c>.missive/</c> folder (its <c>.gitignore</c> entry is in place).</summary>
+    private async Task<Result<bool>> IsLocalFolderIgnoredAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        // Exit code 0: ignored; 1: not ignored; anything else is an error.
+        var result = await RunAsync(workspacePath, ["check-ignore", "--quiet", "--", ".missive"], cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        return result.Value.ExitCode switch
+        {
+            0 => true,
+            1 => false,
+            _ => GitFailure.Classify("check-ignore", Details(result.Value)),
+        };
     }
 
     private async Task<Result<bool>> IsMergingAsync(string workspacePath, CancellationToken cancellationToken)
@@ -887,12 +1123,12 @@ public sealed class GitCliService : IGitService
             return "origin";
         }
 
-        if (remotes.Length == 1)
+        return remotes.Length switch
         {
-            return remotes[0];
-        }
-
-        return GitErrors.NoRemote();
+            1 => remotes[0],
+            0 => GitErrors.NoRemote(),
+            _ => GitErrors.AmbiguousRemote(),
+        };
     }
 
     private async Task<Result<GitCommandResult>> RunCheckedAsync(
@@ -904,12 +1140,17 @@ public sealed class GitCliService : IGitService
         var result = await RunAsync(workspacePath, arguments, cancellationToken);
         if (result.IsSuccess && !result.Value.Succeeded)
         {
-            return GitErrors.CommandFailed(command, Details(result.Value));
+            return GitFailure.Classify(command, Details(result.Value));
         }
 
         return result;
     }
 
+    /// <summary>
+    /// Runs git. A command that fails because another git process (an editor, an IDE's background
+    /// refresh) holds a lock is tried again after a short wait: git takes its locks before changing
+    /// anything, so trying again is safe.
+    /// </summary>
     private async Task<Result<GitCommandResult>> RunAsync(
         string workspacePath,
         IReadOnlyList<string> arguments,
@@ -917,7 +1158,16 @@ public sealed class GitCliService : IGitService
     {
         try
         {
-            return await _runner.RunAsync(workspacePath, arguments, cancellationToken);
+            for (var attempt = 0; ; attempt++)
+            {
+                var result = await _runner.RunAsync(workspacePath, arguments, cancellationToken);
+                if (result.Succeeded || attempt >= LockRetryDelays.Length || !GitFailure.IsLocked(result.StandardError))
+                {
+                    return result;
+                }
+
+                await Task.Delay(LockRetryDelays[attempt], cancellationToken);
+            }
         }
         catch (GitNotFoundException)
         {

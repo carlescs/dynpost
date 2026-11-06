@@ -31,6 +31,16 @@ public static class GitErrors
     public const string InvalidRemoteCode = "git.invalid_remote";
     public const string RemoteExistsCode = "git.remote_exists";
     public const string RemoteNotFoundCode = "git.remote_not_found";
+    public const string AuthenticationFailedCode = "git.authentication_failed";
+    public const string RemoteUnreachableCode = "git.remote_unreachable";
+    public const string IdentityUnknownCode = "git.identity_unknown";
+    public const string InvalidIdentityCode = "git.invalid_identity";
+    public const string LocalChangesOverwrittenCode = "git.local_changes_overwritten";
+    public const string RepositoryLockedCode = "git.repository_locked";
+    public const string UnsafeRepositoryCode = "git.unsafe_repository";
+    public const string UnrelatedHistoriesCode = "git.unrelated_histories";
+    public const string UpstreamGoneCode = "git.upstream_gone";
+    public const string NoCommitsCode = "git.no_commits";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -73,10 +83,62 @@ public static class GitErrors
         new(DetachedHeadCode, "No branch is checked out (detached HEAD). Check out a branch first.");
 
     public static Error NoUpstream(string branch) =>
-        new(NoUpstreamCode, $"The branch '{branch}' has no upstream branch to pull from. Push it first.");
+        new(NoUpstreamCode, $"The branch '{branch}' doesn't exist on the remote yet, so there is nothing to pull. Publish it first.");
 
     public static Error NoRemote() =>
-        new(NoRemoteCode, "The repository has no remote to push to, or more than one and none named 'origin'.");
+        new(NoRemoteCode, "The repository has no remote yet. Add one under Remotes, then try again.");
+
+    public static Error AmbiguousRemote() =>
+        new(NoRemoteCode, "The repository has several remotes and none is named 'origin', so Missive can't tell which one to use. Rename the one to use to 'origin'.");
+
+    public static Error AuthenticationFailed(string details) =>
+        new(
+            AuthenticationFailedCode,
+            WithDetails(
+                "Git couldn't sign in to the remote. Missive uses your own git credentials: for an HTTPS remote, set up a credential helper "
+                    + "(such as Git Credential Manager) or sign in once from a terminal; for an SSH remote, add your key to the SSH agent "
+                    + "and connect once from a terminal so the host is trusted.",
+                details));
+
+    public static Error RemoteUnreachable(string details) =>
+        new(RemoteUnreachableCode, WithDetails("Couldn't reach the remote. Check your network connection and the remote's URL.", details));
+
+    public static Error IdentityUnknown() =>
+        new(IdentityUnknownCode, "Git doesn't know who you are yet. Enter the name and email to record on your commits, then commit again.");
+
+    public static Error InvalidIdentity() =>
+        new(InvalidIdentityCode, "Enter a name and an email address (without < or > or line breaks).");
+
+    public static Error LocalChangesOverwritten(IReadOnlyList<string> paths) =>
+        new(
+            LocalChangesOverwrittenCode,
+            paths.Count == 0
+                ? "The pull would overwrite uncommitted changes. Commit or discard them, then pull again."
+                : $"The pull would overwrite your uncommitted changes to: {string.Join(", ", paths)}. Commit or discard them, then pull again.");
+
+    public static Error RepositoryLocked(string details) =>
+        new(
+            RepositoryLockedCode,
+            WithDetails(
+                "Another git program is working in this repository. Wait for it to finish and try again; if none is running, "
+                    + "a git process may have crashed, and the lock file named below must be deleted.",
+                details));
+
+    public static Error UnsafeRepository(string details) =>
+        new(
+            UnsafeRepositoryCode,
+            WithDetails(
+                "Git refuses to use this repository because its folder belongs to another user. If you trust it, run the command below in a terminal.",
+                details));
+
+    public static Error UnrelatedHistories() =>
+        new(UnrelatedHistoriesCode, "The upstream branch has a history unrelated to yours, so git won't merge it.");
+
+    public static Error UpstreamGone(string upstream) =>
+        new(UpstreamGoneCode, $"The upstream branch '{upstream}' no longer exists on the remote. Publish the branch to create it again.");
+
+    public static Error NoCommits() =>
+        new(NoCommitsCode, "The branch has no commits yet. Commit your changes first, then publish it.");
 
     public static Error PushRejected(string details) =>
         new(PushRejectedCode, WithDetails("The remote rejected the push. Pull the latest changes and try again.", details));

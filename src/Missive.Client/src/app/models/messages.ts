@@ -165,6 +165,16 @@ export interface GitStatus {
   changes: GitChange[];
   /** During a merge, git's proposed commit message. */
   mergeMessage?: string | null;
+  /** Whether the branch has no commits yet (a new repository). */
+  unborn?: boolean;
+  /** Whether the upstream branch was deleted on the remote (as of the last fetch). */
+  upstreamGone?: boolean;
+}
+
+/** The name and email git records on commits; a part is `null` when it is not configured. */
+export interface GitIdentity {
+  name: string | null;
+  email: string | null;
 }
 
 /** Both sides of a conflicted file; a side is `null` when it deleted the file. */
@@ -359,6 +369,15 @@ export interface BridgeMessages {
   'git.pull': { payload: void; result: { outcome: PullOutcome; status: GitStatus } };
   /** Pushes the current branch, or publishes it when it has no upstream. Never forces. */
   'git.push': { payload: void; result: GitStatus };
+  /** Downloads the remotes' latest commits without changing files, so `behind` is current. */
+  'git.fetch': { payload: void; result: GitStatus };
+  /** The commit identity git uses in the workspace. */
+  'git.identity': { payload: void; result: GitIdentity };
+  /** Sets the commit identity, for all of the user's repositories (`global`) or only this one. */
+  'git.identity.set': {
+    payload: { name: string; email: string; global: boolean };
+    result: GitIdentity;
+  };
   'git.conflict': { payload: { path: string }; result: GitConflict };
   /** Resolves one conflicted file; `edited` is refused while it still has conflict markers. */
   'git.resolve': { payload: { path: string; resolution: ConflictResolution }; result: GitStatus };

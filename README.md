@@ -287,7 +287,11 @@ configuration, hooks and credential helpers apply as usual. In detail:
 - **Status** lists changed files inside the workspace folder only (the
   workspace can be a subfolder of a larger repository), plus the branch, its
   upstream and how many commits it is ahead of or behind it. It refreshes when
-  you come back to the window.
+  you come back to the window. An upstream branch that was deleted on the
+  remote is shown as such.
+- **Fetch** (the cloud button) checks the remotes for new commits without
+  changing your files (`git fetch --all --prune`), so the number of commits to
+  pull is current.
 - **Diff**: click a changed file to see what changed since the last commit.
   A request file can be shown as a **Request** — laid out like the request
   editor, read-only, with the changed name, method, URL, params, headers, auth
@@ -297,6 +301,12 @@ configuration, hooks and credential helpers apply as usual. In detail:
 - **Commit** stages and commits every change in the workspace, or only the files
   you tick in the changes list, and never touches files outside the workspace.
   Files in `.missive/` are never committed, even if they are not git-ignored.
+  Git only sees saved files, so the view warns when open tabs have unsaved
+  changes and offers **Save all**.
+- **Identity**: if git has no name and email to record on commits
+  (`user.name`, `user.email`), the view asks for them and saves them for all
+  your repositories (`git config --global`) or, if you untick that, for this
+  repository only.
 - **Changes view**: the changes list can be shown as a flat list or as a
   folder tree.
 - **Discard** (the undo button on a row, or *Discard selected* / *Discard all*)
@@ -305,11 +315,24 @@ configuration, hooks and credential helpers apply as usual. In detail:
   unavailable during a merge.
 - **Pull** merges the upstream branch into yours; it never rebases. If the merge
   conflicts, nothing is resolved for you: the conflicted files are listed and
-  Missive walks you through them (see below).
-- **Push** pushes the current branch without force. A branch with no upstream
-  yet is published to `origin` (or the only remote) and tracks it from then on.
-  If the remote has commits you don't have, the push is rejected and you are
-  asked to pull first.
+  Missive walks you through them (see below). A branch with no upstream yet
+  pulls from the branch of the same name on `origin` (or the only remote) and
+  tracks it from then on — so a repository you initialized in Missive can be
+  joined with an existing remote one, even though their histories are
+  unrelated. A pull that would overwrite uncommitted changes is refused and
+  names the files to commit or discard first.
+- **Push** pushes the current branch without force, to its upstream branch
+  (even if it is named differently, or was deleted on the remote) unless you
+  configured a separate push remote. A branch with no upstream yet is published
+  to `origin` (or the only remote) and tracks it from then on; it needs at
+  least one commit. If the remote has commits you don't have, the push is
+  rejected, Missive fetches them so you can see what to pull, and asks you to
+  pull first.
+- **Errors** are explained in plain terms: failed sign-ins (with a hint to set
+  up a credential helper or SSH key), an unreachable remote, a repository locked
+  by another git program (Missive waits briefly and tries again first), or a
+  repository git refuses to trust. Missive never shows a git prompt: git runs
+  with terminal prompts disabled, though GUI credential helpers still work.
 - **History**: the **History** tab lists the commits on the current branch that
   changed files in the workspace, newest first, 50 at a time (**Load more** for
   older ones). Choosing a commit opens it for review: its message, author and

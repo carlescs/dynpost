@@ -21,6 +21,8 @@ internal static class PorcelainStatusParser
         string? upstream = null;
         var ahead = 0;
         var behind = 0;
+        var unborn = false;
+        var hasCounts = false;
         var changes = new List<GitChange>();
 
         var records = output.Split('\0');
@@ -35,7 +37,7 @@ internal static class PorcelainStatusParser
             switch (record[0])
             {
                 case '#':
-                    ParseHeader(record, ref branch, ref upstream, ref ahead, ref behind);
+                    ParseHeader(record, ref branch, ref upstream, ref ahead, ref behind, ref unborn, ref hasCounts);
                     break;
 
                 // 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
@@ -83,10 +85,20 @@ internal static class PorcelainStatusParser
         }
 
         changes.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
-        return new GitStatus(branch, upstream, ahead, behind, isMerging, changes);
+        // Git prints no ahead/behind counts when the upstream's remote-tracking branch is missing.
+        return new GitStatus(
+            branch,
+            upstream,
+            ahead,
+            behind,
+            isMerging,
+            changes,
+            IsUnborn: unborn,
+            IsUpstreamGone: upstream is not null && !hasCounts);
     }
 
-    private static void ParseHeader(string record, ref string? branch, ref string? upstream, ref int ahead, ref int behind)
+    private static void ParseHeader(string record, ref string? branch, ref string? upstream, ref int ahead, ref int behind,
+        ref bool unborn, ref bool hasCounts)
     {
         var fields = record.Split(' ', 3);
         if (fields.Length < 3)
@@ -96,6 +108,9 @@ internal static class PorcelainStatusParser
 
         switch (fields[1])
         {
+            case "branch.oid":
+                unborn = fields[2] == "(initial)";
+                break;
             case "branch.head":
                 branch = fields[2] == "(detached)" ? null : fields[2];
                 break;
@@ -103,6 +118,7 @@ internal static class PorcelainStatusParser
                 upstream = fields[2];
                 break;
             case "branch.ab":
+                hasCounts = true;
                 var counts = fields[2].Split(' ');
                 if (counts.Length == 2)
                 {

@@ -6,6 +6,9 @@ import {
   faBan,
   faCheck,
   faCircleExclamation,
+  faCloudArrowDown,
+  faFloppyDisk,
+  faUser,
   faChevronDown,
   faChevronRight,
   faCodeBranch,
@@ -60,6 +63,14 @@ export class GitView {
   }
 
   constructor() {
+    // Prefill the identity form with whatever part of the identity git already knows.
+    effect(() => {
+      const identity = this.git.identity();
+      untracked(() => {
+        if (identity?.name && !this.identityName()) this.identityName.set(identity.name);
+        if (identity?.email && !this.identityEmail()) this.identityEmail.set(identity.email);
+      });
+    });
     // Offer git's merge commit message once a merge starts, unless the user typed one already.
     effect(() => {
       const mergeMessage = this.git.status()?.mergeMessage;
@@ -125,6 +136,57 @@ export class GitView {
   protected readonly faXmark = faXmark;
   protected readonly faCircleExclamation = faCircleExclamation;
   protected readonly faTriangleExclamation = faTriangleExclamation;
+  protected readonly faCloudArrowDown = faCloudArrowDown;
+  protected readonly faFloppyDisk = faFloppyDisk;
+  protected readonly faUser = faUser;
+
+  /** The identity form's fields, prefilled with any part git already knows. */
+  protected readonly identityName = signal('');
+  protected readonly identityEmail = signal('');
+  protected readonly identityGlobal = signal(true);
+
+  /** A branch without an upstream can pull once a remote is set: from its namesake there. */
+  protected readonly canPull = computed(() => {
+    const status = this.git.status();
+    if (!status?.branch || status.upstreamGone) return false;
+    return !!status.upstream || this.git.hasRemotes();
+  });
+
+  protected readonly pullTitle = computed(() => {
+    const status = this.git.status();
+    if (!status?.branch) return 'No branch is checked out';
+    if (status.upstreamGone) return `${status.upstream} was deleted on the remote`;
+    if (status.upstream) return 'Pull from ' + status.upstream;
+    return this.git.hasRemotes()
+      ? `Pull ${status.branch} from the remote`
+      : 'Add a remote to pull from';
+  });
+
+  protected readonly pushTitle = computed(() => {
+    const status = this.git.status();
+    if (!status?.branch) return 'No branch is checked out';
+    if (status.unborn) return 'Commit your changes before publishing the branch';
+    if (status.upstreamGone) return 'Publish the branch again';
+    return status.upstream ? 'Push to ' + status.upstream : 'Publish the branch';
+  });
+
+  protected async saveIdentity(): Promise<void> {
+    await this.git.setIdentity(this.identityName(), this.identityEmail(), this.identityGlobal());
+  }
+
+  /** Pulls, after a warning when unsaved tabs could later overwrite what the pull brings in. */
+  protected pull(): void {
+    const unsaved = this.git.unsavedCount();
+    if (
+      unsaved &&
+      !confirm(
+        `${unsaved} open tab(s) have unsaved changes. The pull won't update them, and saving them afterwards would overwrite the pulled versions. Pull anyway?`,
+      )
+    ) {
+      return;
+    }
+    void this.git.pull();
+  }
 
   protected async commit(): Promise<void> {
     if (!this.canCommit()) return;
