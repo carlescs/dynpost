@@ -47,11 +47,62 @@ public class LastWorkspaceTests
     public async Task OpeningTheSameFolderAgain_KeepsSettingsUnchanged()
     {
         _repository.FolderExists(Folder).Returns(true);
-        _storedSettings = new AppSettings(Folder);
+        var settings = new AppSettings(Folder, RecentWorkspaces: [Folder]);
+        _storedSettings = settings;
 
         await _open.ExecuteAsync(Folder);
 
-        Assert.Equal(new AppSettings(Folder), _storedSettings);
+        Assert.Equal(settings, _storedSettings);
+    }
+
+    [Fact]
+    public async Task OpeningAFolder_MovesItToTheTopOfTheRecentWorkspaces()
+    {
+        _repository.FolderExists(Folder).Returns(true);
+        _storedSettings = new AppSettings("/work/other", RecentWorkspaces: ["/work/other", Folder, "/work/third"]);
+
+        await _open.ExecuteAsync(Folder);
+
+        Assert.Equal([Folder, "/work/other", "/work/third"], _storedSettings.RecentWorkspaces);
+    }
+
+    [Fact]
+    public void RecentWorkspaces_KeepAtMostTheMaximum()
+    {
+        var recent = Enumerable.Range(1, RecentWorkspaces.MaxCount).Select(i => $"/work/{i}").ToList();
+
+        var updated = RecentWorkspaces.Add(recent, "/work/new");
+
+        Assert.Equal(RecentWorkspaces.MaxCount, updated.Count);
+        Assert.Equal("/work/new", updated[0]);
+        Assert.DoesNotContain($"/work/{RecentWorkspaces.MaxCount}", updated);
+    }
+
+    [Fact]
+    public async Task GetRecent_ListsExistingFoldersAndForgetsMissingOnes()
+    {
+        _storedSettings = new AppSettings(Folder, RecentWorkspaces: [Folder, "/work/gone", "/work/other/"]);
+        _repository.FolderExists(Folder).Returns(true);
+        _repository.FolderExists("/work/other/").Returns(true);
+
+        var result = await new GetRecentWorkspaces(_settings, _repository).ExecuteAsync();
+
+        Assert.Equal(
+            [new RecentWorkspaceDto("my-api", Folder), new RecentWorkspaceDto("other", "/work/other/")],
+            result.Value);
+        Assert.Equal([Folder, "/work/other/"], _storedSettings.RecentWorkspaces);
+    }
+
+    [Fact]
+    public async Task GetRecent_DoesNotRewriteSettingsWhenAllFoldersExist()
+    {
+        _storedSettings = new AppSettings(Folder, RecentWorkspaces: [Folder]);
+        _repository.FolderExists(Folder).Returns(true);
+
+        var result = await new GetRecentWorkspaces(_settings, _repository).ExecuteAsync();
+
+        Assert.Single(result.Value);
+        _ = _settings.DidNotReceiveWithAnyArgs().UpdateAsync(default!, default);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
-import { Component, ElementRef, inject, signal } from '@angular/core';
+import { Component, ElementRef, computed, inject, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
+  faChevronDown,
   faCircleArrowUp,
   faGear,
   faMoon,
@@ -33,6 +34,12 @@ export class AppHeader {
   protected readonly theme = inject(ThemeStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly menuOpen = signal(false);
+  protected readonly recentOpen = signal(false);
+  /** Recent workspaces other than the open one. */
+  protected readonly otherRecent = computed(() =>
+    this.store.recent().filter((r) => r.path !== this.store.workspace()?.root),
+  );
+  protected readonly faChevronDown = faChevronDown;
   protected readonly faGear = faGear;
   protected readonly faMoon = faMoon;
   protected readonly faCircleArrowUp = faCircleArrowUp;
@@ -40,11 +47,34 @@ export class AppHeader {
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faFolderOpen = faFolderOpen;
 
+  protected toggleRecent(): void {
+    const open = !this.recentOpen();
+    this.recentOpen.set(open);
+    this.menuOpen.set(false);
+    // Folders may have been removed since the list was read.
+    if (open) void this.store.loadRecent();
+  }
+
+  protected openRecent(path: string): void {
+    this.recentOpen.set(false);
+    void this.store.openRecent(path);
+  }
+
   protected onDocumentClick(event: MouseEvent): void {
-    if (!this.host.nativeElement.contains(event.target as Node)) this.menuOpen.set(false);
+    const target = event.target as Node;
+    if (!this.host.nativeElement.contains(target)) this.menuOpen.set(false);
+    const recent = this.host.nativeElement.querySelector('#recent-panel')?.parentElement;
+    if (!recent?.contains(target)) this.recentOpen.set(false);
   }
 
   protected onEscape(): void {
+    if (this.recentOpen()) {
+      this.recentOpen.set(false);
+      this.host.nativeElement
+        .querySelector<HTMLButtonElement>('[aria-label="Recent workspaces"][aria-controls]')
+        ?.focus();
+      return;
+    }
     if (!this.menuOpen()) return;
     this.menuOpen.set(false);
     this.host.nativeElement.querySelector<HTMLButtonElement>('[aria-label="Settings"]')?.focus();

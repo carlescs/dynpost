@@ -43,15 +43,52 @@
       </select>
     </label>
   }
-  <button
-    type="button"
-    class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50"
-    title="Open a workspace folder"
-    [disabled]="store.opening()"
-    (click)="store.openFolder()"
-  >
-    <fa-icon [icon]="faFolderOpen" /> Open folder
-  </button>
+  <div class="relative flex items-center">
+    <button
+      type="button"
+      class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50"
+      title="Open a workspace folder"
+      [disabled]="store.opening()"
+      (click)="store.openFolder()"
+    >
+      <fa-icon [icon]="faFolderOpen" /> Open folder
+    </button>
+    @if (otherRecent().length) {
+      <button
+        type="button"
+        class="flex h-7 w-5 items-center justify-center rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50"
+        title="Open a recent workspace"
+        aria-label="Recent workspaces"
+        aria-controls="recent-panel"
+        [attr.aria-expanded]="recentOpen()"
+        [disabled]="store.opening()"
+        (click)="toggleRecent()"
+      >
+        <fa-icon [icon]="faChevronDown" />
+      </button>
+    }
+    @if (recentOpen()) {
+      <div
+        id="recent-panel"
+        role="menu"
+        aria-label="Recent workspaces"
+        class="adaptive absolute top-full right-0 z-50 mt-1 w-72 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
+      >
+        @for (recent of otherRecent(); track recent.path) {
+          <button
+            type="button"
+            role="menuitem"
+            class="flex w-full min-w-0 flex-col px-3 py-1.5 text-left hover:bg-slate-100"
+            [title]="recent.path"
+            (click)="openRecent(recent.path)"
+          >
+            <span class="truncate">{{ recent.name }}</span>
+            <span class="truncate text-xs text-slate-500">{{ recent.path }}</span>
+          </button>
+        }
+      </div>
+    }
+  </div>
   <div class="relative">
     <button
       type="button"

@@ -33,6 +33,17 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task RecentWorkspaces_RoundTrip()
+    {
+        var file = _temp.Combine("settings.json");
+
+        await new JsonAppSettingsStore(file).SaveAsync(new AppSettings("/work/a", RecentWorkspaces: ["/work/a", "/work/b"]));
+
+        var loaded = await new JsonAppSettingsStore(file).LoadAsync();
+        Assert.Equal(["/work/a", "/work/b"], loaded.RecentWorkspaces);
+    }
+
+    [Fact]
     public async Task CorruptFile_LoadsTheDefaults()
     {
         var file = _temp.Combine("settings.json");

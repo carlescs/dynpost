@@ -36,6 +36,8 @@ internal static class BridgeHandlers
                 (p, ct) => Use<OpenWorkspace>().ExecuteAsync(p.Path, ct))
             .Register(BridgeMessageTypes.WorkspaceOpenLast,
                 ct => Use<OpenLastWorkspace>().ExecuteAsync(ct))
+            .Register(BridgeMessageTypes.WorkspaceRecent,
+                ct => Use<GetRecentWorkspaces>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.WorkspaceTree,
                 ct => Use<GetWorkspaceTree>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.WorkspaceExportFormats,
@@ -75,6 +77,8 @@ internal static class BridgeHandlers
                 (p, ct) => Use<CreateRequest>().ExecuteAsync(p.Folder, p.Request, ct))
             .Register<SaveRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestSave,
                 (p, ct) => Use<SaveRequest>().ExecuteAsync(p.Path, p.Request, ct))
+            .Register<DuplicateRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestDuplicate,
+                (p, ct) => Use<DuplicateRequest>().ExecuteAsync(p.Path, ct))
             .Register<MoveRequestPayload, MovedRequestDto>(BridgeMessageTypes.RequestMove,
                 (p, _) => Task.FromResult(Use<MoveRequest>().Execute(p.Path, p.Folder)))
             .Register<SendRequestPayload, ResponseDto>(BridgeMessageTypes.RequestSend,
@@ -87,6 +91,8 @@ internal static class BridgeHandlers
                 (p, _) => Task.FromResult(Use<RenameFolder>().Execute(p.Path, p.Name)))
             .Register<MoveFolderPayload, FolderDto>(BridgeMessageTypes.FolderMove,
                 (p, _) => Task.FromResult(Use<MoveFolder>().Execute(p.Path, p.Parent)))
+            .Register<DuplicateFolderPayload, FolderDto>(BridgeMessageTypes.FolderDuplicate,
+                (p, _) => Task.FromResult(Use<DuplicateFolder>().Execute(p.Path)))
             .Register<DeleteRequestPayload, Unit?>(BridgeMessageTypes.RequestDelete,
                 (p, _) => Task.FromResult(NoValue(Use<DeleteRequest>().Execute(p.Path))))
             .Register<DeleteFolderPayload, Unit?>(BridgeMessageTypes.FolderDelete,

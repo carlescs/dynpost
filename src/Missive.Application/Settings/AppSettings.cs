@@ -6,7 +6,11 @@ namespace Missive.Application.Settings;
 /// </summary>
 /// <param name="LastWorkspacePath">The workspace folder to reopen at startup.</param>
 /// <param name="Theme">The color theme, <see cref="AppThemes.Light"/> or <see cref="AppThemes.Dark"/>; <c>null</c> is light.</param>
-public sealed record AppSettings(string? LastWorkspacePath = null, string? Theme = null)
+/// <param name="RecentWorkspaces">Workspace folders opened recently, the most recent first.</param>
+public sealed record AppSettings(
+    string? LastWorkspacePath = null,
+    string? Theme = null,
+    IReadOnlyList<string>? RecentWorkspaces = null)
 {
     public static AppSettings Default { get; } = new();
 }

@@ -99,6 +99,9 @@ export class MockBackend {
       return ok(!!cancel);
     }
     if (request.type === 'workspace.openLast') return ok(null);
+    if (request.type === 'workspace.recent') {
+      return ok([{ name: 'my-api (browser preview)', path: this.root }]);
+    }
     if (request.type === 'settings.get') return ok({ theme: this.theme });
     if (request.type === 'settings.setTheme') {
       this.theme = payload?.['theme'] as Theme;
@@ -280,6 +283,28 @@ export class MockBackend {
           return fail(ERROR_CODES.alreadyExists, `'${target}' already exists.`);
         this.files.delete(path);
         this.files.set(target, dto);
+        return ok({ path: target });
+      }
+      case 'request.duplicate': {
+        const path = payload?.['path'] as string;
+        const dto = this.files.get(path);
+        if (!dto) return fail(ERROR_CODES.notFound, `The request file '${path}' does not exist.`);
+        const copy = { ...structuredClone(dto), name: `${dto.name} copy` };
+        const target = this.freePath(parentOf(path), copy.name);
+        this.files.set(target, copy);
+        return ok({ path: target, request: structuredClone(copy) });
+      }
+      case 'folder.duplicate': {
+        const path = payload?.['path'] as string;
+        if (!this.folders.has(path))
+          return fail(ERROR_CODES.notFound, `The folder '${path}' does not exist.`);
+        let target = `${path} copy`;
+        for (let n = 2; this.exists(target); n++) target = `${path} copy ${n}`;
+        const copyPath = (p: string) => target + p.slice(path.length);
+        for (const folder of [...this.folders].filter((f) => isWithin(f, path)))
+          this.folders.add(copyPath(folder));
+        for (const [file, dto] of [...this.files].filter(([f]) => isWithin(f, path)))
+          this.files.set(copyPath(file), structuredClone(dto));
         return ok({ path: target });
       }
       case 'request.delete': {

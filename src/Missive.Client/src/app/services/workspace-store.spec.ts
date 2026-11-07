@@ -193,6 +193,86 @@ describe('WorkspaceStore', () => {
     });
   });
 
+  it('duplicates a request and opens the copy', async () => {
+    const copied: WorkspaceDto = {
+      ...workspace,
+      nodes: [
+        {
+          ...workspace.nodes[0],
+          children: [
+            ...workspace.nodes[0].children!,
+            { path: 'users/get-user-copy.yaml', name: 'Get user copy', kind: 'request' },
+          ],
+        },
+      ],
+    };
+    respond({
+      'workspace.openLast': () => workspace,
+      'request.duplicate': () => ({
+        path: 'users/get-user-copy.yaml',
+        request: { ...request, name: 'Get user copy' },
+      }),
+      'workspace.tree': () => copied,
+      'request.load': () => ({ ...request, name: 'Get user copy' }),
+    });
+    await store.restore();
+    await store.duplicateRequest('users/get.yaml');
+
+    expect(send).toHaveBeenCalledWith('request.duplicate', { path: 'users/get.yaml' });
+    expect(store.activeDocument()).toMatchObject({
+      path: 'users/get-user-copy.yaml',
+      name: 'Get user copy',
+      dirty: false,
+    });
+  });
+
+  it('duplicates a folder and reloads the tree', async () => {
+    respond({
+      'workspace.openLast': () => workspace,
+      'folder.duplicate': () => ({ path: 'users copy' }),
+      'workspace.tree': () => workspace,
+    });
+    await store.restore();
+    expect(await store.duplicateFolder('users')).toBe('users copy');
+    expect(send).toHaveBeenLastCalledWith('workspace.tree');
+  });
+
+  it('loads the recent workspaces when restoring', async () => {
+    const recent = [{ name: 'api', path: '/home/me/api' }];
+    respond({ 'workspace.openLast': () => null, 'workspace.recent': () => recent });
+    await store.restore();
+    expect(store.recent()).toEqual(recent);
+  });
+
+  it('opens a recent workspace, closing the open documents', async () => {
+    const other: WorkspaceDto = { name: 'other', root: '/home/me/other', nodes: [] };
+    respond({
+      'workspace.openLast': () => workspace,
+      'workspace.recent': () => [],
+      'workspace.open': () => other,
+      'request.load': () => request,
+    });
+    await store.restore();
+    await store.openRequest({ path: 'users/get.yaml', name: 'Get user', kind: 'request' });
+
+    await store.openRecent('/home/me/other');
+
+    expect(send).toHaveBeenCalledWith('workspace.open', { path: '/home/me/other' });
+    expect(store.workspace()).toEqual({ name: 'other', root: '/home/me/other' });
+    expect(store.documents()).toHaveLength(0);
+    expect(send).toHaveBeenLastCalledWith('workspace.recent');
+  });
+
+  it('reports a recent workspace that can no longer be opened', async () => {
+    respond({
+      'workspace.open': () => Promise.reject(new BridgeError('not_found', 'Gone')),
+      'workspace.recent': () => [],
+    });
+    await store.openRecent('/home/me/gone');
+    expect(store.error()).toBe('Gone');
+    expect(store.workspace()).toBeNull();
+  });
+
   it('clamps the sidebar width and toggles the sidebar', () => {
     store.setSidebarWidth(10);
     expect(store.sidebarWidth()).toBe(SIDEBAR_MIN_WIDTH);

@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
-import { ERROR_CODES, WorkspaceDto } from '../models/messages';
+import { ERROR_CODES, RecentWorkspaceDto, WorkspaceDto } from '../models/messages';
 import {
   RequestContent,
   RequestDocument,
@@ -29,6 +29,8 @@ export class WorkspaceStore {
   readonly workspace = signal<WorkspaceInfo | null>(null);
   readonly tree = signal<WorkspaceNode[]>([]);
   readonly opening = signal(false);
+  /** Workspace folders opened recently, the most recent first (the open one included). */
+  readonly recent = signal<RecentWorkspaceDto[]>([]);
   /** The last error to show the user, or `null`. */
   readonly error = signal<string | null>(null);
 
@@ -72,24 +74,50 @@ export class WorkspaceStore {
     } catch {
       // Start without a workspace; the user can open one.
     }
+    await this.loadRecent();
+  }
+
+  /** Re-reads the recently opened workspaces; the host drops folders that no longer exist. */
+  async loadRecent(): Promise<void> {
+    try {
+      this.recent.set(await this.bridge.send('workspace.recent'));
+    } catch {
+      // The list is a convenience; keep the one shown.
+    }
   }
 
   /** Asks the user for a folder and opens it as the workspace. */
   async openFolder(): Promise<void> {
+    await this.switchWorkspace(() => this.bridge.send('workspace.pick'));
+  }
+
+  /** Opens a recently used workspace folder. */
+  async openRecent(path: string): Promise<void> {
+    if (path === this.workspace()?.root) return;
+    await this.switchWorkspace(() => this.bridge.send('workspace.open', { path }));
+  }
+
+  /**
+   * Replaces the open workspace with the one `open` returns (`null` when the user cancelled),
+   * closing the open documents.
+   */
+  private async switchWorkspace(open: () => Promise<WorkspaceDto | null>): Promise<void> {
     if (!this.confirmDiscard('Open another folder?')) return;
     this.opening.set(true);
     try {
-      const workspace = await this.bridge.send('workspace.pick');
+      const workspace = await open();
       if (workspace) {
         this.removeTabs(this.documents().map((d) => d.key));
         this.documents.set([]);
         this.applyWorkspace(workspace);
+        this.error.set(null);
       }
     } catch (error) {
       this.report(error);
     } finally {
       this.opening.set(false);
     }
+    await this.loadRecent();
   }
 
   /** Re-reads the workspace tree from disk. */
@@ -338,6 +366,32 @@ export class WorkspaceStore {
     } catch (error) {
       this.report(error);
       return false;
+    }
+  }
+
+  /** Copies a request next to it as "… copy" and opens the copy. */
+  async duplicateRequest(path: string): Promise<void> {
+    try {
+      const saved = await this.bridge.send('request.duplicate', { path });
+      this.error.set(null);
+      await this.refresh();
+      const node = findNode(this.tree(), saved.path);
+      if (node) await this.openRequest(node);
+    } catch (error) {
+      this.report(error);
+    }
+  }
+
+  /** Copies a folder with everything in it next to it as "… copy". Returns the copy's path. */
+  async duplicateFolder(path: string): Promise<string | null> {
+    try {
+      const copy = await this.bridge.send('folder.duplicate', { path });
+      this.error.set(null);
+      await this.refresh();
+      return copy.path;
+    } catch (error) {
+      this.report(error);
+      return null;
     }
   }
 

@@ -35,6 +35,12 @@ export class ExplorerState {
     this.menu.set(null);
   }
 
+  duplicateNode(node: WorkspaceNode): void {
+    this.closeMenu();
+    if (node.kind === 'folder') void this.store.duplicateFolder(node.path);
+    else void this.store.duplicateRequest(node.path);
+  }
+
   deleteNode(node: WorkspaceNode): void {
     this.closeMenu();
     if (node.kind === 'folder') void this.store.deleteFolder(node.path);

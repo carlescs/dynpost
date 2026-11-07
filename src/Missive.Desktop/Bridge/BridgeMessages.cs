@@ -20,6 +20,12 @@ internal static class BridgeMessageTypes
     /// <summary>Reopens the workspace from the previous session. Payload: none. Result: workspace, or null if there is none.</summary>
     public const string WorkspaceOpenLast = "workspace.openLast";
 
+    /// <summary>
+    /// Lists the workspace folders opened recently, the most recent first; folders that no longer
+    /// exist are dropped. Payload: none. Result: recent workspaces.
+    /// </summary>
+    public const string WorkspaceRecent = "workspace.recent";
+
     /// <summary>Re-reads the open workspace. Payload: none. Result: workspace.</summary>
     public const string WorkspaceTree = "workspace.tree";
 
@@ -47,6 +53,9 @@ internal static class BridgeMessageTypes
     /// <summary>Saves an existing request file. Payload: <see cref="SaveRequestPayload"/>. Result: saved request.</summary>
     public const string RequestSave = "request.save";
 
+    /// <summary>Copies a request as "… copy" next to it. Payload: <see cref="DuplicateRequestPayload"/>. Result: the saved copy.</summary>
+    public const string RequestDuplicate = "request.duplicate";
+
     /// <summary>Moves a request file into another folder. Payload: <see cref="MoveRequestPayload"/>. Result: its new path.</summary>
     public const string RequestMove = "request.move";
 
@@ -70,6 +79,9 @@ internal static class BridgeMessageTypes
 
     /// <summary>Moves a folder into another folder. Payload: <see cref="MoveFolderPayload"/>. Result: folder (new path).</summary>
     public const string FolderMove = "folder.move";
+
+    /// <summary>Copies a folder with its contents as "… copy" next to it. Payload: <see cref="DuplicateFolderPayload"/>. Result: the copy.</summary>
+    public const string FolderDuplicate = "folder.duplicate";
 
     /// <summary>Deletes a folder with its requests. Payload: <see cref="DeleteFolderPayload"/>. Result: none.</summary>
     public const string FolderDelete = "folder.delete";
@@ -216,6 +228,10 @@ internal sealed record CreateFolderPayload(string Parent, string Name);
 internal sealed record RenameFolderPayload(string Path, string Name);
 
 internal sealed record DeleteRequestPayload(string Path);
+
+internal sealed record DuplicateRequestPayload(string Path);
+
+internal sealed record DuplicateFolderPayload(string Path);
 
 internal sealed record DeleteFolderPayload(string Path);
 
