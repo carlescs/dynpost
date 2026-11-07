@@ -6,7 +6,8 @@ namespace Missive.Application.Folders;
 
 /// <summary>
 /// Deletes a collection folder with its requests. Refuses when the folder holds anything else —
-/// notes, scripts, links — so Missive never deletes files it does not own.
+/// notes, scripts, links, or names that aren't valid workspace paths — so Missive never deletes
+/// files it does not own.
 /// </summary>
 public sealed class DeleteFolder(IWorkspaceRepository repository, CurrentWorkspace current)
 {
@@ -31,9 +32,12 @@ public sealed class DeleteFolder(IWorkspaceRepository repository, CurrentWorkspa
             return contents.Error!;
         }
 
+        // Names that aren't workspace paths (such as "a:b.txt" on Linux) can't be checked, and
+        // the recursive delete would remove them along with anything under them.
         var blocking = contents.Value.Links
             .Concat(contents.Value.Files.Where(f => !WorkspaceLayout.IsDisposableFile(f.FileName)))
             .Select(p => p.Value)
+            .Concat((contents.Value.Unsupported ?? []).Select(u => $"{folder}/{u}"))
             .Order(StringComparer.Ordinal)
             .ToList();
 

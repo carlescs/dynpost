@@ -16,10 +16,15 @@ public sealed record RequestFileEntry(WorkspacePath Path, Result<HttpRequestDefi
 /// <param name="Files">Regular files.</param>
 /// <param name="Folders">Sub-folders.</param>
 /// <param name="Links">Symbolic links and other special entries, which are never followed.</param>
+/// <param name="Unsupported">
+/// Entries whose names are not valid workspace paths (such as <c>a:b.txt</c> on Linux), relative
+/// to the folder with <c>/</c> separators. Their contents are not listed.
+/// </param>
 public sealed record FolderContents(
     IReadOnlyList<WorkspacePath> Files,
     IReadOnlyList<WorkspacePath> Folders,
-    IReadOnlyList<WorkspacePath> Links);
+    IReadOnlyList<WorkspacePath> Links,
+    IReadOnlyList<string>? Unsupported = null);
 
 /// <summary>Reads and writes request files and folders inside a workspace folder.</summary>
 public interface IWorkspaceRepository
