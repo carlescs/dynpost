@@ -13,7 +13,26 @@ public sealed class DuplicateRequest(IWorkspaceRepository repository, CurrentWor
 {
     public const string CopySuffix = " copy";
 
+    /// <summary>
+    /// Bridge messages are handled concurrently; one duplicate at a time means two copies of the
+    /// same request never pick, and overwrite, the same file name.
+    /// </summary>
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
     public async Task<Result<SavedRequestDto>> ExecuteAsync(string path, CancellationToken cancellationToken = default)
+    {
+        await Gate.WaitAsync(cancellationToken);
+        try
+        {
+            return await DuplicateAsync(path, cancellationToken);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private async Task<Result<SavedRequestDto>> DuplicateAsync(string path, CancellationToken cancellationToken)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)

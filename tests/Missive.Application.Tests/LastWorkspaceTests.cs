@@ -94,6 +94,23 @@ public class LastWorkspaceTests
     }
 
     [Fact]
+    public async Task GetRecent_KeepsFoldersOpenedWhileItChecked()
+    {
+        _storedSettings = new AppSettings(Folder, RecentWorkspaces: [Folder, "/work/gone"]);
+        _repository.FolderExists(Folder).Returns(true);
+        // Another workspace is opened between reading the list and saving it.
+        _repository.FolderExists("/work/gone").Returns(_ =>
+        {
+            _storedSettings = _storedSettings with { RecentWorkspaces = ["/work/new", .. _storedSettings.RecentWorkspaces!] };
+            return false;
+        });
+
+        await new GetRecentWorkspaces(_settings, _repository).ExecuteAsync();
+
+        Assert.Equal(["/work/new", Folder], _storedSettings.RecentWorkspaces);
+    }
+
+    [Fact]
     public async Task GetRecent_DoesNotRewriteSettingsWhenAllFoldersExist()
     {
         _storedSettings = new AppSettings(Folder, RecentWorkspaces: [Folder]);
