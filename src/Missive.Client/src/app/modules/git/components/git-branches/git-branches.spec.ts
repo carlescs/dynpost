@@ -25,6 +25,7 @@ describe('GitBranches', () => {
     switchBranch: any;
     checkoutRemoteBranch: any;
     deleteBranch: any;
+    mergeBranch: any;
     createBranch: any;
     dismissError: any;
     loadBranches: any;
@@ -64,6 +65,7 @@ describe('GitBranches', () => {
       switchBranch: vi.fn().mockResolvedValue(true),
       checkoutRemoteBranch: vi.fn().mockResolvedValue(true),
       deleteBranch: vi.fn().mockResolvedValue(true),
+      mergeBranch: vi.fn().mockResolvedValue(true),
       createBranch: vi.fn().mockResolvedValue(true),
       dismissError: vi.fn(),
       loadBranches: vi.fn().mockResolvedValue(undefined),
@@ -136,5 +138,54 @@ describe('GitBranches', () => {
     await fixture.whenStable();
 
     expect(git.createBranch).toHaveBeenCalledWith('feature/login', true);
+  });
+
+  it('merges a local or remote branch into the current one after a confirmation', async () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    const fixture = await render();
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(button(root, 'Merge main into the current branch')).toBeNull();
+    button(root, 'Merge old into the current branch')!.click();
+    await fixture.whenStable();
+    button(root, 'Merge origin/topic into the current branch')!.click();
+    await fixture.whenStable();
+
+    expect(confirm.mock.calls[0][0]).toBe("Merge 'old' into the current branch 'main'?");
+    expect(git.mergeBranch).toHaveBeenNthCalledWith(1, expect.objectContaining({ name: 'old' }));
+    expect(git.mergeBranch).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ name: 'origin/topic', remote: 'origin' }),
+    );
+  });
+
+  it('does not merge when the confirmation is declined', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    const fixture = await render();
+
+    button(fixture.nativeElement, 'Merge old into the current branch')!.click();
+    await fixture.whenStable();
+
+    expect(git.mergeBranch).not.toHaveBeenCalled();
+  });
+
+  it('disables merging while there are uncommitted changes or a merge in progress', async () => {
+    git.status.update((s) => ({ ...s!, changes: [{ path: 'a.yaml', status: 'modified' }] }));
+    const fixture = await render();
+    const merge = button(fixture.nativeElement, 'Merge old into the current branch')!;
+
+    expect(merge.disabled).toBe(true);
+    expect(merge.title).toContain('Commit or discard');
+
+    git.status.update((s) => ({ ...s!, changes: [], merging: true }));
+    fixture.detectChanges();
+    expect(merge.disabled).toBe(true);
+    expect(merge.title).toContain('abort the merge');
+
+    git.status.update((s) => ({ ...s!, merging: false }));
+    fixture.detectChanges();
+    expect(merge.disabled).toBe(false);
+    expect(merge.title).toBe('Merge old into main');
   });
 });

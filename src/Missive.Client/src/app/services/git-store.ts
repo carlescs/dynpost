@@ -10,6 +10,7 @@ import {
   GitIdentity,
   GitRemote,
   GitStatus,
+  MergeOutcome,
   PullOutcome,
 } from '../models/messages';
 import { EnvironmentStore } from './environment-store';
@@ -471,6 +472,43 @@ export class GitStore {
     );
   }
 
+  /**
+   * Merges a local or remote-tracking branch into the current one, then reloads the workspace and
+   * open tabs from disk. Conflicts are left for the user to resolve, as after a pull. Resolves to
+   * whether the merge ran (including when it stopped on conflicts).
+   */
+  async mergeBranch(branch: GitBranch): Promise<boolean> {
+    const name = branch.name;
+    const into = this.status()?.branch;
+    const question = `Merge ${name} into ${into ?? 'the current branch'}?`;
+    const consequence =
+      "The merge won't update them, and saving them afterwards would overwrite the merged versions.";
+    if (!this.confirmUnsavedTabs(question, consequence)) return false;
+    const ok = await this.run(
+      'branch',
+      () => this.bridge.send('git.branch.merge', { name, remote: !!branch.remote }),
+      (result) => {
+        this.status.set(result.status);
+        this.branches.set(result.branches);
+        this.notice.set(
+          mergeNotice(
+            result.outcome,
+            name,
+            result.status.branch ?? into,
+            result.conflictsOutsideWorkspace ?? [],
+          ),
+        );
+        // A merge can add, change or remove request and environment files.
+        void this.workspace.refresh();
+        void this.workspace.reloadFromDisk();
+        void this.environments.refresh();
+      },
+    );
+    // A merge commit needs an identity: show the form, filled with whatever git already knows.
+    if (!ok && this.error()?.code === 'git.identity_unknown') await this.loadIdentity();
+    return ok;
+  }
+
   private async runBranch(
     call: () => Promise<GitBranches>,
     text: string,
@@ -490,12 +528,15 @@ export class GitStore {
   }
 
   /** Asks before a checkout when open tabs have unsaved edits, which git can't see. */
-  private confirmUnsavedTabs(question: string): boolean {
+  private confirmUnsavedTabs(
+    question: string,
+    consequence = 'They stay in their tabs, and saving them later writes them to the new branch.',
+  ): boolean {
     const unsaved = this.unsavedCount();
     if (!unsaved) return true;
     return confirm(
       `${question} ${unsaved} open tab${unsaved === 1 ? ' has' : 's have'} unsaved changes. ` +
-        'They stay in their tabs, and saving them later writes them to the new branch.',
+        consequence,
     );
   }
 
@@ -578,6 +619,31 @@ export class GitStore {
     } finally {
       this.busy.set(null);
     }
+  }
+}
+
+function mergeNotice(
+  outcome: MergeOutcome,
+  name: string,
+  into: string | null | undefined,
+  outside: string[],
+): GitNotice {
+  const target = into ?? 'the current branch';
+  switch (outcome) {
+    case 'upToDate':
+      return { kind: 'info', text: `${target} already contains everything in ${name}.` };
+    case 'merged':
+      return { kind: 'info', text: `Merged ${name} into ${target}.` };
+    case 'conflicted':
+      return {
+        kind: 'warning',
+        text:
+          `Merging ${name} stopped on conflicts. Open each conflicted file below to resolve it.` +
+          (outside.length
+            ? ` These conflicted files are outside the workspace folder; resolve them with your ` +
+              `own git tools (or abort the merge): ${outside.join(', ')}.`
+            : ''),
+      };
   }
 }
 

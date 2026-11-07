@@ -177,6 +177,17 @@ public interface IGitService
     /// </summary>
     Task<Result<Unit>> DeleteBranchAsync(string workspacePath, string branch, bool force, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Merges a local or remote-tracking branch into the current branch (<c>git merge --no-edit
+    /// --commit</c>, fast-forwarding when possible unless the user's git configuration says
+    /// otherwise; never a rebase or squash). The branch is named so that no other ref of the same
+    /// name can be merged instead. Fails with <see cref="GitErrors.UncommittedChangesCode"/> when
+    /// tracked files anywhere in the repository have uncommitted changes, since aborting the merge
+    /// would lose them. Conflicts are left in the working tree for the user and reported as
+    /// <see cref="MergeOutcome.Conflicted"/>.
+    /// </summary>
+    Task<Result<BranchMergeResult>> MergeBranchAsync(string workspacePath, GitBranch branch, CancellationToken cancellationToken = default);
+
     /// <summary>Lists the repository's remotes, sorted by name.</summary>
     Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(string workspacePath, CancellationToken cancellationToken = default);
 

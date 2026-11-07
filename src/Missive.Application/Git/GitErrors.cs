@@ -48,6 +48,7 @@ public static class GitErrors
     public const string BranchDuringMergeCode = "git.branch_during_merge";
     public const string BranchNotMergedCode = "git.branch_not_merged";
     public const string CurrentBranchCode = "git.current_branch";
+    public const string MergeSameBranchCode = "git.merge_same_branch";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -179,6 +180,25 @@ public static class GitErrors
 
     public static Error CurrentBranch(string name) =>
         new(CurrentBranchCode, $"'{name}' is the current branch. Switch to another branch before deleting it.");
+
+    public static Error MergeSameBranch(string name) =>
+        new(MergeSameBranchCode, $"'{name}' is the current branch; choose another branch to merge into it.");
+
+    public static Error UncommittedChangesBeforeMerge(IReadOnlyList<string> paths) =>
+        new(
+            UncommittedChangesCode,
+            paths.Count == 0
+                ? "You have uncommitted changes. Commit or discard them, then merge, so aborting the merge can't lose them."
+                : $"You have uncommitted changes to: {string.Join(", ", paths)}. Commit or discard them, then merge, so aborting the merge can't lose them.");
+
+    public static Error MergeDuringMerge() =>
+        new(BranchDuringMergeCode, "A merge is already in progress; complete it or abort it before merging another branch.");
+
+    public static Error NoCommitsToMergeInto() =>
+        new(NoCommitsCode, "The current branch has no commits yet, so there is nothing to merge into. Commit first, or switch to the other branch.");
+
+    public static Error UnrelatedBranchHistories(string name) =>
+        new(UnrelatedHistoriesCode, $"'{name}' has a history unrelated to the current branch, so git won't merge it.");
 
     public static Error PushRejected(string details) =>
         new(PushRejectedCode, WithDetails("The remote rejected the push. Pull the latest changes and try again.", details));

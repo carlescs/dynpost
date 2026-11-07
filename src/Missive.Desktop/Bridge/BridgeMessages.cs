@@ -209,6 +209,13 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string GitBranchDelete = "git.branch.delete";
 
+    /// <summary>
+    /// Merges a local or remote-tracking branch into the current one (never a rebase); refused with
+    /// uncommitted changes. Payload: <see cref="GitMergeBranchPayload"/>. Result: outcome, status,
+    /// branches and any conflicts outside the workspace folder.
+    /// </summary>
+    public const string GitBranchMerge = "git.branch.merge";
+
     /// <summary>Lists the repository's remotes. Payload: none. Result: remotes.</summary>
     public const string GitRemoteList = "git.remote.list";
 
@@ -348,6 +355,9 @@ internal sealed record GitCreateBranchPayload(string Name, bool SwitchTo = false
 
 /// <param name="Force">Delete even if its commits aren't merged anywhere (after a second confirmation).</param>
 internal sealed record GitDeleteBranchPayload(string Name, bool Force = false);
+
+/// <param name="Remote">Whether <c>Name</c> is a remote-tracking branch (a local branch can share its name).</param>
+internal sealed record GitMergeBranchPayload(string Name, bool Remote = false);
 
 internal static class BridgeErrorCodes
 {

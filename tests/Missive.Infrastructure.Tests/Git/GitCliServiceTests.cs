@@ -910,6 +910,211 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task MergeBranch_FastForwardsThenMergesWithGitsMessage()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+        TestGit.Run(repository, "switch", "--quiet", "-c", "feature");
+        Write(repository, "b.yaml", "name: B\n");
+        TestGit.CommitAll(repository, "Add B");
+        TestGit.Run(repository, "switch", "--quiet", "main");
+
+        var fastForward = await _git.MergeBranchAsync(repository, LocalBranch("feature"));
+
+        Assert.True(fastForward.IsSuccess, fastForward.Error?.Message);
+        Assert.Equal(MergeOutcome.Merged, fastForward.Value.Outcome);
+        Assert.True(File.Exists(Path.Combine(repository, "b.yaml")));
+        Assert.Equal(MergeOutcome.UpToDate, (await _git.MergeBranchAsync(repository, LocalBranch("feature"))).Value.Outcome);
+
+        TestGit.Run(repository, "switch", "--quiet", "feature");
+        Write(repository, "c.yaml", "name: C\n");
+        TestGit.CommitAll(repository, "Add C");
+        TestGit.Run(repository, "switch", "--quiet", "main");
+        Write(repository, "d.yaml", "name: D\n");
+        TestGit.CommitAll(repository, "Add D");
+
+        var merged = await _git.MergeBranchAsync(repository, LocalBranch("feature"));
+
+        Assert.Equal(MergeOutcome.Merged, merged.Value.Outcome);
+        Assert.Equal("Merge branch 'feature'", TestGit.Run(repository, "log", "-1", "--format=%s").Trim());
+        Assert.False((await _git.GetStatusAsync(repository)).Value.HasChanges);
+    }
+
+    [Fact]
+    public async Task MergeBranch_ShadowedByATag_MergesTheBranch()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+        TestGit.Run(repository, "tag", "feature");
+        TestGit.Run(repository, "switch", "--quiet", "-c", "feature");
+        Write(repository, "b.yaml", "name: B\n");
+        TestGit.CommitAll(repository, "Add B");
+        TestGit.Run(repository, "switch", "--quiet", "main");
+
+        var merged = await _git.MergeBranchAsync(repository, LocalBranch("feature"));
+
+        Assert.Equal(MergeOutcome.Merged, merged.Value.Outcome);
+        Assert.True(File.Exists(Path.Combine(repository, "b.yaml")));
+    }
+
+    [Fact]
+    public async Task MergeBranch_RemoteBranchWithConflicts_LeavesTheConflictForTheUser()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "switch", "--quiet", "-c", "feature");
+        Write(alice, "a.yaml", "name: From Alice\n");
+        TestGit.CommitAll(alice, "Alice");
+        TestGit.Run(alice, "push", "--quiet", "origin", "feature");
+        TestGit.Run(bob, "fetch", "--quiet");
+        Write(bob, "a.yaml", "name: From Bob\n");
+        TestGit.CommitAll(bob, "Bob");
+
+        var merge = await _git.MergeBranchAsync(bob, RemoteBranch("origin/feature"));
+
+        Assert.True(merge.IsSuccess, merge.Error?.Message);
+        Assert.Equal(MergeOutcome.Conflicted, merge.Value.Outcome);
+        Assert.Empty(merge.Value.ConflictsOutsideWorkspace);
+        var status = (await _git.GetStatusAsync(bob)).Value;
+        Assert.True(status.IsMerging);
+        Assert.StartsWith("Merge remote-tracking branch 'origin/feature'", status.MergeMessage);
+        Assert.Equal(new[] { new GitChange("a.yaml", GitFileStatus.Conflicted) }, status.Changes);
+    }
+
+    [Fact]
+    public async Task MergeBranch_WithUnrelatedHistory_IsExplained()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+        TestGit.Run(repository, "switch", "--quiet", "--orphan", "other");
+        Write(repository, "b.yaml", "name: B\n");
+        TestGit.CommitAll(repository, "Add B");
+        TestGit.Run(repository, "switch", "--quiet", "main");
+
+        var merge = await _git.MergeBranchAsync(repository, LocalBranch("other"));
+
+        Assert.Equal(GitErrors.UnrelatedHistoriesCode, merge.Error?.Code);
+        Assert.Contains("'other'", merge.Error!.Message);
+        Assert.False((await _git.GetStatusAsync(repository)).Value.IsMerging);
+    }
+
+    [Fact]
+    public async Task MergeBranch_ShadowedByAGitDirectoryRef_MergesTheBranch()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+        // .git/ORIG_HEAD (left by a reset or merge) wins over a branch of that name.
+        TestGit.Run(repository, "update-ref", "ORIG_HEAD", "HEAD");
+        TestGit.Run(repository, "switch", "--quiet", "-c", "ORIG_HEAD");
+        Write(repository, "b.yaml", "name: B\n");
+        TestGit.CommitAll(repository, "Add B");
+        TestGit.Run(repository, "switch", "--quiet", "main");
+
+        var merged = await _git.MergeBranchAsync(repository, LocalBranch("ORIG_HEAD"));
+
+        Assert.Equal(MergeOutcome.Merged, merged.Value.Outcome);
+        Assert.True(File.Exists(Path.Combine(repository, "b.yaml")));
+    }
+
+    [Fact]
+    public async Task MergeBranch_RemoteBranchWithALocalNamesake_MergesTheRemoteOne()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "switch", "--quiet", "-c", "topic");
+        Write(alice, "remote.yaml", "name: Remote\n");
+        TestGit.CommitAll(alice, "Remote topic");
+        TestGit.Run(alice, "push", "--quiet", "origin", "topic");
+        TestGit.Run(bob, "fetch", "--quiet");
+        TestGit.Run(bob, "switch", "--quiet", "-c", "origin/topic");
+        Write(bob, "local.yaml", "name: Local\n");
+        TestGit.CommitAll(bob, "Local branch named like the remote one");
+        TestGit.Run(bob, "switch", "--quiet", "main");
+
+        var merged = await _git.MergeBranchAsync(bob, RemoteBranch("origin/topic"));
+
+        Assert.Equal(MergeOutcome.Merged, merged.Value.Outcome);
+        Assert.True(File.Exists(Path.Combine(bob, "remote.yaml")));
+        Assert.False(File.Exists(Path.Combine(bob, "local.yaml")));
+    }
+
+    [Fact]
+    public async Task MergeBranch_WithMergeOptionsNoCommit_StillCommitsACleanMerge()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+        TestGit.Run(repository, "switch", "--quiet", "-c", "feature");
+        Write(repository, "b.yaml", "name: B\n");
+        TestGit.CommitAll(repository, "Add B");
+        TestGit.Run(repository, "switch", "--quiet", "main");
+        Write(repository, "c.yaml", "name: C\n");
+        TestGit.CommitAll(repository, "Add C");
+        TestGit.Run(repository, "config", "branch.main.mergeOptions", "--no-commit --no-ff");
+
+        var merged = await _git.MergeBranchAsync(repository, LocalBranch("feature"));
+
+        Assert.Equal(MergeOutcome.Merged, merged.Value.Outcome);
+        Assert.False((await _git.GetStatusAsync(repository)).Value.IsMerging);
+        Assert.Equal("Merge branch 'feature'", TestGit.Run(repository, "log", "-1", "--format=%s").Trim());
+    }
+
+    [Fact]
+    public async Task MergeBranch_WithChangesOutsideTheWorkspaceFolder_IsRefused()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "api/a.yaml", "name: A\n");
+        Write(repository, "docs/notes.md", "notes\n");
+        TestGit.CommitAll(repository, "Add files");
+        TestGit.Run(repository, "branch", "feature");
+        Write(repository, "docs/notes.md", "edited\n");
+        Write(repository, "api/.missive/state.json", "{}\n");
+        var workspace = Path.Combine(repository, "api");
+
+        var merge = await _git.MergeBranchAsync(workspace, LocalBranch("feature"));
+
+        Assert.Equal(GitErrors.UncommittedChangesCode, merge.Error?.Code);
+        Assert.Contains("docs/notes.md", merge.Error!.Message);
+        Assert.DoesNotContain(".missive", merge.Error.Message);
+    }
+
+    [Fact]
+    public async Task MergeBranch_ConflictsOutsideTheWorkspaceFolder_AreReported()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "api/a.yaml", "name: A\n");
+        Write(repository, "docs/notes.md", "notes\n");
+        TestGit.CommitAll(repository, "Add files");
+        TestGit.Run(repository, "switch", "--quiet", "-c", "feature");
+        Write(repository, "docs/notes.md", "from feature\n");
+        TestGit.CommitAll(repository, "Feature notes");
+        TestGit.Run(repository, "switch", "--quiet", "main");
+        Write(repository, "docs/notes.md", "from main\n");
+        TestGit.CommitAll(repository, "Main notes");
+
+        var merge = await _git.MergeBranchAsync(Path.Combine(repository, "api"), LocalBranch("feature"));
+
+        Assert.True(merge.IsSuccess, merge.Error?.Message);
+        Assert.Equal(MergeOutcome.Conflicted, merge.Value.Outcome);
+        Assert.Equal(["docs/notes.md"], merge.Value.ConflictsOutsideWorkspace);
+    }
+
+    [Fact]
+    public void ParsePorcelainPaths_SkipsTheOriginalPathOfRenames()
+    {
+        var paths = GitCliService.ParsePorcelainPaths(" M a.yaml\0R  new.yaml\0old.yaml\0M  b.yaml\0");
+
+        Assert.Equal(["a.yaml", "new.yaml", "b.yaml"], paths);
+    }
+
+    private static GitBranch LocalBranch(string name) => new(name, null, false, null, string.Empty, null, string.Empty);
+
+    private static GitBranch RemoteBranch(string name) =>
+        new(name, name[..name.IndexOf('/')], false, null, string.Empty, null, string.Empty);
+
+    [Fact]
     public void ParseBranches_AssignsRemoteBranchesToTheLongestMatchingRemote()
     {
         var output = string.Join('\n',

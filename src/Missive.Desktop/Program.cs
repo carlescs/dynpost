@@ -149,6 +149,7 @@ internal static class Program
             .AddTransient<CreateBranch>()
             .AddTransient<CheckoutRemoteBranch>()
             .AddTransient<DeleteBranch>()
+            .AddTransient<MergeBranch>()
             .AddTransient<ListRemotes>()
             .AddTransient<AddRemote>()
             .AddTransient<UpdateRemote>()

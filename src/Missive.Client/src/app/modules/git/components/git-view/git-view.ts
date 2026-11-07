@@ -82,7 +82,7 @@ export class GitView {
   protected abortMerge(): void {
     if (
       confirm(
-        'Abort the merge? Your branch goes back to how it was before the pull, and any conflict resolutions so far are lost.',
+        'Abort the merge? Your branch goes back to how it was before the merge, and any conflict resolutions so far are lost.',
       )
     ) {
       void this.git.abortMerge();

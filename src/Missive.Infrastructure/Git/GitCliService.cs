@@ -455,6 +455,136 @@ public sealed class GitCliService : IGitService
         return Unit.Value;
     }
 
+    public async Task<Result<BranchMergeResult>> MergeBranchAsync(
+        string workspacePath,
+        GitBranch branch,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // Aborting a conflicted merge resets every tracked file of the repository, not only the
+        // workspace's, so the merge needs the whole repository clean. Untracked files are safe:
+        // git refuses to overwrite them, and an abort leaves them alone.
+        var dirty = await RunCheckedAsync(
+            workspacePath,
+            "status",
+            ["status", "--porcelain=v1", "-z", "--untracked-files=no", "--", ":/", $":(top,exclude){prefix.Value}.missive"],
+            cancellationToken);
+        if (dirty.IsFailure)
+        {
+            return dirty.Error!;
+        }
+
+        var dirtyPaths = ParsePorcelainPaths(dirty.Value.StandardOutput);
+        if (dirtyPaths.Count > 0)
+        {
+            return GitErrors.UncommittedChangesBeforeMerge(dirtyPaths);
+        }
+
+        var headBefore = await GetHeadAsync(workspacePath, cancellationToken);
+        if (headBefore.IsFailure)
+        {
+            return headBefore.Error!;
+        }
+
+        var target = await MergeTargetAsync(workspacePath, branch, cancellationToken);
+        if (target.IsFailure)
+        {
+            return target.Error!;
+        }
+
+        // --commit and --no-squash override a branch.<name>.mergeOptions that would leave a clean
+        // merge uncommitted (and so look like nothing happened).
+        var merge = await RunAsync(
+            workspacePath,
+            ["merge", "--no-edit", "--commit", "--no-squash", "--", target.Value],
+            cancellationToken);
+        if (merge.IsFailure)
+        {
+            return merge.Error!;
+        }
+
+        if (!merge.Value.Succeeded)
+        {
+            // Paths relative to the repository root, the whole repository.
+            var conflicts = await RunAsync(workspacePath, ["diff", "--name-only", "--diff-filter=U", "-z"], cancellationToken);
+            if (conflicts.IsFailure)
+            {
+                return conflicts.Error!;
+            }
+
+            if (conflicts.Value.Succeeded && conflicts.Value.StandardOutput.Length > 0)
+            {
+                var outside = conflicts.Value.StandardOutput
+                    .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(path => !path.StartsWith(prefix.Value, StringComparison.Ordinal))
+                    .ToList();
+                return new BranchMergeResult(MergeOutcome.Conflicted, outside);
+            }
+
+            var details = Details(merge.Value);
+            return details.Contains("refusing to merge unrelated histories", StringComparison.OrdinalIgnoreCase)
+                ? GitErrors.UnrelatedBranchHistories(branch.Name)
+                : GitFailure.Classify("merge", details);
+        }
+
+        var headAfter = await GetHeadAsync(workspacePath, cancellationToken);
+        if (headAfter.IsFailure)
+        {
+            return headAfter.Error!;
+        }
+
+        return BranchMergeResult.Of(headAfter.Value == headBefore.Value ? MergeOutcome.UpToDate : MergeOutcome.Merged);
+    }
+
+    /// <summary>
+    /// How to name a branch to <c>git merge</c>. Its short name gives git's usual message
+    /// ("Merge branch 'feature'"), but git resolves a short name to the first match among
+    /// <c>.git/&lt;name&gt;</c> (such as <c>ORIG_HEAD</c>), tags, local and remote branches, so it is
+    /// used only when it resolves to exactly this branch; otherwise the full ref is.
+    /// </summary>
+    private async Task<Result<string>> MergeTargetAsync(string workspacePath, GitBranch branch, CancellationToken cancellationToken)
+    {
+        var fullRef = (branch.IsRemote ? "refs/remotes/" : "refs/heads/") + branch.Name;
+        var resolved = await RunAsync(workspacePath, ["rev-parse", "--symbolic-full-name", branch.Name], cancellationToken);
+        if (resolved.IsFailure)
+        {
+            return resolved.Error!;
+        }
+
+        var unambiguous = resolved.Value.Succeeded
+            && string.IsNullOrWhiteSpace(resolved.Value.StandardError)
+            && resolved.Value.StandardOutput.Trim() == fullRef;
+        return unambiguous ? branch.Name : fullRef;
+    }
+
+    /// <summary>The paths in <c>git status --porcelain=v1 -z</c> output (a rename's new path only).</summary>
+    internal static IReadOnlyList<string> ParsePorcelainPaths(string output)
+    {
+        var entries = output.Split('\0');
+        var paths = new List<string>();
+        for (var i = 0; i < entries.Length; i++)
+        {
+            var entry = entries[i];
+            if (entry.Length < 4)
+            {
+                continue;
+            }
+
+            paths.Add(entry[3..]);
+            if (entry[0] is 'R' or 'C')
+            {
+                i++; // The original path follows as its own entry.
+            }
+        }
+
+        return paths;
+    }
+
     /// <summary>Runs a <c>git switch</c>, explaining refusals over uncommitted changes.</summary>
     private async Task<Result<Unit>> RunSwitchAsync(string workspacePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
