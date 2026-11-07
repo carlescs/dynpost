@@ -16,20 +16,58 @@
           (click)="activeTab.set(tab.id)"
         >
           {{ tab.label }}
-          @if (tab.id === 'headers') {
-            <span class="text-xs text-sky-600">({{ r.headers.length }})</span>
+          @if (tabCount(tab.id, r); as count) {
+            <span class="text-xs text-sky-600">({{ count }})</span>
           }
         </button>
       }
     </div>
-    <div class="ml-auto flex items-center gap-4 text-xs text-slate-500">
+    <div class="ml-auto flex min-w-0 items-center gap-4 text-xs text-slate-500">
+      @if (note(); as text) {
+        <span class="truncate text-emerald-700" role="status" [title]="text">{{ text }}</span>
+      }
+      @if (shownBody() !== null && r.body) {
+        <button
+          type="button"
+          class="flex items-center gap-1 hover:text-slate-800"
+          title="Copy the body as shown"
+          (click)="copyBody()"
+        >
+          <fa-icon [icon]="faCopy" /> Copy
+        </button>
+      }
+      @if (r.size > 0) {
+        <button
+          type="button"
+          class="flex items-center gap-1 hover:text-slate-800 disabled:opacity-50"
+          [title]="
+            'Save the body to a file, exactly as received' +
+            (r.truncated ? ' (only the part that was kept)' : '')
+          "
+          [disabled]="saving()"
+          (click)="saveBody()"
+        >
+          <fa-icon
+            [icon]="saving() ? faSpinner : faDownload"
+            [animation]="saving() ? 'spin' : undefined"
+          />
+          Save
+        </button>
+      }
       <span
         class="rounded px-1.5 py-0.5 font-mono font-bold"
         [class]="statusClass(r.status)"
         title="Status"
         >{{ r.status }} {{ r.statusText }}</span
       >
-      <span title="Time">{{ formatDuration(r.durationMs) }}</span>
+      <button
+        type="button"
+        class="hover:text-slate-800"
+        title="Time — show the breakdown"
+        (click)="activeTab.set('timing')"
+      >
+        {{ formatDuration(r.durationMs) }}
+      </button>
       <span title="Body size">{{ formatSize(r.size) }}</span>
     </div>
   }
@@ -136,6 +174,146 @@
               }
             </tbody>
           </table>
+        </div>
+      }
+      @case ('cookies') {
+        <div class="min-h-0 flex-1 overflow-auto px-4 py-2">
+          @if (r.cookies?.length) {
+            <table class="w-full text-left text-xs">
+              <thead class="text-slate-500">
+                <tr>
+                  <th class="py-1 pr-4 font-medium">Name</th>
+                  <th class="py-1 pr-4 font-medium">Value</th>
+                  <th class="py-1 pr-4 font-medium">Domain</th>
+                  <th class="py-1 pr-4 font-medium">Path</th>
+                  <th class="py-1 pr-4 font-medium">Expires</th>
+                  <th class="py-1 font-medium">Flags</th>
+                </tr>
+              </thead>
+              <tbody class="font-mono">
+                @for (cookie of r.cookies; track $index) {
+                  <tr class="border-t border-slate-200 align-top">
+                    <td class="py-1 pr-4 font-semibold whitespace-nowrap text-slate-700">
+                      {{ cookie.name }}
+                    </td>
+                    <td class="py-1 pr-4 break-all text-slate-800 select-text">
+                      {{ cookie.value }}
+                    </td>
+                    <td class="py-1 pr-4 text-slate-600">{{ cookie.domain || '—' }}</td>
+                    <td class="py-1 pr-4 text-slate-600">{{ cookie.path || '—' }}</td>
+                    <td class="py-1 pr-4 font-sans whitespace-nowrap text-slate-600">
+                      {{ formatDate(cookie.expires) }}
+                    </td>
+                    <td class="py-1 font-sans whitespace-nowrap text-slate-500">
+                      {{ cookie.secure ? 'Secure ' : '' }}{{ cookie.httpOnly ? 'HttpOnly ' : ''
+                      }}{{ cookie.sameSite ? 'SameSite=' + cookie.sameSite : '' }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <p class="py-6 text-center text-sm text-slate-400">The response set no cookies.</p>
+          }
+        </div>
+      }
+      @case ('timing') {
+        <div class="min-h-0 flex-1 overflow-auto px-4 py-3 text-xs">
+          @if (phases().length) {
+            <table class="w-full max-w-3xl">
+              <tbody>
+                @for (phase of phases(); track phase.label) {
+                  <tr>
+                    <th
+                      class="w-32 py-1 pr-4 text-left font-medium whitespace-nowrap text-slate-600"
+                    >
+                      {{ phase.label }}
+                    </th>
+                    <td class="py-1">
+                      <div class="relative h-3 rounded bg-slate-200/60">
+                        <div
+                          class="absolute inset-y-0 min-w-0.5 rounded bg-sky-500"
+                          [style.left.%]="phase.offset"
+                          [style.width.%]="phase.width"
+                        ></div>
+                      </div>
+                    </td>
+                    <td
+                      class="w-20 py-1 pl-4 text-right font-mono whitespace-nowrap text-slate-700"
+                    >
+                      {{ formatMs(phase.ms) }}
+                    </td>
+                  </tr>
+                }
+                <tr class="border-t border-slate-200">
+                  <th class="py-1 pr-4 text-left font-semibold text-slate-700">Total</th>
+                  <td></td>
+                  <td class="py-1 pl-4 text-right font-mono font-semibold text-slate-800">
+                    {{ formatDuration(r.durationMs) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            @if (r.timings?.dns === null) {
+              <p class="mt-2 text-slate-400">
+                No new connection was opened, so there is no DNS, connect or TLS time.
+              </p>
+            }
+          } @else {
+            <p class="text-slate-500">Total time: {{ formatDuration(r.durationMs) }}.</p>
+          }
+
+          <h3 class="mt-4 mb-1 font-semibold tracking-wide text-slate-500 uppercase">Redirects</h3>
+          @if (r.redirects?.length) {
+            <ol class="flex flex-col gap-1 font-mono">
+              @for (hop of r.redirects; track $index) {
+                <li class="flex flex-wrap items-center gap-2">
+                  <span
+                    class="rounded px-1.5 py-0.5 font-bold"
+                    [class]="statusClass(hop.status)"
+                    [title]="hop.statusText"
+                    >{{ hop.status }}</span
+                  >
+                  <span class="text-slate-500">{{ hop.method }}</span>
+                  <span class="break-all text-slate-700 select-text">{{ hop.url }}</span>
+                  <fa-icon class="text-slate-400" [icon]="faArrowRight" />
+                  <span class="break-all text-slate-700 select-text">{{ hop.location }}</span>
+                  <span class="font-sans text-slate-400">{{ formatDuration(hop.durationMs) }}</span>
+                </li>
+              }
+            </ol>
+          } @else {
+            <p class="text-slate-400">No redirects were followed.</p>
+          }
+        </div>
+      }
+      @case ('request') {
+        <div class="min-h-0 flex-1 overflow-auto px-4 py-2">
+          @if (r.sent; as sent) {
+            <p class="mb-2 font-mono text-xs break-all select-text">
+              <span class="font-bold text-slate-700">{{ sent.method }}</span>
+              <span class="text-slate-800"> {{ sent.url }}</span>
+            </p>
+            <table class="w-full text-left font-mono text-xs">
+              <tbody>
+                @for (header of sent.headers; track $index) {
+                  <tr class="border-b border-slate-200 align-top">
+                    <th class="py-1 pr-4 font-semibold whitespace-nowrap text-slate-600">
+                      {{ header.key }}
+                    </th>
+                    <td class="py-1 break-all text-slate-800 select-text">{{ header.value }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <p class="mt-2 text-xs text-slate-400">
+              Credentials and secret values are hidden. The body is sent as written in the editor.
+            </p>
+          } @else {
+            <p class="py-6 text-center text-sm text-slate-400">
+              The request as sent is not available.
+            </p>
+          }
         </div>
       }
     }

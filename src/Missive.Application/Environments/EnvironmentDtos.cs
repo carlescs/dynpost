@@ -3,7 +3,8 @@ namespace Missive.Application.Environments;
 /// <param name="Secret">Whether the value is kept on this computer only instead of in the file.</param>
 public sealed record EnvironmentVariableDto(string Name, string Value, bool Secret = false);
 
-public sealed record EnvironmentDto(string Name, IReadOnlyList<EnvironmentVariableDto> Variables);
+/// <param name="CookieJar">Whether requests sent with the environment keep cookies between them.</param>
+public sealed record EnvironmentDto(string Name, IReadOnlyList<EnvironmentVariableDto> Variables, bool CookieJar = false);
 
 /// <summary>An environment as stored: its (possibly new) id and its content.</summary>
 /// <param name="Id">The environment's file name in the <c>environments</c> folder.</param>

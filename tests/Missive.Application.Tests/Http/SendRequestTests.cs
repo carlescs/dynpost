@@ -1,5 +1,6 @@
 using System.Text;
 using Missive.Application.Common;
+using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Http;
 using Missive.Application.Requests;
@@ -9,6 +10,8 @@ using Missive.Domain.Http;
 using NSubstitute;
 
 namespace Missive.Application.Tests.Http;
+
+using Jars = IReadOnlyDictionary<string, IReadOnlyList<StoredCookie>>;
 
 public class SendRequestTests
 {
@@ -21,9 +24,18 @@ public class SendRequestTests
     private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
     private readonly IWorkspaceStateStore _state = Substitute.For<IWorkspaceStateStore>();
     private readonly CurrentWorkspace _current = new();
+    private readonly ICookieJarStore _cookies = Substitute.For<ICookieJarStore>();
+    private readonly ResponseBodies _bodies = new();
+    private static readonly DateTimeOffset Now = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
+
+    private readonly TimeProvider _time = Substitute.For<TimeProvider>();
 
     public SendRequestTests()
     {
+        _time.GetUtcNow().Returns(Now);
+        _cookies.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result<Jars>.Success(new Dictionary<string, IReadOnlyList<StoredCookie>>()));
+        _cookies.SaveAsync(Arg.Any<string>(), Arg.Any<Jars>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
         _state.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(WorkspaceState.Default);
         _secrets.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
@@ -31,7 +43,7 @@ public class SendRequestTests
     }
 
     private SendRequest CreateSendRequest() =>
-        new(_sender, _inFlight, new ActiveEnvironment(_environments, _secrets, _state, _current));
+        new(_sender, _inFlight, new ActiveEnvironment(_environments, _secrets, _state, _current), _bodies, _cookies, _current, _time);
 
     /// <summary>Opens a workspace with <paramref name="environment"/> selected as <c>dev.yaml</c>.</summary>
     private void SelectEnvironment(EnvironmentDefinition environment, Dictionary<string, string>? secrets = null)
@@ -277,5 +289,146 @@ public class SendRequestTests
 
         Assert.Equal(HttpErrors.CancelledCode, result.Error?.Code);
         Assert.False(new CancelRequest(_inFlight).Execute("send-1"));
+    }
+
+    [Fact]
+    public async Task Execute_KeepsTheRawBodyWithASuggestedFileName()
+    {
+        var bytes = new byte[] { 0x25, 0x50, 0x44, 0x46, 0x00, 0xff };
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(new HttpResponseData(
+            200,
+            "OK",
+            [KeyValuePair.Create("Content-Type", "application/pdf"), KeyValuePair.Create("Content-Disposition", "attachment; filename=\"report 2026.pdf\"")],
+            bytes,
+            false,
+            TimeSpan.Zero));
+
+        var response = (await CreateSendRequest().ExecuteAsync("send-7", Request())).Value;
+
+        Assert.Equal("report 2026.pdf", response.FileName);
+        var stored = _bodies.Find("send-7");
+        Assert.NotNull(stored);
+        Assert.Equal(bytes, stored.Content);
+        Assert.Equal("report 2026.pdf", stored.FileName);
+    }
+
+    [Fact]
+    public async Task Execute_SuggestsAFileNameFromTheUrlAndContentType()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}"));
+
+        var response = (await CreateSendRequest().ExecuteAsync("1", Request())).Value;
+
+        Assert.Equal("users.json", response.FileName);
+    }
+
+    [Fact]
+    public async Task Execute_MapsTimingsRedirectsAndTheSentRequestWithSecretsHidden()
+    {
+        SelectEnvironment(
+            new EnvironmentDefinition("Development", [new EnvironmentVariable("token", "", Secret: true)]),
+            new Dictionary<string, string> { ["token"] = "s3cret" });
+        var request = Request() with
+        {
+            Headers = [new KeyValueDto("X-Trace", "token=s3cret")],
+            Auth = new AuthDto("apikey", Key: "X-Api-Key", Value: "literal-key"),
+        };
+        var finalUrl = new Uri("https://api.example.com/v2/users?page=2");
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}") with
+        {
+            Redirects = [new RedirectHop("GET", new Uri("https://api.example.com/users?page=2"), 301, "Moved Permanently", finalUrl, [], TimeSpan.FromMilliseconds(20))],
+            Timings = new ResponseTimings(TimeSpan.FromMilliseconds(1.26), TimeSpan.FromMilliseconds(2), null, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(4)),
+            Sent = new SentRequest("GET", finalUrl, [
+                KeyValuePair.Create("X-Trace", "token=s3cret"),
+                KeyValuePair.Create("X-Api-Key", "literal-key"),
+                KeyValuePair.Create("Authorization", "Bearer s3cret"),
+            ]),
+        });
+
+        var response = (await CreateSendRequest().ExecuteAsync("1", request)).Value;
+
+        Assert.Equal(new TimingsDto(1.3, 2, null, 30, 4), response.Timings);
+        var redirect = Assert.Single(response.Redirects!);
+        Assert.Equal(301, redirect.Status);
+        Assert.Equal(finalUrl.AbsoluteUri, redirect.Location);
+        Assert.Equal(20, redirect.DurationMs);
+        Assert.Equal(finalUrl.AbsoluteUri, response.Sent!.Url);
+        Assert.Equal(
+            [
+                new KeyValueDto("X-Trace", "token=" + SecretMasking.Mask),
+                new KeyValueDto("X-Api-Key", SecretMasking.Mask),
+                new KeyValueDto("Authorization", "Bearer " + SecretMasking.Mask),
+            ],
+            response.Sent.Headers);
+        Assert.Equal("users.json", response.FileName);
+    }
+
+    [Fact]
+    public async Task Execute_ListsTheCookiesSetByTheResponseAndItsRedirects()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(
+            new HttpResponseData(200, "OK", [KeyValuePair.Create("Set-Cookie", "theme=dark; Max-Age=60; SameSite=Lax")], [], false, TimeSpan.Zero)
+            {
+                Redirects = [new RedirectHop("POST", new Uri("https://api.example.com/login"), 302, "Found", new Uri("https://api.example.com/"), [KeyValuePair.Create("Set-Cookie", "session=abc; Path=/; Secure; HttpOnly")], TimeSpan.Zero)],
+            });
+
+        var cookies = (await CreateSendRequest().ExecuteAsync("1", Request())).Value.Cookies!;
+
+        Assert.Equal(
+            [
+                new ResponseCookieDto("session", "abc", null, "/", null, true, true, null),
+                new ResponseCookieDto("theme", "dark", null, null, Now.AddSeconds(60), false, false, "Lax"),
+            ],
+            cookies);
+    }
+
+    [Fact]
+    public async Task Execute_KeepsCookiesInTheWorkspaceTheRequestWasSentFrom()
+    {
+        SelectEnvironment(new EnvironmentDefinition("Development") { CookieJar = true });
+        var fresh = new StoredCookie("session", "new", "api.example.com", "/");
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            _current.Open("/work/other");
+            return Response("") with { Cookies = [fresh] };
+        });
+
+        await CreateSendRequest().ExecuteAsync("1", Request());
+
+        await _cookies.Received(1).SaveAsync(Root, Arg.Any<Jars>(), Arg.Any<CancellationToken>());
+        await _cookies.DidNotReceive().SaveAsync("/work/other", Arg.Any<Jars>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_WithoutACookieJar_SendsNoCookies()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response(""));
+        SelectEnvironment(new EnvironmentDefinition("Development"));
+
+        await CreateSendRequest().ExecuteAsync("1", Request());
+
+        await _sender.Received(1).SendAsync(Arg.Is<OutgoingRequest>(r => r.Cookies == null), Arg.Any<CancellationToken>());
+        await _cookies.DidNotReceiveWithAnyArgs().LoadAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task Execute_WithACookieJar_SendsItsCookiesAndKeepsTheNewOnes()
+    {
+        var old = new StoredCookie("session", "old", "api.example.com", "/");
+        var expired = new StoredCookie("gone", "x", "api.example.com", "/", Now.AddDays(-1));
+        var fresh = new StoredCookie("session", "new", "api.example.com", "/", Now.AddDays(1));
+        SelectEnvironment(new EnvironmentDefinition("Development") { CookieJar = true });
+        _cookies.LoadAsync(Root, Arg.Any<CancellationToken>())
+            .Returns(Result<Jars>.Success(new Dictionary<string, IReadOnlyList<StoredCookie>> { ["dev.yaml"] = [old, expired] }));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("") with { Cookies = [fresh] });
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request());
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(Arg.Is<OutgoingRequest>(r => r.Cookies!.SequenceEqual(new[] { old })), Arg.Any<CancellationToken>());
+        await _cookies.Received(1).SaveAsync(
+            Root,
+            Arg.Is<Jars>(j => j["dev.yaml"].SequenceEqual(new[] { fresh })),
+            Arg.Any<CancellationToken>());
     }
 }

@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Cookies;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
 using Missive.Domain.Workspaces;
@@ -119,6 +120,7 @@ public sealed class SaveEnvironment(
     IEnvironmentStore store,
     ISecretStore secrets,
     IWorkspaceStateStore state,
+    ICookieJarStore cookieJars,
     CurrentWorkspace current)
 {
     public async Task<Result<SavedEnvironmentDto>> ExecuteAsync(string id, EnvironmentDto dto, CancellationToken cancellationToken = default)
@@ -169,6 +171,14 @@ public sealed class SaveEnvironment(
             {
                 await state.SaveAsync(root.Value, selected with { ActiveEnvironment = savedId }, cancellationToken);
             }
+
+            await CookieJars.MoveAsync(cookieJars, root.Value, id, savedId, cancellationToken);
+        }
+
+        if (!environment.Value.CookieJar)
+        {
+            // Turning the jar off forgets its cookies, so turning it on again starts afresh.
+            await CookieJars.RemoveAsync(cookieJars, root.Value, savedId, cancellationToken);
         }
 
         var saved = await EnvironmentFiles.SaveSecretsAsync(secrets, root.Value, stored.Value, savedId, id, environment.Value, cancellationToken);
@@ -199,11 +209,12 @@ public sealed class SaveEnvironment(
     }
 }
 
-/// <summary>Deletes an environment file and the secret values stored for it.</summary>
+/// <summary>Deletes an environment file and the secret values and cookies stored for it.</summary>
 public sealed class DeleteEnvironment(
     IEnvironmentStore store,
     ISecretStore secrets,
     IWorkspaceStateStore state,
+    ICookieJarStore cookieJars,
     CurrentWorkspace current)
 {
     public async Task<Result<Unit>> ExecuteAsync(string id, CancellationToken cancellationToken = default)
@@ -243,6 +254,7 @@ public sealed class DeleteEnvironment(
             await secrets.SaveAsync(root.Value, EnvironmentFiles.Without(stored.Value, id), cancellationToken);
         }
 
+        await CookieJars.RemoveAsync(cookieJars, root.Value, id, cancellationToken);
         return Unit.Value;
     }
 }

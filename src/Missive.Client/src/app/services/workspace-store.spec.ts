@@ -139,7 +139,11 @@ describe('WorkspaceStore', () => {
     respond({ 'request.send': () => response });
     store.newRequest();
     await store.sendActive();
-    expect(store.activeDocument()?.response).toEqual({ kind: 'response', response });
+    expect(store.activeDocument()?.response).toEqual({
+      kind: 'response',
+      response,
+      sendId: 'send-1',
+    });
     expect(store.activeDocument()?.sendId).toBeNull();
 
     respond({ 'request.send': () => Promise.reject(new BridgeError('network', 'Refused')) });
@@ -149,6 +153,25 @@ describe('WorkspaceStore', () => {
       code: 'network',
       message: 'Refused',
     });
+  });
+
+  it('saves the last response body under the id it was sent with', async () => {
+    const response = { status: 200, statusText: 'OK', headers: [], body: '', size: 0 };
+    respond({
+      'request.send': () => response,
+      'response.saveBody': () => ({ path: '/home/me/users.json' }),
+    });
+    store.newRequest();
+    const id = store.activeId()!;
+    expect(await store.saveResponseBody(id)).toBeNull();
+
+    await store.sendActive();
+    expect(await store.saveResponseBody(id)).toBe('/home/me/users.json');
+    expect(send).toHaveBeenLastCalledWith('response.saveBody', { id: 'send-1' });
+
+    respond({ 'response.saveBody': () => Promise.reject(new BridgeError('not_found', 'Gone')) });
+    expect(await store.saveResponseBody(id)).toBeNull();
+    expect(store.error()).toContain('Gone');
   });
 
   it('asks before closing a document with unsaved changes', () => {

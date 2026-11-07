@@ -1,6 +1,6 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
-import { EnvironmentSummaryDto, EnvironmentVariableDto } from '../models/messages';
+import { CookieDto, EnvironmentSummaryDto, EnvironmentVariableDto } from '../models/messages';
 import { VariableLookup } from '../models/variables';
 import { WorkspaceStore } from './workspace-store';
 
@@ -12,6 +12,8 @@ export interface EnvironmentDraft {
   key: string;
   name: string;
   variables: EnvironmentVariableDto[];
+  /** Whether requests sent with it keep cookies between them. */
+  cookieJar: boolean;
   dirty: boolean;
   saving: boolean;
   /** Incremented on every edit, so a save can tell whether the draft changed meanwhile. */
@@ -100,7 +102,15 @@ export class EnvironmentStore {
       const key = this.workspace.newTabKey();
       this.drafts.update((drafts) => [
         ...drafts,
-        { ...environment, id, key, dirty: false, saving: false, revision: 0 },
+        {
+          ...environment,
+          cookieJar: !!environment.cookieJar,
+          id,
+          key,
+          dirty: false,
+          saving: false,
+          revision: 0,
+        },
       ]);
       this.workspace.openTab(key);
     } catch (error) {
@@ -118,6 +128,7 @@ export class EnvironmentStore {
         key,
         name: 'New environment',
         variables: [],
+        cookieJar: false,
         dirty: true,
         saving: false,
         revision: 0,
@@ -126,7 +137,10 @@ export class EnvironmentStore {
     this.workspace.openTab(key);
   }
 
-  update(key: string, patch: Partial<Pick<EnvironmentDraft, 'name' | 'variables'>>): void {
+  update(
+    key: string,
+    patch: Partial<Pick<EnvironmentDraft, 'name' | 'variables' | 'cookieJar'>>,
+  ): void {
     this.patchDraft(key, (d) => ({ ...d, ...patch, dirty: true, revision: d.revision + 1 }));
   }
 
@@ -136,7 +150,11 @@ export class EnvironmentStore {
     if (!draft || draft.saving) return;
     this.patchDraft(key, (d) => ({ ...d, saving: true }));
     try {
-      const environment = { name: draft.name, variables: draft.variables };
+      const environment = {
+        name: draft.name,
+        variables: draft.variables,
+        cookieJar: draft.cookieJar,
+      };
       const saved = draft.id
         ? await this.bridge.send('environment.save', { id: draft.id, environment })
         : await this.bridge.send('environment.create', { environment });
@@ -145,7 +163,12 @@ export class EnvironmentStore {
         const base = { ...d, id: saved.id, saving: false };
         // Keep edits typed while the save was in flight; they still need saving.
         return d.revision === draft.revision
-          ? { ...base, ...saved.environment, dirty: false }
+          ? {
+              ...base,
+              ...saved.environment,
+              cookieJar: !!saved.environment.cookieJar,
+              dirty: false,
+            }
           : base;
       });
       this.workspace.dismissError();
@@ -167,7 +190,11 @@ export class EnvironmentStore {
       this.remove(key);
       return;
     }
-    if (!confirm(`Delete the environment "${draft.name}" and the secret values stored for it?`)) {
+    if (
+      !confirm(
+        `Delete the environment "${draft.name}" and the secret values and cookies stored for it?`,
+      )
+    ) {
       return;
     }
     try {
@@ -176,6 +203,42 @@ export class EnvironmentStore {
       await this.refresh();
     } catch (error) {
       this.report(error);
+    }
+  }
+
+  /** The cookies kept for an environment; `null` when they can't be read (the error is reported). */
+  async cookies(id: string): Promise<CookieDto[] | null> {
+    try {
+      return await this.bridge.send('cookie.list', { environment: id });
+    } catch (error) {
+      this.report(error);
+      return null;
+    }
+  }
+
+  /** Deletes one cookie from an environment's jar; returns the cookies left, or `null` on failure. */
+  async deleteCookie(id: string, cookie: CookieDto): Promise<CookieDto[] | null> {
+    try {
+      return await this.bridge.send('cookie.delete', {
+        environment: id,
+        name: cookie.name,
+        domain: cookie.domain,
+        path: cookie.path,
+      });
+    } catch (error) {
+      this.report(error);
+      return null;
+    }
+  }
+
+  /** Deletes every cookie kept for an environment; returns whether it worked. */
+  async clearCookies(id: string): Promise<boolean> {
+    try {
+      await this.bridge.send('cookie.clear', { environment: id });
+      return true;
+    } catch (error) {
+      this.report(error);
+      return false;
     }
   }
 
@@ -233,7 +296,12 @@ export class EnvironmentStore {
         if (load !== this.loadCount || this.root() !== root) return;
         this.patchDraft(draft.key, (current) =>
           current.id === draft.id && !current.dirty
-            ? { ...current, ...environment, revision: current.revision + 1 }
+            ? {
+                ...current,
+                ...environment,
+                cookieJar: !!environment.cookieJar,
+                revision: current.revision + 1,
+              }
             : current,
         );
       } catch {

@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Folders;
 using Missive.Application.Git;
@@ -85,6 +86,30 @@ internal static class BridgeHandlers
                 (p, ct) => Use<SendRequest>().ExecuteAsync(p.Id, p.Request, ct))
             .Register<CancelRequestPayload, bool>(BridgeMessageTypes.RequestCancel,
                 (p, _) => Task.FromResult(Result<bool>.Success(Use<CancelRequest>().Execute(p.Id))))
+            .Register<SaveResponseBodyPayload, SavedFileDto?>(BridgeMessageTypes.ResponseSaveBody, async (p, ct) =>
+            {
+                var saver = Use<SaveResponseBody>();
+                var fileName = saver.SuggestedFileName(p.Id);
+                if (!fileName.IsSuccess)
+                {
+                    return fileName.Error!;
+                }
+
+                var destination = await dialogs.PickSaveFileAsync($"Save response as {fileName.Value}", SaveFilters(fileName.Value));
+                if (destination is null)
+                {
+                    return Result<SavedFileDto?>.Success(null);
+                }
+
+                var saved = await saver.ExecuteAsync(p.Id, destination, ct);
+                return saved.IsSuccess ? new SavedFileDto(saved.Value) : Result<SavedFileDto?>.Failure(saved.Error!);
+            })
+            .Register<CookieJarPayload, IReadOnlyList<CookieDto>>(BridgeMessageTypes.CookieList,
+                (p, ct) => Use<ListCookies>().ExecuteAsync(p.Environment, ct))
+            .Register<DeleteCookiePayload, IReadOnlyList<CookieDto>>(BridgeMessageTypes.CookieDelete,
+                (p, ct) => Use<DeleteCookie>().ExecuteAsync(p.Environment, p.Name, p.Domain, p.Path, ct))
+            .Register<CookieJarPayload, Unit?>(BridgeMessageTypes.CookieClear,
+                async (p, ct) => NoValue(await Use<ClearCookies>().ExecuteAsync(p.Environment, ct)))
             .Register<CreateFolderPayload, FolderDto>(BridgeMessageTypes.FolderCreate,
                 (p, _) => Task.FromResult(Use<CreateFolder>().Execute(p.Parent, p.Name)))
             .Register<RenameFolderPayload, FolderDto>(BridgeMessageTypes.FolderRename,
@@ -167,6 +192,16 @@ internal static class BridgeHandlers
         new("Collections and API descriptions", ["*.json", "*.har", "*.yaml", "*.yml"]),
         new("All files", ["*"]),
     ];
+
+    /// <summary>The save dialog's file types: the suggested name's extension first, then anything.</summary>
+    private static IReadOnlyList<FileFilter> SaveFilters(string fileName)
+    {
+        var dot = fileName.LastIndexOf('.');
+        var extension = dot > 0 && dot < fileName.Length - 1 ? fileName[(dot + 1)..] : null;
+        return extension is null
+            ? [new FileFilter("All files", ["*"])]
+            : [new FileFilter($"{extension.ToUpperInvariant()} file", [$"*.{extension}"]), new FileFilter("All files", ["*"])];
+    }
 
     private static ConflictResolution? ParseResolution(string? value) =>
         value switch

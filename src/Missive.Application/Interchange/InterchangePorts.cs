@@ -37,4 +37,7 @@ public interface IExternalFiles
 
     /// <summary>Writes (or replaces) a UTF-8 text file.</summary>
     Task<Result<Unit>> WriteTextAsync(string path, string content, CancellationToken cancellationToken = default);
+
+    /// <summary>Writes (or replaces) a file with exactly these bytes.</summary>
+    Task<Result<Unit>> WriteBytesAsync(string path, byte[] content, CancellationToken cancellationToken = default);
 }

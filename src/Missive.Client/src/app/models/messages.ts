@@ -55,6 +55,73 @@ export interface ResponseDto {
   /** Whether the body was too large and was cut off. */
   truncated: boolean;
   durationMs: number;
+  /** The file name suggested when saving the body (from `Content-Disposition`, or the URL and type). */
+  fileName?: string;
+  /** Where the time went, in milliseconds; absent when it wasn't measured. */
+  timings?: TimingsDto | null;
+  /** The redirects followed before this response, in order. */
+  redirects?: RedirectDto[] | null;
+  /** The request as it went on the wire (after redirects), with secrets hidden. */
+  sent?: SentRequestDto | null;
+  /** The cookies set by this response and by the redirects before it. */
+  cookies?: ResponseCookieDto[] | null;
+}
+
+/**
+ * The phases of an exchange in milliseconds, summed over redirect hops. Connection phases are
+ * `null` when no new connection was opened.
+ */
+export interface TimingsDto {
+  dns: number | null;
+  connect: number | null;
+  tls: number | null;
+  /** From sending each request until its response headers arrived (time to first byte). */
+  wait: number;
+  /** Reading the final response's body. */
+  download: number;
+}
+
+export interface RedirectDto {
+  method: string;
+  /** The URL that answered with the redirect. */
+  url: string;
+  status: number;
+  statusText: string;
+  /** Where it redirected to. */
+  location: string;
+  durationMs: number;
+}
+
+export interface SentRequestDto {
+  method: string;
+  url: string;
+  /** In the order sent, including the ones the host adds (User-Agent, Content-Length, Cookie…). */
+  headers: { key: string; value: string }[];
+}
+
+/** A cookie a response set, as written in its `Set-Cookie` header. */
+export interface ResponseCookieDto {
+  name: string;
+  value: string;
+  domain?: string | null;
+  path?: string | null;
+  /** ISO date; `null` for a session cookie. */
+  expires?: string | null;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite?: string | null;
+}
+
+/** A cookie kept in an environment's cookie jar. */
+export interface CookieDto {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  /** ISO date; `null` for a session cookie. */
+  expires?: string | null;
+  secure: boolean;
+  httpOnly: boolean;
 }
 
 export interface EnvironmentVariableDto {
@@ -67,6 +134,8 @@ export interface EnvironmentVariableDto {
 export interface EnvironmentDto {
   name: string;
   variables: EnvironmentVariableDto[];
+  /** Whether requests sent with it keep cookies between them (stored in `.missive/`). */
+  cookieJar?: boolean;
 }
 
 export interface SavedEnvironmentDto {
@@ -346,6 +415,20 @@ export interface BridgeMessages {
   'request.send': { payload: { id: string; request: RequestDto }; result: ResponseDto };
   /** Cancels a request being sent; the result says whether it was still being sent. */
   'request.cancel': { payload: { id: string }; result: boolean };
+  /**
+   * Asks where to save, then writes the body of the response to the send `id` exactly as it was
+   * received; `null` when cancelled.
+   */
+  'response.saveBody': { payload: { id: string }; result: { path: string } | null };
+  /** The cookies kept for an environment (`environment` is its id), without expired ones. */
+  'cookie.list': { payload: { environment: string }; result: CookieDto[] };
+  /** Deletes one cookie from an environment's jar; the result is what is left. */
+  'cookie.delete': {
+    payload: { environment: string; name: string; domain: string; path: string };
+    result: CookieDto[];
+  };
+  /** Deletes every cookie kept for an environment. */
+  'cookie.clear': { payload: { environment: string }; result: null };
   /** Creates a folder inside `parent` (`''` is the workspace root). */
   'folder.create': { payload: { parent: string; name: string }; result: FolderDto };
   /** Renames a folder within its parent; the result is its new path. */

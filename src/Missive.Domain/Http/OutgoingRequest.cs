@@ -11,7 +11,14 @@ public sealed record OutgoingRequest(
     string Method,
     Uri Url,
     IReadOnlyList<KeyValuePair<string, string>> Headers,
-    OutgoingBody? Body);
+    OutgoingBody? Body)
+{
+    /// <summary>
+    /// The cookie jar to send cookies from and to keep the cookies responses set in; <c>null</c>
+    /// when no cookies are kept (only a <c>Cookie</c> header the request sets is sent).
+    /// </summary>
+    public IReadOnlyList<StoredCookie>? Cookies { get; init; }
+}
 
 /// <summary>The body of an <see cref="OutgoingRequest"/>.</summary>
 public abstract record OutgoingBody;

@@ -36,6 +36,15 @@ internal static class YamlNodes
     public static string? OptionalString(YamlMappingNode map, string key) =>
         Optional(map, key) is { } node ? ScalarText(node, key) : null;
 
+    /// <summary>An optional boolean (<c>true</c> or <c>false</c>); a missing one is <paramref name="fallback"/>.</summary>
+    public static bool OptionalBoolean(YamlMappingNode map, string key, bool fallback = false) => OptionalString(map, key) switch
+    {
+        null => fallback,
+        var text when text.Equals("true", StringComparison.OrdinalIgnoreCase) => true,
+        var text when text.Equals("false", StringComparison.OrdinalIgnoreCase) => false,
+        _ => throw new WorkspaceFileFormatException($"'{key}' must be true or false."),
+    };
+
     /// <summary>An optional mapping; a missing or empty one is <c>null</c>.</summary>
     public static YamlMappingNode? OptionalMapping(YamlMappingNode map, string key) => Optional(map, key) switch
     {

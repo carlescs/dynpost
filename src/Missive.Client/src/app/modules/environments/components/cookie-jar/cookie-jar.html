@@ -1,0 +1,73 @@
+<div class="mb-1 flex items-center gap-3">
+  <h3
+    class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase"
+  >
+    <fa-icon [icon]="faCookieBite" /> Cookies
+    <span class="font-normal normal-case">({{ cookies().length }})</span>
+  </h3>
+  <button
+    type="button"
+    class="flex items-center gap-1 text-xs text-sky-700 hover:underline disabled:opacity-50"
+    [disabled]="loading()"
+    (click)="refresh()"
+  >
+    <fa-icon [icon]="faRotate" [animation]="loading() ? 'spin' : undefined" /> Refresh
+  </button>
+  @if (cookies().length) {
+    <button
+      type="button"
+      class="flex items-center gap-1 text-xs text-rose-700 hover:underline"
+      (click)="clear()"
+    >
+      <fa-icon [icon]="faTrash" /> Clear all
+    </button>
+  }
+</div>
+
+@if (cookies().length) {
+  <table class="w-full table-fixed border-collapse text-xs">
+    <thead>
+      <tr class="text-left text-slate-500">
+        <th class="w-1/6 px-2 py-1 font-medium">Name</th>
+        <th class="px-2 py-1 font-medium">Value</th>
+        <th class="w-1/6 px-2 py-1 font-medium">Domain</th>
+        <th class="w-16 px-2 py-1 font-medium">Path</th>
+        <th class="w-40 px-2 py-1 font-medium">Expires</th>
+        <th class="w-28 px-2 py-1 font-medium">Flags</th>
+        <th class="w-8"></th>
+      </tr>
+    </thead>
+    <tbody class="font-mono">
+      @for (cookie of cookies(); track cookie.domain + cookie.path + cookie.name) {
+        <tr class="border-t border-slate-200 align-top">
+          <td class="truncate px-2 py-1 font-semibold text-slate-700" [title]="cookie.name">
+            {{ cookie.name }}
+          </td>
+          <td class="px-2 py-1 break-all text-slate-800 select-text">{{ cookie.value }}</td>
+          <td class="truncate px-2 py-1 text-slate-600" [title]="cookie.domain">
+            {{ cookie.domain }}
+          </td>
+          <td class="truncate px-2 py-1 text-slate-600">{{ cookie.path }}</td>
+          <td class="px-2 py-1 font-sans text-slate-600">{{ formatExpires(cookie.expires) }}</td>
+          <td class="px-2 py-1 font-sans text-slate-500">
+            {{ cookie.secure ? 'Secure ' : '' }}{{ cookie.httpOnly ? 'HttpOnly' : '' }}
+          </td>
+          <td class="text-center">
+            <button
+              type="button"
+              class="text-slate-400 hover:text-rose-600"
+              [attr.aria-label]="'Delete cookie ' + cookie.name"
+              (click)="remove(cookie)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+} @else if (!loading()) {
+  <p class="text-xs text-slate-400">
+    No cookies yet. Cookies that responses set are kept here and sent with later requests.
+  </p>
+}
