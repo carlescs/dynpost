@@ -11,13 +11,14 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentVariableDto } from '../../../../models/messages';
 import { EnvironmentDraft, EnvironmentStore } from '../../../../services/environment-store';
+import { CookieJar } from '../cookie-jar/cookie-jar';
 
 const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
 
-/** Edits an environment open in a tab: its name and variables. */
+/** Edits an environment open in a tab: its name, variables and cookie jar. */
 @Component({
   selector: 'app-environment-editor',
-  imports: [FaIconComponent],
+  imports: [FaIconComponent, CookieJar],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './environment-editor.html',
 })

@@ -2,9 +2,11 @@ import {
   Theme,
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
+  CookieDto,
   ERROR_CODES,
   EnvironmentDto,
   RequestDto,
+  ResponseDto,
   WorkspaceDto,
   WorkspaceNodeDto,
 } from '../models/messages';
@@ -52,6 +54,7 @@ export class MockBackend {
       'dev.yaml',
       {
         name: 'Development',
+        cookieJar: true,
         variables: [
           { name: 'host', value: 'localhost:5000', secret: false },
           { name: 'baseUrl', value: 'http://{{host}}', secret: false },
@@ -75,6 +78,10 @@ export class MockBackend {
   private theme: Theme = 'light';
   /** Sends in progress, by id: calling the function cancels it. */
   private readonly sends = new Map<string, () => void>();
+  /** The file names suggested for recent responses, by send id, for `response.saveBody`. */
+  private readonly bodies = new Map<string, string>();
+  /** Cookie jars by environment id. */
+  private readonly jars = new Map<string, CookieDto[]>();
 
   async handle(request: BridgeRequestEnvelope): Promise<BridgeResponseEnvelope> {
     const ok = (payload: unknown): BridgeResponseEnvelope => ({
@@ -92,6 +99,13 @@ export class MockBackend {
     // Sending works without a workspace, like in the host.
     if (request.type === 'request.send') {
       return this.send(request.id, payload?.['id'] as string, payload?.['request'] as RequestDto);
+    }
+    if (request.type === 'response.saveBody') {
+      // No save dialog in a browser: pretend the user picked a file in their downloads folder.
+      const name = this.bodies.get(payload?.['id'] as string);
+      return name
+        ? ok({ path: `/browser-preview/Downloads/${name}` })
+        : fail(ERROR_CODES.notFound, 'The response is no longer available; send it again.');
     }
     if (request.type === 'request.cancel') {
       const cancel = this.sends.get(payload?.['id'] as string);
@@ -195,12 +209,31 @@ export class MockBackend {
           id = `${slug(env.name)}.yaml`;
           for (let n = 2; this.environments.has(id); n++) id = `${slug(env.name)}-${n}.yaml`;
         }
+        env.cookieJar = !!env.cookieJar;
+        if (!env.cookieJar) this.jars.delete(id);
         this.environments.set(id, env);
         return ok({ id, environment: structuredClone(env) });
       }
+      case 'cookie.list':
+        return ok(structuredClone(this.jars.get(payload?.['environment'] as string) ?? []));
+      case 'cookie.delete': {
+        const id = payload?.['environment'] as string;
+        const left = (this.jars.get(id) ?? []).filter(
+          (c) =>
+            c.name !== payload?.['name'] ||
+            c.domain !== payload?.['domain'] ||
+            c.path !== payload?.['path'],
+        );
+        this.jars.set(id, left);
+        return ok(structuredClone(left));
+      }
+      case 'cookie.clear':
+        this.jars.delete(payload?.['environment'] as string);
+        return ok(null);
       case 'environment.delete': {
         const id = payload?.['id'] as string;
         this.environments.delete(id);
+        this.jars.delete(id);
         if (this.activeEnvironment === id) this.activeEnvironment = null;
         return ok(null);
       }
@@ -397,14 +430,45 @@ export class MockBackend {
     this.sends.delete(id);
     if (cancelled) return fail(ERROR_CODES.cancelled, 'The request was cancelled.');
 
+    const headers = enabled(dto.headers).map((h) => ({ key: h.key, value: h.value }));
+    const env = this.activeEnvironment ? this.environments.get(this.activeEnvironment) : null;
+    const jarId = env?.cookieJar ? this.activeEnvironment : null;
+    const jar = jarId ? (this.jars.get(jarId) ?? []) : [];
+    const sentHeaders = [
+      ...headers.map((h) =>
+        /^authorization$/i.test(h.key) ? { ...h, value: `${h.value.split(' ')[0]} ••••••` } : h,
+      ),
+      { key: 'User-Agent', value: 'Missive' },
+      ...(jar.length
+        ? [{ key: 'Cookie', value: jar.map((c) => `${c.name}=${c.value}`).join('; ') }]
+        : []),
+    ];
     const body = JSON.stringify({
       preview: 'Browser preview: nothing was sent. This is what the host would send.',
       method: dto.method,
       url: url.toString(),
-      headers: Object.fromEntries(enabled(dto.headers).map((h) => [h.key, h.value])),
+      headers: Object.fromEntries(headers.map((h) => [h.key, h.value])),
       auth: dto.auth.type,
       body: dto.body.type === 'none' ? null : dto.body.content,
     });
+    const setCookie = { key: 'Set-Cookie', value: 'preview-session=abc123; Path=/; HttpOnly' };
+    if (jarId && !jar.some((c) => c.name === 'preview-session')) {
+      this.jars.set(jarId, [
+        ...jar,
+        {
+          name: 'preview-session',
+          value: 'abc123',
+          domain: url.hostname,
+          path: '/',
+          secure: false,
+          httpOnly: true,
+        },
+      ]);
+    }
+    const durationMs = Math.round(performance.now() - started);
+    const segment = url.pathname.split('/').filter(Boolean).pop() ?? 'response';
+    const fileName = segment.includes('.') ? segment : `${segment}.json`;
+    this.bodies.set(id, fileName);
     return {
       id: envelopeId,
       ok: true,
@@ -414,14 +478,34 @@ export class MockBackend {
         headers: [
           { key: 'Content-Type', value: 'application/json; charset=utf-8' },
           { key: 'Content-Length', value: String(new TextEncoder().encode(body).length) },
+          setCookie,
         ],
         contentType: 'application/json',
         body,
         bodyEncoding: 'text',
         size: new TextEncoder().encode(body).length,
         truncated: false,
-        durationMs: Math.round(performance.now() - started),
-      },
+        durationMs,
+        fileName,
+        timings: {
+          dns: 2.4,
+          connect: 6.1,
+          tls: url.protocol === 'https:' ? 21.7 : null,
+          wait: Math.max(durationMs - 40, 1),
+          download: 3.2,
+        },
+        redirects: [],
+        sent: { method: dto.method, url: url.toString(), headers: sentHeaders },
+        cookies: [
+          {
+            name: 'preview-session',
+            value: 'abc123',
+            path: '/',
+            secure: false,
+            httpOnly: true,
+          },
+        ],
+      } satisfies ResponseDto,
     };
   }
 

@@ -42,7 +42,13 @@ export interface RequestContent {
 
 /** The outcome of the last send of a request: its response, or why there is none. */
 export type ResponseState =
-  { kind: 'response'; response: ResponseDto } | { kind: 'error'; code: string; message: string };
+  | {
+      kind: 'response';
+      response: ResponseDto;
+      /** The id the request was sent with; the host keeps the raw body under it for saving. */
+      sendId: string;
+    }
+  | { kind: 'error'; code: string; message: string };
 
 /** A request open in the editor. Mirrors one request YAML file in the workspace. */
 export interface RequestDocument extends RequestContent {

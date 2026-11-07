@@ -57,7 +57,9 @@ until you allow it in *System Settings* → *Privacy & Security*.
       (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
 - [x] Sending requests
 - [x] Response viewer: status, time, size, headers and a pretty-printed body,
-      with HTML and PDF previews
+      with HTML and PDF previews; copy or save the body, cookies set, a timing
+      breakdown with redirects, and the request as sent
+- [x] Optional cookie jar per environment (kept out of git)
 - [ ] Collections as folders, with optional folder-level defaults
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token and API key
@@ -87,7 +89,7 @@ my-api/
 │   ├── _folder.yaml        # optional folder-level defaults (headers, auth)
 │   ├── get-user.yaml
 │   └── create-user.yaml
-└── .missive/               # local only, git-ignored: secrets, history, UI state
+└── .missive/               # local only, git-ignored: secrets, cookies, history, UI state
 ```
 
 A request file:
@@ -165,6 +167,7 @@ An environment file (`environments/dev.yaml`):
 
 ```yaml
 name: Development
+cookieJar: true
 variables:
   host: localhost:5000
   baseUrl: http://{{host}}
@@ -172,8 +175,8 @@ secrets:
   - apiToken
 ```
 
-Keys are written in the order `name`, `variables`, `secrets`, and empty
-sections are left out. Variable names can't contain spaces or braces, and a
+Keys are written in the order `name`, `cookieJar`, `variables`, `secrets`, and
+empty sections and defaults (`cookieJar: false`) are left out. Variable names can't contain spaces or braces, and a
 value can use other variables (`{{host}}` above); variables that refer to each
 other in a loop are refused. `secrets` lists only the *names* of secret
 variables: their values stay on each computer, in `.missive/secrets.yaml`, so
@@ -184,6 +187,18 @@ secret values in Missive:
 # .missive/secrets.yaml — local only
 dev.yaml:
   apiToken: s3cr3t
+```
+
+`cookieJar: true` makes requests sent with the environment keep cookies between
+them (see [Sending requests](#sending-requests)); the cookies themselves are
+local too, in `.missive/cookies.json`:
+
+```json
+{
+  "dev.yaml": [
+    { "name": "session", "value": "abc123", "domain": "localhost", "path": "/", "httpOnly": true }
+  ]
+}
 ```
 
 The selected environment is remembered per workspace in `.missive/state.yaml`.
@@ -201,8 +216,17 @@ Pick the environment requests are sent with from the header, or from the
 editor tab, next to the open requests: its name, and a table of variables, each
 of which can be marked **Secret**. New environments are saved as a file named after them
 (`Staging` → `staging.yaml`); renaming one renames its file too, unless the file
-name was chosen by hand, and its secret values and selection follow. Deleting an
-environment also removes its stored secret values.
+name was chosen by hand, and its secret values, cookies and selection follow.
+Deleting an environment also removes its stored secret values and cookies.
+
+**Keep cookies between requests** turns on the environment's cookie jar (off by
+default). Cookies that responses set, including redirects on the way, are then
+kept and sent with later requests using the environment, following the usual
+domain, path, expiry and `Secure` rules, so APIs that log in with a session
+cookie work as in a browser. A `Cookie` header you set yourself is still sent,
+with the jar's cookies added after it. The editor lists the kept cookies, where
+each can be deleted, or all cleared at once; turning the jar off and saving
+forgets them.
 
 In the request editor, `{{variable}}` references are highlighted in the URL and
 body: in violet when the selected environment defines them, in red when it
@@ -223,12 +247,34 @@ rules such as CORS don't apply. When sending:
 - Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
   query parameter; a header you set yourself takes precedence. JSON, text and
   `urlencoded` bodies get a matching `Content-Type` unless you set one.
-- A `User-Agent: Missive` header is added unless you set one. Redirects are
-  followed, compressed responses are decompressed and no cookies are kept
-  between requests. A request times out after 60 seconds.
+- A `User-Agent: Missive` header is added unless you set one. Compressed
+  responses are decompressed. No cookies are kept between requests unless the
+  environment's cookie jar is on. A request times out after 60 seconds.
+- Up to 20 redirects are followed, never from `https` to `http`. A 303, or a
+  301/302 answering a POST, continues as a GET without a body; 307 and 308 keep
+  the method and body. The `Authorization` header is not sent on to the new
+  location.
 
 The response pane shows the status, the time until the whole body was read, the
-body size and the headers. Request and response bodies are shown in the Monaco
+body size and these tabs:
+
+- **Body**, described below. **Copy** copies a text body as shown, and **Save**
+  writes the body to a file exactly as it was received (the bytes, not the
+  decoded text), suggesting a name from `Content-Disposition`, or from the URL
+  and `Content-Type` (`/users` answered with JSON → `users.json`).
+- **Headers**, in the order received.
+- **Cookies**: the cookies the response (and any redirect before it) set, with
+  their domain, path, expiry and flags.
+- **Timing**: where the time went — DNS lookup, TCP connect, TLS handshake,
+  waiting for the first byte, and download — and the redirects followed, each
+  with its status, URL and `Location`. Connection phases are left out when no
+  new connection was needed.
+- **Request**: the request as it went on the wire after redirects: the resolved
+  URL and the final headers, including those Missive adds (`User-Agent`,
+  `Content-Type`, `Content-Length`, `Cookie`). Credentials (`Authorization`,
+  the API key) and the values of secret variables are masked.
+
+Request and response bodies are shown in the Monaco
 editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,
 GraphQL and Markdown, chosen from the body type or the response's
 `Content-Type`); JSON request bodies are also validated as you type. JSON
@@ -236,8 +282,10 @@ responses are pretty-printed (switch to **Raw** for the original text). HTML
 responses are previewed rendered in a sandboxed frame that runs no scripts and
 loads nothing from the network
 (switch to **Source** for the markup), PDFs are rendered with pdf.js (fit to width
-or zoomed, with selectable text), images are previewed, and other binary bodies are not shown. Bodies over 20 MB are cut off. Responses are kept in memory per open
-request only; nothing is written to the workspace.
+or zoomed, with selectable text), images are previewed, and other binary bodies
+are not shown (use **Save** to get them). Bodies over 20 MB are cut off. Responses are kept in memory per open
+request only; nothing is written to the workspace. The bodies of the latest
+responses (up to 64 MB in all) are kept by the backend so they can be saved.
 
 ## Import and export
 
@@ -406,7 +454,7 @@ cases.)
 | --- | --- | --- |
 | `Missive.Domain` | Entities and value objects (`Workspace`, `Collection`, `HttpRequestDefinition`, `Environment`, `Auth`), variable resolution and other pure rules. No I/O, no framework dependencies. | — |
 | `Missive.Application` | Use cases (open workspace, save request, send request, resolve environment, commit/pull/push) and the ports they need, e.g. `IWorkspaceRepository`, `IHttpSender`, `IGitService`, `ISecretStore`, `IHistoryStore`. | Domain |
-| `Missive.Infrastructure` | Adapters implementing the ports: YAML file storage, `HttpClient` sender, git, `.missive/` secrets and history. | Application, Domain |
+| `Missive.Infrastructure` | Adapters implementing the ports: YAML file storage, `HttpClient` sender, git, `.missive/` secrets, cookies and history. | Application, Domain |
 | `Missive.Desktop` | Composition root and presentation adapter: Photino window, bridge message dispatch to use cases, dependency injection wiring. | All of the above |
 
 The Angular client is a separate presentation layer that only talks to

@@ -72,6 +72,13 @@ servers, cloud accounts. See `README.md` for the planned workspace format.
   OpenAPI) is a reader/writer of a JSON tree in `Infrastructure/Interchange`
   (YAML input is converted to the same tree). The host shows the native file
   dialogs (`Desktop/Bridge/IFileDialogs.cs`).
+- Sending: `Infrastructure/Http/HttpClientSender.cs` gives each send its own
+  `SocketsHttpHandler`, whose connect callback and certificate check time the
+  DNS, connect and TLS phases; it follows redirects and keeps cookies itself
+  (the handler's `AllowAutoRedirect` and `UseCookies` stay off) so every hop
+  can be reported. Per-environment cookie jars (`Application/Cookies`) live in
+  `.missive/cookies.json`; raw response bodies are kept in memory by
+  `ResponseBodies` for `SaveResponseBody`.
 - All projects are in `Missive.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual

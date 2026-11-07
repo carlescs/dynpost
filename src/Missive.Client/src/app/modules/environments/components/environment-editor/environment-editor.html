@@ -133,5 +133,26 @@
         </span>
       </p>
     </div>
+
+    <div class="mt-4 border-t border-slate-200 pt-3">
+      <label class="flex items-center gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          [checked]="draft.cookieJar"
+          (change)="store.update(draft.key, { cookieJar: $any($event.target).checked })"
+        />
+        Keep cookies between requests (cookie jar)
+      </label>
+      <p class="mt-1 ml-6 text-xs text-slate-500">
+        Cookies that responses set are sent with later requests using this environment, like a
+        browser does. They stay on this computer, in <code>.missive/cookies.json</code>. Turning
+        this off and saving forgets them.
+      </p>
+      @if (draft.id && draft.cookieJar) {
+        <div class="mt-3 ml-6">
+          <app-cookie-jar [environmentId]="draft.id" />
+        </div>
+      }
+    </div>
   </section>
 }

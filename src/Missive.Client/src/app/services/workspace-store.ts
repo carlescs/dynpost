@@ -289,7 +289,7 @@ export class WorkspaceStore {
         id: sendId,
         request: toRequestDto(doc),
       });
-      response = { kind: 'response', response: result };
+      response = { kind: 'response', response: result, sendId };
     } catch (error) {
       response =
         error instanceof BridgeError
@@ -305,6 +305,22 @@ export class WorkspaceStore {
   async sendActive(): Promise<void> {
     const id = this.activeId();
     if (id) await this.send(id);
+  }
+
+  /**
+   * Asks where to save the body of a document's last response and writes it exactly as received.
+   * Returns the path written, or `null` when cancelled or when it failed (the error is reported).
+   */
+  async saveResponseBody(id: string): Promise<string | null> {
+    const state = this.documents().find((d) => d.id === id)?.response;
+    if (state?.kind !== 'response') return null;
+    try {
+      const saved = await this.bridge.send('response.saveBody', { id: state.sendId });
+      return saved?.path ?? null;
+    } catch (error) {
+      this.report(error);
+      return null;
+    }
   }
 
   /** Cancels the send in progress for a document, if any. */
