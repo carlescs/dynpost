@@ -32,6 +32,9 @@ describe('EnvironmentStore', () => {
           };
         case 'environment.load':
           return structuredClone(files.get(payload.id));
+        case 'environment.save':
+          files.set(payload.id, structuredClone(payload.environment));
+          return { id: payload.id, environment: structuredClone(payload.environment) };
         default:
           throw new Error(`Unexpected message ${type}`);
       }
@@ -61,6 +64,17 @@ describe('EnvironmentStore', () => {
   it('loads the selected environment when a workspace opens', () => {
     expect(store.activeId()).toBe('dev.yaml');
     expect(store.variables().get('baseUrl')?.value).toBe('http://localhost');
+  });
+
+  it('reloads the selected variables after saving the selected environment', async () => {
+    await store.edit('dev.yaml');
+    const key = store.drafts()[0].key;
+    store.update(key, { variables: [{ name: 'baseUrl', value: 'https://saved', secret: false }] });
+
+    await store.save(key);
+
+    expect(store.drafts()[0].dirty).toBe(false);
+    expect(store.variables().get('baseUrl')?.value).toBe('https://saved');
   });
 
   it('reloads the selected variables and clean tabs when the window regains focus', async () => {
