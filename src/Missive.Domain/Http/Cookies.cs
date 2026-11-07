@@ -3,7 +3,11 @@ using System.Globalization;
 namespace Missive.Domain.Http;
 
 /// <summary>A cookie kept in an environment's cookie jar.</summary>
-/// <param name="Domain">The host or domain it is sent to, e.g. <c>api.example.com</c> or <c>.example.com</c>.</param>
+/// <param name="Domain">
+/// Where it is sent: a host without a leading dot (<c>api.example.com</c>) for a host-only cookie,
+/// set without a <c>Domain</c> attribute and sent to that host only; a domain with a leading dot
+/// (<c>.example.com</c>) for a cookie sent to the domain and its subdomains.
+/// </param>
 /// <param name="Path">The path prefix it is sent for, e.g. <c>/</c>.</param>
 /// <param name="Expires">When it expires; <c>null</c> for a session cookie.</param>
 public sealed record StoredCookie(

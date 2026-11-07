@@ -322,12 +322,23 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         {
             try
             {
-                container.Add(new Cookie(cookie.Name, cookie.Value, cookie.Path, cookie.Domain)
+                var restored = new Cookie(cookie.Name, cookie.Value, cookie.Path)
                 {
                     Secure = cookie.Secure,
                     HttpOnly = cookie.HttpOnly,
                     Expires = cookie.Expires?.UtcDateTime ?? DateTime.MinValue,
-                });
+                };
+                if (cookie.Domain.StartsWith('.'))
+                {
+                    // A domain cookie: sent to the domain and its subdomains.
+                    restored.Domain = cookie.Domain;
+                    container.Add(restored);
+                }
+                else
+                {
+                    // A host-only cookie: added for its host, without a Domain, so it stays host-only.
+                    container.Add(new Uri($"https://{cookie.Domain}{cookie.Path}"), restored);
+                }
             }
             catch (CookieException)
             {
@@ -351,6 +362,25 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                 cookie.HttpOnly))
             .ToList();
 
+    /// <summary>
+    /// Writes a <c>Domain</c> attribute with a leading dot. The container then reports domain
+    /// cookies as <c>.example.com</c> and host-only ones (no <c>Domain</c>) as <c>example.com</c>,
+    /// which is how <see cref="StoredCookie.Domain"/> tells them apart; both match the same hosts
+    /// (RFC 6265 ignores the dot).
+    /// </summary>
+    private static string WithDottedDomain(string header) =>
+        string.Join(';', header.Split(';').Select(part =>
+        {
+            var equals = part.IndexOf('=');
+            if (equals < 0 || !part[..equals].Trim().Equals("domain", StringComparison.OrdinalIgnoreCase))
+            {
+                return part;
+            }
+
+            var domain = part[(equals + 1)..].Trim();
+            return domain.Length == 0 || domain.StartsWith('.') ? part : $"{part[..(equals + 1)]}.{domain}";
+        }));
+
     private static void StoreCookies(CookieContainer? jar, Uri url, IEnumerable<KeyValuePair<string, string>> headers)
     {
         if (jar is null)
@@ -367,7 +397,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
 
             try
             {
-                jar.SetCookies(url, value);
+                jar.SetCookies(url, WithDottedDomain(value));
             }
             catch (CookieException)
             {

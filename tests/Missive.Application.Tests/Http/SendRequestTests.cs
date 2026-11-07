@@ -383,6 +383,23 @@ public class SendRequestTests
     }
 
     [Fact]
+    public async Task Execute_KeepsCookiesInTheWorkspaceTheRequestWasSentFrom()
+    {
+        SelectEnvironment(new EnvironmentDefinition("Development") { CookieJar = true });
+        var fresh = new StoredCookie("session", "new", "api.example.com", "/");
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            _current.Open("/work/other");
+            return Response("") with { Cookies = [fresh] };
+        });
+
+        await CreateSendRequest().ExecuteAsync("1", Request());
+
+        await _cookies.Received(1).SaveAsync(Root, Arg.Any<Jars>(), Arg.Any<CancellationToken>());
+        await _cookies.DidNotReceive().SaveAsync("/work/other", Arg.Any<Jars>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Execute_WithoutACookieJar_SendsNoCookies()
     {
         _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response(""));

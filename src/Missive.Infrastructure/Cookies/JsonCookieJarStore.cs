@@ -55,13 +55,13 @@ public sealed class JsonCookieJarStore : ICookieJarStore
 
         try
         {
-            var stored = JsonSerializer.Deserialize<Dictionary<string, List<CookieEntry>?>>(text, JsonOptions) ?? [];
+            var stored = JsonSerializer.Deserialize<Dictionary<string, List<CookieEntry?>?>>(text, JsonOptions) ?? [];
             foreach (var (id, cookies) in stored)
             {
                 jars[id] = (cookies ?? [])
-                    .Where(cookie => !string.IsNullOrEmpty(cookie.Name) && !string.IsNullOrEmpty(cookie.Domain))
+                    .Where(cookie => !string.IsNullOrEmpty(cookie?.Name) && !string.IsNullOrEmpty(cookie.Domain))
                     .Select(cookie => new StoredCookie(
-                        cookie.Name!,
+                        cookie!.Name!,
                         cookie.Value ?? string.Empty,
                         cookie.Domain!,
                         string.IsNullOrEmpty(cookie.Path) ? "/" : cookie.Path,

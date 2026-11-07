@@ -48,6 +48,18 @@ public sealed class JsonCookieJarStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Load_SkipsUnusableEntries()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        File.WriteAllText(FilePath, "{ \"dev.yaml\": [null, { \"name\": \"\" }, { \"name\": \"a\", \"domain\": \"x.test\" }], \"prod.yaml\": null }");
+
+        var loaded = (await _store.LoadAsync(_root)).Value;
+
+        Assert.Equal(new StoredCookie("a", "", "x.test", "/"), Assert.Single(loaded["dev.yaml"]));
+        Assert.Empty(loaded["prod.yaml"]);
+    }
+
+    [Fact]
     public async Task Load_InvalidFile_IsReported()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);

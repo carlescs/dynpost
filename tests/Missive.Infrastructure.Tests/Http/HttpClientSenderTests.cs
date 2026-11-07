@@ -303,6 +303,29 @@ public sealed class HttpClientSenderTests
     }
 
     [Fact]
+    public async Task SendAsync_KeepsHostOnlyCookiesHostOnlyAcrossSaves()
+    {
+        var api = new Uri("https://api.example.com/login");
+        var handler = new SequenceHandler(Ok(setCookie: "host=1; Path=/"), Ok(), Ok(), Ok(setCookie: "dom=2; Domain=api.example.com; Path=/"), Ok(), Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var first = (await sender.SendAsync(new OutgoingRequest("GET", api, [], null) { Cookies = [] })).Value.Cookies!;
+        Assert.Equal("api.example.com", Assert.Single(first).Domain);
+
+        // A later send restores the jar: the host still gets the cookie, a subdomain doesn't.
+        await sender.SendAsync(new OutgoingRequest("GET", api, [], null) { Cookies = first });
+        await sender.SendAsync(new OutgoingRequest("GET", new Uri("https://child.api.example.com/"), [], null) { Cookies = first });
+        Assert.Equal(["host=1"], handler.Received[1].Request.Headers.GetValues("Cookie"));
+        Assert.False(handler.Received[2].Request.Headers.Contains("Cookie"));
+
+        // A cookie with a Domain attribute is stored with a leading dot and reaches subdomains.
+        var both = (await sender.SendAsync(new OutgoingRequest("GET", api, [], null) { Cookies = first })).Value.Cookies!;
+        Assert.Equal(".api.example.com", both.Single(c => c.Name == "dom").Domain);
+        await sender.SendAsync(new OutgoingRequest("GET", new Uri("https://child.api.example.com/"), [], null) { Cookies = both });
+        Assert.Equal(["dom=2"], handler.Received[4].Request.Headers.GetValues("Cookie"));
+    }
+
+    [Fact]
     public async Task SendAsync_WithoutACookieJar_DoesNotKeepCookies()
     {
         var handler = new SequenceHandler(Redirect(HttpStatusCode.Found, "/home", "session=abc"), Ok());

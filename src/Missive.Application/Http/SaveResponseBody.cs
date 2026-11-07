@@ -1,6 +1,5 @@
 using Missive.Application.Common;
 using Missive.Application.Interchange;
-using Missive.Domain.Http;
 
 namespace Missive.Application.Http;
 
@@ -12,8 +11,8 @@ public sealed class SaveResponseBody(ResponseBodies bodies, IExternalFiles files
         bodies.Find(id) is { } body ? body.FileName : NotAvailable();
 
     /// <summary>
-    /// Writes the body to <paramref name="destination"/> and returns the path written. A
-    /// destination without an extension gets the suggested name's extension.
+    /// Writes the body to <paramref name="destination"/>, the path the user chose (the save dialog
+    /// has already asked before replacing it), and returns the path written.
     /// </summary>
     public async Task<Result<string>> ExecuteAsync(string id, string destination, CancellationToken cancellationToken = default)
     {
@@ -25,12 +24,6 @@ public sealed class SaveResponseBody(ResponseBodies bodies, IExternalFiles files
         if (string.IsNullOrWhiteSpace(destination))
         {
             return new Error(ErrorCodes.InvalidPath, "Choose a file to save the response to.");
-        }
-
-        var fileName = destination.Replace('\\', '/').Split('/')[^1];
-        if (ResponseFileName.ExtensionOf(fileName) is null && ResponseFileName.ExtensionOf(body.FileName) is { } extension)
-        {
-            destination += extension;
         }
 
         var written = await files.WriteBytesAsync(destination, body.Content, cancellationToken);

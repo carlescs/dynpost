@@ -111,7 +111,7 @@ public sealed class SendBridgeTests : IDisposable
         byte[] bytes = [0x89, 0x50, 0x4e, 0x47];
         _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(new HttpResponseData(
             200, "OK", [KeyValuePair.Create("Content-Type", "image/png")], bytes, false, TimeSpan.Zero));
-        _dialogs.PickSaveFileAsync(default!, default!).ReturnsForAnyArgs("/home/me/logo");
+        _dialogs.PickSaveFileAsync(default!, default!).ReturnsForAnyArgs("/home/me/logo.png");
         _files.WriteBytesAsync(default!, default!, default).ReturnsForAnyArgs(Unit.Value);
         var sent = await SendAsync("request.send", $$"""{ "id": "s1", "request": {{RequestJson}} }""");
         Assert.Equal("1.png", sent.GetProperty("payload").GetProperty("fileName").GetString());

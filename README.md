@@ -201,6 +201,10 @@ local too, in `.missive/cookies.json`:
 }
 ```
 
+A `domain` with a leading dot (`.example.com`) is a cookie set with a `Domain`
+attribute, sent to that domain and its subdomains; one without (`localhost`
+above) was set without one and is sent to that host only.
+
 The selected environment is remembered per workspace in `.missive/state.yaml`.
 Whenever Missive writes to `.missive/`, it makes sure the workspace's
 `.gitignore` contains `.missive/` (creating the file if needed), and git

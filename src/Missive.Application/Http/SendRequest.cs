@@ -35,6 +35,8 @@ public sealed class SendRequest(
             return definition.Error!;
         }
 
+        // The workspace can change while the request is in flight; cookies belong to the one it was sent from.
+        var root = current.Root;
         var variables = await environment.LoadAsync(cancellationToken);
         if (!variables.IsSuccess)
         {
@@ -49,10 +51,10 @@ public sealed class SendRequest(
         }
 
         var outgoing = prepared.Request!;
-        var jarId = variables.Value.CookieJar && current.Root is not null ? variables.Value.EnvironmentId : null;
+        var jarId = variables.Value.CookieJar && root is not null && current.Root == root ? variables.Value.EnvironmentId : null;
         if (jarId is not null)
         {
-            var jar = await CookieJars.LoadAsync(cookieJars, current.Root!, jarId, time.GetUtcNow(), cancellationToken);
+            var jar = await CookieJars.LoadAsync(cookieJars, root!, jarId, time.GetUtcNow(), cancellationToken);
             if (!jar.IsSuccess)
             {
                 return jar.Error!;
@@ -78,7 +80,7 @@ public sealed class SendRequest(
             if (jarId is not null && response.Value.Cookies is { } cookies)
             {
                 // The response is worth showing even if the jar can't be written.
-                await CookieJars.ReplaceAsync(cookieJars, current.Root!, jarId, CookieJars.Sorted(cookies, time.GetUtcNow()), CancellationToken.None);
+                await CookieJars.ReplaceAsync(cookieJars, root!, jarId, CookieJars.Sorted(cookies, time.GetUtcNow()), CancellationToken.None);
             }
 
             var masking = Masking.For(definition.Value.Auth, variables.Value);

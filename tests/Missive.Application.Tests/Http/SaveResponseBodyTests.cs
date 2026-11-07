@@ -30,13 +30,16 @@ public class SaveResponseBodyTests
     }
 
     [Fact]
-    public async Task Execute_AddsTheSuggestedExtensionWhenTheNameHasNone()
+    public async Task Execute_WritesExactlyThePathChosen()
     {
+        // The dialog asked before replacing this path; changing it (e.g. adding an extension)
+        // could replace another file without asking.
         _bodies.Add("send-1", new StoredBody([1], "report.pdf"));
 
         var result = await new SaveResponseBody(_bodies, _files).ExecuteAsync("send-1", "/home/me/my report");
 
-        Assert.Equal("/home/me/my report.pdf", result.Value);
+        Assert.Equal("/home/me/my report", result.Value);
+        await _files.Received(1).WriteBytesAsync("/home/me/my report", Arg.Any<byte[]>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

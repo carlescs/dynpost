@@ -46,15 +46,14 @@ public sealed class DeleteCookie(ICookieJarStore store, CurrentWorkspace current
             return EnvironmentMapper.InvalidId(environmentId);
         }
 
-        var cookies = await CookieJars.LoadAsync(store, root.Value, environmentId, time.GetUtcNow(), cancellationToken);
-        if (!cookies.IsSuccess)
-        {
-            return cookies.Error!;
-        }
-
-        var remaining = cookies.Value.Where(cookie => !cookie.SameIdentity(name, domain, path)).ToList();
-        var saved = await CookieJars.ReplaceAsync(store, root.Value, environmentId, remaining, cancellationToken);
-        return saved.IsSuccess ? remaining.Select(CookieDto.From).ToList() : saved.Error!;
+        var now = time.GetUtcNow();
+        var remaining = await CookieJars.UpdateAsync(
+            store,
+            root.Value,
+            environmentId,
+            cookies => CookieJars.Sorted(cookies.Where(cookie => !cookie.SameIdentity(name, domain, path)), now),
+            cancellationToken);
+        return remaining.Map<IReadOnlyList<CookieDto>>(list => list.Select(CookieDto.From).ToList());
     }
 }
 
