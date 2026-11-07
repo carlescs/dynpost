@@ -493,7 +493,10 @@ hook runs commitlint (`commitlint.config.mjs`), and CI lints pull request
 commits too. On every push to `main`, `.github/workflows/tag.yml` runs
 [semantic-release](https://semantic-release.gitbook.io) (`.releaserc.json`),
 which picks the next `vMAJOR.MINOR.PATCH` from the commits since the last tag
-(`fix` → patch, `feat` → minor, breaking → major) and pushes the tag.
+(`fix` → patch, `feat` → minor, breaking → major), pushes the tag and starts the
+release build for it. Merge pull requests with a merge commit or by rebasing, not
+by squashing: semantic-release reads every commit, and a squash would fold a
+branch's `fix:` commits into one `feat:` and drop them from the release notes.
 
 Pushing a version tag publishes desktop builds (`.github/workflows/release.yml`).
 semantic-release does this automatically; to do it by hand:
