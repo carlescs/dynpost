@@ -142,6 +142,41 @@ public class FolderUseCaseTests
     }
 
     [Fact]
+    public void Delete_RefusesFoldersWithUnsupportedNames()
+    {
+        GivenFolder(
+            "users",
+            files: ["users/get-user.yaml"],
+            folders: [],
+            unsupported: ["notes:2026.txt", "admin/back\\slash.txt", "drafts:old"]);
+
+        var result = new DeleteFolder(_repository, _current).Execute("users");
+
+        Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
+        Assert.Contains(
+            "users/admin/back\\slash.txt, users/drafts:old, users/notes:2026.txt",
+            result.Error!.Message);
+        _repository.DidNotReceiveWithAnyArgs().DeleteFolder(default!, default!);
+    }
+
+    [Fact]
+    public void Delete_ListsUnsupportedNamesWithOtherBlockingFiles()
+    {
+        GivenFolder(
+            "users",
+            files: ["users/notes.md", "users/run.sh"],
+            folders: [],
+            links: ["users/shared"],
+            unsupported: ["a:b.txt"]);
+
+        var result = new DeleteFolder(_repository, _current).Execute("users");
+
+        Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
+        Assert.Contains("(users/a:b.txt, users/notes.md, users/run.sh and 1 more)", result.Error!.Message);
+        _repository.DidNotReceiveWithAnyArgs().DeleteFolder(default!, default!);
+    }
+
+    [Fact]
     public void Delete_RequiresAnOpenWorkspace()
     {
         var result = new DeleteFolder(_repository, new CurrentWorkspace()).Execute("users");
@@ -149,11 +184,15 @@ public class FolderUseCaseTests
         Assert.Equal(ErrorCodes.NoWorkspace, result.Error?.Code);
     }
 
-    private void GivenFolder(string path, string[] files, string[] folders, string[]? links = null)
+    private void GivenFolder(
+        string path, string[] files, string[] folders, string[]? links = null, string[]? unsupported = null)
     {
         _repository.DirectoryExists(Root, P(path)).Returns(true);
         _repository.ReadFolderContents(Root, P(path)).Returns(new FolderContents(
-            files.Select(P).ToList(), folders.Select(P).ToList(), (links ?? []).Select(P).ToList()));
+            files.Select(P).ToList(),
+            folders.Select(P).ToList(),
+            (links ?? []).Select(P).ToList(),
+            unsupported ?? []));
     }
 
     private static WorkspacePath P(string path) => WorkspacePath.Parse(path);

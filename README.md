@@ -146,7 +146,9 @@ names are kept as typed, but must work on Windows, macOS and Linux (no
 `CON`), and `environments` is reserved at the workspace root. Deleting a folder
 removes the requests in it and only goes ahead when the folder holds nothing
 else — request files, `_folder.yaml`, `.gitkeep` and OS files such as
-`.DS_Store` — so other files you keep there are never deleted. Git doesn't
+`.DS_Store` — so other files you keep there are never deleted. Links, and
+names Missive can't handle as workspace paths (such as `notes:2026.txt` or a
+name with a backslash on Linux and macOS), also block the delete. Git doesn't
 track empty folders, so a new folder appears in commits once it contains a
 request.
 

@@ -183,6 +183,28 @@ public sealed class FileSystemWorkspaceRepositoryTests : IDisposable
         Assert.Equal(linked ? ["users/link"] : [], contents.Links.Select(f => f.Value));
     }
 
+    [Fact]
+    public void ReadFolderContents_ReportsUnsupportedFilesAndFoldersWithoutTheirContents()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Windows doesn't allow ':' or '\\' in file names.
+        }
+
+        Write("users/get.yaml", "name: Get\n");
+        Write("users/admin/notes:2026.txt", "x\n");
+        Write("users/back\\slash.txt", "x\n");
+        Write("users/drafts:old/notes.md", "keep me\n");
+
+        var contents = _repository.ReadFolderContents(_root, WorkspacePath.Parse("users")).Value;
+
+        Assert.Equal(
+            ["admin/notes:2026.txt", "back\\slash.txt", "drafts:old"],
+            contents.Unsupported!.Order(StringComparer.Ordinal));
+        Assert.Equal([WorkspacePath.Parse("users/get.yaml")], contents.Files);
+        Assert.Equal([WorkspacePath.Parse("users/admin")], contents.Folders);
+    }
+
     private void Write(string relativePath, string content)
     {
         var full = Path.Combine(_root, relativePath);
