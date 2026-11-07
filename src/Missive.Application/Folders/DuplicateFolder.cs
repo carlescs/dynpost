@@ -7,13 +7,34 @@ namespace Missive.Application.Folders;
 /// <summary>
 /// Copies a collection folder, with everything in it, next to the original as <c>… copy</c>
 /// (<c>… copy 2</c>, <c>… copy 3</c>, … when that name is taken). Files are copied byte for byte
-/// and only new files are written; symbolic links are never followed or copied.
+/// and only new files are written. Folders holding symbolic links, or names that aren't valid
+/// workspace paths, are refused rather than copied incompletely.
 /// </summary>
 public sealed class DuplicateFolder(IWorkspaceRepository repository, CurrentWorkspace current)
 {
     private const int MaxAttempts = 1000;
+    private const int MaxListed = 3;
+
+    /// <summary>
+    /// Bridge messages are handled concurrently; one duplicate at a time means two copies never
+    /// pick the same destination, so a failed copy only ever rolls back its own folder.
+    /// </summary>
+    private static readonly SemaphoreSlim Gate = new(1, 1);
 
     public Result<FolderDto> Execute(string path)
+    {
+        Gate.Wait();
+        try
+        {
+            return Duplicate(path);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private Result<FolderDto> Duplicate(string path)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)
@@ -30,6 +51,19 @@ public sealed class DuplicateFolder(IWorkspaceRepository repository, CurrentWork
         if (!contents.IsSuccess)
         {
             return contents.Error!;
+        }
+
+        var skipped = contents.Value.Links.Select(l => l.Value)
+            .Concat((contents.Value.Unsupported ?? []).Select(u => $"{folder}/{u}"))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        if (skipped.Count > 0)
+        {
+            var listed = string.Join(", ", skipped.Take(MaxListed));
+            var more = skipped.Count > MaxListed ? $" and {skipped.Count - MaxListed} more" : string.Empty;
+            return new Error(
+                ErrorCodes.InvalidPath,
+                $"'{folder}' contains links or names Missive can't copy ({listed}{more}). Move or rename them first.");
         }
 
         var target = FreeCopyPath(root.Value, folder);

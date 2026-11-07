@@ -60,6 +60,33 @@ public class DuplicateUseCaseTests
     }
 
     [Fact]
+    public async Task DuplicateRequest_ConcurrentCopiesGetTheirOwnFiles()
+    {
+        var path = P("get-user.yaml");
+        var written = new HashSet<WorkspacePath>();
+        _repository.FileExists(Root, Arg.Any<WorkspacePath>()).Returns(call =>
+        {
+            var candidate = call.ArgAt<WorkspacePath>(1);
+            lock (written) return candidate == path || written.Contains(candidate);
+        });
+        _repository.ReadRequestAsync(Root, path, Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1"));
+        _repository.WriteRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                await Task.Delay(20);
+                lock (written) written.Add(call.ArgAt<WorkspacePath>(1));
+                return Result<bool>.Success(true);
+            });
+
+        var results = await Task.WhenAll(
+            new DuplicateRequest(_repository, _current).ExecuteAsync("get-user.yaml"),
+            new DuplicateRequest(_repository, _current).ExecuteAsync("get-user.yaml"));
+
+        Assert.Equal(["get-user-copy-2.yaml", "get-user-copy.yaml"], results.Select(r => r.Value.Path).Order());
+    }
+
+    [Fact]
     public async Task DuplicateRequest_ReportsUnreadableFiles()
     {
         var path = P("broken.yaml");
@@ -91,7 +118,7 @@ public class DuplicateUseCaseTests
         _repository.ReadFolderContents(Root, P("api/users")).Returns(new FolderContents(
             [P("api/users/get-user.yaml"), P("api/users/admin/list.yaml"), P("api/users/notes.md")],
             [P("api/users/admin"), P("api/users/admin/deep")],
-            [P("api/users/link")]));
+            []));
 
         var result = new DuplicateFolder(_repository, _current).Execute("api/users");
 
@@ -107,6 +134,26 @@ public class DuplicateUseCaseTests
         _repository.Received(1).CopyFile(Root, P("api/users/notes.md"), P("api/users copy/notes.md"));
         _repository.Received(3).CopyFile(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>());
         _repository.DidNotReceiveWithAnyArgs().MoveFolder(default!, default!, default!);
+    }
+
+    [Theory]
+    [InlineData("users/link", null)]
+    [InlineData(null, "admin/a:b.txt")]
+    public void DuplicateFolder_RefusesFoldersItCannotCopyCompletely(string? link, string? unsupported)
+    {
+        _repository.DirectoryExists(Root, P("users")).Returns(true);
+        _repository.ReadFolderContents(Root, P("users")).Returns(new FolderContents(
+            [P("users/a.yaml")],
+            [],
+            link is null ? [] : [P(link)],
+            unsupported is null ? [] : [unsupported]));
+
+        var result = new DuplicateFolder(_repository, _current).Execute("users");
+
+        Assert.Equal(ErrorCodes.InvalidPath, result.Error?.Code);
+        Assert.Contains(link ?? "users/" + unsupported, result.Error!.Message);
+        _repository.DidNotReceiveWithAnyArgs().CreateFolder(default!, default!);
+        _repository.DidNotReceiveWithAnyArgs().CopyFile(default!, default!, default!);
     }
 
     [Fact]

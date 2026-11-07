@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faChevronDown,
@@ -35,6 +35,8 @@ export class AppHeader {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly menuOpen = signal(false);
   protected readonly recentOpen = signal(false);
+  /** Always rendered, unlike the panel, so it contains the click that opens the panel. */
+  private readonly recentMenu = viewChild.required<ElementRef<HTMLElement>>('recentMenu');
   /** Recent workspaces other than the open one. */
   protected readonly otherRecent = computed(() =>
     this.store.recent().filter((r) => r.path !== this.store.workspace()?.root),
@@ -63,8 +65,7 @@ export class AppHeader {
   protected onDocumentClick(event: MouseEvent): void {
     const target = event.target as Node;
     if (!this.host.nativeElement.contains(target)) this.menuOpen.set(false);
-    const recent = this.host.nativeElement.querySelector('#recent-panel')?.parentElement;
-    if (!recent?.contains(target)) this.recentOpen.set(false);
+    if (!this.recentMenu().nativeElement.contains(target)) this.recentOpen.set(false);
   }
 
   protected onEscape(): void {

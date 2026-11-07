@@ -154,8 +154,10 @@ Right-click a request or a folder in the explorer to duplicate it. A copied
 request is named `… copy` (`Get user` → `Get user copy`) and saved next to the
 original as `get-user-copy.yaml` (or `get-user-copy-2.yaml` if that is taken).
 A copied folder is named `… copy` (then `… copy 2`, `… copy 3`, …) and holds a
-byte-for-byte copy of everything in the original; symbolic links are not
-copied. Duplicating only writes new files and never changes existing ones.
+byte-for-byte copy of everything in the original. A folder holding symbolic
+links, or names that can't be used on every system (such as `a:b.txt` on
+Linux), is not copied, so a copy is never silently incomplete. Duplicating only
+writes new files and never changes existing ones.
 
 An environment file (`environments/dev.yaml`):
 

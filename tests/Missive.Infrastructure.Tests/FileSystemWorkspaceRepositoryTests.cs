@@ -100,6 +100,24 @@ public sealed class FileSystemWorkspaceRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void FolderContents_ListNamesThatAreNotWorkspacePaths()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Windows doesn't allow ':' or '\\' in file names.
+        }
+
+        Write("users/admin/get.yaml", "name: Get\n");
+        Write("users/admin/notes:2026.txt", "x\n");
+        Write("users/back\\slash.txt", "x\n");
+
+        var contents = _repository.ReadFolderContents(_root, WorkspacePath.Parse("users")).Value;
+
+        Assert.Equal(["admin/notes:2026.txt", "back\\slash.txt"], contents.Unsupported!.Order(StringComparer.Ordinal));
+        Assert.Equal([WorkspacePath.Parse("users/admin/get.yaml")], contents.Files);
+    }
+
+    [Fact]
     public async Task Read_ReportsMissingFiles()
     {
         var result = await _repository.ReadRequestAsync(_root, WorkspacePath.Parse("missing.yaml"));

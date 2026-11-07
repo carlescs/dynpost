@@ -41,12 +41,14 @@ public sealed class GetRecentWorkspaces(IAppSettingsStore settings, IWorkspaceRe
     {
         var recent = (await settings.LoadAsync(cancellationToken)).RecentWorkspaces ?? [];
         var existing = recent.Where(f => !string.IsNullOrWhiteSpace(f) && repository.FolderExists(f)).ToList();
+        var missing = recent.Except(existing).ToHashSet();
 
-        if (existing.Count != recent.Count)
+        if (missing.Count > 0)
         {
+            // Remove only what was found missing: a folder opened meanwhile must stay.
             // Best effort: a list that can't be saved is still worth showing.
             await settings.UpdateAsync(
-                saved => saved with { RecentWorkspaces = [.. (saved.RecentWorkspaces ?? []).Where(existing.Contains)] },
+                saved => saved with { RecentWorkspaces = [.. (saved.RecentWorkspaces ?? []).Where(f => !missing.Contains(f))] },
                 cancellationToken);
         }
 

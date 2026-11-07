@@ -167,6 +167,7 @@ public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
         var files = new List<WorkspacePath>();
         var folders = new List<WorkspacePath>();
         var links = new List<WorkspacePath>();
+        var unsupported = new List<string>();
 
         try
         {
@@ -177,14 +178,16 @@ public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
             return IoError($"Could not read '{path}': {ex.Message}");
         }
 
-        return new FolderContents(files, folders, links);
+        return new FolderContents(files, folders, links, unsupported);
 
         void Collect(WorkspacePath folder)
         {
             foreach (var info in new DirectoryInfo(FullPath(root, folder)).EnumerateFileSystemInfos())
             {
-                if (!WorkspacePath.TryParse(info.Name, out _))
+                if (!WorkspacePath.TryParse(info.Name, out var parsed) || parsed.Value != info.Name)
                 {
+                    var relative = folder.Value[path.Value.Length..].TrimStart('/');
+                    unsupported.Add(relative.Length == 0 ? info.Name : $"{relative}/{info.Name}");
                     continue;
                 }
 
