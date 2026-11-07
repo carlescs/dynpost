@@ -163,6 +163,11 @@
         />
       }
     }
+    @case ('capture') {
+      <ng-container
+        *ngTemplateOutlet="table; context: { $implicit: captureChanges(), label: 'Variable' }"
+      />
+    }
     @case ('docs') {
       @if (!a.description && !b.description) {
         <p class="mt-1 text-sm text-slate-500">This request has no description.</p>

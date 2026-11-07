@@ -128,8 +128,14 @@ describe('GitStore', () => {
     expect(save).toHaveBeenCalledExactlyOnceWith('a.yaml');
   });
 
-  it('loads the branches with the status', async () => {
-    await vi.waitFor(() => expect(store.branches()).toEqual([main]));
+  it('reads the branches when asked, then keeps them current with the status', async () => {
+    expect(store.branches()).toBeNull();
+    await store.loadBranches();
+    expect(store.branches()).toEqual([main]);
+
+    handlers['git.branch.list'] = () => ({ status: status(), branches: [main, feature] });
+    await store.refresh();
+    await vi.waitFor(() => expect(store.branches()).toHaveLength(2));
   });
 
   it('switches branches and reloads the workspace from disk', async () => {

@@ -15,6 +15,14 @@ public class CaptureExpressionTests
     }
 
     [Fact]
+    public void TryParse_ReadsQuotedNamesWithBrackets()
+    {
+        Assert.True(CaptureExpression.TryParse("$['a]b'][\"c.d\"]", out var source, out _));
+
+        Assert.Equal(new JsonCaptureSource([JsonPathStep.Member("a]b"), JsonPathStep.Member("c.d")]), source);
+    }
+
+    [Fact]
     public void TryParse_ReadsHeaders()
     {
         Assert.True(CaptureExpression.TryParse("Header: X-Request-Id", out var source, out _));
@@ -30,6 +38,10 @@ public class CaptureExpressionTests
     [InlineData("$.items[-1]")]
     [InlineData("$.items[0")]
     [InlineData("$[?(@.id)]")]
+    [InlineData("$.items]")]
+    [InlineData("$['open]")]
+    [InlineData("$['a'x]")]
+    [InlineData("$[ 1 ]")]
     [InlineData("header:")]
     [InlineData("header:Two words")]
     public void TryParse_RefusesWhatItDoesNotSupport(string expression)

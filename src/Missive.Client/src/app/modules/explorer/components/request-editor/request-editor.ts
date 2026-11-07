@@ -6,6 +6,7 @@ import {
   input,
   linkedSignal,
   signal,
+  untracked,
 } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { faBan, faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
@@ -62,15 +63,16 @@ export class RequestEditor {
     { id: 'docs', label: 'Docs' },
   ];
 
-  /** Whether the Docs tab shows the Markdown source; by default only an empty description is edited. */
-  private readonly documentId = computed(() => this.document().id);
-  private readonly docsEditing = linkedSignal<string, boolean | null>({
-    source: this.documentId,
-    computation: () => null,
+  /**
+   * Whether the Docs tab shows the Markdown source. Decided per tab (its key never changes, unlike
+   * the id, which a first save or a rename changes): a request opened without a description starts
+   * in Edit, one with a description in Preview, and the user's pick then holds while they type.
+   */
+  private readonly documentKey = computed(() => this.document().key);
+  protected readonly editingDocs = linkedSignal<string, boolean>({
+    source: this.documentKey,
+    computation: () => untracked(() => !this.document().description.trim()),
   });
-  protected readonly editingDocs = computed(
-    () => this.docsEditing() ?? !this.document().description.trim(),
-  );
 
   protected readonly urlPlaceholder = 'https://api.example.com/users or {{baseUrl}}/users';
   protected readonly methods = HTTP_METHODS;
@@ -153,7 +155,7 @@ export class RequestEditor {
   }
 
   protected setEditingDocs(editing: boolean): void {
-    this.docsEditing.set(editing);
+    this.editingDocs.set(editing);
   }
 
   protected count(doc: RequestDocument, tab: RequestTab): number {

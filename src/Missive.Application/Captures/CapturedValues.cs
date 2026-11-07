@@ -9,6 +9,12 @@ public sealed record CapturedValueDto(string Name, string Value);
 /// <summary>Reads and changes the captured values of one environment in <see cref="ICapturedValueStore"/>.</summary>
 public static class CapturedValues
 {
+    /// <summary>
+    /// Every change reads the whole store and writes it back, so changes run one at a time: two
+    /// requests capturing at once must not drop each other's values.
+    /// </summary>
+    private static readonly SemaphoreSlim Writes = new(1, 1);
+
     /// <summary>The captured values of an environment, by name.</summary>
     public static async Task<Result<IReadOnlyDictionary<string, string>>> LoadAsync(
         ICapturedValueStore store,
@@ -28,6 +34,24 @@ public static class CapturedValues
     /// and returns the new values. Nothing is written when they didn't change.
     /// </summary>
     public static async Task<Result<IReadOnlyDictionary<string, string>>> UpdateAsync(
+        ICapturedValueStore store,
+        string root,
+        string environmentId,
+        Func<IReadOnlyDictionary<string, string>, IReadOnlyDictionary<string, string>> change,
+        CancellationToken cancellationToken)
+    {
+        await Writes.WaitAsync(cancellationToken);
+        try
+        {
+            return await ChangeAsync(store, root, environmentId, change, cancellationToken);
+        }
+        finally
+        {
+            Writes.Release();
+        }
+    }
+
+    private static async Task<Result<IReadOnlyDictionary<string, string>>> ChangeAsync(
         ICapturedValueStore store,
         string root,
         string environmentId,
@@ -58,6 +82,19 @@ public static class CapturedValues
     /// <summary>Moves an environment's captured values when it is renamed. Failures only leave local leftovers.</summary>
     public static async Task MoveAsync(ICapturedValueStore store, string root, string from, string to, CancellationToken cancellationToken)
     {
+        await Writes.WaitAsync(cancellationToken);
+        try
+        {
+            await MoveUnlockedAsync(store, root, from, to, cancellationToken);
+        }
+        finally
+        {
+            Writes.Release();
+        }
+    }
+
+    private static async Task MoveUnlockedAsync(ICapturedValueStore store, string root, string from, string to, CancellationToken cancellationToken)
+    {
         var all = await store.LoadAsync(root, cancellationToken);
         if (!all.IsSuccess || !all.Value.TryGetValue(from, out var values))
         {
@@ -74,10 +111,18 @@ public static class CapturedValues
     /// <summary>Forgets an environment's captured values, e.g. when it is deleted.</summary>
     public static async Task RemoveAsync(ICapturedValueStore store, string root, string environmentId, CancellationToken cancellationToken)
     {
-        var all = await store.LoadAsync(root, cancellationToken);
-        if (all.IsSuccess && all.Value.ContainsKey(environmentId))
+        await Writes.WaitAsync(cancellationToken);
+        try
         {
-            await store.SaveAsync(root, EnvironmentFiles.Without(all.Value, environmentId), cancellationToken);
+            var all = await store.LoadAsync(root, cancellationToken);
+            if (all.IsSuccess && all.Value.ContainsKey(environmentId))
+            {
+                await store.SaveAsync(root, EnvironmentFiles.Without(all.Value, environmentId), cancellationToken);
+            }
+        }
+        finally
+        {
+            Writes.Release();
         }
     }
 

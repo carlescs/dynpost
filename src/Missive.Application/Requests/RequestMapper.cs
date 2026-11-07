@@ -88,7 +88,7 @@ public static class RequestMapper
     /// Line endings become LF (files are LF-only), and text that is only whitespace counts as no
     /// description, so an emptied Docs tab leaves the key out of the file.
     /// </summary>
-    private static string NormalizeDescription(string? description)
+    public static string NormalizeDescription(string? description)
     {
         var text = (description ?? string.Empty).ReplaceLineEndings("\n");
         return string.IsNullOrWhiteSpace(text) ? string.Empty : text;
