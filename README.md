@@ -50,8 +50,9 @@ until you allow it in *System Settings* → *Privacy & Security*.
 ## Planned features
 
 - [x] Open a folder as a workspace and browse its requests
-- [x] Create, rename and delete (nested) collection folders, and move requests
-      and folders between them with drag and drop
+- [x] Create, rename, duplicate and delete (nested) collection folders, and move
+      requests and folders between them with drag and drop
+- [x] Duplicate requests, and reopen recently used workspaces
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
 - [x] Sending requests
@@ -148,6 +149,13 @@ else — request files, `_folder.yaml`, `.gitkeep` and OS files such as
 `.DS_Store` — so other files you keep there are never deleted. Git doesn't
 track empty folders, so a new folder appears in commits once it contains a
 request.
+
+Right-click a request or a folder in the explorer to duplicate it. A copied
+request is named `… copy` (`Get user` → `Get user copy`) and saved next to the
+original as `get-user-copy.yaml` (or `get-user-copy-2.yaml` if that is taken).
+A copied folder is named `… copy` (then `… copy 2`, `… copy 3`, …) and holds a
+byte-for-byte copy of everything in the original; symbolic links are not
+copied. Duplicating only writes new files and never changes existing ones.
 
 An environment file (`environments/dev.yaml`):
 
@@ -366,9 +374,11 @@ merge instead (`git merge --abort`) and puts your branch back as it was before
 the pull, after asking you to confirm.
 
 Missive reopens the last workspace at the next launch, if its folder still
-exists. That choice is stored per user, outside any workspace, in
-`settings.json` in the app data folder (`%APPDATA%\Missive` on Windows,
-`~/.config/Missive` on Linux and macOS).
+exists. It also keeps the ten most recently opened workspaces, listed on the
+welcome screen and in the header next to **Open folder**; folders that no longer
+exist are dropped from the list. Both are stored per user, outside any
+workspace, in `settings.json` in the app data folder (`%APPDATA%\Missive` on
+Windows, `~/.config/Missive` on Linux and macOS).
 
 ## Architecture
 

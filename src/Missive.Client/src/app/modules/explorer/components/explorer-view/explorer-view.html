@@ -135,6 +135,15 @@
       <button
         type="button"
         role="menuitem"
+        class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+        (click)="state.duplicateNode(menu.node)"
+      >
+        <fa-icon [icon]="faClone" />
+        Duplicate {{ menu.node.kind === 'folder' ? 'folder' : 'request' }}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
         class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-700 hover:bg-slate-100"
         (click)="state.deleteNode(menu.node)"
       >
@@ -154,5 +163,26 @@
     >
       <fa-icon [icon]="faFolderOpen" /> Open folder
     </button>
+    @if (store.recent().length) {
+      <section aria-labelledby="recent-workspaces" class="flex flex-col gap-1 pt-2">
+        <h3 id="recent-workspaces" class="text-xs font-semibold tracking-wide uppercase">Recent</h3>
+        <ul class="flex flex-col">
+          @for (recent of store.recent(); track recent.path) {
+            <li>
+              <button
+                type="button"
+                class="flex w-full min-w-0 flex-col rounded px-2 py-1 text-left hover:bg-slate-200 disabled:opacity-50"
+                [title]="recent.path"
+                [disabled]="store.opening()"
+                (click)="store.openRecent(recent.path)"
+              >
+                <span class="truncate text-slate-700">{{ recent.name }}</span>
+                <span class="truncate text-xs text-slate-400">{{ recent.path }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    }
   </div>
 }

@@ -43,6 +43,9 @@ public interface IWorkspaceRepository
     /// <summary>Renames or moves a file. Fails if the destination already exists.</summary>
     Result<Unit> MoveFile(string root, WorkspacePath from, WorkspacePath to);
 
+    /// <summary>Copies a file byte for byte. Fails if the destination already exists.</summary>
+    Result<Unit> CopyFile(string root, WorkspacePath from, WorkspacePath to);
+
     /// <summary>Deletes a file.</summary>
     Result<Unit> DeleteFile(string root, WorkspacePath path);
 

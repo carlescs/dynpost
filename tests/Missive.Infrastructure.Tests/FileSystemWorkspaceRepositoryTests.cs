@@ -87,6 +87,19 @@ public sealed class FileSystemWorkspaceRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Copy_CopiesBytesAndRefusesToOverwrite()
+    {
+        Write("a.yaml", "name: A # hand-written\n");
+        Write("b.yaml", "name: B\n");
+
+        Assert.False(_repository.CopyFile(_root, WorkspacePath.Parse("a.yaml"), WorkspacePath.Parse("b.yaml")).IsSuccess);
+        Assert.True(_repository.CopyFile(_root, WorkspacePath.Parse("a.yaml"), WorkspacePath.Parse("c.yaml")).IsSuccess);
+        Assert.Equal("name: A # hand-written\n", await File.ReadAllTextAsync(Path.Combine(_root, "a.yaml")));
+        Assert.Equal("name: A # hand-written\n", await File.ReadAllTextAsync(Path.Combine(_root, "c.yaml")));
+        Assert.Equal("name: B\n", await File.ReadAllTextAsync(Path.Combine(_root, "b.yaml")));
+    }
+
+    [Fact]
     public async Task Read_ReportsMissingFiles()
     {
         var result = await _repository.ReadRequestAsync(_root, WorkspacePath.Parse("missing.yaml"));

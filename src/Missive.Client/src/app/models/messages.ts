@@ -287,6 +287,14 @@ export interface AppSettingsDto {
   theme: Theme;
 }
 
+/** A workspace folder opened recently. */
+export interface RecentWorkspaceDto {
+  /** The folder's name. */
+  name: string;
+  /** The folder's full path, passed to `workspace.open`. */
+  path: string;
+}
+
 /** Every message type with its payload and result. */
 export interface BridgeMessages {
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
@@ -298,6 +306,11 @@ export interface BridgeMessages {
   'workspace.open': { payload: { path: string }; result: WorkspaceDto };
   /** Reopens the workspace from the previous session; `null` when there is none. */
   'workspace.openLast': { payload: void; result: WorkspaceDto | null };
+  /**
+   * The workspace folders opened recently, the most recent first. Folders that no longer exist are
+   * dropped from the list.
+   */
+  'workspace.recent': { payload: void; result: RecentWorkspaceDto[] };
   /** Re-reads the open workspace from disk. */
   'workspace.tree': { payload: void; result: WorkspaceDto };
   /** The formats `workspace.export` can write. */
@@ -320,6 +333,8 @@ export interface BridgeMessages {
   'request.create': { payload: { folder: string; request: RequestDto }; result: SavedRequestDto };
   /** Saves an existing request file; the result path differs if the file was renamed. */
   'request.save': { payload: { path: string; request: RequestDto }; result: SavedRequestDto };
+  /** Copies a request next to it as "… copy", in a new file named after the copy. */
+  'request.duplicate': { payload: { path: string }; result: SavedRequestDto };
   /** Moves a request file into `folder` (`''` is the root), keeping its file name. */
   'request.move': { payload: { path: string; folder: string }; result: { path: string } };
   /** Deletes a request file. */
@@ -337,6 +352,8 @@ export interface BridgeMessages {
   'folder.rename': { payload: { path: string; name: string }; result: FolderDto };
   /** Moves a folder into `parent` (`''` is the root), keeping its name. */
   'folder.move': { payload: { path: string; parent: string }; result: FolderDto };
+  /** Copies a folder with everything in it next to it as "… copy" ("… copy 2", … if taken). */
+  'folder.duplicate': { payload: { path: string }; result: FolderDto };
   /** Deletes a folder with its requests; refused if it holds other files. */
   'folder.delete': { payload: { path: string }; result: null };
   /** The workspace's environments and the selected one. */

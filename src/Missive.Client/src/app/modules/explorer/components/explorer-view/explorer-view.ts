@@ -3,6 +3,7 @@ import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faArrowsRotate,
+  faClone,
   faFileExport,
   faFileImport,
   faFolderOpen,
@@ -34,6 +35,7 @@ export class ExplorerView {
   protected readonly selectedFormat = signal('postman');
   protected readonly includeEnvironments = signal(true);
   protected readonly faPlus = faPlus;
+  protected readonly faClone = faClone;
   protected readonly faFileExport = faFileExport;
   protected readonly faFileImport = faFileImport;
   protected readonly faFolderOpen = faFolderOpen;

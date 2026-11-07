@@ -87,6 +87,19 @@ public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
         }
     }
 
+    public Result<Unit> CopyFile(string root, WorkspacePath from, WorkspacePath to)
+    {
+        try
+        {
+            File.Copy(FullPath(root, from), FullPath(root, to), overwrite: false);
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return IoError($"Could not copy '{from}' to '{to}': {ex.Message}");
+        }
+    }
+
     public Result<Unit> DeleteFile(string root, WorkspacePath path)
     {
         try
