@@ -223,6 +223,13 @@ of which can be marked **Secret**. New environments are saved as a file named af
 name was chosen by hand, and its secret values, cookies and selection follow.
 Deleting an environment also removes its stored secret values and cookies.
 
+Environments are re-read from disk whenever they can have changed: after saving
+one, after git operations in the app, and when the Missive window regains focus,
+so edits made in another editor or by git in a terminal take effect without
+reopening the workspace. Open environment tabs without unsaved edits show the
+new contents; tabs with unsaved edits are left as they are. **Reload from disk**
+in the Environments view does the same on demand.
+
 **Keep cookies between requests** turns on the environment's cookie jar (off by
 default). Cookies that responses set, including redirects on the way, are then
 kept and sent with later requests using the environment, following the usual

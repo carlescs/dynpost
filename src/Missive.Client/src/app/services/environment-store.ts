@@ -48,6 +48,13 @@ export class EnvironmentStore {
   private loadCount = 0;
 
   constructor() {
+    // Environment files may have been edited in another tool (an editor, or git in a terminal)
+    // while the window was in the background: re-read them when the user comes back, so the
+    // variables requests are sent with, and the clean tabs showing them, match the files.
+    window.addEventListener('focus', () => {
+      if (this.root()) void this.refresh(undefined, { quiet: true });
+    });
+
     effect(() => {
       const root = this.root();
       untracked(() => {
@@ -61,8 +68,12 @@ export class EnvironmentStore {
     });
   }
 
-  /** Re-reads the list, selected variables, and clean open drafts from disk. */
-  async refresh(paths?: string[]): Promise<void> {
+  /**
+   * Re-reads the list, selected variables, and clean open drafts from disk. With `quiet`, a
+   * failure isn't reported (used when the window regains focus, so errors don't pop up again
+   * every time the user switches back).
+   */
+  async refresh(paths?: string[], { quiet = false }: { quiet?: boolean } = {}): Promise<void> {
     const root = this.root();
     if (!root) return;
     const load = ++this.loadCount;
@@ -74,7 +85,7 @@ export class EnvironmentStore {
       await this.reloadDrafts(list.environments, paths, load, root);
       await this.loadVariables(load);
     } catch (error) {
-      this.report(error);
+      if (!quiet) this.report(error);
     }
   }
 
