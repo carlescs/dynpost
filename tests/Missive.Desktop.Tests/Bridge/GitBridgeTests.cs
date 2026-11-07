@@ -483,16 +483,17 @@ public sealed class GitBridgeTests : IDisposable
             new GitBranch("main", null, true, null, "a1", null, "Init"),
             new GitBranch("feature", null, false, null, "b2", null, "Work"),
         ]));
-        _git.MergeBranchAsync(Folder, "feature", Arg.Any<CancellationToken>())
-            .Returns(Result<MergeOutcome>.Success(MergeOutcome.Conflicted));
+        _git.MergeBranchAsync(Folder, Arg.Is<GitBranch>(b => b.Name == "feature"), Arg.Any<CancellationToken>())
+            .Returns(Result<BranchMergeResult>.Success(new BranchMergeResult(MergeOutcome.Conflicted, ["docs/notes.md"])));
 
-        var response = await SendAsync("git.branch.merge", """{ "name": "feature" }""");
+        var response = await SendAsync("git.branch.merge", """{ "name": "feature", "remote": false }""");
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         var payload = response.GetProperty("payload");
         Assert.Equal("conflicted", payload.GetProperty("outcome").GetString());
         Assert.Equal("main", payload.GetProperty("status").GetProperty("branch").GetString());
         Assert.Equal(2, payload.GetProperty("branches").GetArrayLength());
+        Assert.Equal("docs/notes.md", payload.GetProperty("conflictsOutsideWorkspace")[0].GetString());
     }
 
     private async Task<JsonElement> SendAsync(string type, string? payload = null)

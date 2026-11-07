@@ -477,7 +477,8 @@ export class GitStore {
    * open tabs from disk. Conflicts are left for the user to resolve, as after a pull. Resolves to
    * whether the merge ran (including when it stopped on conflicts).
    */
-  async mergeBranch(name: string): Promise<boolean> {
+  async mergeBranch(branch: GitBranch): Promise<boolean> {
+    const name = branch.name;
     const into = this.status()?.branch;
     const question = `Merge ${name} into ${into ?? 'the current branch'}?`;
     const consequence =
@@ -485,11 +486,18 @@ export class GitStore {
     if (!this.confirmUnsavedTabs(question, consequence)) return false;
     const ok = await this.run(
       'branch',
-      () => this.bridge.send('git.branch.merge', { name }),
+      () => this.bridge.send('git.branch.merge', { name, remote: !!branch.remote }),
       (result) => {
         this.status.set(result.status);
         this.branches.set(result.branches);
-        this.notice.set(mergeNotice(result.outcome, name, result.status.branch ?? into));
+        this.notice.set(
+          mergeNotice(
+            result.outcome,
+            name,
+            result.status.branch ?? into,
+            result.conflictsOutsideWorkspace ?? [],
+          ),
+        );
         // A merge can add, change or remove request and environment files.
         void this.workspace.refresh();
         void this.workspace.reloadFromDisk();
@@ -618,6 +626,7 @@ function mergeNotice(
   outcome: MergeOutcome,
   name: string,
   into: string | null | undefined,
+  outside: string[],
 ): GitNotice {
   const target = into ?? 'the current branch';
   switch (outcome) {
@@ -628,7 +637,12 @@ function mergeNotice(
     case 'conflicted':
       return {
         kind: 'warning',
-        text: `Merging ${name} stopped on conflicts. Open each conflicted file below to resolve it.`,
+        text:
+          `Merging ${name} stopped on conflicts. Open each conflicted file below to resolve it.` +
+          (outside.length
+            ? ` These conflicted files are outside the workspace folder; resolve them with your ` +
+              `own git tools (or abort the merge): ${outside.join(', ')}.`
+            : ''),
       };
   }
 }

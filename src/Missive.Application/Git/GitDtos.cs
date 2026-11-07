@@ -206,7 +206,12 @@ public sealed record GitBranchesDto(GitStatusDto Status, IReadOnlyList<GitBranch
 }
 
 /// <param name="Outcome"><c>upToDate</c>, <c>merged</c> or <c>conflicted</c>.</param>
-public sealed record GitMergeDto(string Outcome, GitStatusDto Status, IReadOnlyList<GitBranchDto> Branches)
+/// <param name="ConflictsOutsideWorkspace">Conflicted files outside the workspace folder, relative to the repository root.</param>
+public sealed record GitMergeDto(
+    string Outcome,
+    GitStatusDto Status,
+    IReadOnlyList<GitBranchDto> Branches,
+    IReadOnlyList<string> ConflictsOutsideWorkspace)
 {
     public static GitMergeDto From(MergeBranchResult result)
     {
@@ -219,7 +224,8 @@ public sealed record GitMergeDto(string Outcome, GitStatusDto Status, IReadOnlyL
                 _ => "conflicted",
             },
             branches.Status,
-            branches.Branches);
+            branches.Branches,
+            result.ConflictsOutsideWorkspace);
     }
 }
 

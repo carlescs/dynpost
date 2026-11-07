@@ -153,8 +153,11 @@ describe('GitBranches', () => {
     await fixture.whenStable();
 
     expect(confirm.mock.calls[0][0]).toBe("Merge 'old' into the current branch 'main'?");
-    expect(git.mergeBranch).toHaveBeenNthCalledWith(1, 'old');
-    expect(git.mergeBranch).toHaveBeenNthCalledWith(2, 'origin/topic');
+    expect(git.mergeBranch).toHaveBeenNthCalledWith(1, expect.objectContaining({ name: 'old' }));
+    expect(git.mergeBranch).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ name: 'origin/topic', remote: 'origin' }),
+    );
   });
 
   it('does not merge when the confirmation is declined', async () => {

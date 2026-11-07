@@ -564,8 +564,10 @@ export interface BridgeMessages {
   'git.branch.delete': { payload: { name: string; force: boolean }; result: GitBranches };
   /** Merges a local or remote-tracking branch into the current one; never rebases. */
   'git.branch.merge': {
-    payload: { name: string };
-    result: GitBranches & { outcome: MergeOutcome };
+    /** `remote`: whether `name` is a remote-tracking branch (a local branch can share its name). */
+    payload: { name: string; remote: boolean };
+    /** `conflictsOutsideWorkspace`: conflicted files outside the workspace folder (repository paths). */
+    result: GitBranches & { outcome: MergeOutcome; conflictsOutsideWorkspace: string[] };
   };
   /** The repository's remotes, sorted by name. */
   'git.remote.list': { payload: void; result: GitRemote[] };

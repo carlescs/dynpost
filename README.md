@@ -498,10 +498,12 @@ configuration, hooks and credential helpers apply as usual. In detail:
     with git's usual message such as `Merge branch 'feature'`). It
     fast-forwards when it can, unless your git configuration says otherwise,
     and never rebases or squashes. It is refused while there are uncommitted
-    changes — so aborting the merge always puts your branch back exactly — or
-    a merge is in progress. If it conflicts, the conflicted files are listed
-    and resolved as after a pull (see below). Merging a remote branch uses its
-    commits as of the last fetch.
+    changes — in the workspace, or to tracked files anywhere in the
+    repository, so aborting the merge always puts your branch back exactly —
+    or a merge is in progress. If it conflicts, the conflicted files are listed
+    and resolved as after a pull (see below); conflicted files outside the
+    workspace folder are named, to resolve with your own git tools. Merging a
+    remote branch uses its commits as of the last fetch.
   - **Delete** removes a local branch after a confirmation; the current branch
     can't be deleted. If the branch has commits that aren't merged into its
     upstream or the current branch, git keeps it and Missive asks a second

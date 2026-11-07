@@ -110,7 +110,7 @@ export class GitBranches {
   protected async merge(branch: GitBranch): Promise<void> {
     const into = this.git.status()?.branch;
     if (!confirm(`Merge '${branch.name}' into the current branch '${into}'?`)) return;
-    await this.track(branch.name, () => this.git.mergeBranch(branch.name));
+    await this.track(branch.name, () => this.git.mergeBranch(branch));
   }
 
   protected async remove(branch: GitBranch): Promise<void> {
