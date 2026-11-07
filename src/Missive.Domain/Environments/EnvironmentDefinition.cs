@@ -22,6 +22,12 @@ public sealed record EnvironmentDefinition
     public IReadOnlyList<EnvironmentVariable> Variables { get; init; }
 
     /// <summary>
+    /// Whether requests sent with this environment keep cookies between them. The cookies stay on
+    /// this computer; only this switch is part of the file. Off by default.
+    /// </summary>
+    public bool CookieJar { get; init; }
+
+    /// <summary>
     /// Checks the rules an environment must satisfy before it can be saved. Returns an empty list
     /// when the environment is valid.
     /// </summary>

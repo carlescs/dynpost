@@ -1,16 +1,28 @@
 using Missive.Application.Common;
+using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Requests;
+using Missive.Application.Workspaces;
 using Missive.Domain.Http;
+using Missive.Domain.Requests;
 
 namespace Missive.Application.Http;
 
 /// <summary>
 /// Sends the request currently in the editor (saved or not) and returns the response. The request
 /// can be cancelled with <see cref="CancelRequest"/> using the same id. <c>{{variable}}</c>
-/// references are resolved with the selected environment.
+/// references are resolved with the selected environment. When that environment has a cookie
+/// jar, its cookies are sent and the cookies responses set are kept in it. The raw body is kept in
+/// <see cref="ResponseBodies"/> under the same id, for <see cref="SaveResponseBody"/>.
 /// </summary>
-public sealed class SendRequest(IHttpSender sender, InFlightRequests inFlight, ActiveEnvironment environment)
+public sealed class SendRequest(
+    IHttpSender sender,
+    InFlightRequests inFlight,
+    ActiveEnvironment environment,
+    ResponseBodies bodies,
+    ICookieJarStore cookieJars,
+    CurrentWorkspace current,
+    TimeProvider time)
 {
     /// <param name="id">An id chosen by the caller, used to cancel the request.</param>
     public async Task<Result<ResponseDto>> ExecuteAsync(string id, RequestDto request, CancellationToken cancellationToken = default)
@@ -36,6 +48,19 @@ public sealed class SendRequest(IHttpSender sender, InFlightRequests inFlight, A
             return new Error(ErrorCodes.InvalidRequest, string.Join(" ", hint is null ? prepared.Errors : [.. prepared.Errors, hint]));
         }
 
+        var outgoing = prepared.Request!;
+        var jarId = variables.Value.CookieJar && current.Root is not null ? variables.Value.EnvironmentId : null;
+        if (jarId is not null)
+        {
+            var jar = await CookieJars.LoadAsync(cookieJars, current.Root!, jarId, time.GetUtcNow(), cancellationToken);
+            if (!jar.IsSuccess)
+            {
+                return jar.Error!;
+            }
+
+            outgoing = outgoing with { Cookies = jar.Value };
+        }
+
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (!inFlight.TryStart(id, cancellation))
         {
@@ -44,8 +69,22 @@ public sealed class SendRequest(IHttpSender sender, InFlightRequests inFlight, A
 
         try
         {
-            var response = await sender.SendAsync(prepared.Request!, cancellation.Token);
-            return response.Map(ToDto);
+            var response = await sender.SendAsync(outgoing, cancellation.Token);
+            if (!response.IsSuccess)
+            {
+                return response.Error!;
+            }
+
+            if (jarId is not null && response.Value.Cookies is { } cookies)
+            {
+                // The response is worth showing even if the jar can't be written.
+                await CookieJars.ReplaceAsync(cookieJars, current.Root!, jarId, CookieJars.Sorted(cookies, time.GetUtcNow()), CancellationToken.None);
+            }
+
+            var masking = Masking.For(definition.Value.Auth, variables.Value);
+            var dto = ToDto(response.Value, outgoing.Url, masking, time.GetUtcNow());
+            bodies.Add(id, new StoredBody(response.Value.Body, dto.FileName));
+            return dto;
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
@@ -76,13 +115,29 @@ public sealed class SendRequest(IHttpSender sender, InFlightRequests inFlight, A
             : $"Add them to the environment '{variables.EnvironmentName}'.";
     }
 
-    private static ResponseDto ToDto(HttpResponseData response)
+    private static ResponseDto ToDto(HttpResponseData response, Uri requestUrl, Masking masking, DateTimeOffset now)
     {
-        var contentType = response.Headers
-            .FirstOrDefault(header => string.Equals(header.Key, "Content-Type", StringComparison.OrdinalIgnoreCase))
-            .Value;
+        var contentType = Header(response.Headers, "Content-Type");
         var (mediaType, charset) = ResponseBodyDecoder.ParseContentType(contentType);
         var (body, encoding) = ResponseBodyDecoder.Decode(response.Body, mediaType, charset);
+        var finalUrl = response.Sent?.Url ?? response.Redirects.LastOrDefault()?.Location ?? requestUrl;
+
+        var setCookies = response.Redirects
+            .SelectMany(hop => hop.Headers)
+            .Concat(response.Headers)
+            .Where(header => string.Equals(header.Key, "Set-Cookie", StringComparison.OrdinalIgnoreCase))
+            .Select(header => SetCookieHeader.Parse(header.Value))
+            .OfType<ResponseCookie>()
+            .Select(cookie => new ResponseCookieDto(
+                cookie.Name,
+                cookie.Value,
+                cookie.Domain,
+                cookie.Path,
+                cookie.MaxAge is { } maxAge ? now.AddSeconds(Math.Clamp(maxAge, -1_000_000_000L, 1_000_000_000L)) : cookie.Expires,
+                cookie.Secure,
+                cookie.HttpOnly,
+                cookie.SameSite))
+            .ToList();
 
         return new ResponseDto(
             response.StatusCode,
@@ -93,6 +148,53 @@ public sealed class SendRequest(IHttpSender sender, InFlightRequests inFlight, A
             encoding,
             response.Body.LongLength,
             response.Truncated,
-            (long)Math.Round(response.Duration.TotalMilliseconds));
+            (long)Math.Round(response.Duration.TotalMilliseconds),
+            ResponseFileName.Suggest(Header(response.Headers, "Content-Disposition"), finalUrl, mediaType),
+            response.Timings is { } t
+                ? new TimingsDto(Ms(t.Dns), Ms(t.Connect), Ms(t.Tls), Ms(t.Wait)!.Value, Ms(t.Download)!.Value)
+                : null,
+            response.Redirects
+                .Select(hop => new RedirectDto(
+                    hop.Method,
+                    masking.Url(hop.Url),
+                    hop.StatusCode,
+                    hop.ReasonPhrase ?? string.Empty,
+                    masking.Url(hop.Location),
+                    (long)Math.Round(hop.Duration.TotalMilliseconds)))
+                .ToList(),
+            response.Sent is { } sent
+                ? new SentRequestDto(
+                    sent.Method,
+                    masking.Url(sent.Url),
+                    sent.Headers.Select(h => new KeyValueDto(h.Key, masking.Header(h.Key, h.Value))).ToList())
+                : null,
+            setCookies);
+    }
+
+    private static string? Header(IEnumerable<KeyValuePair<string, string>> headers, string name) =>
+        headers.FirstOrDefault(header => string.Equals(header.Key, name, StringComparison.OrdinalIgnoreCase)).Value;
+
+    private static double? Ms(TimeSpan? span) => span is { } value ? Math.Round(value.TotalMilliseconds, 1) : null;
+
+    /// <summary>What to hide in the request shown as sent: secret values and the credentials auth added.</summary>
+    private sealed record Masking(IReadOnlyCollection<string> Secrets, IReadOnlyCollection<string> SensitiveHeaders, IReadOnlyCollection<string> SensitiveParams)
+    {
+        public static Masking For(RequestAuth auth, ActiveVariables variables)
+        {
+            var secrets = variables.SecretValues ?? [];
+            if (auth is not ApiKeyAuth apiKey)
+            {
+                return new Masking(secrets, [], []);
+            }
+
+            var key = VariableTemplate.Resolve(apiKey.Key, variables.Values, new SortedSet<string>(StringComparer.Ordinal)).Trim();
+            return apiKey.In == ApiKeyLocation.Query
+                ? new Masking(secrets, [], [key])
+                : new Masking(secrets, [key], []);
+        }
+
+        public string Url(Uri url) => SecretMasking.MaskUrl(url, SensitiveParams, Secrets);
+
+        public string Header(string name, string value) => SecretMasking.MaskHeader(name, value, SensitiveHeaders, Secrets);
     }
 }

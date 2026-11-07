@@ -170,4 +170,197 @@ public sealed class HttpClientSenderTests
         Assert.Equal(HttpErrors.NetworkErrorCode, result.Error?.Code);
         Assert.Contains($"127.0.0.1:{port}", result.Error!.Message);
     }
+
+    /// <summary>Answers each request in turn with the next response, recording what it received.</summary>
+    private sealed class SequenceHandler(params Func<HttpRequestMessage, HttpResponseMessage>[] responses) : HttpMessageHandler
+    {
+        public List<(HttpRequestMessage Request, string? Body)> Received { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            Received.Add((request, body));
+            return responses[Math.Min(Received.Count - 1, responses.Length - 1)](request);
+        }
+    }
+
+    private static Func<HttpRequestMessage, HttpResponseMessage> Redirect(HttpStatusCode status, string location, string? setCookie = null) => _ =>
+    {
+        var response = new HttpResponseMessage(status);
+        response.Headers.Location = new Uri(location, UriKind.RelativeOrAbsolute);
+        if (setCookie is not null)
+        {
+            response.Headers.Add("Set-Cookie", setCookie);
+        }
+
+        return response;
+    };
+
+    private static Func<HttpRequestMessage, HttpResponseMessage> Ok(string body = "done", string? setCookie = null) => _ =>
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
+        if (setCookie is not null)
+        {
+            response.Headers.Add("Set-Cookie", setCookie);
+        }
+
+        return response;
+    };
+
+    [Fact]
+    public async Task SendAsync_FollowsRedirectsAndReportsEachHop()
+    {
+        var handler = new SequenceHandler(Redirect(HttpStatusCode.Found, "/next"), Redirect(HttpStatusCode.MovedPermanently, "https://other.example.com/final"), Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var result = await sender.SendAsync(Request("POST", [KeyValuePair.Create("Authorization", "Bearer abc"), KeyValuePair.Create("X-Keep", "1")], new TextBody("{}", "application/json")));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        var response = result.Value;
+        Assert.Equal(200, response.StatusCode);
+        Assert.Equal("done", Encoding.UTF8.GetString(response.Body));
+        Assert.Equal(
+            [(302, Url.AbsoluteUri, "https://api.example.com/next"), (301, "https://api.example.com/next", "https://other.example.com/final")],
+            response.Redirects.Select(hop => (hop.StatusCode, hop.Url.AbsoluteUri, hop.Location.AbsoluteUri)));
+        Assert.Equal(["POST", "GET", "GET"], handler.Received.Select(r => r.Request.Method.Method));
+        Assert.Equal("{}", handler.Received[0].Body);
+        Assert.Null(handler.Received[1].Body);
+        Assert.False(handler.Received[1].Request.Headers.Contains("Authorization"));
+        Assert.True(handler.Received[2].Request.Headers.Contains("X-Keep"));
+        Assert.Equal("GET", response.Sent!.Method);
+        Assert.Equal("https://other.example.com/final", response.Sent.Url.AbsoluteUri);
+        Assert.Contains(KeyValuePair.Create("User-Agent", HttpClientSender.DefaultUserAgent), response.Sent.Headers);
+        Assert.Null(response.Timings!.Dns);
+        Assert.Null(response.Cookies);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.TemporaryRedirect)]
+    [InlineData(HttpStatusCode.PermanentRedirect)]
+    public async Task SendAsync_KeepsTheMethodAndBodyFor307And308(HttpStatusCode status)
+    {
+        var handler = new SequenceHandler(Redirect(status, "/again"), Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var response = (await sender.SendAsync(Request("PUT", body: new TextBody("payload", "text/plain")))).Value;
+
+        Assert.Equal(["PUT", "PUT"], handler.Received.Select(r => r.Request.Method.Method));
+        Assert.Equal("payload", handler.Received[1].Body);
+        Assert.Contains(KeyValuePair.Create("Content-Length", "7"), response.Sent!.Headers);
+    }
+
+    [Fact]
+    public async Task SendAsync_DoesNotFollowRedirectsFromHttpsToHttp()
+    {
+        var handler = new SequenceHandler(Redirect(HttpStatusCode.Found, "http://api.example.com/insecure"), Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var response = (await sender.SendAsync(Request())).Value;
+
+        Assert.Equal(302, response.StatusCode);
+        Assert.Empty(response.Redirects);
+        Assert.Single(handler.Received);
+    }
+
+    [Fact]
+    public async Task SendAsync_StopsFollowingRedirectsAfterTheLimit()
+    {
+        var handler = new SequenceHandler(Redirect(HttpStatusCode.Found, "/loop"));
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var response = (await sender.SendAsync(Request())).Value;
+
+        Assert.Equal(302, response.StatusCode);
+        Assert.Equal(HttpClientSender.MaxRedirects, response.Redirects.Count);
+        Assert.Equal(HttpClientSender.MaxRedirects + 1, handler.Received.Count);
+    }
+
+    [Fact]
+    public async Task SendAsync_WithACookieJar_SendsAndKeepsCookiesAcrossRedirects()
+    {
+        var handler = new SequenceHandler(
+            Redirect(HttpStatusCode.Found, "/home", "session=abc; Path=/; HttpOnly"),
+            Ok(setCookie: "theme=dark; Max-Age=3600"));
+        using var sender = new HttpClientSender(new HttpClient(handler));
+        var request = Request(headers: [KeyValuePair.Create("Cookie", "own=1")]) with
+        {
+            Cookies = [new StoredCookie("stored", "old", "api.example.com", "/"), new StoredCookie("elsewhere", "x", "other.test", "/")],
+        };
+
+        var response = (await sender.SendAsync(request)).Value;
+
+        Assert.Equal(["own=1; stored=old"], handler.Received[0].Request.Headers.GetValues("Cookie"));
+        var second = Assert.Single(handler.Received[1].Request.Headers.GetValues("Cookie"));
+        Assert.StartsWith("own=1; ", second);
+        Assert.Contains("session=abc", second);
+        Assert.Contains("stored=old", second);
+        Assert.DoesNotContain("elsewhere", second);
+        Assert.Equal(["elsewhere", "session", "stored", "theme"], response.Cookies!.Select(c => c.Name).Order());
+        var session = response.Cookies!.Single(c => c.Name == "session");
+        Assert.True(session.HttpOnly);
+        Assert.Null(session.Expires);
+        Assert.NotNull(response.Cookies!.Single(c => c.Name == "theme").Expires);
+    }
+
+    [Fact]
+    public async Task SendAsync_WithoutACookieJar_DoesNotKeepCookies()
+    {
+        var handler = new SequenceHandler(Redirect(HttpStatusCode.Found, "/home", "session=abc"), Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var response = (await sender.SendAsync(Request())).Value;
+
+        Assert.False(handler.Received[1].Request.Headers.Contains("Cookie"));
+        Assert.Null(response.Cookies);
+        Assert.Contains(KeyValuePair.Create("Set-Cookie", "session=abc"), response.Redirects[0].Headers);
+    }
+
+    [Fact]
+    public async Task SendAsync_MeasuresConnectionPhasesOverARealConnection()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var serving = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            var buffer = new byte[4096];
+            var received = new StringBuilder();
+            while (!received.ToString().Contains("\r\n\r\n"))
+            {
+                var read = await stream.ReadAsync(buffer);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                received.Append(Encoding.ASCII.GetString(buffer, 0, read));
+            }
+
+            var reply = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello";
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(reply));
+            return received.ToString();
+        });
+
+        try
+        {
+            using var sender = new HttpClientSender();
+            var result = await sender.SendAsync(new OutgoingRequest("GET", new Uri($"http://127.0.0.1:{port}/hi"), [], null));
+
+            Assert.True(result.IsSuccess, result.Error?.Message);
+            Assert.Equal("hello", Encoding.UTF8.GetString(result.Value.Body));
+            var timings = result.Value.Timings!;
+            Assert.NotNull(timings.Dns);
+            Assert.NotNull(timings.Connect);
+            Assert.Null(timings.Tls);
+            Assert.True(timings.Wait >= TimeSpan.Zero);
+            Assert.True(timings.Download >= TimeSpan.Zero);
+            Assert.StartsWith("GET /hi HTTP/1.1", await serving);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
 }

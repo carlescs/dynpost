@@ -35,6 +35,14 @@ internal sealed partial class YamlWriter
         return this;
     }
 
+    /// <summary>Writes <c>key: true</c> or <c>key: false</c> (an unquoted YAML boolean).</summary>
+    public YamlWriter Boolean(string key, bool value)
+    {
+        Indent();
+        _builder.Append(FormatKey(key)).Append(": ").Append(value ? "true" : "false").Append('\n');
+        return this;
+    }
+
     /// <summary>Writes <c>key:</c> and indents what <paramref name="body"/> writes under it.</summary>
     public YamlWriter Mapping(string key, Action<YamlWriter> body)
     {

@@ -1,0 +1,76 @@
+using Missive.Application.Common;
+using Missive.Application.Environments;
+using Missive.Application.Workspaces;
+
+namespace Missive.Application.Cookies;
+
+/// <summary>Lists the cookies kept for an environment.</summary>
+public sealed class ListCookies(ICookieJarStore store, CurrentWorkspace current, TimeProvider time)
+{
+    public async Task<Result<IReadOnlyList<CookieDto>>> ExecuteAsync(string environmentId, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        if (!EnvironmentMapper.IsValidId(environmentId))
+        {
+            return EnvironmentMapper.InvalidId(environmentId);
+        }
+
+        var cookies = await CookieJars.LoadAsync(store, root.Value, environmentId, time.GetUtcNow(), cancellationToken);
+        return cookies.Map<IReadOnlyList<CookieDto>>(list => list.Select(CookieDto.From).ToList());
+    }
+}
+
+/// <summary>Deletes one cookie from an environment's jar and returns what is left.</summary>
+public sealed class DeleteCookie(ICookieJarStore store, CurrentWorkspace current, TimeProvider time)
+{
+    public async Task<Result<IReadOnlyList<CookieDto>>> ExecuteAsync(
+        string environmentId,
+        string name,
+        string domain,
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        if (!EnvironmentMapper.IsValidId(environmentId))
+        {
+            return EnvironmentMapper.InvalidId(environmentId);
+        }
+
+        var cookies = await CookieJars.LoadAsync(store, root.Value, environmentId, time.GetUtcNow(), cancellationToken);
+        if (!cookies.IsSuccess)
+        {
+            return cookies.Error!;
+        }
+
+        var remaining = cookies.Value.Where(cookie => !cookie.SameIdentity(name, domain, path)).ToList();
+        var saved = await CookieJars.ReplaceAsync(store, root.Value, environmentId, remaining, cancellationToken);
+        return saved.IsSuccess ? remaining.Select(CookieDto.From).ToList() : saved.Error!;
+    }
+}
+
+/// <summary>Deletes every cookie kept for an environment.</summary>
+public sealed class ClearCookies(ICookieJarStore store, CurrentWorkspace current)
+{
+    public async Task<Result<Unit>> ExecuteAsync(string environmentId, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        return EnvironmentMapper.IsValidId(environmentId)
+            ? await CookieJars.ReplaceAsync(store, root.Value, environmentId, [], cancellationToken)
+            : EnvironmentMapper.InvalidId(environmentId);
+    }
+}

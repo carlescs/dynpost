@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Folders;
 using Missive.Application.Git;
@@ -10,6 +11,7 @@ using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Desktop.Hosting;
+using Missive.Infrastructure.Cookies;
 using Missive.Infrastructure.Environments;
 using Missive.Infrastructure.Git;
 using Missive.Infrastructure.Http;
@@ -75,10 +77,13 @@ internal static class Program
             .AddSingleton<IEnvironmentStore, FileSystemEnvironmentStore>()
             .AddSingleton<ISecretStore, YamlSecretStore>()
             .AddSingleton<IWorkspaceStateStore, YamlWorkspaceStateStore>()
+            .AddSingleton<ICookieJarStore, JsonCookieJarStore>()
+            .AddSingleton(TimeProvider.System)
             .AddSingleton<IGitService, GitCliService>()
             .AddSingleton<IRequestFileFormat, YamlRequestFileFormat>()
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
+            .AddSingleton<ResponseBodies>()
             .AddSingleton<IExternalFiles, LocalExternalFiles>()
             .AddSingleton<ICollectionImporter, CollectionImporter>()
             .AddSingleton<ICollectionExporter, PostmanCollectionExporter>()
@@ -104,6 +109,10 @@ internal static class Program
             .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
             .AddTransient<CancelRequest>()
+            .AddTransient<SaveResponseBody>()
+            .AddTransient<ListCookies>()
+            .AddTransient<DeleteCookie>()
+            .AddTransient<ClearCookies>()
             .AddTransient<CreateFolder>()
             .AddTransient<RenameFolder>()
             .AddTransient<MoveFolder>()

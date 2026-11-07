@@ -5,12 +5,13 @@ namespace Missive.Infrastructure.Yaml;
 
 /// <summary>
 /// Reads and writes environment files. Keys are always written in the same order (<c>name</c>,
-/// <c>variables</c>, <c>secrets</c>) and empty sections are omitted. Secret variables are listed
+/// <c>cookieJar</c>, <c>variables</c>, <c>secrets</c>) and empty sections and defaults are omitted. Secret variables are listed
 /// by name only: their values are never written to the file.
 /// </summary>
 /// <example>
 /// <code>
 /// name: Development
+/// cookieJar: true
 /// variables:
 ///   baseUrl: http://localhost:5000
 /// secrets:
@@ -22,6 +23,10 @@ public static class EnvironmentYamlSerializer
     public static string Serialize(EnvironmentDefinition environment)
     {
         var writer = new YamlWriter().Scalar("name", environment.Name);
+        if (environment.CookieJar)
+        {
+            writer.Boolean("cookieJar", true);
+        }
 
         var variables = environment.Variables.Where(v => !v.Secret).ToList();
         if (variables.Count > 0)
@@ -70,7 +75,10 @@ public static class EnvironmentYamlSerializer
             variables.Add(new EnvironmentVariable(secret, string.Empty, Secret: true));
         }
 
-        var environment = new EnvironmentDefinition(string.IsNullOrWhiteSpace(name) ? fallbackName : name, variables);
+        var environment = new EnvironmentDefinition(string.IsNullOrWhiteSpace(name) ? fallbackName : name, variables)
+        {
+            CookieJar = OptionalBoolean(root, "cookieJar"),
+        };
         var errors = environment.Validate(checkReferences: false);
         return errors.Count == 0 ? environment : throw new WorkspaceFileFormatException(string.Join(" ", errors));
     }

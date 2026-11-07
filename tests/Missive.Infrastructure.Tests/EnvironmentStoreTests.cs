@@ -53,7 +53,21 @@ public sealed class EnvironmentStoreTests : IDisposable
             parsed.Variables);
     }
 
+    [Fact]
+    public void CookieJar_IsWrittenOnlyWhenOnAndRoundTrips()
+    {
+        var withJar = new EnvironmentDefinition("Dev", [new EnvironmentVariable("a", "1")]) { CookieJar = true };
+
+        var yaml = EnvironmentYamlSerializer.Serialize(withJar);
+
+        Assert.Equal("name: Dev\ncookieJar: true\nvariables:\n  a: \"1\"\n", yaml);
+        Assert.True(EnvironmentYamlSerializer.Deserialize(yaml, "dev").CookieJar);
+        Assert.False(EnvironmentYamlSerializer.Deserialize("name: Dev\n", "dev").CookieJar);
+        Assert.False(EnvironmentYamlSerializer.Deserialize("name: Dev\ncookieJar: false\n", "dev").CookieJar);
+    }
+
     [Theory]
+    [InlineData("cookieJar: maybe", "'cookieJar' must be true or false")]
     [InlineData("variables: [a]", "'variables' must be a mapping")]
     [InlineData("secrets: token", "'secrets' must be a list")]
     [InlineData("variables:\n  a: 1\nsecrets:\n  - a\n", "'a' is listed both")]

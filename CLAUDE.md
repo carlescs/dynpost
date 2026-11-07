@@ -210,3 +210,10 @@ Desktop → Application
   render with `<fa-icon [icon]="...">` via `FaIconComponent` so unused icons
   are tree-shaken; don't import whole icon packs or use the CDN/webfont.
 - Keep changes focused; update `README.md` when user-visible behavior changes.
+
+## Issues and pull requests
+
+- When merging a pull request that closes an issue, document the outcome in the
+  issue itself: add a comment summarizing what was implemented (behavior,
+  user-visible changes, notable design decisions, anything left out or deferred)
+  and link the pull request, so the issue stays a useful record on its own.

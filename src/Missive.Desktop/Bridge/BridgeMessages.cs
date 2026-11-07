@@ -71,6 +71,21 @@ internal static class BridgeMessageTypes
     /// <summary>Cancels a request being sent. Payload: <see cref="CancelRequestPayload"/>. Result: whether it was being sent.</summary>
     public const string RequestCancel = "request.cancel";
 
+    /// <summary>
+    /// Asks where to save, then writes the body of a recent response exactly as received.
+    /// Payload: <see cref="SaveResponseBodyPayload"/>. Result: <see cref="SavedFileDto"/>, or null if cancelled.
+    /// </summary>
+    public const string ResponseSaveBody = "response.saveBody";
+
+    /// <summary>Lists the cookies kept for an environment. Payload: <see cref="CookieJarPayload"/>. Result: cookies.</summary>
+    public const string CookieList = "cookie.list";
+
+    /// <summary>Deletes one cookie from an environment's jar. Payload: <see cref="DeleteCookiePayload"/>. Result: the cookies left.</summary>
+    public const string CookieDelete = "cookie.delete";
+
+    /// <summary>Deletes every cookie kept for an environment. Payload: <see cref="CookieJarPayload"/>. Result: none.</summary>
+    public const string CookieClear = "cookie.clear";
+
     /// <summary>Creates a folder. Payload: <see cref="CreateFolderPayload"/>. Result: folder.</summary>
     public const string FolderCreate = "folder.create";
 
@@ -215,6 +230,16 @@ internal sealed record SaveRequestPayload(string Path, RequestDto Request);
 internal sealed record SendRequestPayload(string Id, RequestDto Request);
 
 internal sealed record CancelRequestPayload(string Id);
+
+/// <param name="Id">The id the response's request was sent with.</param>
+internal sealed record SaveResponseBodyPayload(string Id);
+
+internal sealed record SavedFileDto(string Path);
+
+/// <param name="Environment">The environment's file name in the <c>environments</c> folder.</param>
+internal sealed record CookieJarPayload(string Environment);
+
+internal sealed record DeleteCookiePayload(string Environment, string Name, string Domain, string Path);
 
 /// <param name="Folder">The destination folder; <c>""</c> is the workspace root.</param>
 internal sealed record MoveRequestPayload(string Path, string Folder);

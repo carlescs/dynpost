@@ -11,10 +11,16 @@ namespace Missive.Application.Environments;
 /// Secret variables the environment declares but that have no value on this computer (for
 /// example after cloning the workspace). They are not in <see cref="Values"/>.
 /// </param>
+/// <param name="EnvironmentId">The selected environment's file name, or <c>null</c> when none is selected.</param>
+/// <param name="SecretValues">The resolved values of the secret variables, to hide them where requests are shown.</param>
+/// <param name="CookieJar">Whether the selected environment keeps cookies between requests.</param>
 public sealed record ActiveVariables(
     string? EnvironmentName,
     IReadOnlyDictionary<string, string> Values,
-    IReadOnlySet<string> UnsetSecrets)
+    IReadOnlySet<string> UnsetSecrets,
+    string? EnvironmentId = null,
+    IReadOnlyList<string>? SecretValues = null,
+    bool CookieJar = false)
 {
     public static ActiveVariables None { get; } =
         new(null, new Dictionary<string, string>(), new HashSet<string>());
@@ -86,6 +92,12 @@ public sealed class ActiveEnvironment(
                 $"{VariableSet.CycleMessage(resolved.Cycle)} Fix the environment '{environment.Value.Name}'.");
         }
 
-        return new ActiveVariables(environment.Value.Name, resolved.Values, unset);
+        var resolvedSecrets = environment.Value.Variables
+            .Where(v => v.Secret && resolved.Values.ContainsKey(v.Name))
+            .Select(v => resolved.Values[v.Name])
+            .Where(value => value.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return new ActiveVariables(environment.Value.Name, resolved.Values, unset, id, resolvedSecrets, environment.Value.CookieJar);
     }
 }

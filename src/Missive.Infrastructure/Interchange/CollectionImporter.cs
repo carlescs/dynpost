@@ -129,4 +129,23 @@ public sealed class LocalExternalFiles : IExternalFiles
             return new Error(ErrorCodes.Io, $"Could not write '{path}': {ex.Message}");
         }
     }
+
+    public async Task<Result<Unit>> WriteBytesAsync(string path, byte[] content, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+            if (directory is not null)
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await File.WriteAllBytesAsync(path, content, cancellationToken);
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not write '{path}': {ex.Message}");
+        }
+    }
 }

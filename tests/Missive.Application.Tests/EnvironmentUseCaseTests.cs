@@ -1,11 +1,14 @@
 using Missive.Application.Common;
+using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
+using Missive.Domain.Http;
 using NSubstitute;
 
 namespace Missive.Application.Tests;
 
+using Jars = IReadOnlyDictionary<string, IReadOnlyList<Missive.Domain.Http.StoredCookie>>;
 using Secrets = IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>;
 
 public class EnvironmentUseCaseTests
@@ -15,6 +18,7 @@ public class EnvironmentUseCaseTests
     private readonly IEnvironmentStore _store = Substitute.For<IEnvironmentStore>();
     private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
     private readonly IWorkspaceStateStore _state = Substitute.For<IWorkspaceStateStore>();
+    private readonly ICookieJarStore _cookies = Substitute.For<ICookieJarStore>();
     private readonly CurrentWorkspace _current = new();
 
     public EnvironmentUseCaseTests()
@@ -28,7 +32,14 @@ public class EnvironmentUseCaseTests
             .Returns(Result<bool>.Success(true));
         _store.Move(Root, Arg.Any<string>(), Arg.Any<string>()).Returns(Unit.Value);
         _store.Delete(Root, Arg.Any<string>()).Returns(Unit.Value);
+        StoredCookies(new Dictionary<string, IReadOnlyList<StoredCookie>>());
+        _cookies.SaveAsync(Root, Arg.Any<Jars>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
     }
+
+    private void StoredCookies(Dictionary<string, IReadOnlyList<StoredCookie>> jars) =>
+        _cookies.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<Jars>.Success(jars));
+
+    private static readonly StoredCookie Session = new("session", "abc", "localhost", "/");
 
     private void StoredSecrets(Dictionary<string, IReadOnlyDictionary<string, string>> secrets) =>
         _secrets.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<Secrets>.Success(secrets));
@@ -174,7 +185,7 @@ public class EnvironmentUseCaseTests
             ["prod.yaml"] = new Dictionary<string, string> { ["token"] = "p" },
         });
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _current).ExecuteAsync(
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync(
             "dev.yaml",
             Dto("Local", new EnvironmentVariableDto("token", "new", true)));
 
@@ -192,7 +203,7 @@ public class EnvironmentUseCaseTests
     {
         Existing("my-env.yaml", new EnvironmentDefinition("Dev"));
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _current).ExecuteAsync("my-env.yaml", Dto("Local"));
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync("my-env.yaml", Dto("Local"));
 
         Assert.Equal("my-env.yaml", result.Value.Id);
         _store.DidNotReceiveWithAnyArgs().Move(default!, default!, default!);
@@ -204,7 +215,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev"));
         StoredSecrets(new() { ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "abc" } });
 
-        await new SaveEnvironment(_store, _secrets, _state, _current).ExecuteAsync(
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync(
             "dev.yaml",
             Dto("Dev", new EnvironmentVariableDto("token", "abc", true)));
 
@@ -217,7 +228,7 @@ public class EnvironmentUseCaseTests
         _secrets.LoadAsync(Root, Arg.Any<CancellationToken>())
             .Returns(Result<Secrets>.Failure(ErrorCodes.InvalidFile, "bad secrets"));
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
 
         Assert.Equal(ErrorCodes.InvalidFile, result.Error?.Code);
         await _store.DidNotReceiveWithAnyArgs().WriteAsync(default!, default!, default!, default);
@@ -231,7 +242,7 @@ public class EnvironmentUseCaseTests
         _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("dev.yaml"));
         StoredSecrets(new() { ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "abc" } });
 
-        var result = await new DeleteEnvironment(_store, _secrets, _state, _current).ExecuteAsync("dev.yaml");
+        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync("dev.yaml");
 
         Assert.True(result.IsSuccess);
         _store.Received(1).Delete(Root, "dev.yaml");
@@ -240,9 +251,52 @@ public class EnvironmentUseCaseTests
     }
 
     [Fact]
+    public async Task Save_KeepsTheCookieJarSwitchAndMovesTheJarWithARename()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev") { CookieJar = true });
+        StoredCookies(new() { ["dev.yaml"] = [Session] });
+
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync(
+            "dev.yaml",
+            Dto("Local") with { CookieJar = true });
+
+        Assert.True(result.Value.Environment.CookieJar);
+        await _store.Received(1).WriteAsync(Root, "dev.yaml", Arg.Is<EnvironmentDefinition>(e => e.CookieJar), Arg.Any<CancellationToken>());
+        await _cookies.Received(1).SaveAsync(
+            Root,
+            Arg.Is<Jars>(j => j.Count == 1 && j["local.yaml"].Single() == Session),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Save_TurningTheCookieJarOff_ForgetsItsCookies()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev") { CookieJar = true });
+        StoredCookies(new() { ["dev.yaml"] = [Session], ["prod.yaml"] = [Session] });
+
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
+
+        await _cookies.Received(1).SaveAsync(
+            Root,
+            Arg.Is<Jars>(j => j.Count == 1 && j.ContainsKey("prod.yaml")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Delete_RemovesTheCookieJar()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev"));
+        StoredCookies(new() { ["dev.yaml"] = [Session] });
+
+        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync("dev.yaml");
+
+        await _cookies.Received(1).SaveAsync(Root, Arg.Is<Jars>(j => j.Count == 0), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Delete_MissingFile_IsNotFound()
     {
-        var result = await new DeleteEnvironment(_store, _secrets, _state, _current).ExecuteAsync("dev.yaml");
+        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _current).ExecuteAsync("dev.yaml");
 
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
     }

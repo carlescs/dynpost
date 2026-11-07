@@ -20,7 +20,7 @@ public static class EnvironmentMapper
             .OrderBy(v => v.Secret)
             .ToList();
 
-        var environment = new EnvironmentDefinition((dto.Name ?? string.Empty).Trim(), variables);
+        var environment = new EnvironmentDefinition((dto.Name ?? string.Empty).Trim(), variables) { CookieJar = dto.CookieJar };
         var errors = environment.Validate();
         return errors.Count == 0
             ? environment
@@ -33,7 +33,8 @@ public static class EnvironmentMapper
             .Select(v => v.Secret
                 ? new EnvironmentVariableDto(v.Name, secrets?.GetValueOrDefault(v.Name) ?? string.Empty, true)
                 : new EnvironmentVariableDto(v.Name, v.Value))
-            .ToList());
+            .ToList(),
+            environment.CookieJar);
 
     /// <summary>The values of an environment's secret variables, without the empty ones.</summary>
     public static IReadOnlyDictionary<string, string> SecretValues(EnvironmentDefinition environment) =>
