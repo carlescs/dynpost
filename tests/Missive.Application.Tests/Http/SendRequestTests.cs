@@ -517,4 +517,33 @@ public class SendRequestTests
                 r.Url.AbsolutePath == "/s1" && r.Headers.Contains(KeyValuePair.Create("Authorization", "Bearer fresh"))),
             Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task Execute_UsesCapturedValuesLiterally()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response(""));
+        SelectEnvironment(new EnvironmentDefinition("Development", [
+            new EnvironmentVariable("auth", "Bearer {{token}}"),
+            new EnvironmentVariable("host", "api.example.com"),
+        ]));
+        _captures.LoadAsync(Root, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
+                new Dictionary<string, IReadOnlyDictionary<string, string>>
+                {
+                    // Response text that looks like a template must neither expand nor loop.
+                    ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "{{token}}{{host}}" },
+                }));
+        var request = Request(url: "https://{{host}}/x") with
+        {
+            Headers = [new KeyValueDto("Authorization", "{{auth}}")],
+            Auth = new AuthDto("none"),
+        };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r => r.Headers.Contains(KeyValuePair.Create("Authorization", "Bearer {{token}}{{host}}"))),
+            Arg.Any<CancellationToken>());
+    }
 }

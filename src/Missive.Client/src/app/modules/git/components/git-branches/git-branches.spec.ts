@@ -27,6 +27,7 @@ describe('GitBranches', () => {
     deleteBranch: any;
     createBranch: any;
     dismissError: any;
+    loadBranches: any;
   };
 
   async function render() {
@@ -65,6 +66,7 @@ describe('GitBranches', () => {
       deleteBranch: vi.fn().mockResolvedValue(true),
       createBranch: vi.fn().mockResolvedValue(true),
       dismissError: vi.fn(),
+      loadBranches: vi.fn().mockResolvedValue(undefined),
     };
   });
 
@@ -73,6 +75,7 @@ describe('GitBranches', () => {
   it('offers to switch to and delete other local branches, and to check out untracked remote ones', async () => {
     const root = (await render()).nativeElement as HTMLElement;
 
+    expect(git.loadBranches).toHaveBeenCalled();
     expect(button(root, 'Switch to main')).toBeNull();
     expect(button(root, 'Delete main')).toBeNull();
     button(root, 'Switch to old')!.click();

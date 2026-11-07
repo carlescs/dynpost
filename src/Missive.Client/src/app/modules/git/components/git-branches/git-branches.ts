@@ -53,8 +53,13 @@ export class GitBranches {
   protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
 
+  protected toggle(): void {
+    this.expanded.update((open) => !open);
+    if (this.expanded()) void this.git.loadBranches();
+  }
+
   protected startCreate(): void {
-    this.expanded.set(true);
+    if (!this.expanded()) this.toggle();
     this.form.set({ name: '', switchTo: true });
   }
 

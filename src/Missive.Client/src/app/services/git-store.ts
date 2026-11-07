@@ -152,7 +152,8 @@ export class GitStore {
       (status) => {
         this.status.set(status);
         void this.loadRemotes();
-        void this.loadBranches();
+        // Branches are read once the Branches section is opened, then kept current.
+        if (this.branches() !== null) void this.loadBranches();
         void this.loadIdentity();
       },
     );

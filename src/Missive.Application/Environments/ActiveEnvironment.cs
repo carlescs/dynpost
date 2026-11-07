@@ -92,13 +92,19 @@ public sealed class ActiveEnvironment(
             return captured.Error!;
         }
 
-        if (captured.Value.GetValueOrDefault(id) is { Count: > 0 } capturedValues)
+        // Captured values come from responses: they are used as they are, never expanded as
+        // templates, so a value such as "{{token}}" can't refer to other variables or loop. They
+        // take part in resolution as placeholders that no file value can contain.
+        var capturedValues = captured.Value.GetValueOrDefault(id) ?? new Dictionary<string, string>();
+        var placeholders = capturedValues.Keys
+            .Order(StringComparer.Ordinal)
+            .Select((name, index) => (Name: name, Placeholder: $"\0captured:{index}\0"))
+            .ToList();
+        if (placeholders.Count > 0)
         {
             variables.RemoveAll(variable => capturedValues.ContainsKey(variable.Name));
             unset.ExceptWith(capturedValues.Keys);
-            variables.AddRange(capturedValues
-                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-                .Select(pair => new EnvironmentVariable(pair.Key, pair.Value)));
+            variables.AddRange(placeholders.Select(p => new EnvironmentVariable(p.Name, p.Placeholder)));
         }
 
         var resolved = VariableSet.Resolve(variables);
@@ -107,6 +113,15 @@ public sealed class ActiveEnvironment(
             return new Error(
                 ErrorCodes.InvalidRequest,
                 $"{VariableSet.CycleMessage(resolved.Cycle)} Fix the environment '{environment.Value.Name}'.");
+        }
+
+        if (placeholders.Count > 0)
+        {
+            var values = resolved.Values.ToDictionary(
+                pair => pair.Key,
+                pair => placeholders.Aggregate(pair.Value, (text, p) => text.Replace(p.Placeholder, capturedValues[p.Name], StringComparison.Ordinal)),
+                StringComparer.Ordinal);
+            resolved = resolved with { Values = values };
         }
 
         var resolvedSecrets = environment.Value.Variables

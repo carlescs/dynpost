@@ -3,10 +3,13 @@
     type="button"
     class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase hover:text-slate-800"
     [attr.aria-expanded]="expanded()"
-    (click)="expanded.set(!expanded())"
+    (click)="toggle()"
   >
     <fa-icon class="w-3" [icon]="expanded() ? faChevronDown : faChevronRight" />
-    Branches ({{ local().length }})
+    Branches
+    @if (git.branches() !== null) {
+      ({{ local().length }})
+    }
   </button>
   <button
     type="button"

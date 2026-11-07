@@ -111,6 +111,7 @@ describe('request diff model', () => {
         headers: 0,
         auth: false,
         body: false,
+        capture: 0,
         docs: false,
       });
     });
@@ -125,6 +126,7 @@ describe('request diff model', () => {
         bodyType: 'json',
         body: '{}',
         description: 'Now documented.',
+        captures: [{ variable: 'token', expression: '$.token' }],
       });
       expect(changed).toEqual({
         name: false,
@@ -133,6 +135,7 @@ describe('request diff model', () => {
         headers: 1,
         auth: true,
         body: true,
+        capture: 1,
         docs: true,
       });
     });

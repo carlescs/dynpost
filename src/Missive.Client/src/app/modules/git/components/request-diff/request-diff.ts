@@ -13,13 +13,14 @@ import {
   RowChange,
   authFields,
   authValue,
+  captureRows,
   diffRows,
   requestChanges,
   textChange,
 } from '../../models/request-diff-model';
 import { TextChange } from '../text-change/text-change';
 
-type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'docs';
+type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
 
 const ROW_STYLES: Record<RowChange['kind'], { marker: string; row: string; label: string }> = {
   same: { marker: '', row: '', label: 'Unchanged' },
@@ -54,6 +55,7 @@ export class RequestDiff {
     { id: 'headers', label: 'Headers' },
     { id: 'auth', label: 'Auth' },
     { id: 'body', label: 'Body' },
+    { id: 'capture', label: 'Capture' },
     { id: 'docs', label: 'Docs' },
   ];
 
@@ -67,6 +69,9 @@ export class RequestDiff {
   // For an added or deleted request every row shows as added or removed.
   protected readonly paramRows = computed(() => diffRows(this.a().params, this.b().params));
   protected readonly headerRows = computed(() => diffRows(this.a().headers, this.b().headers));
+  protected readonly captureChanges = computed(() =>
+    diffRows(captureRows(this.a()), captureRows(this.b())),
+  );
   protected readonly auth = computed(() => {
     const a = this.a().auth;
     const b = this.b().auth;

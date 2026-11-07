@@ -142,7 +142,13 @@ export interface RequestChanges {
   headers: number;
   auth: boolean;
   body: boolean;
+  capture: number;
   docs: boolean;
+}
+
+/** A request's captures as table rows: the variable and where its value comes from. */
+export function captureRows(request: RequestContent): KeyValue[] {
+  return request.captures.map((c) => ({ key: c.variable, value: c.expression, enabled: true }));
 }
 
 /** What differs between two versions of a request, section by section. */
@@ -161,6 +167,7 @@ export function requestChanges(before: RequestContent, after: RequestContent): R
     body:
       before.bodyType !== after.bodyType ||
       (after.bodyType !== 'none' && before.body !== after.body),
+    capture: changedRows(diffRows(captureRows(before), captureRows(after))),
     docs: before.description !== after.description,
   };
 }

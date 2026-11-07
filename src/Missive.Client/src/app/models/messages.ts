@@ -550,7 +550,7 @@ export interface BridgeMessages {
   'git.commitFile': { payload: { commitId: string; path: string }; result: GitFileRevision };
   /** The committed and working tree versions of a changed file. */
   'git.diff': { payload: { path: string }; result: GitFileDiff };
-  /** The repository's remotes, sorted by name. */
+  /** The local and remote-tracking branches, with the status. */
   'git.branch.list': { payload: void; result: GitBranches };
   /** Checks out a local branch; refused while there are uncommitted changes or a merge. */
   'git.branch.switch': { payload: { name: string }; result: GitBranches };
@@ -560,6 +560,7 @@ export interface BridgeMessages {
   'git.branch.checkout': { payload: { name: string }; result: GitBranches };
   /** Deletes a local branch; one with unmerged commits only with `force`. */
   'git.branch.delete': { payload: { name: string; force: boolean }; result: GitBranches };
+  /** The repository's remotes, sorted by name. */
   'git.remote.list': { payload: void; result: GitRemote[] };
   /** Adds a remote; nothing is fetched or pushed. */
   'git.remote.add': { payload: { name: string; url: string }; result: GitRemote[] };

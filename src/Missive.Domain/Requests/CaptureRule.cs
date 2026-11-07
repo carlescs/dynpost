@@ -85,7 +85,7 @@ public static class CaptureExpression
                 }
 
                 var name = text[start..i];
-                if (name.Length == 0 || name == "*" || name.Any(char.IsWhiteSpace))
+                if (name.Length == 0 || name == "*" || name.Any(c => char.IsWhiteSpace(c) || c is ']' or '\'' or '"'))
                 {
                     return Invalid(text, out error);
                 }
@@ -94,27 +94,32 @@ public static class CaptureExpression
             }
             else if (text[i] == '[')
             {
-                var close = text.IndexOf(']', i);
-                if (close < 0)
+                var start = i + 1;
+                if (start < text.Length && text[start] is '\'' or '"')
                 {
-                    return Invalid(text, out error);
-                }
+                    // A quoted name may contain anything but its quote, ']' included.
+                    var quote = text[start];
+                    var end = text.IndexOf(quote, start + 1);
+                    if (end < 0 || end + 1 >= text.Length || text[end + 1] != ']')
+                    {
+                        return Invalid(text, out error);
+                    }
 
-                var inner = text[(i + 1)..close].Trim();
-                if (inner.Length >= 2 && inner[0] is '\'' or '"' && inner[^1] == inner[0])
-                {
-                    steps.Add(JsonPathStep.Member(inner[1..^1]));
-                }
-                else if (int.TryParse(inner, NumberStyles.None, CultureInfo.InvariantCulture, out var index))
-                {
-                    steps.Add(JsonPathStep.At(index));
+                    steps.Add(JsonPathStep.Member(text[(start + 1)..end]));
+                    i = end + 2;
                 }
                 else
                 {
-                    return Invalid(text, out error);
-                }
+                    var close = text.IndexOf(']', start);
+                    if (close < 0
+                        || !int.TryParse(text[start..close], NumberStyles.None, CultureInfo.InvariantCulture, out var index))
+                    {
+                        return Invalid(text, out error);
+                    }
 
-                i = close + 1;
+                    steps.Add(JsonPathStep.At(index));
+                    i = close + 1;
+                }
             }
             else
             {
