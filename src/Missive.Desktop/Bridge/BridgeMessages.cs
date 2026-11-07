@@ -209,6 +209,12 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string GitBranchDelete = "git.branch.delete";
 
+    /// <summary>
+    /// Merges a local or remote-tracking branch into the current one (never a rebase); refused with
+    /// uncommitted changes. Payload: <see cref="GitBranchNamePayload"/>. Result: outcome, status and branches.
+    /// </summary>
+    public const string GitBranchMerge = "git.branch.merge";
+
     /// <summary>Lists the repository's remotes. Payload: none. Result: remotes.</summary>
     public const string GitRemoteList = "git.remote.list";
 

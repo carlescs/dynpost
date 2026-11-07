@@ -183,4 +183,65 @@ describe('GitStore', () => {
     expect(store.failedOperation()).toBe('branch');
     expect(store.error()?.message).toContain('a.yaml');
   });
+
+  it('merges a branch, reports the outcome and reloads the workspace from disk', async () => {
+    handlers['git.branch.merge'] = () => ({
+      outcome: 'merged',
+      status: status({ ahead: 2 }),
+      branches: [main, feature],
+    });
+    const refresh = vi.spyOn(workspaceStore, 'refresh').mockResolvedValue();
+    const reload = vi.spyOn(workspaceStore, 'reloadFromDisk').mockResolvedValue();
+
+    expect(await store.mergeBranch('feature')).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.branch.merge', { name: 'feature' });
+    expect(store.status()?.ahead).toBe(2);
+    expect(store.branches()).toHaveLength(2);
+    expect(store.notice()).toEqual({ kind: 'info', text: 'Merged feature into main.' });
+    expect(refresh).toHaveBeenCalled();
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('warns when a merge stops on conflicts', async () => {
+    handlers['git.branch.merge'] = () => ({
+      outcome: 'conflicted',
+      status: status({ merging: true, changes: [{ path: 'a.yaml', status: 'conflicted' }] }),
+      branches: [main, feature],
+    });
+    vi.spyOn(workspaceStore, 'reloadFromDisk').mockResolvedValue();
+
+    expect(await store.mergeBranch('origin/topic')).toBe(true);
+
+    expect(store.notice()?.kind).toBe('warning');
+    expect(store.notice()?.text).toContain('Merging origin/topic stopped on conflicts');
+    expect(store.conflicts()).toHaveLength(1);
+  });
+
+  it('asks before merging with unsaved tabs', async () => {
+    workspaceStore.documents.set([
+      { id: 'a.yaml', key: 'a', path: 'a.yaml', dirty: true, saving: false } as never,
+    ]);
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+
+    expect(await store.mergeBranch('feature')).toBe(false);
+
+    expect(confirm.mock.calls[0][0]).toContain('Merge feature into main?');
+    expect(confirm.mock.calls[0][0]).toContain('overwrite the merged versions');
+    expect(send).not.toHaveBeenCalledWith('git.branch.merge', expect.anything());
+    vi.unstubAllGlobals();
+  });
+
+  it('asks for an identity when a merge commit has none', async () => {
+    handlers['git.branch.merge'] = () => {
+      throw new BridgeError('git.identity_unknown', 'Git does not know who you are.');
+    };
+    handlers['git.identity'] = () => ({ name: null, email: null });
+
+    expect(await store.mergeBranch('feature')).toBe(false);
+
+    expect(store.failedOperation()).toBe('branch');
+    expect(store.needsIdentity()).toBe(true);
+  });
 });

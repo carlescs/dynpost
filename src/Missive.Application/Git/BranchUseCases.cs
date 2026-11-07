@@ -178,6 +178,75 @@ public sealed class DeleteBranch(IGitService git, CurrentWorkspace workspace)
     }
 }
 
+/// <param name="Outcome">Whether anything was merged, or the merge stopped on conflicts.</param>
+/// <param name="Status">The workspace's git state afterwards; lists any conflicted files.</param>
+/// <param name="Branches">The branches afterwards.</param>
+public sealed record MergeBranchResult(MergeOutcome Outcome, GitStatus Status, IReadOnlyList<GitBranch> Branches);
+
+/// <summary>
+/// Merges another local or remote-tracking branch into the current branch, never rebasing. Refused
+/// on a detached HEAD, a branch without commits, during a merge, and while there are uncommitted
+/// changes (they are named), so aborting a conflicted merge always restores the branch exactly.
+/// Conflicts are left for the user to resolve like those of a pull.
+/// </summary>
+public sealed class MergeBranch(IGitService git, CurrentWorkspace workspace)
+{
+    /// <param name="name">The branch to merge: <c>feature</c>, or <c>origin/feature</c>.</param>
+    public async Task<Result<MergeBranchResult>> ExecuteAsync(string name, CancellationToken cancellationToken = default)
+    {
+        var context = await BranchContext.LoadAsync(git, workspace, cancellationToken);
+        if (context.IsFailure)
+        {
+            return context.Error!;
+        }
+
+        var (root, current) = context.Value;
+        var trimmed = name?.Trim() ?? string.Empty;
+        var branch = current.Branches.FirstOrDefault(b => string.Equals(b.Name, trimmed, StringComparison.Ordinal));
+        if (branch is null)
+        {
+            return GitErrors.BranchNotFound(trimmed);
+        }
+
+        var status = current.Status;
+        if (status.Branch is not { } currentBranch)
+        {
+            return GitErrors.DetachedHead();
+        }
+
+        if (branch.IsCurrent)
+        {
+            return GitErrors.MergeSameBranch(currentBranch);
+        }
+
+        if (status.IsUnborn)
+        {
+            return GitErrors.NoCommitsToMergeInto();
+        }
+
+        if (status.IsMerging)
+        {
+            return GitErrors.MergeDuringMerge();
+        }
+
+        if (status.HasChanges)
+        {
+            return GitErrors.UncommittedChangesBeforeMerge(status.Changes.Select(c => c.Path).ToList());
+        }
+
+        var merged = await git.MergeBranchAsync(root, branch.Name, cancellationToken);
+        if (merged.IsFailure)
+        {
+            return merged.Error!;
+        }
+
+        var after = await BranchContext.ReadAsync(git, root, cancellationToken);
+        return after.IsFailure
+            ? after.Error!
+            : new MergeBranchResult(merged.Value, after.Value.Status, after.Value.Branches);
+    }
+}
+
 internal static class BranchContext
 {
     public static async Task<Result<(string Root, GitBranchesResult Current)>> LoadAsync(

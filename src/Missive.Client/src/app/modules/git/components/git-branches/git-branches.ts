@@ -5,6 +5,7 @@ import {
   faChevronRight,
   faCircleExclamation,
   faCodeBranch,
+  faCodeMerge,
   faDownload,
   faPlus,
   faRightLeft,
@@ -24,7 +25,8 @@ interface BranchForm {
 /**
  * The repository's branches, in a collapsible section of the Source control view: switch to a
  * local branch, create one from the current commit, check out a remote branch as a local
- * tracking branch, or delete a local branch. Remote branches are never deleted.
+ * tracking branch, merge a local or remote branch into the current one, or delete a local
+ * branch. Remote branches are never deleted.
  */
 @Component({
   selector: 'app-git-branches',
@@ -42,10 +44,22 @@ export class GitBranches {
   protected readonly local = computed(() => (this.git.branches() ?? []).filter((b) => !b.remote));
   protected readonly remote = computed(() => (this.git.branches() ?? []).filter((b) => b.remote));
 
+  /** Why nothing can be merged into the current branch right now, or `null` when it can. */
+  protected readonly mergeBlocker = computed(() => {
+    const status = this.git.status();
+    if (!status) return 'The git status is not loaded yet';
+    if (!status.branch) return 'Check out a branch to merge into';
+    if (status.unborn) return 'The current branch has no commits to merge into yet';
+    if (status.merging) return 'Complete or abort the merge in progress first';
+    if (status.changes.length) return 'Commit or discard your changes before merging';
+    return null;
+  });
+
   protected readonly faChevronDown = faChevronDown;
   protected readonly faChevronRight = faChevronRight;
   protected readonly faCircleExclamation = faCircleExclamation;
   protected readonly faCodeBranch = faCodeBranch;
+  protected readonly faCodeMerge = faCodeMerge;
   protected readonly faDownload = faDownload;
   protected readonly faPlus = faPlus;
   protected readonly faRightLeft = faRightLeft;
@@ -84,6 +98,19 @@ export class GitBranches {
 
   protected async checkout(branch: GitBranch): Promise<void> {
     await this.track(branch.name, () => this.git.checkoutRemoteBranch(branch));
+  }
+
+  protected mergeTitle(branch: GitBranch): string {
+    return (
+      this.mergeBlocker() ??
+      `Merge ${branch.name} into ${this.git.status()?.branch ?? 'the current branch'}`
+    );
+  }
+
+  protected async merge(branch: GitBranch): Promise<void> {
+    const into = this.git.status()?.branch;
+    if (!confirm(`Merge '${branch.name}' into the current branch '${into}'?`)) return;
+    await this.track(branch.name, () => this.git.mergeBranch(branch.name));
   }
 
   protected async remove(branch: GitBranch): Promise<void> {

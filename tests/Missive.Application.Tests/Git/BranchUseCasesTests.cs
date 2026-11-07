@@ -26,6 +26,7 @@ public class BranchUseCasesTests
         _git.CreateBranchAsync(default!, default!, default).ReturnsForAnyArgs(Ok(Unit.Value));
         _git.CheckoutRemoteBranchAsync(default!, default!, default!).ReturnsForAnyArgs(Ok(Unit.Value));
         _git.DeleteBranchAsync(default!, default!, default).ReturnsForAnyArgs(Ok(Unit.Value));
+        _git.MergeBranchAsync(default!, default!).ReturnsForAnyArgs(Ok(MergeOutcome.Merged));
     }
 
     private void HasStatus(GitStatus status) =>
@@ -205,5 +206,76 @@ public class BranchUseCasesTests
         var result = await new DeleteBranch(_git, _workspace).ExecuteAsync(new DeleteBranchRequest("feature"));
 
         Assert.Equal(GitErrors.BranchNotMergedCode, result.Error?.Code);
+    }
+
+    [Theory]
+    [InlineData(" feature ", "feature")]
+    [InlineData("origin/topic", "origin/topic")]
+    public async Task Merge_MergesALocalOrRemoteBranchAndReturnsTheNewState(string name, string merged)
+    {
+        var result = await new MergeBranch(_git, _workspace).ExecuteAsync(name);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(MergeOutcome.Merged, result.Value.Outcome);
+        Assert.Equal(4, result.Value.Branches.Count);
+        await _git.Received(1).MergeBranchAsync(WorkspacePath, merged, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Merge_ReportsConflicts()
+    {
+        _git.MergeBranchAsync(WorkspacePath, "feature", Arg.Any<CancellationToken>()).Returns(Ok(MergeOutcome.Conflicted));
+
+        var result = await new MergeBranch(_git, _workspace).ExecuteAsync("feature");
+
+        Assert.Equal(MergeOutcome.Conflicted, result.Value.Outcome);
+    }
+
+    [Fact]
+    public async Task Merge_UnknownOrCurrentBranch_IsRejected()
+    {
+        var merge = new MergeBranch(_git, _workspace);
+
+        Assert.Equal(GitErrors.BranchNotFoundCode, (await merge.ExecuteAsync("nope")).Error?.Code);
+        Assert.Equal(GitErrors.MergeSameBranchCode, (await merge.ExecuteAsync("main")).Error?.Code);
+        await _git.DidNotReceiveWithAnyArgs().MergeBranchAsync(default!, default!);
+    }
+
+    [Fact]
+    public async Task Merge_WithUncommittedChanges_IsRefusedAndNamesTheFiles()
+    {
+        HasStatus(WithChanges());
+
+        var result = await new MergeBranch(_git, _workspace).ExecuteAsync("feature");
+
+        Assert.Equal(GitErrors.UncommittedChangesCode, result.Error?.Code);
+        Assert.Contains("users/get.yaml", result.Error!.Message);
+        Assert.Contains("new.yaml", result.Error.Message);
+        await _git.DidNotReceiveWithAnyArgs().MergeBranchAsync(default!, default!);
+    }
+
+    [Fact]
+    public async Task Merge_DuringAMergeOnADetachedHeadOrWithoutCommits_IsRefused()
+    {
+        var merge = new MergeBranch(_git, _workspace);
+
+        HasStatus(Status(merging: true));
+        Assert.Equal(GitErrors.BranchDuringMergeCode, (await merge.ExecuteAsync("feature")).Error?.Code);
+        HasStatus(Status(branch: null, upstream: null));
+        Assert.Equal(GitErrors.DetachedHeadCode, (await merge.ExecuteAsync("feature")).Error?.Code);
+        HasStatus(Status(upstream: null) with { IsUnborn = true });
+        Assert.Equal(GitErrors.NoCommitsCode, (await merge.ExecuteAsync("feature")).Error?.Code);
+        await _git.DidNotReceiveWithAnyArgs().MergeBranchAsync(default!, default!);
+    }
+
+    [Fact]
+    public async Task Merge_PassesGitFailuresOn()
+    {
+        _git.MergeBranchAsync(WorkspacePath, "feature", Arg.Any<CancellationToken>())
+            .Returns(Result<MergeOutcome>.Failure(GitErrors.IdentityUnknown()));
+
+        var result = await new MergeBranch(_git, _workspace).ExecuteAsync("feature");
+
+        Assert.Equal(GitErrors.IdentityUnknownCode, result.Error?.Code);
     }
 }

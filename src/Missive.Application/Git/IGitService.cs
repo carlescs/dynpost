@@ -177,6 +177,15 @@ public interface IGitService
     /// </summary>
     Task<Result<Unit>> DeleteBranchAsync(string workspacePath, string branch, bool force, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Merges a local or remote-tracking branch into the current branch (<c>git merge --no-edit</c>,
+    /// fast-forwarding when possible unless the user's git configuration says otherwise; never a
+    /// rebase or squash). Conflicts are left in the working tree for the user and reported as
+    /// <see cref="MergeOutcome.Conflicted"/>.
+    /// </summary>
+    /// <param name="branch">The branch's short name: <c>feature</c>, or <c>origin/feature</c>.</param>
+    Task<Result<MergeOutcome>> MergeBranchAsync(string workspacePath, string branch, CancellationToken cancellationToken = default);
+
     /// <summary>Lists the repository's remotes, sorted by name.</summary>
     Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(string workspacePath, CancellationToken cancellationToken = default);
 

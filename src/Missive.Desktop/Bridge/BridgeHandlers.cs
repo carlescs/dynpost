@@ -183,6 +183,8 @@ internal static class BridgeHandlers
                 async (p, ct) => (await Use<CheckoutRemoteBranch>().ExecuteAsync(p.Name, ct)).Map(GitBranchesDto.From))
             .Register<GitDeleteBranchPayload, GitBranchesDto>(BridgeMessageTypes.GitBranchDelete,
                 async (p, ct) => (await Use<DeleteBranch>().ExecuteAsync(new DeleteBranchRequest(p.Name, p.Force), ct)).Map(GitBranchesDto.From))
+            .Register<GitBranchNamePayload, GitMergeDto>(BridgeMessageTypes.GitBranchMerge,
+                async (p, ct) => (await Use<MergeBranch>().ExecuteAsync(p.Name, ct)).Map(GitMergeDto.From))
             .Register(BridgeMessageTypes.GitRemoteList,
                 async ct => (await Use<ListRemotes>().ExecuteAsync(ct)).Map(GitRemoteDto.From))
             .Register<GitAddRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteAdd,

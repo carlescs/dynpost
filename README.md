@@ -409,7 +409,7 @@ exports diff cleanly.
 
 When the workspace folder is a git repository, Missive shows which request and
 environment files changed, lets you commit them with a message, pulls and
-pushes the current branch, and switches, creates and deletes branches. It uses your existing git credentials. Missive never
+pushes the current branch, and switches, creates, merges and deletes branches. It uses your existing git credentials. Missive never
 force-pushes and never resolves conflicts automatically: conflicting files are
 reported so you can resolve them (in Missive's editor or your own tools).
 
@@ -493,6 +493,15 @@ configuration, hooks and credential helpers apply as usual. In detail:
     of the same name (`feature`) that tracks it, refused like a switch when
     there are uncommitted changes. A remote branch that a local branch
     already tracks offers to switch to that branch instead.
+  - **Merge** (the merge button on a local or remote branch) merges that
+    branch into the current one after a confirmation (`git merge --no-edit`,
+    with git's usual message such as `Merge branch 'feature'`). It
+    fast-forwards when it can, unless your git configuration says otherwise,
+    and never rebases or squashes. It is refused while there are uncommitted
+    changes — so aborting the merge always puts your branch back exactly — or
+    a merge is in progress. If it conflicts, the conflicted files are listed
+    and resolved as after a pull (see below). Merging a remote branch uses its
+    commits as of the last fetch.
   - **Delete** removes a local branch after a confirmation; the current branch
     can't be deleted. If the branch has commits that aren't merged into its
     upstream or the current branch, git keeps it and Missive asks a second
@@ -506,7 +515,7 @@ configuration, hooks and credential helpers apply as usual. In detail:
 
 ### Resolving merge conflicts
 
-When a pull stops on conflicts, the Source control view shows a merge banner
+When a pull or a branch merge stops on conflicts, the Source control view shows a merge banner
 and marks each conflicted file. **Resolve** opens it side by side, your
 version (the current branch) next to the incoming one, and for each file you
 choose:
@@ -520,7 +529,7 @@ choose:
 Once every file is resolved, **Commit all** completes the merge; the commit
 message is pre-filled with git's merge message. **Abort merge** abandons the
 merge instead (`git merge --abort`) and puts your branch back as it was before
-the pull, after asking you to confirm.
+the pull or merge, after asking you to confirm.
 
 Missive reopens the last workspace at the next launch, if its folder still
 exists. It also keeps the ten most recently opened workspaces, listed on the

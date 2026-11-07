@@ -455,6 +455,77 @@ public sealed class GitCliService : IGitService
         return Unit.Value;
     }
 
+    public async Task<Result<MergeOutcome>> MergeBranchAsync(
+        string workspacePath,
+        string branch,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var headBefore = await GetHeadAsync(workspacePath, cancellationToken);
+        if (headBefore.IsFailure)
+        {
+            return headBefore.Error!;
+        }
+
+        // The short name gives git's usual message ("Merge branch 'feature'"), but a tag of the same
+        // name would win over it; then name the branch by its full ref instead.
+        var target = branch;
+        var tag = await RunAsync(workspacePath, ["rev-parse", "--quiet", "--verify", "refs/tags/" + branch], cancellationToken);
+        if (tag.IsFailure)
+        {
+            return tag.Error!;
+        }
+
+        if (tag.Value.Succeeded)
+        {
+            var local = await RunAsync(workspacePath, ["rev-parse", "--quiet", "--verify", "refs/heads/" + branch], cancellationToken);
+            if (local.IsFailure)
+            {
+                return local.Error!;
+            }
+
+            target = (local.Value.Succeeded ? "refs/heads/" : "refs/remotes/") + branch;
+        }
+
+        var merge = await RunAsync(workspacePath, ["merge", "--no-edit", "--no-squash", "--", target], cancellationToken);
+        if (merge.IsFailure)
+        {
+            return merge.Error!;
+        }
+
+        if (!merge.Value.Succeeded)
+        {
+            var conflicts = await RunAsync(workspacePath, ["diff", "--name-only", "--diff-filter=U", "-z"], cancellationToken);
+            if (conflicts.IsFailure)
+            {
+                return conflicts.Error!;
+            }
+
+            if (conflicts.Value.Succeeded && conflicts.Value.StandardOutput.Length > 0)
+            {
+                return MergeOutcome.Conflicted;
+            }
+
+            var details = Details(merge.Value);
+            return details.Contains("refusing to merge unrelated histories", StringComparison.OrdinalIgnoreCase)
+                ? GitErrors.UnrelatedBranchHistories(branch)
+                : GitFailure.Classify("merge", details);
+        }
+
+        var headAfter = await GetHeadAsync(workspacePath, cancellationToken);
+        if (headAfter.IsFailure)
+        {
+            return headAfter.Error!;
+        }
+
+        return headAfter.Value == headBefore.Value ? MergeOutcome.UpToDate : MergeOutcome.Merged;
+    }
+
     /// <summary>Runs a <c>git switch</c>, explaining refusals over uncommitted changes.</summary>
     private async Task<Result<Unit>> RunSwitchAsync(string workspacePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
