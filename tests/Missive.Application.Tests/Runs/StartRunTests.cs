@@ -150,6 +150,8 @@ public class StartRunTests
 
         var run = await RunToEndAsync((await Create().ExecuteAsync(PlanFile, false)).Value.RunId);
 
+        Assert.True(run.State == "completed", $"Expected a completed run, got '{run.State}': {run.Message}");
+        Assert.Equal(2, run.Total.Samples);
         Assert.Equal(2, run.Total.Errors);
         Assert.Equal("Expected status 201, got 200", Assert.Single(run.Total.ErrorReasons.Keys));
         Assert.Equal(2, run.FailedSamples.Count);
