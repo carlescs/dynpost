@@ -74,9 +74,10 @@
         </button>
         <button
           type="button"
-          class="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          class="flex size-5 shrink-0 items-center justify-center rounded enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           [class.text-sky-600]="store.draft()?.id === env.id"
-          [title]="env.error ? 'This environment can\'t be read' : 'Edit environments/' + env.id"
+          [class.text-slate-400]="store.draft()?.id !== env.id"
+          [title]="env.error ?? 'Edit environments/' + env.id"
           [attr.aria-label]="'Edit ' + env.name"
           [disabled]="!!env.error"
           (click)="store.edit(env.id)"
