@@ -54,7 +54,14 @@ public sealed record RedirectHop(
     string? ReasonPhrase,
     Uri Location,
     IReadOnlyList<KeyValuePair<string, string>> Headers,
-    TimeSpan Duration);
+    TimeSpan Duration)
+{
+    /// <summary>
+    /// The headers of the request that got the redirect, as sent. They can differ from the final
+    /// request's: <c>Authorization</c> is not sent on to the new location.
+    /// </summary>
+    public IReadOnlyList<KeyValuePair<string, string>> SentHeaders { get; init; } = [];
+}
 
 /// <summary>
 /// The phases of an exchange, summed over every redirect hop. Connection phases are <c>null</c>

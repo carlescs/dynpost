@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -115,7 +116,10 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                 if (redirects.Count < MaxRedirects && RedirectTarget(response, url) is { } location)
                 {
                     response.Dispose();
-                    redirects.Add(new RedirectHop(method, url, (int)response.StatusCode, response.ReasonPhrase, location, responseHeaders, stopwatch.Elapsed - hopStart));
+                    redirects.Add(new RedirectHop(method, url, (int)response.StatusCode, response.ReasonPhrase, location, responseHeaders, stopwatch.Elapsed - hopStart)
+                    {
+                        SentHeaders = SentHeaders(message),
+                    });
                     (method, body) = RedirectedMethod((int)response.StatusCode, method, body);
                     // Like HttpClient's own redirects: credentials are not sent on to the new location.
                     headers = headers.Where(header => !header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)).ToList();
@@ -300,19 +304,38 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         return message;
     }
 
-    /// <summary>The headers of a request as sent, content headers (with the computed length) included.</summary>
-    private static IReadOnlyList<KeyValuePair<string, string>> SentHeaders(HttpRequestMessage message)
+    /// <summary>
+    /// The headers of a request as sent, read after sending so the ones the handler adds to the
+    /// message (<c>Accept-Encoding</c>) are there; a header with several values is one entry, as on
+    /// the wire. Content headers (with the computed length) are
+    /// included, and <c>Host</c>, which the handler writes from the URL without adding it to the
+    /// message, comes first as on the wire.
+    /// </summary>
+    internal static IReadOnlyList<KeyValuePair<string, string>> SentHeaders(HttpRequestMessage message)
     {
-        IEnumerable<KeyValuePair<string, IEnumerable<string>>> headers = message.Headers;
+        IEnumerable<KeyValuePair<string, HeaderStringValues>> headers = message.Headers.NonValidated;
         if (message.Content is { } content)
         {
             _ = content.Headers.ContentLength;
-            headers = headers.Concat(content.Headers);
+            headers = headers.Concat(content.Headers.NonValidated);
         }
 
-        return headers
-            .SelectMany(header => header.Value.Select(value => KeyValuePair.Create(header.Key, value)))
+        var sent = headers
+            .Select(header => KeyValuePair.Create(header.Key, header.Value.ToString()))
             .ToList();
+        if (message.Headers.Host is null && message.RequestUri is { IsAbsoluteUri: true } url)
+        {
+            sent.Insert(0, KeyValuePair.Create("Host", HostHeader(url)));
+        }
+
+        return sent;
+    }
+
+    /// <summary>The <c>Host</c> header for a URL: the ASCII (punycode) host, and the port unless it's the scheme's default.</summary>
+    private static string HostHeader(Uri url)
+    {
+        var host = url.HostNameType == UriHostNameType.IPv6 ? $"[{url.IdnHost.Trim('[', ']')}]" : url.IdnHost;
+        return url.IsDefaultPort ? host : $"{host}:{url.Port}";
     }
 
     private static CookieContainer ToContainer(IReadOnlyList<StoredCookie> cookies)

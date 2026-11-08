@@ -389,7 +389,10 @@ public class SendRequestTests
         var finalUrl = new Uri("https://api.example.com/v2/users?page=2");
         _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}") with
         {
-            Redirects = [new RedirectHop("GET", new Uri("https://api.example.com/users?page=2"), 301, "Moved Permanently", finalUrl, [], TimeSpan.FromMilliseconds(20))],
+            Redirects = [new RedirectHop("GET", new Uri("https://api.example.com/users?page=2"), 301, "Moved Permanently", finalUrl, [], TimeSpan.FromMilliseconds(20))
+            {
+                SentHeaders = [KeyValuePair.Create("Authorization", "Bearer s3cret"), KeyValuePair.Create("X-Api-Key", "literal-key")],
+            }],
             Timings = new ResponseTimings(TimeSpan.FromMilliseconds(1.26), TimeSpan.FromMilliseconds(2), null, TimeSpan.FromMilliseconds(30), TimeSpan.FromMilliseconds(4)),
             Sent = new SentRequest("GET", finalUrl, [
                 KeyValuePair.Create("X-Trace", "token=s3cret"),
@@ -405,6 +408,9 @@ public class SendRequestTests
         Assert.Equal(301, redirect.Status);
         Assert.Equal(finalUrl.AbsoluteUri, redirect.Location);
         Assert.Equal(20, redirect.DurationMs);
+        Assert.Equal(
+            [new KeyValueDto("Authorization", "Bearer " + SecretMasking.Mask), new KeyValueDto("X-Api-Key", SecretMasking.Mask)],
+            redirect.SentHeaders);
         Assert.Equal(finalUrl.AbsoluteUri, response.Sent!.Url);
         Assert.Equal(
             [

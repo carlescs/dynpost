@@ -312,9 +312,14 @@ body size and these tabs:
   with its status, URL and `Location`. Connection phases are left out when no
   new connection was needed.
 - **Request**: the request as it went on the wire after redirects: the resolved
-  URL and the final headers, including those Missive adds (`User-Agent`,
-  `Content-Type`, `Content-Length`, `Cookie`). Credentials (`Authorization`,
-  the API key) and the values of secret variables are masked.
+  URL and the final headers, with `{{variables}}` substituted and including
+  those Missive and the connection add (`Host`, `User-Agent`,
+  `Accept-Encoding`, `Content-Type`, `Content-Length`, `Cookie`, auth), one
+  line per header as sent. The tab shows how many headers were sent. When the
+  request was redirected, every request is listed in order: `Authorization`
+  is not sent on to a redirected location, so only the first one carries it.
+  Credentials (`Authorization`, the API key) and the values of secret variables
+  are masked.
 
 Request and response bodies are shown in the Monaco
 editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,

@@ -490,6 +490,11 @@ export class MockBackend {
       return fail(ERROR_CODES.invalidRequest, `'${raw}' is not a valid http or https URL.`);
     }
     for (const param of enabled(dto.params)) url.searchParams.append(param.key, param.value);
+    // Like the host's masking, the credentials auth adds are shown hidden.
+    const auth = dto.auth;
+    if (auth.type === 'apiKey' && auth.in === 'query' && auth.key) {
+      url.searchParams.append(auth.key, '••••••');
+    }
 
     const started = performance.now();
     const cancelled = await new Promise<boolean>((resolve) => {
@@ -503,14 +508,25 @@ export class MockBackend {
     if (cancelled) return fail(ERROR_CODES.cancelled, 'The request was cancelled.');
 
     const headers = enabled(dto.headers).map((h) => ({ key: h.key, value: h.value }));
+    const hasHeader = (name: string) =>
+      headers.some((h) => h.key.toLowerCase() === name.toLowerCase());
+    const authHeader =
+      auth.type === 'basic' || auth.type === 'bearer' || auth.type === 'oauth2'
+        ? { key: 'Authorization', value: `${auth.type === 'basic' ? 'Basic' : 'Bearer'} ••••••` }
+        : auth.type === 'apiKey' && auth.in !== 'query' && auth.key
+          ? { key: auth.key, value: '••••••' }
+          : null;
+    if (authHeader && !hasHeader(authHeader.key)) headers.push(authHeader);
     const env = this.activeEnvironment ? this.environments.get(this.activeEnvironment) : null;
     const jarId = env?.cookieJar ? this.activeEnvironment : null;
     const jar = jarId ? (this.jars.get(jarId) ?? []) : [];
     const sentHeaders = [
+      { key: 'Host', value: url.host },
       ...headers.map((h) =>
         /^authorization$/i.test(h.key) ? { ...h, value: `${h.value.split(' ')[0]} ••••••` } : h,
       ),
       { key: 'User-Agent', value: 'Missive' },
+      { key: 'Accept-Encoding', value: 'gzip, deflate, br' },
       ...(jar.length
         ? [{ key: 'Cookie', value: jar.map((c) => `${c.name}=${c.value}`).join('; ') }]
         : []),

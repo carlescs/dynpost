@@ -39,7 +39,15 @@ public sealed record TimingsDto(double? Dns, double? Connect, double? Tls, doubl
 /// <summary>A redirect that was followed.</summary>
 /// <param name="Url">The URL that answered with the redirect, with secrets hidden.</param>
 /// <param name="Location">Where it redirected to, with secrets hidden.</param>
-public sealed record RedirectDto(string Method, string Url, int Status, string StatusText, string Location, long DurationMs);
+/// <param name="SentHeaders">The headers of the request that got the redirect, as sent, with secrets hidden.</param>
+public sealed record RedirectDto(
+    string Method,
+    string Url,
+    int Status,
+    string StatusText,
+    string Location,
+    long DurationMs,
+    IReadOnlyList<KeyValueDto>? SentHeaders = null);
 
 /// <summary>A request as it went on the wire, with secrets hidden.</summary>
 public sealed record SentRequestDto(string Method, string Url, IReadOnlyList<KeyValueDto> Headers);

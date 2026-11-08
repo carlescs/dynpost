@@ -34,6 +34,15 @@ export interface TimingPhase {
   offset: number;
   width: number;
 }
+/** A request as it went on the wire: one per redirect hop, then the final one. */
+export interface SentHop {
+  method: string;
+  url: string;
+  headers: { key: string; value: string }[];
+  /** The redirect status it got; `null` for the final request. */
+  status: number | null;
+}
+
 /** How a text body is shown: re-indented, as received, or rendered (HTML). */
 type BodyView = 'pretty' | 'raw' | 'preview';
 
@@ -150,6 +159,16 @@ export class ResponseViewer {
   /** The waterfall of the response's timing phases; empty when they weren't measured. */
   protected readonly phases = computed<TimingPhase[]>(() => timingPhases(this.response()));
 
+  /** Every request sent, oldest first; empty when the host didn't report them. */
+  protected readonly sentHops = computed<SentHop[]>(() => sentHops(this.response()));
+
+  /** Whether an earlier hop sent `Authorization` and the final request didn't (redirects drop it). */
+  protected readonly authDropped = computed(() => {
+    const hops = this.sentHops();
+    const hasAuth = (hop: SentHop) => hop.headers.some((h) => /^authorization$/i.test(h.key));
+    return hops.length > 1 && !hasAuth(hops[hops.length - 1]) && hops.some(hasAuth);
+  });
+
   /** The text shown in the body view, which is what "Copy" copies. */
   protected readonly shownBody = computed(() => {
     const r = this.response();
@@ -191,6 +210,7 @@ export class ResponseViewer {
   protected tabCount(tab: ResponseTab, r: ResponseDto): number | null {
     if (tab === 'headers') return r.headers.length;
     if (tab === 'cookies') return r.cookies?.length ?? 0;
+    if (tab === 'request') return r.sent?.headers.length ?? null;
     if (tab === 'captures') return r.captures?.filter((c) => c.value != null).length ?? 0;
     return null;
   }
@@ -236,6 +256,18 @@ export class ResponseViewer {
   protected dataUrl(r: ResponseDto): string {
     return `data:${r.contentType};base64,${r.body}`;
   }
+}
+
+/** The requests sent for a response: those that got a redirect, then the final one. */
+export function sentHops(r: ResponseDto | null): SentHop[] {
+  if (!r?.sent) return [];
+  const redirects = (r.redirects ?? []).map((hop) => ({
+    method: hop.method,
+    url: hop.url,
+    headers: hop.sentHeaders ?? [],
+    status: hop.status,
+  }));
+  return [...redirects, { ...r.sent, status: null }];
 }
 
 function looksLikeJson(r: ResponseDto): boolean {
