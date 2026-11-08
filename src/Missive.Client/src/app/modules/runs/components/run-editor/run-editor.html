@@ -59,13 +59,38 @@
   }
 
   <div class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
-    <div class="min-h-48 border-b border-slate-200 lg:border-r lg:border-b-0">
-      <app-code-editor
-        class="block h-full min-h-48"
-        language="yaml"
-        [value]="draft.yaml"
-        (valueChange)="store.edit($event)"
-      />
+    <div class="flex min-h-48 min-w-0 flex-col border-b border-slate-200 lg:border-r lg:border-b-0">
+      <div class="flex shrink-0 gap-1 border-b border-slate-200 px-3 py-1" role="tablist">
+        @for (option of ['visual', 'yaml']; track option) {
+          <button
+            type="button"
+            role="tab"
+            class="rounded px-2 py-0.5 text-xs capitalize hover:bg-slate-100"
+            [class.bg-slate-200]="mode() === option"
+            [class.font-semibold]="mode() === option"
+            [attr.aria-selected]="mode() === option"
+            (click)="mode.set($any(option))"
+          >
+            {{ option === 'yaml' ? 'YAML' : 'Visual' }}
+          </button>
+        }
+      </div>
+      @if (mode() === 'visual') {
+        @defer {
+          <app-run-plan-form
+            class="min-h-0 flex-1 overflow-y-auto"
+            [yaml]="draft.yaml"
+            (yamlChange)="store.edit($event)"
+          />
+        }
+      } @else {
+        <app-code-editor
+          class="block min-h-48 flex-1"
+          language="yaml"
+          [value]="draft.yaml"
+          (valueChange)="store.edit($event)"
+        />
+      }
     </div>
 
     <div class="min-h-0 overflow-y-auto p-3 text-sm">
