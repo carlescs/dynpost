@@ -321,12 +321,19 @@ internal static partial class PostmanFormat
         var result = new List<KeyValuePair<string, string>>();
         foreach (var field in fields.Where(f => !f.Bool("disabled") && f.Str("key") is not null))
         {
+            var key = field.Str("key");
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                warnings.Add($"Skipped a form field of '{owner}' that has no name.");
+                continue;
+            }
+
             if (field.Str("type") == "file")
             {
                 var path = field.Str("src") ?? field.Str("fileName");
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    warnings.Add($"Skipped the file field '{field.Str("key")}' of '{owner}': the import has no file path.");
+                    warnings.Add($"Skipped the file field '{key}' of '{owner}': the import has no file path.");
                     continue;
                 }
 
@@ -337,11 +344,11 @@ internal static partial class PostmanFormat
                     value += $";type={contentType}";
                 }
 
-                result.Add(KeyValuePair.Create(field.Str("key")!, value));
+                result.Add(KeyValuePair.Create(key, value));
             }
             else
             {
-                result.Add(KeyValuePair.Create(field.Str("key")!, field.Str("value") ?? string.Empty));
+                result.Add(KeyValuePair.Create(key, field.Str("value") ?? string.Empty));
             }
         }
 

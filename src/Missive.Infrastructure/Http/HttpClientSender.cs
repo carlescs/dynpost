@@ -462,7 +462,16 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
 
     private static StreamContent CreateFileContent(string path, string mediaType)
     {
-        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+        FileStream stream;
+        try
+        {
+            stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            throw new IOException($"'{path}': {ex.Message}", ex);
+        }
+
         var content = new StreamContent(stream);
         content.Headers.ContentType = MediaTypeHeaderValue.Parse(mediaType);
         return content;
