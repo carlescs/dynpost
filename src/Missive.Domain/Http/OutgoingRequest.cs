@@ -26,5 +26,11 @@ public abstract record OutgoingBody;
 /// <summary>A body sent as text, with the media type to use when no Content-Type header is set.</summary>
 public sealed record TextBody(string Content, string DefaultMediaType) : OutgoingBody;
 
-/// <summary>A <c>multipart/form-data</c> body made of text fields.</summary>
-public sealed record MultipartBody(IReadOnlyList<KeyValuePair<string, string>> Fields) : OutgoingBody;
+/// <summary>A body sent from a file, with the media type to use when no Content-Type header is set.</summary>
+public sealed record BinaryBody(string FilePath, string DefaultMediaType = "application/octet-stream") : OutgoingBody;
+
+/// <summary>A field in a <c>multipart/form-data</c> body.</summary>
+public sealed record MultipartField(string Name, string? Value = null, string? FilePath = null, string? ContentType = null);
+
+/// <summary>A <c>multipart/form-data</c> body made of text and file fields.</summary>
+public sealed record MultipartBody(IReadOnlyList<MultipartField> Fields) : OutgoingBody;

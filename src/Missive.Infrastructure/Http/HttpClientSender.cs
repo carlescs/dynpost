@@ -151,6 +151,10 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         {
             return HttpErrors.NetworkError(url.Authority, Describe(ex));
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not read a request body file: {ex.Message}");
+        }
         finally
         {
             if (_client is null)
@@ -253,6 +257,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         message.Content = body switch
         {
             TextBody text => new StringContent(text.Content, new UTF8Encoding(false), text.DefaultMediaType),
+            BinaryBody binary => CreateFileContent(binary.FilePath, binary.DefaultMediaType),
             MultipartBody multipart => CreateMultipart(multipart),
             _ => null,
         };
@@ -432,11 +437,34 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     private static MultipartFormDataContent CreateMultipart(MultipartBody body)
     {
         var content = new MultipartFormDataContent();
-        foreach (var (name, value) in body.Fields)
+        try
         {
-            content.Add(new StringContent(value, new UTF8Encoding(false)), name);
+            foreach (var field in body.Fields)
+            {
+                if (field.FilePath is null)
+                {
+                    content.Add(new StringContent(field.Value ?? string.Empty, new UTF8Encoding(false)), field.Name);
+                    continue;
+                }
+
+                var file = CreateFileContent(field.FilePath, field.ContentType ?? "application/octet-stream");
+                content.Add(file, field.Name, Path.GetFileName(field.FilePath));
+            }
+        }
+        catch
+        {
+            content.Dispose();
+            throw;
         }
 
+        return content;
+    }
+
+    private static StreamContent CreateFileContent(string path, string mediaType)
+    {
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+        var content = new StreamContent(stream);
+        content.Headers.ContentType = MediaTypeHeaderValue.Parse(mediaType);
         return content;
     }
 

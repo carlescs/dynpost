@@ -253,21 +253,57 @@
         @if (doc.bodyType === 'form' || doc.bodyType === 'urlencoded') {
           <p class="mt-2 text-xs text-slate-500">
             One <code>name=value</code> pair per line.
+            @if (doc.bodyType === 'form') {
+              File fields use <code>name=@path</code>; add <code>;type=image/png</code> for a
+              content type.
+              <button type="button" class="ml-2 underline" (click)="pickBodyFile(true)">
+                Add file field
+              </button>
+            }
             @if (doc.bodyType === 'urlencoded') {
               Values are sent as written, so percent-encode them.
             }
           </p>
         }
-        <app-code-editor
-          class="mt-2 min-h-24 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
-          ariaLabel="Request body"
-          [value]="doc.body"
-          [language]="doc.bodyType === 'json' ? 'json' : 'plaintext'"
-          [highlightVariables]="true"
-          [variables]="environments.variables()"
-          (valueChange)="patch({ body: $event })"
-          (submit)="send()"
-        />
+        @if (doc.bodyType === 'binary') {
+          <div class="mt-2 flex items-center gap-2 text-sm">
+            <label for="binary-body-path">File path</label>
+            <input
+              id="binary-body-path"
+              class="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 font-mono"
+              [value]="doc.body"
+              (input)="patch({ body: $any($event.target).value })"
+            />
+            <button
+              type="button"
+              class="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
+              (click)="pickBodyFile()"
+            >
+              Choose file…
+            </button>
+          </div>
+          @if (hasAbsoluteFilePath(doc.body, false)) {
+            <p class="mt-1 text-xs text-amber-700">
+              Absolute paths are allowed, but this request will not be portable to other machines.
+            </p>
+          }
+        } @else {
+          @if (doc.bodyType === 'form' && hasAbsoluteFilePath(doc.body, true)) {
+            <p class="mt-1 text-xs text-amber-700">
+              Absolute paths are allowed, but this request will not be portable to other machines.
+            </p>
+          }
+          <app-code-editor
+            class="mt-2 min-h-24 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
+            ariaLabel="Request body"
+            [value]="doc.body"
+            [language]="doc.bodyType === 'json' ? 'json' : 'plaintext'"
+            [highlightVariables]="true"
+            [variables]="environments.variables()"
+            (valueChange)="patch({ body: $event })"
+            (submit)="send()"
+          />
+        }
       }
     }
     @case ('capture') {

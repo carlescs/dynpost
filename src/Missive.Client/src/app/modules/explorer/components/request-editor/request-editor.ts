@@ -32,6 +32,7 @@ import { ResponseViewer } from '../response-viewer/response-viewer';
 import { VariableInput } from '../../../../components/variable-input/variable-input';
 import { MarkdownView } from '../../../../components/markdown-view/markdown-view';
 import { OAuth2Auth } from '../oauth2-auth/oauth2-auth';
+import { Bridge } from '../../../../services/bridge';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
 
@@ -53,6 +54,7 @@ export class RequestEditor {
   readonly document = input.required<RequestDocument>();
 
   private readonly store = inject(WorkspaceStore);
+  private readonly bridge = inject(Bridge);
   protected readonly environments = inject(EnvironmentStore);
 
   protected readonly activeTab = signal<RequestTab>('params');
@@ -145,6 +147,31 @@ export class RequestEditor {
 
   protected cancel(): void {
     void this.store.cancelSend(this.document().id);
+  }
+
+  protected async pickBodyFile(multipart = false): Promise<void> {
+    try {
+      const file = await this.bridge.send('request.pickFile');
+      if (!file) return;
+
+      const current = this.document().body;
+      const body = multipart
+        ? `${current.trimEnd()}${current.trim() ? '\n' : ''}file=@${file.path}`
+        : file.path;
+      this.patch({ body });
+    } catch (error) {
+      this.store.error.set(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  protected hasAbsoluteFilePath(body: string, multipart: boolean): boolean {
+    const absolute = (path: string) => /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path);
+    return multipart
+      ? body.split('\n').some((line) => {
+          const value = line.slice(line.indexOf('=') + 1).trim();
+          return value.startsWith('@') && absolute(value.slice(1).split(';type=')[0]);
+        })
+      : absolute(body.trim());
   }
 
   /** The captures as table rows: variable name and expression. */

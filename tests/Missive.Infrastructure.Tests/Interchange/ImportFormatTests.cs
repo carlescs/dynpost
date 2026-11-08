@@ -186,14 +186,32 @@ public class ImportFormatTests
         Assert.Equal(new RequestBody(BodyType.UrlEncoded, "user%20name=Ada%20%26%20co"), requests[0].Body);
         Assert.Empty(requests[0].Headers); // Missive sets this Content-Type itself.
 
-        Assert.Equal(new RequestBody(BodyType.Form, "title=Report"), requests[1].Body);
-        Assert.Contains(parsed.Warnings, w => w.Contains("file field 'file'"));
+        Assert.Equal(new RequestBody(BodyType.Form, "title=Report\nfile=@/tmp/a.pdf"), requests[1].Body);
+        Assert.DoesNotContain(parsed.Warnings, w => w.Contains("file field 'file'"));
 
         Assert.Equal(new RequestBody(BodyType.Json, "{\"a\":1}"), requests[2].Body);
 
         Assert.Equal(new RequestBody(BodyType.Graphql, "{ me { id } }", "{\"x\":1}"), requests[3].Body);
 
         Assert.Contains(parsed.Warnings, w => w.Contains("PURGE"));
+    }
+
+    [Fact]
+    public void Postman_ImportsBinaryFileBodies()
+    {
+        var parsed = Parse("""
+            {
+              "info": { "name": "Files", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+              "item": [{ "name": "Upload", "request": {
+                "method": "POST", "url": "https://example.test/upload",
+                "body": { "mode": "file", "file": { "src": "./fixtures/data.bin" } }
+              } }]
+            }
+            """);
+
+        Assert.Equal(
+            new RequestBody(BodyType.Binary, "./fixtures/data.bin"),
+            Assert.Single(parsed.Collection.Root.Requests).Body);
     }
 
     [Fact]
@@ -209,11 +227,35 @@ public class ImportFormatTests
                   "body": { "mimeType": "application/graphql", "text": "query { me }", "variables": "{\"id\":\"{{ _.userId }}\"}" } }
               ]
             }
+
             """);
 
         Assert.Equal(
             new RequestBody(BodyType.Graphql, "query { me }", "{\"id\":\"{{userId}}\"}"),
             Assert.Single(parsed.Collection.Root.Requests).Body);
+    }
+
+    [Fact]
+    public void Insomnia_ImportsMultipartFileFields()
+    {
+        var parsed = Parse("""
+            {
+              "_type": "export", "__export_format": 4,
+              "resources": [
+                { "_id": "wrk_1", "_type": "workspace", "name": "Upload" },
+                { "_id": "req_1", "_type": "request", "parentId": "wrk_1", "name": "Upload",
+                  "method": "POST", "url": "https://example.test/upload",
+                  "body": { "mimeType": "multipart/form-data", "params": [
+                    { "name": "avatar", "value": "/tmp/ada.png", "type": "file", "contentType": "image/png" }
+                  ] } }
+              ]
+            }
+            """);
+
+        Assert.Equal(
+            new RequestBody(BodyType.Form, "avatar=@/tmp/ada.png;type=image/png"),
+            Assert.Single(parsed.Collection.Root.Requests).Body);
+        Assert.Empty(parsed.Warnings);
     }
 
     [Fact]
@@ -340,7 +382,7 @@ public class ImportFormatTests
         Assert.Equal([new KeyValueEntry("Content-Type", "application/xml")], api[1].Headers);
 
         var upload = Assert.Single(root.Folders[1].Requests);
-        Assert.Equal(new RequestBody(BodyType.Form, "title=Hi"), upload.Body);
+        Assert.Equal(new RequestBody(BodyType.Form, "title=Hi\nfile=@a.png"), upload.Body);
         Assert.Empty(upload.Headers);
     }
 

@@ -26,7 +26,11 @@ public static class RequestPreparation
     /// The OAuth 2.0 access token to send when the request uses <see cref="OAuth2Auth"/>; it is
     /// obtained beforehand, from the token endpoint or the token cache.
     /// </param>
-    public static PreparedRequest Prepare(HttpRequestDefinition request, IReadOnlyDictionary<string, string> variables, string? accessToken = null)
+    public static PreparedRequest Prepare(
+        HttpRequestDefinition request,
+        IReadOnlyDictionary<string, string> variables,
+        string? accessToken = null,
+        string? workspaceRoot = null)
     {
         var errors = new List<string>();
         var missing = new SortedSet<string>(StringComparer.Ordinal);
@@ -36,7 +40,7 @@ public static class RequestPreparation
         var query = Resolved(request.Params, Resolve);
         var headers = Resolved(request.Headers, Resolve);
         ApplyAuth(request.Auth, Resolve, headers, query, errors, accessToken);
-        var body = BuildBody(request.Body, Resolve, errors);
+        var body = BuildBody(request.Body, Resolve, errors, workspaceRoot);
 
         if (missing.Count > 0)
         {
@@ -129,23 +133,111 @@ public static class RequestPreparation
         }
     }
 
-    private static OutgoingBody? BuildBody(RequestBody body, Func<string, string> resolve, List<string> errors) => body.Type switch
+    private static OutgoingBody? BuildBody(
+        RequestBody body,
+        Func<string, string> resolve,
+        List<string> errors,
+        string? workspaceRoot)
     {
-        BodyType.Json => new TextBody(resolve(body.Content), "application/json"),
-        BodyType.Graphql => BuildGraphqlBody(body, resolve, errors),
-        BodyType.Text => new TextBody(resolve(body.Content), "text/plain"),
-        // One name=value pair per line (or already joined with '&'), sent as written.
-        BodyType.UrlEncoded => new TextBody(
-            string.Join('&', Lines(resolve(body.Content))),
-            "application/x-www-form-urlencoded"),
-        // One name=value field per line; a line without '=' is a field with an empty value.
-        BodyType.Form => new MultipartBody(Lines(resolve(body.Content))
-            .Select(line => line.IndexOf('=') is var index and >= 0
-                ? KeyValuePair.Create(line[..index].Trim(), line[(index + 1)..].Trim())
-                : KeyValuePair.Create(line, string.Empty))
-            .ToList()),
-        _ => null,
-    };
+        switch (body.Type)
+        {
+            case BodyType.Json:
+                return new TextBody(resolve(body.Content), "application/json");
+            case BodyType.Graphql:
+                return BuildGraphqlBody(body, resolve, errors);
+            case BodyType.Text:
+                return new TextBody(resolve(body.Content), "text/plain");
+            case BodyType.Binary:
+                var binaryPath = ResolveFilePath(resolve(body.Content).Trim(), workspaceRoot, errors);
+                return binaryPath is null ? null : new BinaryBody(binaryPath);
+            // One name=value pair per line (or already joined with '&'), sent as written.
+            case BodyType.UrlEncoded:
+                return new TextBody(
+                    string.Join('&', Lines(resolve(body.Content))),
+                    "application/x-www-form-urlencoded");
+            // One name=value field per line; @path (optionally followed by ;type=...) is a file.
+            case BodyType.Form:
+                var fields = new List<MultipartField>();
+                foreach (var line in Lines(resolve(body.Content)))
+                {
+                    var index = line.IndexOf('=');
+                    var name = index >= 0 ? line[..index].Trim() : line;
+                    var value = index >= 0 ? line[(index + 1)..].Trim() : string.Empty;
+                    if (value.StartsWith('@'))
+                    {
+                        var file = value[1..];
+                        string? contentType = null;
+                        var typeIndex = file.LastIndexOf(";type=", StringComparison.OrdinalIgnoreCase);
+                        if (typeIndex >= 0)
+                        {
+                            contentType = file[(typeIndex + 6)..].Trim();
+                            file = file[..typeIndex].Trim();
+                            if (!System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(contentType, out _))
+                            {
+                                errors.Add($"'{contentType}' is not a valid multipart content type.");
+                                continue;
+                            }
+                        }
+
+                        var filePath = ResolveFilePath(file, workspaceRoot, errors);
+                        if (filePath is not null)
+                        {
+                            fields.Add(new MultipartField(name, FilePath: filePath, ContentType: contentType));
+                        }
+                    }
+                    else
+                    {
+                        fields.Add(new MultipartField(name, value));
+                    }
+                }
+
+                return new MultipartBody(fields);
+            default:
+                return null;
+        }
+    }
+
+    private static string? ResolveFilePath(string path, string? workspaceRoot, List<string> errors)
+    {
+        if (path.Length == 0)
+        {
+            errors.Add("Choose a file for the request body.");
+            return null;
+        }
+
+        try
+        {
+            if (Path.IsPathRooted(path))
+            {
+                return Path.GetFullPath(path);
+            }
+
+            if (string.IsNullOrWhiteSpace(workspaceRoot))
+            {
+                errors.Add($"The file '{path}' is relative to the workspace, but no workspace is open.");
+                return null;
+            }
+
+            var root = Path.GetFullPath(workspaceRoot);
+            var fullPath = Path.GetFullPath(Path.Combine(root, path));
+            var relative = Path.GetRelativePath(root, fullPath);
+            if (Path.IsPathRooted(relative)
+                || relative == ".."
+                || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                || relative.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                errors.Add($"The file path '{path}' must stay inside the workspace, or be an absolute path.");
+                return null;
+            }
+
+            return fullPath;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException)
+        {
+            errors.Add($"'{path}' is not a valid file path.");
+            return null;
+        }
+    }
 
     private static OutgoingBody? BuildGraphqlBody(RequestBody body, Func<string, string> resolve, List<string> errors)
     {

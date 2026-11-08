@@ -72,6 +72,7 @@ public static class RequestMapper
         BodyType.Form => "form",
         BodyType.UrlEncoded => "urlencoded",
         BodyType.Graphql => "graphql",
+        BodyType.Binary => "binary",
         _ => throw new ArgumentOutOfRangeException(nameof(type)),
     };
 

@@ -68,6 +68,28 @@ public sealed class SendBridgeTests : IDisposable
     public void Dispose() => _services.Dispose();
 
     [Fact]
+    public async Task PickRequestFile_ReturnsWorkspaceRelativePathsAndMarksAbsolutePaths()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        _current.Open(root);
+        var workspaceFile = Path.Combine(root, "fixtures", "avatar.png");
+        _dialogs.PickFileAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<FileFilter>>()).Returns(workspaceFile);
+
+        var relative = await SendAsync("request.pickFile", "null");
+
+        Assert.Equal("fixtures/avatar.png", relative.GetProperty("payload").GetProperty("path").GetString());
+        Assert.False(relative.GetProperty("payload").GetProperty("isAbsolute").GetBoolean());
+
+        var externalFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "avatar.png");
+        _dialogs.PickFileAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<FileFilter>>()).Returns(externalFile);
+
+        var absolute = await SendAsync("request.pickFile", "null");
+
+        Assert.Equal(Path.GetFullPath(externalFile), absolute.GetProperty("payload").GetProperty("path").GetString());
+        Assert.True(absolute.GetProperty("payload").GetProperty("isAbsolute").GetBoolean());
+    }
+
+    [Fact]
     public async Task Send_ReturnsTheResponse()
     {
         _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(new HttpResponseData(

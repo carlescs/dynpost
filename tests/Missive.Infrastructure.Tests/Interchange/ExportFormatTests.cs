@@ -132,7 +132,7 @@ public class ExportFormatTests
             RequestMethod.Post,
             "https://example.test/graphql",
             body: new RequestBody(BodyType.Graphql, "query { me }", """{"id":"{{userId}}"}"""));
-        var collection = new RequestCollection(new CollectionFolder("API", [], [request]));
+        var collection = new RequestCollection(new CollectionFolder("API", [], [request]), []);
 
         var postman = JsonNode.Parse(new PostmanCollectionExporter().Export(collection).Content)!;
         var postmanBody = postman["item"]![0]!["request"]!["body"]!;

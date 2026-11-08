@@ -43,7 +43,7 @@ export interface OAuth2TokenDto {
 }
 
 export interface BodyDto {
-  type: 'none' | 'json' | 'text' | 'form' | 'urlencoded' | 'graphql';
+  type: 'none' | 'json' | 'text' | 'form' | 'urlencoded' | 'graphql' | 'binary';
   content: string;
   variables?: string | null;
 }
@@ -483,6 +483,8 @@ export interface BridgeMessages {
    */
   'workspace.import': { payload: { folder: string }; result: ImportResultDto | null };
   'request.load': { payload: { path: string }; result: RequestDto };
+  /** Shows the native file picker for a request body; `null` when cancelled. */
+  'request.pickFile': { payload: void; result: { path: string; isAbsolute: boolean } | null };
   /** Saves a new request in a folder (`''` is the workspace root). */
   'request.create': { payload: { folder: string; request: RequestDto }; result: SavedRequestDto };
   /** Saves an existing request file; the result path differs if the file was renamed. */

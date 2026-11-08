@@ -260,37 +260,35 @@ internal static partial class InsomniaFormat
             return graphql;
         }
 
-        var fields = body.Arr("params").Where(p => !p.Bool("disabled") && p.Str("name") is not null).ToList();
-        if (fields.Any(f => f.Str("type") == "file"))
+        if (body.Str("fileName") is { Length: > 0 } fileName)
         {
-            warnings.Add($"Skipped the file fields of '{owner}': Missive bodies can't attach files.");
+            return new RequestBody(BodyType.Binary, fileName);
         }
 
-        private static RequestBody? ImportGraphqlJson(string? text)
+        var fields = body.Arr("params").Where(p => !p.Bool("disabled") && p.Str("name") is not null).ToList();
+
+        var pairs = new List<KeyValuePair<string, string>>();
+        foreach (var field in fields)
         {
-            try
+            if (field.Str("type") == "file")
             {
-                if (JsonNode.Parse(text ?? string.Empty) is not JsonObject payload || payload.Str("query") is not { } query)
+                var path = field.Str("value") ?? field.Str("fileName");
+                if (string.IsNullOrWhiteSpace(path))
                 {
-                    return null;
+                    warnings.Add($"Skipped the file field '{field.Str("name")}' of '{owner}': the import has no file path.");
+                    continue;
                 }
 
-                var variables = payload.Get("variables");
-                var variablesText = variables is JsonValue value && value.TryGetValue<string>(out var stringValue)
-                    ? stringValue
-                    : variables?.ToJsonString() ?? string.Empty;
-                return new RequestBody(BodyType.Graphql, query, variablesText);
+                var contentType = field.Str("contentType");
+                pairs.Add(KeyValuePair.Create(
+                    field.Str("name")!,
+                    $"@{path}{(string.IsNullOrWhiteSpace(contentType) ? string.Empty : $";type={contentType}")}"));
             }
-            catch (System.Text.Json.JsonException)
+            else
             {
-                return null;
+                pairs.Add(KeyValuePair.Create(field.Str("name")!, field.Str("value") ?? string.Empty));
             }
         }
-
-        var pairs = fields
-            .Where(f => f.Str("type") != "file")
-            .Select(f => KeyValuePair.Create(f.Str("name")!, f.Str("value") ?? string.Empty))
-            .ToList();
 
         switch (InterchangeText.BodyTypeFor(mimeType))
         {
@@ -311,6 +309,27 @@ internal static partial class InsomniaFormat
                 }
 
                 return new RequestBody(type, text);
+        }
+    }
+
+    private static RequestBody? ImportGraphqlJson(string? text)
+    {
+        try
+        {
+            if (JsonNode.Parse(text ?? string.Empty) is not JsonObject payload || payload.Str("query") is not { } query)
+            {
+                return null;
+            }
+
+            var variables = payload.Get("variables");
+            var variablesText = variables is JsonValue value && value.TryGetValue<string>(out var stringValue)
+                ? stringValue
+                : variables?.ToJsonString() ?? string.Empty;
+            return new RequestBody(BodyType.Graphql, query, variablesText);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
         }
     }
 

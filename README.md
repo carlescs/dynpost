@@ -132,10 +132,16 @@ params:
 
 Auth types are `basic` (`username`, `password`), `bearer` (`token`),
 `apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
-instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form`, `urlencoded` and `graphql`.
+instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form`, `urlencoded`, `graphql` and `binary`.
 `graphql` bodies store a GraphQL `query` and JSON `variables` separately and are sent as JSON POSTs.
 `form` (multipart) and `urlencoded` bodies hold one `name=value` pair per line;
 `urlencoded` values are sent as written, so percent-encode them yourself.
+In `form` bodies, use `name=@path/to/file` for a file field and optionally add
+`;type=image/png` to set its content type. A `binary` body stores a file path in
+`content` and sends that file as the whole body. Relative paths are resolved
+from the workspace root; absolute paths are accepted but make requests
+non-portable. Use the request editor's file picker to insert workspace-relative
+paths where possible.
 
 ```yaml
 body:
@@ -146,6 +152,14 @@ body:
     }
   variables: |
     { "id": "{{userId}}" }
+```
+
+```yaml
+body:
+  type: form
+  content: |
+    name=Ada
+    avatar=@./fixtures/ada.png;type=image/png
 ```
 
 `capture` stores values from a successful response in variables, so a login
