@@ -23,6 +23,7 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
     private readonly Timeline _timeline = new();
     private readonly List<SampleDto> _failed = [];
     private readonly List<SampleDto> _slowest = [];
+    private readonly TaskCompletionSource _persistence = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _activeThreads;
     private TimeSpan? _finishedAt;
 
@@ -39,6 +40,10 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
     public string State { get; private set; } = "running";
 
     public string? Message { get; private set; }
+
+    public bool PersistenceComplete => _persistence.Task.IsCompleted;
+
+    public Task Persistence => _persistence.Task;
 
     public TimeSpan Elapsed => _finishedAt ?? _clock.Elapsed;
 
@@ -81,6 +86,16 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
         _finishedAt = _clock.Elapsed;
         Message = message;
         State = state;
+    }
+
+    public void CompletePersistence(string? message)
+    {
+        if (message is not null)
+        {
+            Message = Message is null ? message : $"{Message} {message}";
+        }
+
+        _persistence.TrySetResult();
     }
 
     public static string? Preview(byte[] body)

@@ -18,9 +18,9 @@ export class RunChart {
   protected readonly bars = computed(() => {
     const points = this.points();
     const max = Math.max(1, ...points.map((p) => p.samples));
-    const slot = WIDTH / Math.max(1, points.length);
-    return points.map((p, i) => ({
-      x: i * slot,
+    const slot = WIDTH / (Math.max(0, ...points.map((p) => p.second)) + 1);
+    return points.map((p) => ({
+      x: p.second * slot,
       width: Math.max(1, slot - 1),
       height: (p.samples / max) * HEIGHT,
       errors: p.errors > 0,
@@ -30,11 +30,11 @@ export class RunChart {
   protected readonly line = computed(() => {
     const points = this.points();
     const max = Math.max(1, ...points.map((p) => p.averageMs));
-    const slot = WIDTH / Math.max(1, points.length);
+    const slot = WIDTH / (Math.max(0, ...points.map((p) => p.second)) + 1);
     return points
       .map(
-        (p, i) =>
-          `${(i * slot + slot / 2).toFixed(1)},${(HEIGHT - (p.averageMs / max) * HEIGHT).toFixed(1)}`,
+        (p) =>
+          `${(p.second * slot + slot / 2).toFixed(1)},${(HEIGHT - (p.averageMs / max) * HEIGHT).toFixed(1)}`,
       )
       .join(' ');
   });

@@ -1,4 +1,5 @@
 using Missive.Application.Runs;
+using Missive.Application.Common;
 using Missive.Domain.Runs;
 using Missive.Domain.Workspaces;
 using Missive.Infrastructure.Runs;
@@ -80,6 +81,8 @@ public sealed class RunInfrastructureTests : IDisposable
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nassert:\n  '*':\n    status: 20\n", "status")]
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\ndata:\n  file: a.csv\n  mode: shuffle\n", "data.mode")]
     [InlineData("name: x\nrequests: [../a.yaml]\nload: {threads: 1, iterations: 1}\n", "not a valid workspace path")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1, maxRps: Infinity}\n", "load.maxRps")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nthresholds: {throughput: NaN}\n", "thresholds.throughput")]
     public void Parse_ReportsProblems(string yaml, string expected)
     {
         var result = new YamlRunPlanFormat().Parse(yaml);
@@ -110,6 +113,17 @@ public sealed class RunInfrastructureTests : IDisposable
         var rows = await new CsvRunDataReader().ReadCsvAsync(_root, WorkspacePath.Parse("d.csv"));
 
         Assert.Contains("Row 2", rows.Error!.Message);
+    }
+
+    [Fact]
+    public async Task CsvReader_RejectsAnUnterminatedQuotedField()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_root, "d.csv"), "id,name\n1,\"Jane");
+
+        var rows = await new CsvRunDataReader().ReadCsvAsync(_root, WorkspacePath.Parse("d.csv"));
+
+        Assert.Equal(ErrorCodes.InvalidFile, rows.Error!.Code);
+        Assert.Contains("not terminated", rows.Error.Message);
     }
 
     [Fact]

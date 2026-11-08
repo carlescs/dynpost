@@ -159,6 +159,54 @@ public class StartRunTests
     }
 
     [Fact]
+    public async Task Execute_DecodesAssertionBodiesUsingTheResponseCharset()
+    {
+        UsePlan(Plan(1, 1, assertions: new Dictionary<string, RunAssertion>
+        {
+            ["users/get.yaml"] = new([], null, "café", null),
+        }));
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/users"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpResponseData(
+                200,
+                "OK",
+                [KeyValuePair.Create("Content-Type", "text/plain; charset=iso-8859-1")],
+                [0x63, 0x61, 0x66, 0xe9],
+                false,
+                TimeSpan.Zero));
+
+        var run = await RunToEndAsync((await Create().ExecuteAsync(PlanFile, false)).Value.RunId);
+
+        Assert.Equal(0, run.Total.Errors);
+    }
+
+    [Fact]
+    public async Task Execute_MasksQueryApiKeysResolvedFromIterationVariables()
+    {
+        UsePlan(Plan(
+            1,
+            1,
+            new RunDataSource(WorkspacePath.Parse("perf/users.csv"), SelectionMode.Sequential, EndBehavior.Recycle)));
+        _data.ReadCsvAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<IReadOnlyDictionary<string, string>>>.Success(
+                [new Dictionary<string, string> { ["key"] = "api_key", ["value"] = "sensitive-value" }]));
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition(
+                "Get",
+                RequestMethod.Get,
+                "https://api.test/users",
+                auth: new ApiKeyAuth("{{key}}", "{{value}}", ApiKeyLocation.Query)));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response(500));
+
+        var run = await RunToEndAsync((await Create().ExecuteAsync(PlanFile, false)).Value.RunId);
+
+        var url = Assert.Single(run.FailedSamples).Url;
+        Assert.Contains("api_key=••••••", url);
+        Assert.DoesNotContain("sensitive-value", url);
+    }
+
+    [Fact]
     public async Task Execute_ReportsMissingVariablesAsErrorsWithoutSending()
     {
         UsePlan(Plan(1, 1));
@@ -236,5 +284,123 @@ public class StartRunTests
         new CancelRun(_registry).Execute(started.Value.RunId);
 
         Assert.Equal(ErrorCodes.AlreadyExists, second.Error!.Code);
+    }
+
+    [Fact]
+    public async Task Execute_ReservesAPlanBeforeAwaitingPreparation()
+    {
+        UsePlan(Plan(1, 1));
+        var readStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRead = new TaskCompletionSource<Result<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _plans.ReadAsync(Root, WorkspacePath.Parse(PlanFile), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                readStarted.SetResult();
+                return releaseRead.Task;
+            });
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var firstTask = Create().ExecuteAsync(PlanFile, false);
+        await readStarted.Task;
+        var second = await Create().ExecuteAsync(PlanFile, false);
+        releaseRead.SetResult(Result<string>.Success("plan"));
+        var first = await firstTask;
+
+        Assert.True(first.IsSuccess);
+        Assert.Equal(ErrorCodes.AlreadyExists, second.Error!.Code);
+    }
+
+    [Fact]
+    public async Task Execute_AllowsTheSamePlanPathInDifferentWorkspaces()
+    {
+        UsePlan(Plan(1, 1_000_000));
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/users"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                await Task.Delay(10, call.Arg<CancellationToken>());
+                return Result<HttpResponseData>.Success(Response());
+            });
+        var first = await Create().ExecuteAsync(PlanFile, false);
+        _current.Open("/work/other");
+        _plans.ReadAsync("/work/other", WorkspacePath.Parse(PlanFile), Arg.Any<CancellationToken>()).Returns("plan");
+        _repository.ReadRequestAsync("/work/other", Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/users"));
+        _repository.FileExists("/work/other", Arg.Any<WorkspacePath>()).Returns(true);
+        _runs.SaveAsync("/work/other", Arg.Any<RunResultDto>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
+
+        var second = await Create().ExecuteAsync(PlanFile, false);
+
+        Assert.True(first.IsSuccess);
+        Assert.True(second.IsSuccess, second.Error?.Message);
+        new CancelRun(_registry).Execute(first.Value.RunId);
+        new CancelRun(_registry).Execute(second.Value.RunId);
+        await RunToEndAsync(first.Value.RunId);
+        await RunToEndAsync(second.Value.RunId);
+    }
+
+    [Fact]
+    public async Task Execute_WaitsForPersistenceAndReportsSaveFailures()
+    {
+        UsePlan(Plan(1, 1));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+        var save = new TaskCompletionSource<Result<Unit>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _runs.SaveAsync(Root, Arg.Any<RunResultDto>(), Arg.Any<CancellationToken>()).Returns(_ => save.Task);
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        while (_registry.Find(started.Value.RunId)!.State == "running")
+        {
+            await Task.Delay(5);
+        }
+
+        var progress = new GetRunProgress(_registry, _runs, _current).ExecuteAsync(started.Value.RunId);
+        Assert.False(progress.IsCompleted);
+        save.SetResult(new Error(ErrorCodes.Io, "disk full"));
+        var run = (await progress).Value;
+
+        Assert.Equal("completed", run.State);
+        Assert.Contains("disk full", run.Message!);
+    }
+
+    [Fact]
+    public async Task Execute_DoesNotSendAfterDurationWhileWaitingForRateLimit()
+    {
+        var plan = Plan(3, 100_000) with
+        {
+            Load = new RunLoad(3, null, TimeSpan.FromSeconds(1), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, 1),
+        };
+        UsePlan(plan);
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/users"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var run = await RunToEndAsync((await Create().ExecuteAsync(PlanFile, false)).Value.RunId);
+
+        Assert.Equal(1, run.Total.Samples);
+    }
+
+    [Fact]
+    public async Task Execute_BoundsRampUpAndThinkTimeByTheRunDuration()
+    {
+        var plan = Plan(2, 100_000, requests: ["users/get.yaml", "users/get.yaml"]) with
+        {
+            Load = new RunLoad(
+                2,
+                null,
+                TimeSpan.FromMilliseconds(250),
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(1),
+                null),
+        };
+        UsePlan(plan);
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/users"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var run = await RunToEndAsync((await Create().ExecuteAsync(PlanFile, false)).Value.RunId);
+
+        Assert.Equal(1, run.Total.Samples);
     }
 }

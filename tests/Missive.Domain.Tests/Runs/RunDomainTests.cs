@@ -23,6 +23,8 @@ public class RunDomainTests
     [InlineData("fast")]
     [InlineData("-1s")]
     [InlineData("10x")]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
     public void ParseDuration_RejectsOtherText(string text) => Assert.False(RunText.TryParseDuration(text, out _));
 
     [Theory]

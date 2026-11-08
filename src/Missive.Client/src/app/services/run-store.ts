@@ -33,6 +33,7 @@ const NEW_PLAN = (name: string) =>
 export class RunStore {
   private readonly bridge = inject(Bridge);
   private readonly workspace = inject(WorkspaceStore);
+  private readonly root = computed(() => this.workspace.workspace()?.root ?? null);
 
   readonly plans = signal<RunPlanFileDto[]>([]);
   readonly draft = signal<RunPlanDraft | null>(null);
@@ -57,7 +58,7 @@ export class RunStore {
 
   constructor() {
     effect(() => {
-      const root = this.workspace.workspace()?.root ?? null;
+      const root = this.root();
       untracked(() => {
         this.stopPolling();
         this.draft.set(null);
@@ -69,7 +70,7 @@ export class RunStore {
       });
     });
     effect(() => {
-      this.workspace.activeTab();
+      this.workspace.shown();
       untracked(() => this.showing.set(false));
     });
   }
@@ -83,7 +84,16 @@ export class RunStore {
   }
 
   async open(path: string): Promise<void> {
-    if (this.dirty() && this.draft()?.path !== path && !confirm('Discard unsaved changes?')) return;
+    const current = this.draft();
+    if (current?.path === path) {
+      this.showing.set(true);
+      return;
+    }
+    if (this.running()) {
+      this.error.set('Stop the running plan before opening another plan.');
+      return;
+    }
+    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
     try {
       const document = await this.bridge.send('runPlan.open', { path });
       this.stopPolling();
@@ -126,7 +136,12 @@ export class RunStore {
       // Edits typed while saving stay as they are, and stay unsaved.
       this.draft.update((current) =>
         current?.path === draft.path
-          ? { ...current, savedYaml: saved.yaml, error: saved.error }
+          ? {
+              ...current,
+              yaml: current.yaml === draft.yaml ? saved.yaml : current.yaml,
+              savedYaml: saved.yaml,
+              error: saved.error,
+            }
           : current,
       );
       await this.refresh();
@@ -177,6 +192,10 @@ export class RunStore {
 
   /** Shows an earlier run of the open plan. */
   async show(runId: string): Promise<void> {
+    if (this.running()) {
+      this.error.set('Stop the running plan before viewing history.');
+      return;
+    }
     this.stopPolling();
     try {
       this.run.set(await this.bridge.send('run.progress', { runId }));
@@ -186,6 +205,10 @@ export class RunStore {
   }
 
   close(): void {
+    if (this.running()) {
+      this.error.set('Stop the running plan before closing it.');
+      return;
+    }
     if (this.dirty() && !confirm('Discard unsaved changes?')) return;
     this.showing.set(false);
     this.draft.set(null);

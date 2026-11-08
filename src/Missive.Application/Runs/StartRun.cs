@@ -26,11 +26,12 @@ public sealed class RunRegistry
     private const int KeepFinished = 10;
 
     private readonly ConcurrentDictionary<string, ActiveRun> _runs = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string Root, string PlanPath), byte> _reservations = new();
 
     public void Add(ActiveRun run)
     {
         _runs[run.RunId] = run;
-        var finished = _runs.Values.Where(r => r.State != "running").OrderBy(r => r.Elapsed).ToList();
+        var finished = _runs.Values.Where(r => r.State != "running" && r.PersistenceComplete).OrderBy(r => r.Elapsed).ToList();
         foreach (var old in finished.Take(Math.Max(0, finished.Count - KeepFinished)))
         {
             _runs.TryRemove(old.RunId, out _);
@@ -39,7 +40,31 @@ public sealed class RunRegistry
 
     public ActiveRun? Find(string runId) => _runs.GetValueOrDefault(runId);
 
-    public bool IsRunning(string planPath) => _runs.Values.Any(r => r.State == "running" && r.PlanPath == planPath);
+    public IDisposable? TryReserve(string root, string planPath)
+    {
+        var key = (root, planPath);
+        if (!_reservations.TryAdd(key, 0))
+        {
+            return null;
+        }
+
+        if (_runs.Values.Any(r => r.State == "running" && r.Root == root && r.PlanPath == planPath))
+        {
+            _reservations.TryRemove(key, out _);
+            return null;
+        }
+
+        return new PlanReservation(this, key);
+    }
+
+    private void ReleaseReservation((string Root, string PlanPath) key) => _reservations.TryRemove(key, out _);
+
+    private sealed class PlanReservation(RunRegistry registry, (string Root, string PlanPath) key) : IDisposable
+    {
+        private RunRegistry? _registry = registry;
+
+        public void Dispose() => Interlocked.Exchange(ref _registry, null)?.ReleaseReservation(key);
+    }
 }
 
 /// <summary>
@@ -72,7 +97,8 @@ public sealed class StartRun(
             return root.IsSuccess ? planPath.Error! : root.Error!;
         }
 
-        if (registry.IsRunning(planPath.Value.Value))
+        using var reservation = registry.TryReserve(root.Value, planPath.Value.Value);
+        if (reservation is null)
         {
             return new Error(ErrorCodes.AlreadyExists, "This plan is already running.");
         }
@@ -184,7 +210,15 @@ public sealed class StartRun(
         }
 
         // The partial results of a cancelled run are kept too.
-        await runStore.SaveAsync(run.Root, run.ToDto(), CancellationToken.None);
+        try
+        {
+            var saved = await runStore.SaveAsync(run.Root, run.ToDto(), CancellationToken.None);
+            run.CompletePersistence(saved.IsSuccess ? null : $"Run results could not be saved: {saved.Error!.Message}");
+        }
+        catch (Exception ex)
+        {
+            run.CompletePersistence($"Run results could not be saved: {ex.Message}");
+        }
     }
 
     private sealed record ThreadContext(
@@ -205,9 +239,9 @@ public sealed class StartRun(
         try
         {
             var delay = RunScheduling.StartDelay(thread, load.Threads, load.RampUp);
-            if (delay > TimeSpan.Zero)
+            if (delay > TimeSpan.Zero && !await WaitWithinRunAsync(run, delay, token))
             {
-                await Task.Delay(delay, token);
+                return;
             }
 
             var first = true;
@@ -238,9 +272,9 @@ public sealed class StartRun(
                     if (!first)
                     {
                         var think = RunScheduling.ThinkTime(load, random);
-                        if (think > TimeSpan.Zero)
+                        if (think > TimeSpan.Zero && !await WaitWithinRunAsync(run, think, token))
                         {
-                            await Task.Delay(think, token);
+                            return;
                         }
                     }
 
@@ -253,10 +287,15 @@ public sealed class StartRun(
                     if (context.Limiter is { } limiter)
                     {
                         var wait = limiter.Reserve(run.Now.Ticks);
-                        if (wait > TimeSpan.Zero)
+                        if (wait > TimeSpan.Zero && !await WaitWithinRunAsync(run, wait, token))
                         {
-                            await Task.Delay(wait, token);
+                            return;
                         }
+                    }
+
+                    if (TimeUp(run))
+                    {
+                        return;
                     }
 
                     await SampleAsync(context, request, thread, iteration, values, row);
@@ -274,6 +313,27 @@ public sealed class StartRun(
 
     private static bool TimeUp(ActiveRun run) =>
         run.Cancellation.IsCancellationRequested || (run.Plan.Load.Duration is { } duration && run.Now >= duration);
+
+    private static async Task<bool> WaitWithinRunAsync(ActiveRun run, TimeSpan delay, CancellationToken token)
+    {
+        var remaining = run.Plan.Load.Duration is { } duration ? duration - run.Now : (TimeSpan?)null;
+        if (remaining is { } timeLeft)
+        {
+            if (timeLeft <= TimeSpan.Zero)
+            {
+                return false;
+            }
+
+            if (delay >= timeLeft)
+            {
+                await Task.Delay(timeLeft, token);
+                return false;
+            }
+        }
+
+        await Task.Delay(delay, token);
+        return !TimeUp(run);
+    }
 
     private async Task SampleAsync(
         ThreadContext context,
@@ -325,8 +385,16 @@ public sealed class StartRun(
             outgoing = RequestPreparation.Prepare(definition, values, accessToken.Value.AccessToken, run.Root).Request!;
         }
 
-        var url = SecretMasking.MaskUrl(outgoing.Url, [], context.Variables.SecretValues ?? []);
+        IReadOnlyCollection<string> sensitiveParams = definition.Auth is ApiKeyAuth { In: ApiKeyLocation.Query } apiKey
+            ? [VariableTemplate.Resolve(apiKey.Key, values, new SortedSet<string>(StringComparer.Ordinal)).Trim()]
+            : [];
+        var url = SecretMasking.MaskUrl(outgoing.Url, sensitiveParams, context.Variables.SecretValues ?? []);
         var sent = outgoing.Body is TextBody text ? Encoding.UTF8.GetByteCount(text.Content) : 0;
+        if (TimeUp(run))
+        {
+            return;
+        }
+
         var watch = System.Diagnostics.Stopwatch.StartNew();
         Result<HttpResponseData> response;
         try
@@ -346,8 +414,15 @@ public sealed class StartRun(
         }
 
         var data = response.Value;
-        var bodyText = Encoding.UTF8.GetString(data.Body);
-        var reason = FailureReason(run.Plan.AssertionsFor(path), data, bodyText, latency);
+        var assertions = run.Plan.AssertionsFor(path);
+        string? body = null;
+        if (assertions.Any(a => a.BodyContains is not null || a.BodyNotContains is not null))
+        {
+            var contentType = data.Headers.FirstOrDefault(h => h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)).Value;
+            var (mediaType, charset) = ResponseBodyDecoder.ParseContentType(contentType);
+            body = ResponseBodyDecoder.Decode(data.Body, mediaType, charset).Body;
+        }
+        var reason = FailureReason(assertions, data, body, latency);
         var sample = new SampleDto(
             path.Value,
             thread,
@@ -360,14 +435,14 @@ public sealed class StartRun(
             url,
             row,
             reason is null ? null : ActiveRun.Preview(data.Body));
-        run.Add(path, sample, sent, data.Body.LongLength);
+        run.Add(path, sample, data.BytesSent > 0 ? data.BytesSent : sent, data.Body.LongLength);
     }
 
     /// <summary>
     /// Why a response counts as an error: a failed assertion, or, when the request has no status
     /// assertion, a 4xx/5xx status. <c>null</c> when it is fine.
     /// </summary>
-    internal static string? FailureReason(IReadOnlyList<RunAssertion> assertions, HttpResponseData response, string body, double latencyMs)
+    internal static string? FailureReason(IReadOnlyList<RunAssertion> assertions, HttpResponseData response, string? body, double latencyMs)
     {
         var statusChecked = assertions.Any(a => a.Status.Count > 0);
         if (!statusChecked && response.StatusCode >= 400)
@@ -387,12 +462,12 @@ public sealed class StartRun(
                 return $"Took {latencyMs:0}ms, more than {RunText.FormatDuration(max)}";
             }
 
-            if (assertion.BodyContains is { } contains && !body.Contains(contains, StringComparison.Ordinal))
+            if (assertion.BodyContains is { } contains && body is not null && !body.Contains(contains, StringComparison.Ordinal))
             {
                 return $"Body doesn't contain '{contains}'";
             }
 
-            if (assertion.BodyNotContains is { } notContains && body.Contains(notContains, StringComparison.Ordinal))
+            if (assertion.BodyNotContains is { } notContains && body is not null && body.Contains(notContains, StringComparison.Ordinal))
             {
                 return $"Body contains '{notContains}'";
             }

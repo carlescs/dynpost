@@ -25,6 +25,11 @@ public sealed class GetRunProgress(RunRegistry registry, IRunStore store, Curren
     {
         if (registry.Find(runId) is { } run)
         {
+            if (run.State != "running")
+            {
+                await run.Persistence.WaitAsync(cancellationToken);
+            }
+
             return run.ToDto();
         }
 

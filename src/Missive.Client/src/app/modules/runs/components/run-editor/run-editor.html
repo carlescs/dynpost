@@ -60,7 +60,12 @@
 
   <div class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
     <div class="min-h-48 border-b border-slate-200 lg:border-r lg:border-b-0">
-      <app-code-editor language="yaml" [value]="draft.yaml" (valueChange)="store.edit($event)" />
+      <app-code-editor
+        class="block h-full min-h-48"
+        language="yaml"
+        [value]="draft.yaml"
+        (valueChange)="store.edit($event)"
+      />
     </div>
 
     <div class="min-h-0 overflow-y-auto p-3 text-sm">

@@ -198,6 +198,7 @@ public sealed class YamlRunPlanFormat : IRunPlanFormat
     private static double? Number(YamlMappingNode map, string key, string where) =>
         YamlNodes.OptionalString(map, key) is { } text
             ? double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+                && double.IsFinite(value)
                 ? value
                 : throw new WorkspaceFileFormatException($"'{where}' must be a number.")
             : null;

@@ -37,7 +37,16 @@ public sealed class CsvRunDataReader : IRunDataReader
             return new Error(ErrorCodes.Io, $"Could not read '{path}': {ex.Message}");
         }
 
-        var records = Parse(text);
+        List<List<string>> records;
+        try
+        {
+            records = Parse(text);
+        }
+        catch (FormatException ex)
+        {
+            return new Error(ErrorCodes.InvalidFile, $"The data file '{path}' is not valid CSV: {ex.Message}");
+        }
+
         if (records.Count == 0)
         {
             return new Error(ErrorCodes.InvalidFile, $"The data file '{path}' is empty: it needs a header row.");
@@ -118,6 +127,11 @@ public sealed class CsvRunDataReader : IRunDataReader
                     any = true;
                     break;
             }
+        }
+
+        if (quoted)
+        {
+            throw new FormatException("a quoted field is not terminated");
         }
 
         EndRecord();

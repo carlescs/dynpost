@@ -26,7 +26,7 @@ public static class RunText
         var number = trimmed[..^suffix.Length];
         if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var amount)
             || amount < 0
-            || double.IsInfinity(amount)
+            || !double.IsFinite(amount)
             || amount * scale > TimeSpan.MaxValue.TotalMilliseconds)
         {
             return false;
