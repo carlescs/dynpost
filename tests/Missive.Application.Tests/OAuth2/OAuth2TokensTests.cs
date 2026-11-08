@@ -113,6 +113,57 @@ public class OAuth2TokensTests
     }
 
     [Fact]
+    public async Task Get_ServerFailureDuringRefresh_KeepsTheRefreshToken()
+    {
+        Cache(AuthorizationCode, Token("old", Now.AddMinutes(-1), refresh: "r1"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Json("unavailable", 503));
+
+        var token = await _tokens.GetAsync(AuthorizationCode, Root, "dev.yaml");
+
+        Assert.Equal(OAuth2Errors.FailedCode, token.Error?.Code);
+        Assert.Equal("r1", _stored["dev.yaml"][AuthorizationCode.CacheKey].RefreshToken);
+    }
+
+    [Fact]
+    public async Task Get_ConcurrentRequestsRefreshOnce()
+    {
+        Cache(AuthorizationCode, Token("old", Now.AddMinutes(-1), refresh: "r1"));
+        var release = new TaskCompletionSource();
+        var calls = 0;
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(async _ =>
+        {
+            Interlocked.Increment(ref calls);
+            await release.Task;
+            return Result<HttpResponseData>.Success(Json("""{"access_token":"fresh","refresh_token":"r2","expires_in":3600}"""));
+        });
+
+        var first = _tokens.GetAsync(AuthorizationCode, Root, "dev.yaml");
+        var second = _tokens.GetAsync(AuthorizationCode, Root, "dev.yaml");
+        release.SetResult();
+
+        Assert.Equal("fresh", (await first).Value.AccessToken);
+        Assert.Equal("fresh", (await second).Value.AccessToken);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public void Parse_ZeroLifetime_IsAlreadyExpired()
+    {
+        var token = OAuth2TokenResponse.Parse(Json("""{"access_token":"a","expires_in":0}"""), ClientCredentials, Now).Value;
+
+        Assert.Equal(Now, token.Expires);
+        Assert.True(token.IsExpired(Now));
+    }
+
+    [Fact]
+    public void Parse_InvalidGrant_IsARejectedGrant()
+    {
+        var result = OAuth2TokenResponse.Parse(Json("""{"error":"invalid_grant"}""", 400), ClientCredentials, Now);
+
+        Assert.Equal(OAuth2Errors.GrantRejectedCode, result.Error?.Code);
+    }
+
+    [Fact]
     public async Task Get_AuthorizationCodeWithoutToken_NeverOpensTheBrowser()
     {
         var token = await _tokens.GetAsync(AuthorizationCode, Root, "dev.yaml");

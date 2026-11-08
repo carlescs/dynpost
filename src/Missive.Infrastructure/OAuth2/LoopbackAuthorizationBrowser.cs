@@ -146,10 +146,10 @@ public sealed class LoopbackAuthorizationBrowser : IAuthorizationBrowser
                 return new Uri($"http://127.0.0.1:{port}{OAuth2Flow.DefaultRedirectPath}");
             }
 
+            // An address (127.0.0.2, [::1]…) is listened on exactly; validation made sure it is loopback.
             var addresses = redirectUri.HostNameType switch
             {
-                UriHostNameType.IPv4 => [IPAddress.Loopback],
-                UriHostNameType.IPv6 => [IPAddress.IPv6Loopback],
+                UriHostNameType.IPv4 or UriHostNameType.IPv6 => [IPAddress.Parse(redirectUri.DnsSafeHost)],
                 _ => Socket.OSSupportsIPv6 ? new[] { IPAddress.Loopback, IPAddress.IPv6Loopback } : [IPAddress.Loopback],
             };
             foreach (var address in addresses)

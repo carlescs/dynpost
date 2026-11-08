@@ -96,7 +96,7 @@ public class OAuth2InterchangeTests
         var parsed = Parse("""
             openapi: 3.0.3
             info: { title: Shop, version: "1" }
-            servers: [{ url: https://shop.test }]
+            servers: [{ url: https://shop.test/v1 }]
             security: [{ oauth: [orders.read] }]
             paths:
               /orders:
@@ -106,16 +106,16 @@ public class OAuth2InterchangeTests
                 oauth:
                   type: oauth2
                   flows:
-                    authorizationCode: { authorizationUrl: /authorize, tokenUrl: /token, scopes: { orders.read: read } }
+                    authorizationCode: { authorizationUrl: /authorize, tokenUrl: oauth/token, scopes: { orders.read: read } }
             """, "shop.yaml");
 
         Assert.Equal(
             new OAuth2Auth(
                 OAuth2Grant.AuthorizationCode,
-                "{{baseUrl}}/token",
+                "https://shop.test/v1/oauth/token",
                 "{{clientId}}",
                 "{{clientSecret}}",
-                "{{baseUrl}}/authorize",
+                "https://shop.test/authorize",
                 Scope: "orders.read"),
             Assert.Single(parsed.Collection.Root.Requests).Auth);
         var variables = Assert.Single(parsed.Collection.Environments).Variables;

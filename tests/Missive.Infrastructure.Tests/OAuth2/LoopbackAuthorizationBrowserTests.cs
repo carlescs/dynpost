@@ -44,14 +44,30 @@ public class LoopbackAuthorizationBrowserTests
     [Fact]
     public async Task Authorize_ListensOnAFixedRedirect()
     {
-        var port = FreePort();
-        var redirect = new Uri($"http://localhost:{port}/oauth/done");
         var browser = new LoopbackAuthorizationBrowser(Browser(r => "/oauth/done?error=access_denied"));
 
-        var callback = await browser.AuthorizeAsync(redirect, AuthorizationUrl);
+        var (redirect, callback) = await AuthorizeOnFreePortAsync(browser, port => $"http://localhost:{port}/oauth/done");
 
+        Assert.True(callback.IsSuccess, callback.Error?.Message);
         Assert.Equal(redirect, callback.Value.RedirectUri);
         Assert.Equal("access_denied", callback.Value.Parameters["error"]);
+    }
+
+    [Fact]
+    public async Task Authorize_ListensOnTheRedirectsOwnLoopbackAddress()
+    {
+        // Only Linux routes all of 127.0.0.0/8 to loopback out of the box.
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var browser = new LoopbackAuthorizationBrowser(Browser(_ => "/cb?code=c"));
+
+        var (_, callback) = await AuthorizeOnFreePortAsync(browser, port => $"http://127.0.0.2:{port}/cb");
+
+        Assert.True(callback.IsSuccess, callback.Error?.Message);
+        Assert.Equal("c", callback.Value.Parameters["code"]);
     }
 
     [Fact]
@@ -96,6 +112,26 @@ public class LoopbackAuthorizationBrowserTests
         finally
         {
             taken.Stop();
+        }
+    }
+
+    /// <summary>
+    /// Authorizes on a fixed redirect with a port that was free a moment ago. Tests running in
+    /// parallel can take that port before the browser listens on it, so a taken port is retried.
+    /// </summary>
+    private static async Task<(Uri Redirect, Application.Common.Result<AuthorizationCallback> Callback)> AuthorizeOnFreePortAsync(
+        LoopbackAuthorizationBrowser browser,
+        Func<int, string> redirectFor)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var port = FreePort();
+            var redirect = new Uri(redirectFor(port));
+            var callback = await browser.AuthorizeAsync(redirect, AuthorizationUrl);
+            if (callback.IsSuccess || attempt == 5 || callback.Error!.Message.Contains($"port {port}?", StringComparison.Ordinal) is false)
+            {
+                return (redirect, callback);
+            }
         }
     }
 

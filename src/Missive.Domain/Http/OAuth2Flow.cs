@@ -59,7 +59,8 @@ public static class OAuth2Flow
 
         var tokenUrl = Resolve(auth.TokenUrl);
         var clientId = Resolve(auth.ClientId);
-        var clientSecret = Resolve(auth.ClientSecret);
+        // The secret is used exactly as written: spaces in it are part of it.
+        var clientSecret = VariableTemplate.Resolve(auth.ClientSecret, variables, missing);
         var authUrl = auth.Grant == OAuth2Grant.AuthorizationCode ? Resolve(auth.AuthUrl) : string.Empty;
         var redirect = auth.Grant == OAuth2Grant.AuthorizationCode ? Resolve(auth.RedirectUri) : string.Empty;
         var scope = string.Join(' ', Resolve(auth.Scope).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));

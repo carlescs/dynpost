@@ -131,6 +131,27 @@ describe('OAuth2Auth', () => {
     expect(fixture.nativeElement.textContent).toContain('No token yet');
   });
 
+  it('ignores a sign-in that finishes after the environment changed', async () => {
+    const fixture = await render();
+    let finish!: (value: OAuth2TokenDto) => void;
+    send.mockImplementation((type: string) =>
+      type === 'oauth2.token.get'
+        ? new Promise((resolve) => (finish = resolve))
+        : Promise.resolve(null),
+    );
+
+    button(fixture, 'Get new token').click();
+    activeId.set('prod.yaml');
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(300);
+    finish(token);
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Token valid until');
+    activeId.set('dev.yaml');
+  });
+
   it('reloads the status when the environment changes', async () => {
     await render();
     send.mockClear();

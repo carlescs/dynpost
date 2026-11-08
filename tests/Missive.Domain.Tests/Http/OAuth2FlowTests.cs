@@ -51,6 +51,14 @@ public class OAuth2FlowTests
     }
 
     [Fact]
+    public void Resolve_KeepsTheSecretVerbatim()
+    {
+        var settings = Settings(ClientCredentials with { ClientSecret = " {{clientSecret}} " });
+
+        Assert.Equal(" s3cr3t ", settings.ClientSecret);
+    }
+
+    [Fact]
     public void Resolve_ReportsMissingVariablesAndFields()
     {
         var resolution = OAuth2Flow.Resolve(new OAuth2Auth(OAuth2Grant.AuthorizationCode, TokenUrl: "{{nope}}/token"), Variables);

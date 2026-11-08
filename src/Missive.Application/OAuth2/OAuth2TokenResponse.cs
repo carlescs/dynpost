@@ -14,6 +14,12 @@ public static class OAuth2Errors
     /// <summary>The token or authorization endpoint refused, or answered something unusable.</summary>
     public const string FailedCode = "oauth2.failed";
 
+    /// <summary>
+    /// The token endpoint rejected the grant itself (<c>invalid_grant</c>): an expired or revoked
+    /// refresh token or authorization code, which retrying can't fix.
+    /// </summary>
+    public const string GrantRejectedCode = "oauth2.grant_rejected";
+
     /// <summary>The authorization code grant needs the user to sign in first ('Get new token').</summary>
     public const string SignInRequiredCode = "oauth2.sign_in_required";
 
@@ -45,7 +51,8 @@ public static class OAuth2TokenResponse
             var error = fields.GetValueOrDefault("error");
             var description = fields.GetValueOrDefault("error_description");
             var status = $"{response.StatusCode}{(string.IsNullOrEmpty(response.ReasonPhrase) ? string.Empty : " " + response.ReasonPhrase)}";
-            return OAuth2Errors.Failed(
+            return new Error(
+                error == "invalid_grant" ? OAuth2Errors.GrantRejectedCode : OAuth2Errors.FailedCode,
                 !string.IsNullOrEmpty(error)
                     ? $"The token endpoint refused the request ({status}): {error}{(string.IsNullOrEmpty(description) ? "." : $" — {description}")}"
                     : success
@@ -56,7 +63,7 @@ public static class OAuth2TokenResponse
         DateTimeOffset? expires = null;
         if (fields.GetValueOrDefault("expires_in") is { } expiresIn
             && double.TryParse(expiresIn, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
-            && seconds > 0)
+            && seconds >= 0)
         {
             expires = now.AddSeconds(Math.Min(seconds, 100L * 365 * 24 * 3600));
         }

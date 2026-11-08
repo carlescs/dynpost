@@ -178,7 +178,7 @@ public static class RequestMapper
             grant,
             Field(auth.TokenUrl),
             Field(auth.ClientId),
-            Field(auth.ClientSecret),
+            auth.ClientSecret ?? string.Empty,
             grant == OAuth2Grant.AuthorizationCode ? Field(auth.AuthUrl) : string.Empty,
             grant == OAuth2Grant.AuthorizationCode ? Field(auth.RedirectUri) : string.Empty,
             Field(auth.Scope),

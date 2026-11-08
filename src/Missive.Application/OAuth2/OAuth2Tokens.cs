@@ -17,6 +17,13 @@ public sealed class OAuth2Tokens(IHttpSender sender, IOAuth2TokenStore store, IA
     private readonly ConcurrentDictionary<(string Environment, string Key), OAuth2Token> _memory = new();
 
     /// <summary>
+    /// One guard per workspace, environment and settings, so requests sharing an expired token
+    /// renew it once: with refresh token rotation, a second refresh with the same (now used)
+    /// refresh token would be rejected.
+    /// </summary>
+    private readonly ConcurrentDictionary<(string Root, string Environment, string Key), SemaphoreSlim> _renewals = new();
+
+    /// <summary>
     /// The token to send a request with: the cached one while it is valid, else one obtained with
     /// the refresh token, else (client credentials) a new one. The authorization code grant never
     /// opens the browser here: without a usable token it asks the user to sign in.
@@ -26,13 +33,33 @@ public sealed class OAuth2Tokens(IHttpSender sender, IOAuth2TokenStore store, IA
     public async Task<Result<OAuth2Token>> GetAsync(OAuth2Settings settings, string? root, string? environmentId, CancellationToken cancellationToken = default)
     {
         var cached = await PeekAsync(settings, root, environmentId, cancellationToken);
+        if (!cached.IsSuccess || cached.Value is { } valid && !valid.IsExpired(time.GetUtcNow()))
+        {
+            return cached.IsSuccess ? cached.Value! : cached.Error!;
+        }
+
+        var renewal = _renewals.GetOrAdd((root ?? string.Empty, environmentId ?? string.Empty, settings.CacheKey), _ => new SemaphoreSlim(1, 1));
+        await renewal.WaitAsync(cancellationToken);
+        try
+        {
+            return await RenewAsync(settings, root, environmentId, cancellationToken);
+        }
+        finally
+        {
+            renewal.Release();
+        }
+    }
+
+    /// <summary>Renews the token while holding its guard; another request may have renewed it meanwhile.</summary>
+    private async Task<Result<OAuth2Token>> RenewAsync(OAuth2Settings settings, string? root, string? environmentId, CancellationToken cancellationToken)
+    {
+        var cached = await PeekAsync(settings, root, environmentId, cancellationToken);
         if (!cached.IsSuccess)
         {
             return cached.Error!;
         }
 
-        var now = time.GetUtcNow();
-        if (cached.Value is { } token && !token.IsExpired(now))
+        if (cached.Value is { } token && !token.IsExpired(time.GetUtcNow()))
         {
             return token;
         }
@@ -45,12 +72,13 @@ public sealed class OAuth2Tokens(IHttpSender sender, IOAuth2TokenStore store, IA
                 return await KeepAsync(settings, root, environmentId, refreshed.Value, cancellationToken);
             }
 
-            if (refreshed.Error!.Code != OAuth2Errors.FailedCode)
+            if (refreshed.Error!.Code != OAuth2Errors.GrantRejectedCode)
             {
+                // A network error or a server failure: the refresh token may still work later.
                 return refreshed.Error;
             }
 
-            // The server refused the refresh token (expired or revoked): it is no use any more.
+            // The server rejected the refresh token (expired or revoked): it is no use any more.
             await ForgetAsync(settings, root, environmentId, cancellationToken);
         }
 
