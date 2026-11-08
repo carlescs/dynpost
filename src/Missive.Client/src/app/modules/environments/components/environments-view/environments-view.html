@@ -56,29 +56,33 @@
       >
         <button
           type="button"
-          class="flex shrink-0 items-center text-slate-400 hover:text-sky-600 disabled:cursor-not-allowed"
-          [title]="env.error ? 'This environment can\'t be read' : 'Send requests with ' + env.name"
+          class="flex min-w-0 flex-1 items-center gap-2 text-left enabled:hover:text-sky-700 disabled:cursor-not-allowed"
+          [title]="env.error ?? 'Send requests with ' + env.name"
           [attr.aria-label]="'Use ' + env.name"
           [disabled]="!!env.error"
           (click)="store.select(env.id)"
         >
           @if (store.activeId() === env.id) {
-            <fa-icon class="text-sky-600" [icon]="faCircleCheck" />
+            <fa-icon class="shrink-0 text-sky-600" [icon]="faCircleCheck" />
           } @else {
-            <span [class]="ring"></span>
+            <span [class]="ring + ' shrink-0 text-slate-400'"></span>
           }
-        </button>
-        <button
-          type="button"
-          class="flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 text-left"
-          [title]="env.error ?? 'Edit environments/' + env.id"
-          [disabled]="!!env.error"
-          (click)="store.edit(env.id)"
-        >
           <span class="truncate" [class.text-rose-700]="env.error">{{ env.name }}</span>
           @if (env.error) {
             <fa-icon class="shrink-0 text-rose-600" [icon]="faCircleExclamation" />
           }
+        </button>
+        <button
+          type="button"
+          class="flex size-5 shrink-0 items-center justify-center rounded enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          [class.text-sky-600]="store.draft()?.id === env.id"
+          [class.text-slate-400]="store.draft()?.id !== env.id"
+          [title]="env.error ?? 'Edit environments/' + env.id"
+          [attr.aria-label]="'Edit ' + env.name"
+          [disabled]="!!env.error"
+          (click)="store.edit(env.id)"
+        >
+          <fa-icon [icon]="faPen" />
         </button>
       </li>
     }
