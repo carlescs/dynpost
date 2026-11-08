@@ -37,9 +37,12 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
 
     public CancellationTokenSource Cancellation { get; } = new();
 
-    public string State { get; private set; } = "running";
+    private string _state = "running";
+    private string? _message;
 
-    public string? Message { get; private set; }
+    public string State => Volatile.Read(ref _state);
+
+    public string? Message => Volatile.Read(ref _message);
 
     public bool PersistenceComplete => _persistence.Task.IsCompleted;
 
@@ -84,15 +87,16 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
     public void Finish(string state, string? message = null)
     {
         _finishedAt = _clock.Elapsed;
-        Message = message;
-        State = state;
+        Volatile.Write(ref _message, message);
+        Volatile.Write(ref _state, state);
     }
 
     public void CompletePersistence(string? message)
     {
         if (message is not null)
         {
-            Message = Message is null ? message : $"{Message} {message}";
+            var current = Message;
+            Volatile.Write(ref _message, current is null ? message : $"{current} {message}");
         }
 
         _persistence.TrySetResult();
@@ -111,6 +115,9 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
 
     public RunResultDto ToDto()
     {
+        // Read the state first: once it is final, every sample is in, so the snapshots below agree.
+        var state = State;
+        var message = Message;
         var elapsed = Elapsed;
         var total = _total.Snapshot(elapsed);
         var thresholds = ThresholdEvaluator.Evaluate(Plan.Thresholds, total)
@@ -129,7 +136,7 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
             RunId,
             PlanPath,
             Plan.Name,
-            State,
+            state,
             startedAt,
             (long)elapsed.TotalMilliseconds,
             Plan.Load.Threads,
@@ -138,10 +145,10 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
             _requests.Select(pair => new RequestStatsDto(pair.Key, ToDto(pair.Value.Snapshot(elapsed)))).ToList(),
             _timeline.Points().Select(point => new TimelinePointDto(point.Second, point.Samples, point.Errors, Math.Round(point.AverageMs, 1))).ToList(),
             thresholds,
-            State == "completed" ? thresholds.All(t => t.Passed) : null,
+            state == "completed" ? thresholds.All(t => t.Passed) : null,
             failed,
             slowest,
-            Message);
+            message);
     }
 
     public static StatsDto ToDto(StatsSnapshot s) => new(
