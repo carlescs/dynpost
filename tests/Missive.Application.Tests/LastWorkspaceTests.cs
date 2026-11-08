@@ -123,6 +123,30 @@ public class LastWorkspaceTests
     }
 
     [Fact]
+    public async Task RemoveRecent_RemovesOnlyTheSelectedFolderAndKeepsLastWorkspace()
+    {
+        _storedSettings = new AppSettings(Folder, RecentWorkspaces: [Folder, "/work/other"]);
+
+        var result = await new RemoveRecentWorkspace(_settings).ExecuteAsync("/work/other");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(Folder, _storedSettings.LastWorkspacePath);
+        Assert.Equal([Folder], _storedSettings.RecentWorkspaces);
+    }
+
+    [Fact]
+    public async Task RemoveRecent_WhenFolderIsNotListed_KeepsSettingsUnchanged()
+    {
+        _storedSettings = new AppSettings(Folder, RecentWorkspaces: [Folder]);
+        var settings = _storedSettings;
+
+        var result = await new RemoveRecentWorkspace(_settings).ExecuteAsync("/work/other");
+
+        Assert.True(result.IsSuccess);
+        Assert.Same(settings, _storedSettings);
+    }
+
+    [Fact]
     public async Task FailingToRemember_StillOpensTheFolder()
     {
         _repository.FolderExists(Folder).Returns(true);

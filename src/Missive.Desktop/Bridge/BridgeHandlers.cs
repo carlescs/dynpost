@@ -41,6 +41,8 @@ internal static class BridgeHandlers
                 ct => Use<OpenLastWorkspace>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.WorkspaceRecent,
                 ct => Use<GetRecentWorkspaces>().ExecuteAsync(ct))
+            .Register<RemoveRecentWorkspacePayload, Unit?>(BridgeMessageTypes.WorkspaceRecentRemove,
+                async (p, ct) => NoValue(await Use<RemoveRecentWorkspace>().ExecuteAsync(p.Path, ct)))
             .Register(BridgeMessageTypes.WorkspaceTree,
                 ct => Use<GetWorkspaceTree>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.WorkspaceExportFormats,

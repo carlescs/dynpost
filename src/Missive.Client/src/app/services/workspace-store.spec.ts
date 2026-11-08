@@ -85,6 +85,32 @@ describe('WorkspaceStore', () => {
     expect(store.error()).toBeNull();
   });
 
+  it('removes a workspace from the recent list after the host confirms', async () => {
+    store.recent.set([
+      { name: 'api', path: '/home/me/api' },
+      { name: 'other', path: '/home/me/other' },
+    ]);
+    respond({ 'workspace.recent.remove': () => null });
+
+    await store.removeRecent('/home/me/other');
+
+    expect(send).toHaveBeenCalledWith('workspace.recent.remove', { path: '/home/me/other' });
+    expect(store.recent()).toEqual([{ name: 'api', path: '/home/me/api' }]);
+  });
+
+  it('keeps the recent list and reports a removal error', async () => {
+    store.recent.set([{ name: 'other', path: '/home/me/other' }]);
+    respond({
+      'workspace.recent.remove': () =>
+        Promise.reject(new BridgeError('settings.save_failed', 'Read-only')),
+    });
+
+    await store.removeRecent('/home/me/other');
+
+    expect(store.recent()).toEqual([{ name: 'other', path: '/home/me/other' }]);
+    expect(store.error()).toBe('Read-only');
+  });
+
   it('creates new requests as dirty, untitled documents', () => {
     store.newRequest('users');
     expect(store.activeDocument()).toMatchObject({

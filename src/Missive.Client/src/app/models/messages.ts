@@ -457,6 +457,8 @@ export interface BridgeMessages {
    * dropped from the list.
    */
   'workspace.recent': { payload: void; result: RecentWorkspaceDto[] };
+  /** Removes a folder from recently opened workspaces. */
+  'workspace.recent.remove': { payload: { path: string }; result: null };
   /** Re-reads the open workspace from disk. */
   'workspace.tree': { payload: void; result: WorkspaceDto };
   /** The formats `workspace.export` can write. */

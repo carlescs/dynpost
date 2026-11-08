@@ -8,6 +8,7 @@ import {
   faFolderOpen,
   faLayerGroup,
   faPaperPlane,
+  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentStore } from '../../services/environment-store';
 import { ThemeStore } from '../../services/theme-store';
@@ -48,6 +49,7 @@ export class AppHeader {
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faFolderOpen = faFolderOpen;
+  protected readonly faXmark = faXmark;
 
   protected toggleRecent(): void {
     const open = !this.recentOpen();

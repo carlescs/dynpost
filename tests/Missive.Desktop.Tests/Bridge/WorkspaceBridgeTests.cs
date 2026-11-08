@@ -31,6 +31,7 @@ public sealed class WorkspaceBridgeTests : IDisposable
             .AddTransient<DuplicateRequest>()
             .AddTransient<DuplicateFolder>()
             .AddTransient<GetRecentWorkspaces>()
+            .AddTransient<RemoveRecentWorkspace>()
             .BuildServiceProvider();
         _services.GetRequiredService<CurrentWorkspace>().Open(Root);
         _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>());
@@ -80,6 +81,25 @@ public sealed class WorkspaceBridgeTests : IDisposable
         var entry = Assert.Single(response.GetProperty("payload").EnumerateArray());
         Assert.Equal("my-api", entry.GetProperty("name").GetString());
         Assert.Equal(Root, entry.GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public async Task RecentRemove_RemovesTheSelectedFolder()
+    {
+        var settings = new AppSettings(Root, RecentWorkspaces: [Root, "/work/other"]);
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(settings);
+        _settings.UpdateAsync(Arg.Any<Func<AppSettings, AppSettings>>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult<Result<AppSettings>>(
+                call.Arg<Func<AppSettings, AppSettings>>()(settings)));
+
+        var response = await SendAsync("workspace.recent.remove", """{ "path": "/work/other" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Null(response.GetProperty("payload").GetString());
+        _ = _settings.Received(1).UpdateAsync(
+            Arg.Is<Func<AppSettings, AppSettings>>(update =>
+                update(settings).RecentWorkspaces!.SequenceEqual(new[] { Root })),
+            Arg.Any<CancellationToken>());
     }
 
     private async Task<JsonElement> SendAsync(string type, string payload)

@@ -57,3 +57,17 @@ public sealed class GetRecentWorkspaces(IAppSettingsStore settings, IWorkspaceRe
             .ToList());
     }
 }
+
+/// <summary>Removes a workspace folder from the recently opened list.</summary>
+public sealed class RemoveRecentWorkspace(IAppSettingsStore settings)
+{
+    public async Task<Result<Unit>> ExecuteAsync(string folder, CancellationToken cancellationToken = default)
+    {
+        var result = await settings.UpdateAsync(
+            saved => saved.RecentWorkspaces?.Contains(folder) == true
+                ? saved with { RecentWorkspaces = [.. saved.RecentWorkspaces.Where(f => f != folder)] }
+                : saved,
+            cancellationToken);
+        return result.IsSuccess ? Unit.Value : result.Error!;
+    }
+}

@@ -52,7 +52,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Open a folder as a workspace and browse its requests
 - [x] Create, rename, duplicate and delete (nested) collection folders, and move
       requests and folders between them with drag and drop
-- [x] Duplicate requests, and reopen recently used workspaces
+- [x] Duplicate requests, switch between recently used workspaces, and remove
+      them from recents
 - [x] Request descriptions in Markdown (a **Docs** tab), imported and exported
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
