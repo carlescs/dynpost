@@ -446,7 +446,8 @@ Captures are not imported or exported: other tools express them as scripts.
 
 A load run sends a chosen set of requests repeatedly from several concurrent
 virtual users and reports latency percentiles, throughput and errors. The plan
-is a git-tracked `*.run.yaml` file (edit it in the **Load runs** view); results
+is a git-tracked `*.run.yaml` file (edit it in the **Load runs** view, with a
+visual form or as YAML text; the form keeps comments and unknown keys); results
 are saved locally under `.missive/runs/` and never committed. Runs use the
 selected environment and send no cookies.
 
