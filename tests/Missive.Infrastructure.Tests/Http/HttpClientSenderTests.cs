@@ -226,6 +226,8 @@ public sealed class HttpClientSenderTests
         Assert.Equal("{}", handler.Received[0].Body);
         Assert.Null(handler.Received[1].Body);
         Assert.False(handler.Received[1].Request.Headers.Contains("Authorization"));
+        Assert.Contains(KeyValuePair.Create("Authorization", "Bearer abc"), response.Redirects[0].SentHeaders);
+        Assert.DoesNotContain(response.Redirects[1].SentHeaders, header => header.Key == "Authorization");
         Assert.True(handler.Received[2].Request.Headers.Contains("X-Keep"));
         Assert.Equal("GET", response.Sent!.Method);
         Assert.Equal("https://other.example.com/final", response.Sent.Url.AbsoluteUri);
@@ -380,6 +382,88 @@ public sealed class HttpClientSenderTests
             Assert.True(timings.Wait >= TimeSpan.Zero);
             Assert.True(timings.Download >= TimeSpan.Zero);
             Assert.StartsWith("GET /hi HTTP/1.1", await serving);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [Theory]
+    [InlineData("https://api.example.com/users", "api.example.com")]
+    [InlineData("http://api.example.com:8080/users", "api.example.com:8080")]
+    [InlineData("https://bücher.example/", "xn--bcher-kva.example")]
+    [InlineData("http://[::1]:5000/", "[::1]:5000")]
+    public void SentHeaders_StartsWithTheHostTheHandlerWrites(string url, string host)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Get, url);
+        message.Headers.TryAddWithoutValidation("Accept", "*/*");
+
+        Assert.Equal(
+            [KeyValuePair.Create("Host", host), KeyValuePair.Create("Accept", "*/*")],
+            HttpClientSender.SentHeaders(message));
+    }
+
+    [Fact]
+    public void SentHeaders_KeepsAHostSetByTheRequest()
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Get, "https://127.0.0.1/");
+        message.Headers.Host = "api.example.com";
+
+        Assert.Equal([KeyValuePair.Create("Host", "api.example.com")], HttpClientSender.SentHeaders(message));
+    }
+
+    [Fact]
+    public async Task SendAsync_ReportsEveryHeaderSentOverARealConnection()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var serving = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            var buffer = new byte[4096];
+            var received = new StringBuilder();
+            while (!received.ToString().Contains("\r\n\r\n"))
+            {
+                var read = await stream.ReadAsync(buffer);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                received.Append(Encoding.ASCII.GetString(buffer, 0, read));
+            }
+
+            var reply = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(reply));
+            return received.ToString();
+        });
+
+        try
+        {
+            using var sender = new HttpClientSender();
+            var result = await sender.SendAsync(new OutgoingRequest(
+                "POST",
+                new Uri($"http://127.0.0.1:{port}/items"),
+                [KeyValuePair.Create("X-Trace", "abc")],
+                new TextBody("{}", "application/json")));
+
+            Assert.True(result.IsSuccess, result.Error?.Message);
+            var wire = (await serving)
+                .Split("\r\n\r\n")[0]
+                .Split("\r\n")
+                .Skip(1)
+                .Select(line => line.Split(": ", 2))
+                .Select(parts => (Name: parts[0].ToLowerInvariant(), Value: parts[1]))
+                .ToList();
+            var reported = result.Value.Sent!.Headers
+                .Select(header => (Name: header.Key.ToLowerInvariant(), header.Value))
+                .ToList();
+            Assert.Equal(wire.OrderBy(h => h.Name), reported.OrderBy(h => h.Name));
+            Assert.Equal(("host", $"127.0.0.1:{port}"), reported[0]);
+            Assert.Contains(reported, header => header.Name == "accept-encoding");
         }
         finally
         {

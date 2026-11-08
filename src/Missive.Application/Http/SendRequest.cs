@@ -248,13 +248,11 @@ public sealed class SendRequest(
                     hop.StatusCode,
                     hop.ReasonPhrase ?? string.Empty,
                     masking.Url(hop.Location),
-                    (long)Math.Round(hop.Duration.TotalMilliseconds)))
+                    (long)Math.Round(hop.Duration.TotalMilliseconds),
+                    masking.Headers(hop.SentHeaders)))
                 .ToList(),
             response.Sent is { } sent
-                ? new SentRequestDto(
-                    sent.Method,
-                    masking.Url(sent.Url),
-                    sent.Headers.Select(h => new KeyValueDto(h.Key, masking.Header(h.Key, h.Value))).ToList())
+                ? new SentRequestDto(sent.Method, masking.Url(sent.Url), masking.Headers(sent.Headers))
                 : null,
             setCookies);
     }
@@ -284,5 +282,8 @@ public sealed class SendRequest(
         public string Url(Uri url) => SecretMasking.MaskUrl(url, SensitiveParams, Secrets);
 
         public string Header(string name, string value) => SecretMasking.MaskHeader(name, value, SensitiveHeaders, Secrets);
+
+        public List<KeyValueDto> Headers(IEnumerable<KeyValuePair<string, string>> headers) =>
+            headers.Select(h => new KeyValueDto(h.Key, Header(h.Key, h.Value))).ToList();
     }
 }

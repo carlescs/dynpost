@@ -140,6 +140,11 @@ export interface RedirectDto {
   /** Where it redirected to. */
   location: string;
   durationMs: number;
+  /**
+   * The headers of the request that got the redirect, as sent, with secrets hidden. They can
+   * differ from the final request's: `Authorization` is not sent on to the new location.
+   */
+  sentHeaders?: { key: string; value: string }[] | null;
 }
 
 export interface SentRequestDto {

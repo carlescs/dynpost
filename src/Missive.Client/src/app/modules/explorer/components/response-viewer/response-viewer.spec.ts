@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ResponseDto } from '../../../../models/messages';
 import { RequestDocument } from '../../../../models/workspace';
 import { WorkspaceStore } from '../../../../services/workspace-store';
-import { copyText, ResponseViewer, timingPhases } from './response-viewer';
+import { copyText, ResponseViewer, sentHops, timingPhases } from './response-viewer';
 
 const response = (patch: Partial<ResponseDto> = {}): ResponseDto => ({
   status: 200,
@@ -29,7 +29,10 @@ const response = (patch: Partial<ResponseDto> = {}): ResponseDto => ({
   sent: {
     method: 'GET',
     url: 'https://a.test/new',
-    headers: [{ key: 'Authorization', value: 'Bearer ••••••' }],
+    headers: [
+      { key: 'Host', value: 'a.test' },
+      { key: 'Authorization', value: 'Bearer ••••••' },
+    ],
   },
   cookies: [{ name: 'session', value: 'abc', path: '/', secure: true, httpOnly: true }],
   ...patch,
@@ -142,8 +145,58 @@ describe('ResponseViewer', () => {
     expect(text()).toContain('https://a.test/old');
     expect(text()).toContain('301');
 
+    const requestTab = [...fixture.nativeElement.querySelectorAll('[role=tab]')].find(
+      (b: HTMLElement) => b.textContent?.trim().startsWith('Request'),
+    ) as HTMLElement;
+    expect(requestTab.textContent).toContain('(2)');
     click(fixture, 'Request');
     expect(text()).toContain('https://a.test/new');
+    expect(text()).toContain('Host');
     expect(text()).toContain('Bearer ••••••');
+  });
+
+  it('lists every request sent and says why a redirect dropped the Authorization header', () => {
+    const fixture = render(
+      response({
+        redirects: [
+          {
+            method: 'GET',
+            url: 'http://a.test/old',
+            status: 301,
+            statusText: 'Moved Permanently',
+            location: 'https://a.test/new',
+            durationMs: 15,
+            sentHeaders: [{ key: 'Authorization', value: 'Bearer ••••••' }],
+          },
+        ],
+        sent: {
+          method: 'GET',
+          url: 'https://a.test/new',
+          headers: [{ key: 'Host', value: 'a.test' }],
+        },
+      }),
+    );
+    click(fixture, 'Request');
+    const text = fixture.nativeElement.textContent as string;
+
+    expect(text).toContain('Request 1');
+    expect(text).toContain('http://a.test/old');
+    expect(text).toContain('Bearer ••••••');
+    expect(text).toContain('Final request');
+    expect(text).toContain('Authorization is not sent on to the new location');
+  });
+});
+
+describe('sentHops', () => {
+  it('puts the requests that got redirects before the final one', () => {
+    const hops = sentHops(response());
+    expect(hops.map((h) => [h.url, h.status])).toEqual([
+      ['https://a.test/old', 301],
+      ['https://a.test/new', null],
+    ]);
+  });
+
+  it('is empty when the request as sent is unknown', () => {
+    expect(sentHops(response({ sent: null }))).toEqual([]);
   });
 });

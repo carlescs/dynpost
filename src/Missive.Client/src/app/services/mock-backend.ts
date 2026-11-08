@@ -490,6 +490,11 @@ export class MockBackend {
       return fail(ERROR_CODES.invalidRequest, `'${raw}' is not a valid http or https URL.`);
     }
     for (const param of enabled(dto.params)) url.searchParams.append(param.key, param.value);
+    const auth = dto.auth;
+    const apiKeyIn = auth.type === 'apiKey' && auth.key ? (auth.in ?? 'header') : null;
+    if (apiKeyIn === 'query' && !url.searchParams.has(auth.key!)) {
+      url.searchParams.append(auth.key!, auth.value ?? '');
+    }
 
     const started = performance.now();
     const cancelled = await new Promise<boolean>((resolve) => {
@@ -503,18 +508,55 @@ export class MockBackend {
     if (cancelled) return fail(ERROR_CODES.cancelled, 'The request was cancelled.');
 
     const headers = enabled(dto.headers).map((h) => ({ key: h.key, value: h.value }));
+    const named = (name: string) => (h: { key: string }) =>
+      h.key.toLowerCase() === name.toLowerCase();
+    // Like the host, auth only adds a header the request doesn't set itself.
+    const authHeader =
+      auth.type === 'basic' || auth.type === 'bearer' || auth.type === 'oauth2'
+        ? { key: 'Authorization', value: `${auth.type === 'basic' ? 'Basic' : 'Bearer'} token` }
+        : apiKeyIn === 'header'
+          ? { key: auth.key!, value: auth.value ?? '' }
+          : null;
+    if (authHeader && !headers.some(named(authHeader.key))) headers.push(authHeader);
     const env = this.activeEnvironment ? this.environments.get(this.activeEnvironment) : null;
     const jarId = env?.cookieJar ? this.activeEnvironment : null;
     const jar = jarId ? (this.jars.get(jarId) ?? []) : [];
+
+    // The request as the host would report it: Host first, the handler's additions merged into
+    // the request's own headers, and credentials hidden wherever they appear.
+    const mask = '••••••';
+    const isApiKeyHeader = (key: string) => apiKeyIn === 'header' && named(auth.key!)({ key });
+    const masked = (h: { key: string; value: string }) =>
+      /^(proxy-)?authorization$/i.test(h.key)
+        ? { ...h, value: h.value.includes(' ') ? `${h.value.split(' ')[0]} ${mask}` : mask }
+        : isApiKeyHeader(h.key)
+          ? { ...h, value: mask }
+          : h;
+    const encodings = ['gzip', 'deflate', 'br'];
+    const ownEncoding = headers.find(named('Accept-Encoding'));
+    const own = (ownEncoding?.value ?? '')
+      .split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+    const acceptEncoding = [...own, ...encodings.filter((e) => !own.includes(e))].join(', ');
     const sentHeaders = [
-      ...headers.map((h) =>
-        /^authorization$/i.test(h.key) ? { ...h, value: `${h.value.split(' ')[0]} ••••••` } : h,
-      ),
-      { key: 'User-Agent', value: 'Missive' },
+      { key: 'Host', value: headers.find(named('Host'))?.value ?? url.host },
+      ...headers
+        .filter((h) => !named('Host')(h))
+        .map((h) => (h === ownEncoding ? { ...h, value: acceptEncoding } : masked(h))),
+      ...(headers.some(named('User-Agent')) ? [] : [{ key: 'User-Agent', value: 'Missive' }]),
+      ...(ownEncoding ? [] : [{ key: 'Accept-Encoding', value: acceptEncoding }]),
       ...(jar.length
         ? [{ key: 'Cookie', value: jar.map((c) => `${c.name}=${c.value}`).join('; ') }]
         : []),
     ];
+    const sentUrl = new URL(url);
+    if (apiKeyIn === 'query') {
+      const params = [...sentUrl.searchParams].map(
+        ([k, v]) => [k, k === auth.key ? mask : v] as [string, string],
+      );
+      sentUrl.search = new URLSearchParams(params).toString();
+    }
     const body = JSON.stringify({
       preview: 'Browser preview: nothing was sent. This is what the host would send.',
       method: dto.method,
@@ -571,7 +613,7 @@ export class MockBackend {
           download: 3.2,
         },
         redirects: [],
-        sent: { method: dto.method, url: url.toString(), headers: sentHeaders },
+        sent: { method: dto.method, url: sentUrl.toString(), headers: sentHeaders },
         cookies: [
           {
             name: 'preview-session',
