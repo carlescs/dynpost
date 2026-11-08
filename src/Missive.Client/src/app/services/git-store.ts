@@ -166,8 +166,6 @@ export class GitStore {
       () => this.bridge.send('git.fetch'),
       (status) => {
         this.status.set(status);
-        // A fetch adds and prunes remote-tracking branches.
-        this.reloadBranchesIfShown();
         this.notice.set({
           kind: 'info',
           text: status.upstreamGone
@@ -178,6 +176,8 @@ export class GitStore {
         });
       },
     );
+    // A fetch adds and prunes remote-tracking branches, even one that then fails on a remote.
+    this.reloadBranchesIfShown();
   }
 
   /** Reads the commit identity; failures leave the last one (the status shows git errors). */
@@ -283,7 +283,6 @@ export class GitStore {
       () => this.bridge.send('git.pull'),
       (r) => {
         this.status.set(r.status);
-        this.reloadBranchesIfShown();
         this.notice.set(PULL_NOTICES[r.outcome]);
         // A pull can add, change or remove request and environment files.
         void this.workspace.refresh();
@@ -291,6 +290,8 @@ export class GitStore {
         void this.environments.refresh();
       },
     );
+    // The pull's fetch prunes remote-tracking branches even when the merge then fails.
+    this.reloadBranchesIfShown();
   }
 
   async push(): Promise<void> {

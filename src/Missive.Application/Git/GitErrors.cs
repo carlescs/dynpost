@@ -47,6 +47,7 @@ public static class GitErrors
     public const string UncommittedChangesCode = "git.uncommitted_changes";
     public const string BranchDuringMergeCode = "git.branch_during_merge";
     public const string BranchNotMergedCode = "git.branch_not_merged";
+    public const string RemoteBranchUnmappedCode = "git.remote_branch_unmapped";
     public const string CurrentBranchCode = "git.current_branch";
     public const string MergeSameBranchCode = "git.merge_same_branch";
 
@@ -172,6 +173,11 @@ public static class GitErrors
 
     public static Error BranchDuringMerge() =>
         new(BranchDuringMergeCode, "A merge is in progress; complete it or abort it before switching branches.");
+
+    public static Error RemoteBranchUnmapped(string name) =>
+        new(
+            RemoteBranchUnmappedCode,
+            $"Missive can't tell which branch on the remote '{name}' is fetched from (the remote's fetch settings don't map it to a single branch), so it wasn't deleted. Delete it with your own git tools.");
 
     public static Error BranchNotMerged(string name) =>
         new(

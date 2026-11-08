@@ -565,7 +565,9 @@ configuration, hooks and credential helpers apply as usual. In detail:
     branch on its remote after a confirmation (`git push --delete`, never
     forced), for everyone who uses the remote. Local branches are kept; one
     that tracked it shows its upstream as deleted. A branch someone else
-    already deleted is simply dropped from the list.
+    already deleted is simply dropped from the list. The branch to delete is worked out from
+    the remote's fetch settings, so a renamed mapping deletes the right branch;
+    if they don't map it to exactly one branch, nothing is deleted.
 - **Remotes** lists the repository's remotes with their URLs. You can add one,
   rename it or change its URL (`git remote add`, `rename`, `set-url`), or
   remove it after confirming (`git remote remove`, which also drops its
