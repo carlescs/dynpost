@@ -126,9 +126,12 @@ public sealed class HttpClientSenderTests
     {
         using var sender = new HttpClientSender(new HttpClient(Respond()));
 
-        var result = await sender.SendAsync(Request("POST", body: new BinaryBody(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")))));
+        var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+        var result = await sender.SendAsync(Request("POST", body: new BinaryBody(missing)));
 
         Assert.Equal(ErrorCodes.Io, result.Error?.Code);
+        Assert.Contains(missing, result.Error?.Message);
     }
 
     [Fact]

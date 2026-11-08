@@ -67,9 +67,18 @@ public class RequestYamlSerializerTests
 
         var yaml = RequestYamlSerializer.Serialize(request);
 
-        Assert.Contains("type: graphql", yaml);
-        Assert.Contains("query:", yaml);
-        Assert.Contains("variables:", yaml);
+        Assert.Equal(
+            """
+            name: GraphQL
+            method: POST
+            url: https://api.example.com/graphql
+            body:
+              type: graphql
+              query: query { me { id } }
+              variables: "{\"id\":\"{{userId}}\"}"
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
         Assert.Equal(request.Body, RequestYamlSerializer.Deserialize(yaml, "fallback").Body);
     }
 

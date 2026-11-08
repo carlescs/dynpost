@@ -168,7 +168,11 @@ export class RequestEditor {
     const absolute = (path: string) => /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path);
     return multipart
       ? body.split('\n').some((line) => {
-          const value = line.slice(line.indexOf('=') + 1).trim();
+          const eq = line.indexOf('=');
+          if (eq < 0) {
+            return false;
+          }
+          const value = line.slice(eq + 1).trim();
           return value.startsWith('@') && absolute(value.slice(1).split(';type=')[0]);
         })
       : absolute(body.trim());
