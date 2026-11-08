@@ -125,6 +125,35 @@ public class ExportFormatTests
     }
 
     [Fact]
+    public void GraphqlBodies_RoundTripThroughPostmanAndInsomnia()
+    {
+        var request = new HttpRequestDefinition(
+            "GraphQL",
+            RequestMethod.Post,
+            "https://example.test/graphql",
+            body: new RequestBody(BodyType.Graphql, "query { me }", """{"id":"{{userId}}"}"""));
+        var collection = new RequestCollection(new CollectionFolder("API", [], [request]));
+
+        var postman = JsonNode.Parse(new PostmanCollectionExporter().Export(collection).Content)!;
+        var postmanBody = postman["item"]![0]!["request"]!["body"]!;
+        Assert.Equal("graphql", (string?)postmanBody["mode"]);
+        Assert.Equal(request.Body.Content, (string?)postmanBody["graphql"]!["query"]);
+        Assert.Equal(request.Body.Variables, (string?)postmanBody["graphql"]!["variables"]);
+        var postmanImported = new CollectionImporter().Parse(postman.ToJsonString(), "api.json").Value;
+        Assert.Equal(request.Body, Assert.Single(postmanImported.Collection.Root.Requests).Body);
+
+        var insomnia = JsonNode.Parse(new InsomniaExporter().Export(collection).Content)!;
+        var insomniaBody = insomnia["resources"]!.AsArray()
+            .Single(r => (string?)r!["_type"] == "request")!["body"]!;
+        Assert.Equal("application/json", (string?)insomniaBody["mimeType"]);
+        var insomniaPayload = JsonNode.Parse((string?)insomniaBody["text"]!)!;
+        Assert.Equal(request.Body.Content, (string?)insomniaPayload["query"]);
+        Assert.Equal("""{"id":"{{ _.userId }}"}""", insomniaPayload["variables"]!.ToJsonString());
+        var insomniaImported = new CollectionImporter().Parse(insomnia.ToJsonString(), "api.json").Value;
+        Assert.Equal(request.Body, Assert.Single(insomniaImported.Collection.Root.Requests).Body);
+    }
+
+    [Fact]
     public async Task LocalExternalFiles_WritesAndReadsText()
     {
         using var temp = new TempDirectory();

@@ -152,6 +152,25 @@
       </div>
       @if (a.bodyType === 'none' && b.bodyType === 'none') {
         <p class="mt-3 text-sm text-slate-500">This request does not have a body.</p>
+      } @else if (a.bodyType === 'graphql' || b.bodyType === 'graphql') {
+        <label class="mt-2 text-xs text-slate-500">Query</label>
+        <app-code-diff-editor
+          class="mt-1 min-h-32 flex-1 overflow-hidden rounded border border-slate-300"
+          ariaLabel="GraphQL query"
+          [original]="a.bodyType === 'none' ? '' : a.body"
+          [modified]="b.bodyType === 'none' ? '' : b.body"
+          language="graphql"
+          [sideBySide]="sideBySide()"
+        />
+        <label class="mt-2 text-xs text-slate-500">Variables (JSON)</label>
+        <app-code-diff-editor
+          class="mt-1 min-h-24 flex-1 overflow-hidden rounded border border-slate-300"
+          ariaLabel="GraphQL variables"
+          [original]="a.bodyType === 'graphql' ? a.bodyVariables : ''"
+          [modified]="b.bodyType === 'graphql' ? b.bodyVariables : ''"
+          language="json"
+          [sideBySide]="sideBySide()"
+        />
       } @else {
         <app-code-diff-editor
           class="mt-2 min-h-48 flex-1 overflow-hidden rounded border border-slate-300"

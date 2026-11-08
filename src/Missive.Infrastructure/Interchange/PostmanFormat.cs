@@ -293,21 +293,11 @@ internal static partial class PostmanFormat
                 return new RequestBody(BodyType.Form, InterchangeText.FormBody(Fields(body.Arr("formdata"), owner, warnings)));
 
             case "graphql":
-                var graphql = new JsonObject { ["query"] = body.Obj("graphql").Str("query") ?? string.Empty };
-                if (body.Obj("graphql").Str("variables") is { Length: > 0 } variables)
-                {
-                    try
-                    {
-                        graphql["variables"] = JsonNode.Parse(variables);
-                    }
-                    catch (System.Text.Json.JsonException)
-                    {
-                        graphql["variables"] = variables;
-                    }
-                }
-
-                warnings.Add($"The GraphQL body of '{owner}' was imported as a JSON body.");
-                return new RequestBody(BodyType.Json, InterchangeText.Write(graphql));
+                var graphql = body.Obj("graphql");
+                return new RequestBody(
+                    BodyType.Graphql,
+                    graphql.Str("query") ?? string.Empty,
+                    graphql.Str("variables") ?? string.Empty);
 
             case null:
                 return RequestBody.None;
@@ -464,6 +454,15 @@ internal static partial class PostmanFormat
                 ["mode"] = "raw",
                 ["raw"] = body.Content,
                 ["options"] = new JsonObject { ["raw"] = new JsonObject { ["language"] = "json" } },
+            },
+            BodyType.Graphql => new JsonObject
+            {
+                ["mode"] = "graphql",
+                ["graphql"] = new JsonObject
+                {
+                    ["query"] = body.Content,
+                    ["variables"] = body.Variables,
+                },
             },
             BodyType.Text => new JsonObject { ["mode"] = "raw", ["raw"] = body.Content },
             BodyType.UrlEncoded => new JsonObject { ["mode"] = "urlencoded", ["urlencoded"] = Pairs(encoded: true) },

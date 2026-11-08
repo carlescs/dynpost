@@ -140,6 +140,11 @@ describe('request diff model', () => {
       });
     });
 
+    it('reports changes to GraphQL variables', () => {
+      const before = { ...request, bodyType: 'graphql' as const, bodyVariables: '{"id":1}' };
+      expect(requestChanges(before, { ...before, bodyVariables: '{"id":2}' }).body).toBe(true);
+    });
+
     it('ignores edits to fields the request does not use', () => {
       const noBody = { ...request, body: 'leftover' };
       const unusedAuth = { ...request, auth: { ...EMPTY_AUTH, token: 'unused' } };

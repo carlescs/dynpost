@@ -43,8 +43,9 @@ export interface OAuth2TokenDto {
 }
 
 export interface BodyDto {
-  type: 'none' | 'json' | 'text' | 'form' | 'urlencoded';
+  type: 'none' | 'json' | 'text' | 'form' | 'urlencoded' | 'graphql';
   content: string;
+  variables?: string | null;
 }
 
 /** Stores a value from a successful response in a variable of the selected environment. */

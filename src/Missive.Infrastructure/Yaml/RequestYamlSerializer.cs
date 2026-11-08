@@ -31,7 +31,19 @@ public static class RequestYamlSerializer
             writer.Mapping("body", body =>
             {
                 body.Scalar("type", RequestMapper.BodyTypeName(request.Body.Type));
-                if (request.Body.Content.Length > 0)
+                if (request.Body.Type == BodyType.Graphql)
+                {
+                    if (request.Body.Content.Length > 0)
+                    {
+                        body.Scalar("query", request.Body.Content);
+                    }
+
+                    if (request.Body.Variables.Length > 0)
+                    {
+                        body.Scalar("variables", request.Body.Variables);
+                    }
+                }
+                else if (request.Body.Content.Length > 0)
                 {
                     body.Scalar("content", request.Body.Content);
                 }
@@ -303,7 +315,15 @@ public static class RequestYamlSerializer
             throw new RequestFormatException($"'{typeName}' is not a supported body type.");
         }
 
-        return type == BodyType.None ? RequestBody.None : new RequestBody(type, OptionalString(map, "content") ?? string.Empty);
+        return type switch
+        {
+            BodyType.None => RequestBody.None,
+            BodyType.Graphql => new RequestBody(
+                type,
+                OptionalString(map, "query") ?? OptionalString(map, "content") ?? string.Empty,
+                OptionalString(map, "variables") ?? string.Empty),
+            _ => new RequestBody(type, OptionalString(map, "content") ?? string.Empty),
+        };
     }
 
     private static YamlNode? Optional(YamlMappingNode map, string key) =>

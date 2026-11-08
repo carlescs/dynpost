@@ -226,6 +226,29 @@
       </div>
       @if (doc.bodyType === 'none') {
         <p class="mt-3 text-sm text-slate-500">This request does not have a body.</p>
+      } @else if (doc.bodyType === 'graphql') {
+        <label class="mt-2 text-xs text-slate-500">Query</label>
+        <app-code-editor
+          class="mt-1 min-h-24 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
+          ariaLabel="GraphQL query"
+          [value]="doc.body"
+          language="graphql"
+          [highlightVariables]="true"
+          [variables]="environments.variables()"
+          (valueChange)="patch({ body: $event })"
+          (submit)="send()"
+        />
+        <label class="mt-2 text-xs text-slate-500">Variables (JSON)</label>
+        <app-code-editor
+          class="mt-1 min-h-20 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
+          ariaLabel="GraphQL variables"
+          [value]="doc.bodyVariables"
+          language="json"
+          [highlightVariables]="true"
+          [variables]="environments.variables()"
+          (valueChange)="patch({ bodyVariables: $event })"
+          (submit)="send()"
+        />
       } @else {
         @if (doc.bodyType === 'form' || doc.bodyType === 'urlencoded') {
           <p class="mt-2 text-xs text-slate-500">

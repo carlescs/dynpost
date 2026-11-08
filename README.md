@@ -56,7 +56,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
       them from recents
 - [x] Request descriptions in Markdown (a **Docs** tab), imported and exported
 - [x] Request editor: method, URL, query parameters, headers, auth and body
-      (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
+      (JSON, raw text, form-data, `x-www-form-urlencoded`, GraphQL), saved as YAML files
 - [x] Sending requests
 - [x] Response viewer: status, time, size, headers and a pretty-printed body,
       with HTML and PDF previews; copy or save the body, cookies set, a timing
@@ -132,9 +132,21 @@ params:
 
 Auth types are `basic` (`username`, `password`), `bearer` (`token`),
 `apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
-instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form` and `urlencoded`.
+instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form`, `urlencoded` and `graphql`.
+`graphql` bodies store a GraphQL `query` and JSON `variables` separately and are sent as JSON POSTs.
 `form` (multipart) and `urlencoded` bodies hold one `name=value` pair per line;
 `urlencoded` values are sent as written, so percent-encode them yourself.
+
+```yaml
+body:
+  type: graphql
+  query: |
+    query User($id: ID!) {
+      user(id: $id) { name }
+    }
+  variables: |
+    { "id": "{{userId}}" }
+```
 
 `capture` stores values from a successful response in variables, so a login
 request can hand its token to the requests after it — declaratively, without
@@ -443,8 +455,9 @@ environments as new environment files; nothing that already exists is changed.
 What Missive can't represent is skipped and listed after the import: other auth
 types (digest, OAuth 1, the OAuth 2 implicit and password grants, …), file uploads, scripts, and HTTP methods other than
 `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` and `OPTIONS`. Repeated query
-parameters or headers keep their first value, and a GraphQL body becomes the
-equivalent JSON body.
+parameters or headers keep their first value. GraphQL bodies are kept as a
+separate query and variables object and can be sent and edited without embedding
+the query in JSON.
 
 **Export** (the export button in the explorer header) writes the whole
 workspace to a file you choose:

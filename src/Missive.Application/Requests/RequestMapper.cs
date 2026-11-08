@@ -13,7 +13,10 @@ public static class RequestMapper
         request.Params.Select(ToDto).ToList(),
         request.Headers.Select(ToDto).ToList(),
         ToDto(request.Auth),
-        new BodyDto(BodyTypeName(request.Body.Type), request.Body.Content),
+        new BodyDto(
+            BodyTypeName(request.Body.Type),
+            request.Body.Content,
+            request.Body.Type == BodyType.Graphql ? request.Body.Variables : null),
         request.Description,
         request.Captures.Select(c => new CaptureDto(c.Variable, c.Expression)).ToList());
 
@@ -46,7 +49,9 @@ public static class RequestMapper
             ToEntries(dto.Params),
             ToEntries(dto.Headers),
             auth.Value,
-            bodyType == BodyType.None ? RequestBody.None : new RequestBody(bodyType, dto.Body!.Content ?? string.Empty))
+            bodyType == BodyType.None
+                ? RequestBody.None
+                : new RequestBody(bodyType, dto.Body!.Content ?? string.Empty, dto.Body.Variables ?? string.Empty))
         {
             Description = NormalizeDescription(dto.Description),
             Captures = (dto.Captures ?? [])
@@ -66,6 +71,7 @@ public static class RequestMapper
         BodyType.Text => "text",
         BodyType.Form => "form",
         BodyType.UrlEncoded => "urlencoded",
+        BodyType.Graphql => "graphql",
         _ => throw new ArgumentOutOfRangeException(nameof(type)),
     };
 

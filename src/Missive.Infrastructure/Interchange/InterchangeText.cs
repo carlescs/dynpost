@@ -151,6 +151,7 @@ internal static partial class InterchangeText
     public static string MediaTypeOf(BodyType type) => type switch
     {
         BodyType.Json => "application/json",
+        BodyType.Graphql => "application/json",
         BodyType.UrlEncoded => "application/x-www-form-urlencoded",
         BodyType.Form => "multipart/form-data",
         _ => "text/plain",
@@ -163,7 +164,8 @@ internal static partial class InterchangeText
     /// </remarks>
     public static bool IsImpliedContentType(BodyType type, string? contentType) =>
         type != BodyType.None
-        && MediaType(contentType) == MediaTypeOf(type)
+        && (MediaType(contentType) == MediaTypeOf(type)
+            || type == BodyType.Graphql && MediaType(contentType) == "application/graphql")
         && (type == BodyType.Form || !(contentType ?? string.Empty).Contains(';'));
 
     /// <summary>The headers without a <c>Content-Type</c> that Missive sets by itself for the body.</summary>
@@ -196,7 +198,11 @@ internal static partial class InterchangeText
                 },
                 var other => other,
             },
-            Body = request.Body with { Content = map(request.Body.Content) },
+            Body = request.Body with
+            {
+                Content = map(request.Body.Content),
+                Variables = map(request.Body.Variables),
+            },
         };
 
     /// <summary>

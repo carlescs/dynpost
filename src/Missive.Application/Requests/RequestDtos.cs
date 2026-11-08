@@ -25,8 +25,8 @@ public sealed record AuthDto(
     string? Audience = null,
     string? Credentials = null);
 
-/// <param name="Type"><c>none</c>, <c>json</c>, <c>text</c>, <c>form</c> or <c>urlencoded</c>.</param>
-public sealed record BodyDto(string Type, string Content);
+/// <param name="Type"><c>none</c>, <c>json</c>, <c>text</c>, <c>form</c>, <c>urlencoded</c> or <c>graphql</c>.</param>
+public sealed record BodyDto(string Type, string Content, string? Variables = null);
 
 /// <param name="Variable">The variable the value is stored in.</param>
 /// <param name="Expression">Where the value comes from: a JSONPath (<c>$.token</c>) or <c>header:Name</c>.</param>

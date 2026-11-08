@@ -52,6 +52,21 @@ public class RequestYamlSerializerTests
                   "name": "Ada Lovelace"
                 }
 
+                [Fact]
+                public void GraphqlBodies_WriteAndReadQueryAndVariablesSeparately()
+                {
+                    var request = new HttpRequestDefinition(
+                        "GraphQL",
+                        RequestMethod.Post,
+                        "https://api.example.com/graphql",
+                        body: new RequestBody(BodyType.Graphql, "query { me { id } }", """{"id":"{{userId}}"}"""));
+
+                    var yaml = RequestYamlSerializer.Serialize(request);
+
+                    Assert.Contains("body:\n  type: graphql\n  query: query { me { id } }\n  variables: '{\"id\":\"{{userId}}\"}'\n", yaml);
+                    Assert.Equal(request.Body, RequestYamlSerializer.Deserialize(yaml, "fallback").Body);
+                }
+
             """.ReplaceLineEndings("\n"),
             RequestYamlSerializer.Serialize(request));
     }

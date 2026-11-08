@@ -171,6 +171,38 @@ public class RequestPreparationTests
     }
 
     [Fact]
+    public void Prepare_BuildsGraphqlPostAndResolvesQueryAndVariables()
+    {
+        var request = new HttpRequestDefinition(
+            "GraphQL",
+            RequestMethod.Get,
+            "https://example.com/graphql",
+            body: new RequestBody(BodyType.Graphql, "query { user(id: {{id}}) }", """{"tenant":"{{tenant}}"}"""));
+        var variables = new Dictionary<string, string> { ["id"] = "42", ["tenant"] = "acme" };
+
+        var outgoing = PrepareValid(request, variables);
+
+        Assert.Equal("POST", outgoing.Method);
+        Assert.Equal(
+            new TextBody("""{"query":"query { user(id: 42) }","variables":{"tenant":"acme"}}""", "application/json"),
+            outgoing.Body);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("{")]
+    public void Prepare_RejectsInvalidGraphqlVariables(string variables)
+    {
+        var request = new HttpRequestDefinition(
+            "GraphQL",
+            RequestMethod.Post,
+            "https://example.com/graphql",
+            body: new RequestBody(BodyType.Graphql, "query { me }", variables));
+
+        Assert.Contains("GraphQL variables must be a valid JSON object.", PrepareInvalid(request));
+    }
+
+    [Fact]
     public void Prepare_BuildsMultipartFieldsFromLines()
     {
         var post = new HttpRequestDefinition("Test", RequestMethod.Post, "https://example.com",

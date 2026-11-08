@@ -452,7 +452,11 @@ export class MockBackend {
       auth: Object.fromEntries(
         Object.entries(dto.auth).map(([k, v]) => [k, k === 'type' ? v : resolve(v as string)]),
       ) as RequestDto['auth'],
-      body: { ...dto.body, content: resolve(dto.body.content) },
+      body: {
+        ...dto.body,
+        content: resolve(dto.body.content),
+        variables: resolve(dto.body.variables),
+      },
     };
 
     if (dto.auth.type === 'oauth2' && !this.oauth2Tokens.has(this.oauth2Key(dto.auth))) {
@@ -478,6 +482,7 @@ export class MockBackend {
       dto.auth.clientId ?? '',
       dto.auth.clientSecret ?? '',
       dto.body.content,
+      dto.body.variables ?? '',
     ].join('\n');
     const missing = [...new Set([...text.matchAll(VARIABLE_PATTERN)].map((m) => m[1]))];
     if (missing.length) {
