@@ -45,6 +45,7 @@
               type="button"
               class="text-slate-400 hover:text-rose-600"
               [attr.aria-label]="'Forget ' + value.name"
+              [title]="'Forget ' + value.name"
               (click)="remove(value)"
             >
               <fa-icon [icon]="faTrash" />

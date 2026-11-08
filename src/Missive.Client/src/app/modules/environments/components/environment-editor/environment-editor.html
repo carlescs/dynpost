@@ -7,9 +7,11 @@
       [value]="draft.name"
       (input)="store.update(draft.key, { name: $any($event.target).value })"
     />
-    <span class="truncate text-xs text-slate-400">{{
-      draft.id ? 'environments/' + draft.id : 'New environment — not saved yet'
-    }}</span>
+    <span
+      class="truncate text-xs text-slate-400"
+      [title]="draft.id ? 'environments/' + draft.id : ''"
+      >{{ draft.id ? 'environments/' + draft.id : 'New environment — not saved yet' }}</span
+    >
     @if (draft.id) {
       <button
         type="button"
@@ -42,6 +44,7 @@
       type="button"
       [class]="buttonClass"
       title="Delete environment"
+      aria-label="Delete environment"
       (click)="store.deleteDraft(draft.key)"
     >
       <fa-icon [icon]="faTrash" />
@@ -97,6 +100,7 @@
                 <button
                   type="button"
                   class="text-slate-400 hover:text-rose-600"
+                  title="Remove variable"
                   aria-label="Remove variable"
                   (click)="remove(i)"
                 >
