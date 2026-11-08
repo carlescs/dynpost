@@ -1,0 +1,217 @@
+@if (store.draft(); as draft) {
+  <div class="flex shrink-0 items-center gap-2 border-b border-slate-200 px-3 py-2">
+    <h2 class="min-w-0 flex-1 truncate text-sm font-semibold">
+      {{ draft.path }}{{ store.dirty() ? ' •' : '' }}
+    </h2>
+    <button
+      type="button"
+      [class]="button + ' border border-slate-300 hover:bg-slate-100'"
+      [disabled]="!store.dirty() || store.saving()"
+      (click)="store.save()"
+    >
+      Save
+    </button>
+    @if (store.running()) {
+      <button
+        type="button"
+        [class]="button + ' bg-red-600 text-white hover:bg-red-700'"
+        (click)="store.cancel()"
+      >
+        <fa-icon [icon]="faStop" /> Stop
+      </button>
+    } @else {
+      <button
+        type="button"
+        [class]="button + ' bg-sky-600 text-white hover:bg-sky-700'"
+        [disabled]="store.starting()"
+        (click)="store.start()"
+      >
+        <fa-icon [icon]="faPlay" /> Run
+      </button>
+    }
+    <button
+      type="button"
+      class="flex size-7 items-center justify-center rounded text-slate-500 hover:bg-slate-200"
+      title="Close"
+      aria-label="Close"
+      (click)="store.close()"
+    >
+      <fa-icon [icon]="faXmark" />
+    </button>
+  </div>
+
+  @if (store.error() || draft.error) {
+    <p class="shrink-0 bg-red-50 px-3 py-1 text-sm text-red-700" role="alert">
+      {{ store.error() ?? draft.error }}
+    </p>
+  }
+  @if (store.confirmation(); as message) {
+    <div class="flex shrink-0 items-center gap-3 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <span class="flex-1">{{ message }}</span>
+      <button
+        type="button"
+        [class]="button + ' bg-amber-600 text-white hover:bg-amber-700'"
+        (click)="store.start(true)"
+      >
+        Run anyway
+      </button>
+    </div>
+  }
+
+  <div class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
+    <div class="min-h-48 border-b border-slate-200 lg:border-r lg:border-b-0">
+      <app-code-editor
+        class="block h-full min-h-48"
+        language="yaml"
+        [value]="draft.yaml"
+        (valueChange)="store.edit($event)"
+      />
+    </div>
+
+    <div class="min-h-0 overflow-y-auto p-3 text-sm">
+      @if (store.run(); as run) {
+        <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span class="font-semibold capitalize">{{ run.state }}</span>
+          @if (run.passed !== null) {
+            <span [class]="run.passed ? 'text-green-600' : 'text-red-600'">
+              {{ run.passed ? 'Thresholds passed' : 'Thresholds failed' }}
+            </span>
+          }
+          <span>{{ seconds(run.elapsedMs) }}</span>
+          <span>{{ run.activeThreads }}/{{ run.threads }} threads</span>
+        </div>
+        @if (run.message) {
+          <p class="mb-3 text-red-700">{{ run.message }}</p>
+        }
+
+        <dl class="mb-3 grid grid-cols-3 gap-2">
+          @for (
+            item of [
+              ['Samples', run.total.samples],
+              ['Requests/s', run.total.throughput | number: '1.0-1'],
+              [
+                'Errors',
+                run.total.errors + ' (' + (run.total.errorPercent | number: '1.0-1') + '%)',
+              ],
+              ['Average', (run.total.average | number: '1.0-0') + ' ms'],
+              ['p95', (run.total.p95 | number: '1.0-0') + ' ms'],
+              ['p99', (run.total.p99 | number: '1.0-0') + ' ms'],
+            ];
+            track item[0]
+          ) {
+            <div class="rounded border border-slate-200 px-2 py-1">
+              <dt class="text-xs text-slate-500">{{ item[0] }}</dt>
+              <dd class="font-medium">{{ item[1] }}</dd>
+            </div>
+          }
+        </dl>
+
+        <app-run-chart [points]="run.timeline" />
+
+        @if (run.thresholds.length) {
+          <h3 class="mt-4 mb-1 font-semibold">Thresholds</h3>
+          <ul>
+            @for (t of run.thresholds; track t.name) {
+              <li [class]="t.passed ? 'text-green-700' : 'text-red-700'">
+                {{ t.passed ? '✓' : '✗' }} {{ t.name }} {{ t.limit }} (actual {{ t.actual }})
+              </li>
+            }
+          </ul>
+        }
+
+        <h3 class="mt-4 mb-1 font-semibold">Requests</h3>
+        <table class="w-full text-left">
+          <thead class="text-xs text-slate-500">
+            <tr>
+              <th>Request</th>
+              <th>Samples</th>
+              <th>Errors</th>
+              <th>Avg</th>
+              <th>p95</th>
+              <th>Max</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of run.requests; track r.request) {
+              <tr>
+                <td class="max-w-40 truncate" [title]="r.request">{{ r.request }}</td>
+                <td>{{ r.stats.samples }}</td>
+                <td>{{ r.stats.errors }}</td>
+                <td>{{ r.stats.average | number: '1.0-0' }} ms</td>
+                <td>{{ r.stats.p95 | number: '1.0-0' }} ms</td>
+                <td>{{ r.stats.max | number: '1.0-0' }} ms</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if ((run.total.statusCodes | keyvalue).length) {
+          <h3 class="mt-4 mb-1 font-semibold">Status codes</h3>
+          <p>
+            @for (s of run.total.statusCodes | keyvalue; track s.key) {
+              <span class="mr-3">{{ s.key }}: {{ s.value }}</span>
+            }
+          </p>
+        }
+        @if ((run.total.errorReasons | keyvalue).length) {
+          <h3 class="mt-4 mb-1 font-semibold">Errors</h3>
+          <ul>
+            @for (e of run.total.errorReasons | keyvalue; track e.key) {
+              <li>{{ e.value }} × {{ e.key }}</li>
+            }
+          </ul>
+        }
+
+        @if (run.failedSamples.length) {
+          <h3 class="mt-4 mb-1 font-semibold">Failed samples</h3>
+          <ul class="text-xs">
+            @for (s of run.failedSamples; track $index) {
+              <li class="truncate" [title]="s.responsePreview ?? ''">
+                #{{ s.thread }}/{{ s.iteration }} {{ s.method }} {{ s.url ?? s.request }} →
+                {{ s.status ?? s.error }} ({{ s.latencyMs | number: '1.0-0' }} ms)
+              </li>
+            }
+          </ul>
+        }
+        @if (run.slowestSamples.length) {
+          <h3 class="mt-4 mb-1 font-semibold">Slowest samples</h3>
+          <ul class="text-xs">
+            @for (s of run.slowestSamples; track $index) {
+              <li class="truncate">
+                {{ s.method }} {{ s.url ?? s.request }} → {{ s.status ?? s.error }} ({{
+                  s.latencyMs | number: '1.0-0'
+                }}
+                ms)
+              </li>
+            }
+          </ul>
+        }
+      } @else {
+        <p class="text-slate-500">Run the plan to see its statistics here.</p>
+      }
+
+      @if (store.history().length) {
+        <h3 class="mt-4 mb-1 font-semibold">History</h3>
+        <ul>
+          @for (h of store.history(); track h.runId) {
+            <li>
+              <button
+                type="button"
+                class="w-full truncate text-left text-xs hover:text-sky-600"
+                [class.font-semibold]="store.run()?.runId === h.runId"
+                (click)="store.show(h.runId)"
+              >
+                {{ h.startedAt }} · {{ h.state }} · {{ h.samples }} samples ·
+                {{ h.errorPercent | number: '1.0-1' }}% errors · p95
+                {{ h.p95 | number: '1.0-0' }} ms
+                @if (h.passed !== null) {
+                  · {{ h.passed ? 'passed' : 'failed' }}
+                }
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </div>
+}

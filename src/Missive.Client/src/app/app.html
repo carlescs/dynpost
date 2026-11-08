@@ -71,7 +71,9 @@
       @if (store.tabs().length) {
         <app-document-tabs />
       }
-      @if (environments.draft(); as draft) {
+      @if (runs.showing() && runs.draft()) {
+        <app-run-editor />
+      } @else if (environments.draft(); as draft) {
         <app-environment-editor [draft]="draft" />
       } @else if (store.activeDocument(); as doc) {
         <app-request-editor [document]="doc" />

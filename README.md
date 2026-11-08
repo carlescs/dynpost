@@ -72,13 +72,16 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
       (switch, create, check out, delete), remotes, and clear reporting of
       merge conflicts
+- [x] Load runner: `*.run.yaml` plans that send requests from concurrent
+      virtual users, with live statistics and pass/fail thresholds (see
+      [Load runs](#load-runs))
 - [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
       Postman and Insomnia
 
 ### Non-goals
 
 Missive deliberately stays small. Out of scope for now: pre-request/test
-scripting, collection runners, mock servers, cloud accounts and hosted team
+scripting, functional collection runners, mock servers, cloud accounts and hosted team
 workspaces (git is the collaboration layer).
 
 ## Workspace format
@@ -438,6 +441,44 @@ captured values, where each can be forgotten (bringing back the environment's
 value), or all at once.
 
 Captures are not imported or exported: other tools express them as scripts.
+
+## Load runs
+
+A load run sends a chosen set of requests repeatedly from several concurrent
+virtual users and reports latency percentiles, throughput and errors. The plan
+is a git-tracked `*.run.yaml` file (edit it in the **Load runs** view); results
+are saved locally under `.missive/runs/` and never committed. Runs use the
+selected environment and send no cookies.
+
+```yaml
+name: Checkout smoke
+requests:
+  - shop/list-products.yaml
+  - shop/create-order.yaml
+load:
+  threads: 10        # concurrent virtual users
+  iterations: 50     # per thread; or `duration: 2m`
+  rampUp: 10s
+  thinkTime: 100ms   # or { min: 50ms, max: 300ms }
+  maxRps: 200
+data:
+  file: users.csv    # each row's columns become {{variables}}
+  mode: perThread    # or shared
+  onEof: wrap        # or stop
+assert:
+  "*":
+    status: 200-299
+    maxTime: 800ms
+thresholds:
+  p95: 500ms
+  errorRate: 1%
+  throughput: 50
+```
+
+Without a `status` assertion, a response with status 400 or higher counts as an
+error. A run over 1000 threads needs confirmation. Not yet supported: folder
+bodies, CSV/JSON/HTML export, comparing runs, per-thread cookie jars and an
+environment override in the plan.
 
 ## Import and export
 

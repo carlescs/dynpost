@@ -14,8 +14,10 @@ A simplified, Postman-like desktop HTTP client. Its defining features:
 
 Initial scope: request editor, response viewer, collections, environments with
 `{{variable}}` substitution, auth helpers (Basic, Bearer, API key), local
-response history, git sync. Out of scope: scripting/tests, runners, mock
-servers, cloud accounts. See `README.md` for the planned workspace format.
+response history, git sync, a load runner (`Domain/Runs`, `Application/Runs`,
+`Infrastructure/Runs`, client `modules/runs`; plans are `*.run.yaml` files,
+results go to `.missive/runs/`). Out of scope: scripting/tests, functional
+runners, mock servers, cloud accounts. See `README.md` for the planned workspace format.
 
 ## Stack and layout
 

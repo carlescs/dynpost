@@ -14,7 +14,7 @@ public static class WorkspaceLayout
     /// <summary>Whether a file directly inside <paramref name="folder"/> is a request file.</summary>
     public static bool IsRequestFile(WorkspacePath folder, string fileName)
     {
-        if (fileName.StartsWith('.') || !HasRequestExtension(fileName))
+        if (fileName.StartsWith('.') || !HasRequestExtension(fileName) || IsRunPlanFileName(fileName))
         {
             return false;
         }
@@ -52,6 +52,12 @@ public static class WorkspaceLayout
     public static bool IsCollectionFolder(WorkspacePath parent, string folderName) =>
         !folderName.StartsWith('.')
         && !(parent.IsRoot && string.Equals(folderName, EnvironmentsFolder, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Whether a file name is a load run plan (<c>*.run.yaml</c>), which isn't a request.</summary>
+    public static bool IsRunPlanFileName(string fileName) =>
+        !fileName.StartsWith('.')
+        && (fileName.EndsWith(".run.yaml", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".run.yml", StringComparison.OrdinalIgnoreCase));
 
     public static bool HasRequestExtension(string fileName) =>
         fileName.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)

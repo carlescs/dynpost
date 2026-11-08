@@ -153,6 +153,30 @@ internal static class BridgeMessageTypes
     /// <summary>Selects the environment used to send requests. Payload: <see cref="SelectEnvironmentPayload"/>. Result: none.</summary>
     public const string EnvironmentSelect = "environment.select";
 
+    /// <summary>Lists the run plans (<c>*.run.yaml</c>) of the workspace. Payload: none. Result: plan files.</summary>
+    public const string RunPlanList = "runPlan.list";
+
+    /// <summary>Opens a run plan for editing. Payload: <see cref="RunPlanPathPayload"/>. Result: plan document.</summary>
+    public const string RunPlanOpen = "runPlan.open";
+
+    /// <summary>Saves the text of a run plan, creating the file if needed. Payload: <see cref="SaveRunPlanPayload"/>. Result: plan document.</summary>
+    public const string RunPlanSave = "runPlan.save";
+
+    /// <summary>
+    /// Starts a load run in the background. Payload: <see cref="StartRunPayload"/>. Result: run id.
+    /// Fails with <c>confirmation_required</c> for very large runs until <c>confirmLarge</c> is set.
+    /// </summary>
+    public const string RunStart = "run.start";
+
+    /// <summary>Stops a run; the partial results are kept. Payload: <see cref="RunIdPayload"/>. Result: none.</summary>
+    public const string RunCancel = "run.cancel";
+
+    /// <summary>The live (or saved) numbers of a run, polled by the dashboard. Payload: <see cref="RunIdPayload"/>. Result: run.</summary>
+    public const string RunProgress = "run.progress";
+
+    /// <summary>The earlier runs of a plan, newest first. Payload: <see cref="RunPlanPathPayload"/>. Result: run summaries.</summary>
+    public const string RunList = "run.list";
+
     /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
     public const string GitStatus = "git.status";
 
@@ -401,3 +425,11 @@ internal static class BridgeErrorCodes
     public const string BadPayload = "bad_payload";
     public const string Internal = "internal_error";
 }
+
+internal sealed record RunPlanPathPayload(string Path);
+
+internal sealed record SaveRunPlanPayload(string Path, string Yaml);
+
+internal sealed record StartRunPayload(string Path, bool ConfirmLarge = false);
+
+internal sealed record RunIdPayload(string RunId);

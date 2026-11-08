@@ -91,6 +91,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         var headers = request.Headers;
         var redirects = new List<RedirectHop>();
         var wait = TimeSpan.Zero;
+        long bytesSent = 0;
         var stopwatch = Stopwatch.StartNew();
         try
         {
@@ -102,6 +103,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                     return error;
                 }
 
+                bytesSent += message.Content?.Headers.ContentLength ?? 0;
                 var hopStart = stopwatch.Elapsed;
                 var setupBefore = timings.Setup;
                 var response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
@@ -139,6 +141,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                         Timings = new ResponseTimings(timings.Dns, timings.Connect, timings.Tls, wait, stopwatch.Elapsed - downloadStart),
                         Sent = new SentRequest(method, url, SentHeaders(message)),
                         Cookies = jar is null ? null : FromContainer(jar),
+                        BytesSent = bytesSent,
                     };
                 }
             }

@@ -27,6 +27,9 @@ public sealed record HttpResponseData(
     bool Truncated,
     TimeSpan Duration)
 {
+    /// <summary>The request-body bytes sent across all redirect hops.</summary>
+    public long BytesSent { get; init; }
+
     /// <summary>The redirect responses that led to this one, in order.</summary>
     public IReadOnlyList<RedirectHop> Redirects { get; init; } = [];
 

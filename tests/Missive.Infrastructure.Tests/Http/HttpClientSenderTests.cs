@@ -107,13 +107,16 @@ public sealed class HttpClientSenderTests
             Assert.True(binary.IsSuccess, binary.Error?.Message);
             Assert.Equal("AB", handler.Body);
             Assert.Equal("application/octet-stream", handler.Request!.Content!.Headers.ContentType!.MediaType);
+            Assert.Equal(2, binary.Value.BytesSent);
 
-            await sender.SendAsync(Request("POST", body: new MultipartBody([
+            var multipart = await sender.SendAsync(Request("POST", body: new MultipartBody([
                 new MultipartField("avatar", FilePath: path, ContentType: "image/png"),
             ])));
             Assert.Contains("filename=", handler.Body);
             Assert.Contains("Content-Type: image/png", handler.Body);
             Assert.Contains("AB", handler.Body);
+            Assert.Equal(handler.Request!.Content!.Headers.ContentLength, multipart.Value.BytesSent);
+            Assert.True(multipart.Value.BytesSent > 2);
         }
         finally
         {

@@ -1,0 +1,77 @@
+using Missive.Application.Common;
+using Missive.Application.Runs;
+using Missive.Domain.Workspaces;
+using static Missive.Infrastructure.Workspaces.WorkspaceFiles;
+
+namespace Missive.Infrastructure.Runs;
+
+/// <summary>Run plans are the <c>*.run.yaml</c> files anywhere in the workspace's collection folders.</summary>
+public sealed class FileSystemRunPlanStore : IRunPlanStore
+{
+    public Result<IReadOnlyList<WorkspacePath>> List(string root)
+    {
+        var plans = new List<WorkspacePath>();
+        try
+        {
+            Collect(root, WorkspacePath.Root, plans);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not list the run plans: {ex.Message}");
+        }
+
+        return plans;
+    }
+
+    public async Task<Result<string>> ReadAsync(string root, WorkspacePath path, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await ReadIfExistsAsync(FullPath(root, path), cancellationToken)
+                ?? (Result<string>)new Error(ErrorCodes.NotFound, $"The run plan '{path}' does not exist.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not read '{path}': {ex.Message}");
+        }
+    }
+
+    public async Task<Result<bool>> WriteAsync(string root, WorkspacePath path, string text, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await WriteIfChangedAsync(FullPath(root, path), text, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not write '{path}': {ex.Message}");
+        }
+    }
+
+    private static void Collect(string root, WorkspacePath folder, List<WorkspacePath> plans)
+    {
+        var directory = new DirectoryInfo(FullPath(root, folder));
+        var folders = new List<WorkspacePath>();
+        foreach (var info in directory.EnumerateFileSystemInfos().OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            if (info.LinkTarget is not null || !WorkspacePath.TryParse(info.Name, out _))
+            {
+                continue;
+            }
+
+            if (info is DirectoryInfo && WorkspaceLayout.IsCollectionFolder(folder, info.Name))
+            {
+                folders.Add(folder.Combine(info.Name));
+            }
+            else if (info is FileInfo && WorkspaceLayout.IsRunPlanFileName(info.Name))
+            {
+                plans.Add(folder.Combine(info.Name));
+            }
+        }
+
+        foreach (var child in folders)
+        {
+            Collect(root, child, plans);
+        }
+    }
+}

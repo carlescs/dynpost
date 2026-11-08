@@ -9,6 +9,7 @@ using Missive.Application.Interchange;
 using Missive.Application.OAuth2;
 using Missive.Domain.Git;
 using Missive.Application.Requests;
+using Missive.Application.Runs;
 using Missive.Application.Settings;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
@@ -132,6 +133,20 @@ internal static class BridgeHandlers
                 var saved = await saver.ExecuteAsync(p.Id, destination, ct);
                 return saved.IsSuccess ? new SavedFileDto(saved.Value) : Result<SavedFileDto?>.Failure(saved.Error!);
             })
+            .Register(BridgeMessageTypes.RunPlanList,
+                ct => Use<ListRunPlans>().ExecuteAsync(ct))
+            .Register<RunPlanPathPayload, RunPlanDocumentDto>(BridgeMessageTypes.RunPlanOpen,
+                (p, ct) => Use<OpenRunPlan>().ExecuteAsync(p.Path, ct))
+            .Register<SaveRunPlanPayload, RunPlanDocumentDto>(BridgeMessageTypes.RunPlanSave,
+                (p, ct) => Use<SaveRunPlan>().ExecuteAsync(p.Path, p.Yaml, ct))
+            .Register<StartRunPayload, StartedRunDto>(BridgeMessageTypes.RunStart,
+                (p, ct) => Use<StartRun>().ExecuteAsync(p.Path, p.ConfirmLarge, ct))
+            .Register<RunIdPayload, Unit?>(BridgeMessageTypes.RunCancel,
+                (p, ct) => Task.FromResult(NoValue(Use<CancelRun>().Execute(p.RunId))))
+            .Register<RunIdPayload, RunResultDto>(BridgeMessageTypes.RunProgress,
+                (p, ct) => Use<GetRunProgress>().ExecuteAsync(p.RunId, ct))
+            .Register<RunPlanPathPayload, IReadOnlyList<RunSummaryDto>>(BridgeMessageTypes.RunList,
+                (p, ct) => Use<ListRuns>().ExecuteAsync(p.Path, ct))
             .Register<CookieJarPayload, IReadOnlyList<CookieDto>>(BridgeMessageTypes.CookieList,
                 (p, ct) => Use<ListCookies>().ExecuteAsync(p.Environment, ct))
             .Register<DeleteCookiePayload, IReadOnlyList<CookieDto>>(BridgeMessageTypes.CookieDelete,

@@ -1,0 +1,27 @@
+<svg
+  class="h-32 w-full rounded border border-slate-200 bg-slate-50"
+  [attr.viewBox]="'0 0 ' + width + ' ' + height"
+  preserveAspectRatio="none"
+  role="img"
+  aria-label="Throughput and average latency per second"
+>
+  @for (bar of bars(); track $index) {
+    <rect
+      [attr.x]="bar.x"
+      [attr.y]="height - bar.height"
+      [attr.width]="bar.width"
+      [attr.height]="bar.height"
+      [attr.fill]="bar.errors ? '#fca5a5' : '#bae6fd'"
+    />
+  }
+  <polyline
+    [attr.points]="line()"
+    fill="none"
+    stroke="#0369a1"
+    stroke-width="2"
+    vector-effect="non-scaling-stroke"
+  />
+</svg>
+<p class="mt-1 text-xs text-slate-500">
+  Bars: requests per second (red when some failed). Line: average latency.
+</p>
