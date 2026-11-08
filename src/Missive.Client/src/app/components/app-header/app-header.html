@@ -44,20 +44,38 @@
     </label>
   }
   <div #recentMenu class="relative">
-    @if (otherRecent().length) {
+    <div
+      class="flex items-stretch rounded border border-slate-600"
+      role="group"
+      aria-label="Workspace"
+    >
       <button
         type="button"
-        class="flex items-center gap-2 rounded px-3 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
-        title="Switch to a recent workspace"
-        aria-label="Recent workspaces"
-        aria-controls="recent-panel"
-        [attr.aria-expanded]="recentOpen()"
+        class="flex items-center px-2 py-1 text-sm text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50"
+        [class.rounded]="!otherRecent().length"
+        [class.rounded-l]="otherRecent().length"
+        title="Open workspace folder"
+        aria-label="Open workspace folder"
         [disabled]="store.opening()"
-        (click)="toggleRecent()"
+        (click)="store.openFolder()"
       >
-        Recent workspaces <fa-icon class="text-xs text-slate-400" [icon]="faChevronDown" />
+        <fa-icon [icon]="faFolderOpen" />
       </button>
-    }
+      @if (otherRecent().length) {
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded-r border-l border-slate-600 px-2 py-1 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
+          title="Switch to a recent workspace"
+          aria-label="Recent workspaces"
+          aria-controls="recent-panel"
+          [attr.aria-expanded]="recentOpen()"
+          [disabled]="store.opening()"
+          (click)="toggleRecent()"
+        >
+          Recent workspaces <fa-icon class="text-xs text-slate-400" [icon]="faChevronDown" />
+        </button>
+      }
+    </div>
     @if (recentOpen()) {
       <div
         id="recent-panel"
@@ -90,16 +108,6 @@
           </div>
         }
       </div>
-      <button
-        type="button"
-        class="flex size-8 items-center justify-center rounded text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50"
-        title="Open workspace folder"
-        aria-label="Open workspace folder"
-        [disabled]="store.opening()"
-        (click)="store.openFolder()"
-      >
-        <fa-icon [icon]="faFolderOpen" />
-      </button>
     }
   </div>
   <div class="relative">
