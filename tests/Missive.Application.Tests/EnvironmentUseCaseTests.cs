@@ -1,6 +1,7 @@
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
+using Missive.Application.OAuth2;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
 using Missive.Domain.Http;
@@ -10,6 +11,7 @@ namespace Missive.Application.Tests;
 
 using Jars = IReadOnlyDictionary<string, IReadOnlyList<Missive.Domain.Http.StoredCookie>>;
 using Secrets = IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>;
+using Tokens = IReadOnlyDictionary<string, IReadOnlyDictionary<string, Missive.Application.OAuth2.OAuth2Token>>;
 
 public class EnvironmentUseCaseTests
 {
@@ -20,6 +22,7 @@ public class EnvironmentUseCaseTests
     private readonly IWorkspaceStateStore _state = Substitute.For<IWorkspaceStateStore>();
     private readonly ICookieJarStore _cookies = Substitute.For<ICookieJarStore>();
     private readonly ICapturedValueStore _captures = Substitute.For<ICapturedValueStore>();
+    private readonly IOAuth2TokenStore _tokens = Substitute.For<IOAuth2TokenStore>();
     private readonly CurrentWorkspace _current = new();
 
     public EnvironmentUseCaseTests()
@@ -37,7 +40,14 @@ public class EnvironmentUseCaseTests
         _cookies.SaveAsync(Root, Arg.Any<Jars>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
         StoredCaptures(new Dictionary<string, IReadOnlyDictionary<string, string>>());
         _captures.SaveAsync(Root, Arg.Any<Secrets>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
+        StoredTokens(new Dictionary<string, IReadOnlyDictionary<string, OAuth2Token>>());
+        _tokens.SaveAsync(Root, Arg.Any<Tokens>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
     }
+
+    private void StoredTokens(Dictionary<string, IReadOnlyDictionary<string, OAuth2Token>> tokens) =>
+        _tokens.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<Tokens>.Success(tokens));
+
+    private static readonly OAuth2Token Token = new("https://auth.example.com/token", "app", "", "t", null, null, DateTimeOffset.UnixEpoch);
 
     private void StoredCaptures(Dictionary<string, IReadOnlyDictionary<string, string>> values) =>
         _captures.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<Secrets>.Success(values));
@@ -191,7 +201,7 @@ public class EnvironmentUseCaseTests
             ["prod.yaml"] = new Dictionary<string, string> { ["token"] = "p" },
         });
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync(
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync(
             "dev.yaml",
             Dto("Local", new EnvironmentVariableDto("token", "new", true)));
 
@@ -209,7 +219,7 @@ public class EnvironmentUseCaseTests
     {
         Existing("my-env.yaml", new EnvironmentDefinition("Dev"));
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync("my-env.yaml", Dto("Local"));
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("my-env.yaml", Dto("Local"));
 
         Assert.Equal("my-env.yaml", result.Value.Id);
         _store.DidNotReceiveWithAnyArgs().Move(default!, default!, default!);
@@ -221,7 +231,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev"));
         StoredSecrets(new() { ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "abc" } });
 
-        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync(
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync(
             "dev.yaml",
             Dto("Dev", new EnvironmentVariableDto("token", "abc", true)));
 
@@ -234,7 +244,7 @@ public class EnvironmentUseCaseTests
         _secrets.LoadAsync(Root, Arg.Any<CancellationToken>())
             .Returns(Result<Secrets>.Failure(ErrorCodes.InvalidFile, "bad secrets"));
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
 
         Assert.Equal(ErrorCodes.InvalidFile, result.Error?.Code);
         await _store.DidNotReceiveWithAnyArgs().WriteAsync(default!, default!, default!, default);
@@ -248,7 +258,7 @@ public class EnvironmentUseCaseTests
         _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("dev.yaml"));
         StoredSecrets(new() { ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "abc" } });
 
-        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync("dev.yaml");
+        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
 
         Assert.True(result.IsSuccess);
         _store.Received(1).Delete(Root, "dev.yaml");
@@ -262,7 +272,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev") { CookieJar = true });
         StoredCookies(new() { ["dev.yaml"] = [Session] });
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync(
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync(
             "dev.yaml",
             Dto("Local") with { CookieJar = true });
 
@@ -280,7 +290,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev") { CookieJar = true });
         StoredCookies(new() { ["dev.yaml"] = [Session], ["prod.yaml"] = [Session] });
 
-        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
 
         await _cookies.Received(1).SaveAsync(
             Root,
@@ -294,7 +304,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev"));
         StoredCookies(new() { ["dev.yaml"] = [Session] });
 
-        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync("dev.yaml");
+        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
 
         await _cookies.Received(1).SaveAsync(Root, Arg.Is<Jars>(j => j.Count == 0), Arg.Any<CancellationToken>());
     }
@@ -305,7 +315,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev"));
         StoredCaptures(new() { ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "t" } });
 
-        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync("dev.yaml", Dto("Local"));
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml", Dto("Local"));
 
         await _captures.Received(1).SaveAsync(
             Root,
@@ -323,15 +333,44 @@ public class EnvironmentUseCaseTests
             ["prod.yaml"] = new Dictionary<string, string> { ["token"] = "p" },
         });
 
-        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync("dev.yaml");
+        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
 
         await _captures.Received(1).SaveAsync(Root, Arg.Is<Secrets>(v => v.Count == 1 && v.ContainsKey("prod.yaml")), Arg.Any<CancellationToken>());
     }
 
     [Fact]
+    public async Task Save_MovesOAuth2TokensWithARename()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev"));
+        StoredTokens(new() { ["dev.yaml"] = new Dictionary<string, OAuth2Token> { ["k"] = Token } });
+
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml", Dto("Local"));
+
+        await _tokens.Received(1).SaveAsync(
+            Root,
+            Arg.Is<Tokens>(t => t.Count == 1 && t["local.yaml"]["k"] == Token),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Delete_RemovesOAuth2Tokens()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev"));
+        StoredTokens(new()
+        {
+            ["dev.yaml"] = new Dictionary<string, OAuth2Token> { ["k"] = Token },
+            [""] = new Dictionary<string, OAuth2Token> { ["k"] = Token },
+        });
+
+        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
+
+        await _tokens.Received(1).SaveAsync(Root, Arg.Is<Tokens>(t => t.Count == 1 && t.ContainsKey("")), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Delete_MissingFile_IsNotFound()
     {
-        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _current).ExecuteAsync("dev.yaml");
+        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
 
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
     }

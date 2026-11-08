@@ -2,6 +2,7 @@ using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
+using Missive.Application.OAuth2;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Missive.Domain.Http;
@@ -16,7 +17,8 @@ namespace Missive.Application.Http;
 /// jar, its cookies are sent and the cookies responses set are kept in it. The values the
 /// request's capture rules pick out of a successful response are stored for that environment in
 /// <see cref="ICapturedValueStore"/>. The raw body is kept in <see cref="ResponseBodies"/> under
-/// the same id, for <see cref="SaveResponseBody"/>.
+/// the same id, for <see cref="SaveResponseBody"/>. A request with OAuth 2.0 auth gets its token
+/// from <see cref="OAuth2Tokens"/> (cached, refreshed or newly obtained) before it is sent.
 /// </summary>
 public sealed class SendRequest(
     IHttpSender sender,
@@ -26,7 +28,8 @@ public sealed class SendRequest(
     ICookieJarStore cookieJars,
     ICapturedValueStore captures,
     CurrentWorkspace current,
-    TimeProvider time)
+    TimeProvider time,
+    OAuth2Tokens tokens)
 {
     /// <param name="id">An id chosen by the caller, used to cancel the request.</param>
     public async Task<Result<ResponseDto>> ExecuteAsync(string id, RequestDto request, CancellationToken cancellationToken = default)
@@ -47,11 +50,25 @@ public sealed class SendRequest(
             return variables.Error!;
         }
 
-        var prepared = RequestPreparation.Prepare(definition.Value, variables.Value.Values);
+        // An OAuth 2.0 token is only worth obtaining for a request that can be sent: check it first
+        // with a stand-in token.
+        var oauth = definition.Value.Auth as OAuth2Auth;
+        var prepared = RequestPreparation.Prepare(definition.Value, variables.Value.Values, oauth is null ? null : "token");
         if (!prepared.IsValid)
         {
-            var hint = MissingVariablesHint(prepared.MissingVariables, variables.Value);
-            return new Error(ErrorCodes.InvalidRequest, string.Join(" ", hint is null ? prepared.Errors : [.. prepared.Errors, hint]));
+            return new Error(ErrorCodes.InvalidRequest, variables.Value.Explain(prepared.Errors, prepared.MissingVariables));
+        }
+
+        OAuth2Settings? oauthSettings = null;
+        if (oauth is not null)
+        {
+            var resolution = OAuth2Flow.Resolve(oauth, variables.Value.Values);
+            if (!resolution.IsValid)
+            {
+                return new Error(ErrorCodes.InvalidRequest, variables.Value.Explain(resolution.Errors, resolution.MissingVariables));
+            }
+
+            oauthSettings = resolution.Settings;
         }
 
         var outgoing = prepared.Request!;
@@ -75,6 +92,19 @@ public sealed class SendRequest(
 
         try
         {
+            if (oauthSettings is not null)
+            {
+                // Obtained inside the in-flight window so Cancel also stops a slow token endpoint.
+                var token = await tokens.GetAsync(oauthSettings, root, variables.Value.EnvironmentId, cancellation.Token);
+                if (!token.IsSuccess)
+                {
+                    return token.Error!;
+                }
+
+                var withToken = RequestPreparation.Prepare(definition.Value, variables.Value.Values, token.Value.AccessToken).Request!;
+                outgoing = withToken with { Cookies = outgoing.Cookies };
+            }
+
             var response = await sender.SendAsync(outgoing, cancellation.Token);
             if (!response.IsSuccess)
             {
@@ -171,25 +201,6 @@ public sealed class SendRequest(
         return failure is null
             ? results
             : results.Select(result => result.Value is null ? result : result with { Value = null, Error = failure }).ToList();
-    }
-
-    /// <summary>Explains where the values of undefined variables should come from.</summary>
-    private static string? MissingVariablesHint(IReadOnlyList<string> missing, ActiveVariables variables)
-    {
-        if (missing.Count == 0)
-        {
-            return null;
-        }
-
-        if (variables.EnvironmentName is null)
-        {
-            return "No environment is selected.";
-        }
-
-        var unsetSecrets = missing.Where(variables.UnsetSecrets.Contains).ToList();
-        return unsetSecrets.Count > 0
-            ? $"Secret values are kept on each computer and not shared through git: enter {string.Join(", ", unsetSecrets)} in the environment '{variables.EnvironmentName}'."
-            : $"Add them to the environment '{variables.EnvironmentName}'.";
     }
 
     private static ResponseDto ToDto(HttpResponseData response, Uri requestUrl, Masking masking, DateTimeOffset now)

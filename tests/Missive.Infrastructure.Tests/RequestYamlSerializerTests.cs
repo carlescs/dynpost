@@ -180,6 +180,68 @@ public class RequestYamlSerializerTests
         Assert.Equal(new ApiKeyAuth("X-API-Key", "secret", ApiKeyLocation.Query), parsed.Auth);
     }
 
+    [Fact]
+    public void OAuth2Auth_RoundTripsInTheDocumentedKeyOrder()
+    {
+        var request = new HttpRequestDefinition(
+            "Me",
+            RequestMethod.Get,
+            "https://api.test/me",
+            auth: new OAuth2Auth(
+                OAuth2Grant.AuthorizationCode,
+                "https://auth.test/token",
+                "missive",
+                "{{clientSecret}}",
+                "https://auth.test/authorize",
+                "http://127.0.0.1:8765/callback",
+                "openid email",
+                "https://api.test",
+                OAuth2ClientAuthentication.Body));
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Equal(
+            """
+            name: Me
+            method: GET
+            url: https://api.test/me
+            auth:
+              type: oauth2
+              grant: authorizationCode
+              authUrl: https://auth.test/authorize
+              tokenUrl: https://auth.test/token
+              redirectUri: http://127.0.0.1:8765/callback
+              clientId: missive
+              clientSecret: "{{clientSecret}}"
+              scope: openid email
+              audience: https://api.test
+              credentials: body
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal(request.Auth, RequestYamlSerializer.Deserialize(yaml, "me").Auth);
+    }
+
+    [Fact]
+    public void OAuth2Auth_OmitsEmptyAndDefaultFields()
+    {
+        var request = new HttpRequestDefinition("S", RequestMethod.Get, "https://api.test",
+            auth: new OAuth2Auth(OAuth2Grant.ClientCredentials, "https://auth.test/token", "app"));
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.EndsWith("auth:\n  type: oauth2\n  grant: clientCredentials\n  tokenUrl: https://auth.test/token\n  clientId: app\n", yaml);
+        Assert.Equal(request.Auth, RequestYamlSerializer.Deserialize(yaml, "s").Auth);
+    }
+
+    [Fact]
+    public void OAuth2Auth_UnknownGrant_IsAFormatError()
+    {
+        var error = Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.Deserialize("auth:\n  type: oauth2\n  grant: implicit\n", "x"));
+
+        Assert.Contains("implicit", error.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("name: [unclosed")]
     [InlineData("- just\n- a list")]

@@ -75,7 +75,7 @@ internal static partial class OpenApiFormat
             .ToList();
         var collection = new CollectionFolder(title, folders, untagged);
 
-        var servers = context.Swagger ? SwaggerServers(context) : OpenApiServers(context);
+        var servers = Servers(context);
         var authVariables = context.AuthVariables.Select(name => new EnvironmentVariable(name, string.Empty, Secret: true)).ToList();
         var environments = servers
             .Select(server => new EnvironmentDefinition(
@@ -357,6 +357,10 @@ internal static partial class OpenApiFormat
 
     // ---- Servers and security ----
 
+    /// <summary>The servers, worked out (and warned about) once.</summary>
+    private static List<(string Name, string Url)> Servers(Context context) =>
+        context.Servers ??= context.Swagger ? SwaggerServers(context) : OpenApiServers(context);
+
     private static List<(string Name, string Url)> OpenApiServers(Context context)
     {
         var servers = new List<(string Name, string Url)>();
@@ -398,6 +402,66 @@ internal static partial class OpenApiFormat
         return [(host, url)];
     }
 
+    /// <summary>
+    /// OAuth 2.0 auth for a scheme with a client credentials or authorization code flow (preferred
+    /// in that order), asking for the scopes the requirement lists; <c>null</c> when it has neither.
+    /// The client id and secret become secret variables to fill in. A relative URL is a URI
+    /// reference resolved against the server (<c>/oauth/token</c> against
+    /// <c>https://api.test/v1</c> is <c>https://api.test/oauth/token</c>; <c>oauth/token</c> is
+    /// <c>https://api.test/v1/oauth/token</c>), using the first server when they disagree.
+    /// </summary>
+    private static OAuth2Auth? OAuth2(Context context, JsonObject scheme, JsonNode? scopes)
+    {
+        string Url(string? url)
+        {
+            if (string.IsNullOrEmpty(url) || url.Contains("://", StringComparison.Ordinal))
+            {
+                return url ?? string.Empty;
+            }
+
+            var resolved = Servers(context)
+                .Select(server => Uri.TryCreate(new Uri(server.Url + "/"), url, out var uri) ? uri.AbsoluteUri : null)
+                .OfType<string>()
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (resolved.Count > 1)
+            {
+                context.Warnings.Add($"The OAuth 2.0 URL '{url}' means a different URL on each server; {resolved[0]} (on the first server) was used.");
+            }
+
+            return resolved.FirstOrDefault() ?? url;
+        }
+
+        OAuth2Auth Auth(OAuth2Grant grant, JsonObject flow)
+        {
+            context.UseAuthVariable("clientId");
+            context.UseAuthVariable("clientSecret");
+            var scope = string.Join(' ', scopes is JsonArray list ? list.Select(s => s.Text()).OfType<string>() : []);
+            return new OAuth2Auth(
+                grant,
+                Url(flow.Str("tokenUrl")),
+                "{{clientId}}",
+                "{{clientSecret}}",
+                grant == OAuth2Grant.AuthorizationCode ? Url(flow.Str("authorizationUrl")) : string.Empty,
+                Scope: scope);
+        }
+
+        if (context.Swagger)
+        {
+            return scheme.Str("flow") switch
+            {
+                "application" => Auth(OAuth2Grant.ClientCredentials, scheme),
+                "accessCode" => Auth(OAuth2Grant.AuthorizationCode, scheme),
+                _ => null,
+            };
+        }
+
+        var flows = scheme.Obj("flows");
+        return flows.Obj("clientCredentials") is { } credentials ? Auth(OAuth2Grant.ClientCredentials, credentials)
+            : flows.Obj("authorizationCode") is { } code ? Auth(OAuth2Grant.AuthorizationCode, code)
+            : null;
+    }
+
     /// <summary>The auth for the first security requirement Missive can use.</summary>
     private static RequestAuth Security(Context context, JsonNode? requirements, string owner)
     {
@@ -432,6 +496,11 @@ internal static partial class OpenApiFormat
                     return new ApiKeyAuth(keyName, "{{apiKey}}", scheme.Str("in") == "query" ? ApiKeyLocation.Query : ApiKeyLocation.Header);
                 }
 
+                if (type == "oauth2" && OAuth2(context, scheme, requirement[schemeName]) is { } oauth)
+                {
+                    return oauth;
+                }
+
                 if (type is "oauth2" or "openIdConnect")
                 {
                     context.UseAuthVariable("token");
@@ -464,6 +533,8 @@ internal static partial class OpenApiFormat
         public List<string> AuthVariables { get; } = [];
 
         public HashSet<string> WarnedOAuth { get; } = new(StringComparer.Ordinal);
+
+        public List<(string Name, string Url)>? Servers { get; set; }
 
         public void UseAuthVariable(string name)
         {

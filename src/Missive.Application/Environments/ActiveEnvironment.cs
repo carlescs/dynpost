@@ -24,6 +24,29 @@ public sealed record ActiveVariables(
 {
     public static ActiveVariables None { get; } =
         new(null, new Dictionary<string, string>(), new HashSet<string>());
+
+    /// <summary>Explains where the values of undefined variables should come from; <c>null</c> when none are missing.</summary>
+    public string? MissingVariablesHint(IReadOnlyList<string> missing)
+    {
+        if (missing.Count == 0)
+        {
+            return null;
+        }
+
+        if (EnvironmentName is null)
+        {
+            return "No environment is selected.";
+        }
+
+        var unsetSecrets = missing.Where(UnsetSecrets.Contains).ToList();
+        return unsetSecrets.Count > 0
+            ? $"Secret values are kept on each computer and not shared through git: enter {string.Join(", ", unsetSecrets)} in the environment '{EnvironmentName}'."
+            : $"Add them to the environment '{EnvironmentName}'.";
+    }
+
+    /// <summary>Errors with the hint on undefined variables, as one message.</summary>
+    public string Explain(IReadOnlyList<string> errors, IReadOnlyList<string> missing) =>
+        string.Join(" ", MissingVariablesHint(missing) is { } hint ? [.. errors, hint] : errors);
 }
 
 /// <summary>Reads the variables of the selected environment of the open workspace.</summary>

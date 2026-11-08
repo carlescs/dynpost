@@ -118,6 +118,17 @@ export const AUTH_FIELDS: Record<
     { field: 'value', label: 'Value' },
     { field: 'in', label: 'Add to' },
   ],
+  oauth2: [
+    { field: 'grant', label: 'Grant' },
+    { field: 'authUrl', label: 'Authorization URL' },
+    { field: 'tokenUrl', label: 'Token URL' },
+    { field: 'redirectUri', label: 'Redirect URL' },
+    { field: 'clientId', label: 'Client id' },
+    { field: 'clientSecret', label: 'Client secret' },
+    { field: 'scope', label: 'Scope' },
+    { field: 'audience', label: 'Audience' },
+    { field: 'credentials', label: 'Send credentials in' },
+  ],
 };
 
 /** The value of an auth field as the request uses it: empty when its type doesn't use the field. */

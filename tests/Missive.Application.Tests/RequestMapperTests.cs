@@ -26,4 +26,18 @@ public class RequestMapperTests
 
         Assert.Equal(string.Empty, domain.Value.Description);
     }
+
+    [Fact]
+    public void OAuth2_KeepsTheClientSecretVerbatim()
+    {
+        var dto = RequestDtoFactory.Create() with
+        {
+            Auth = new AuthDto("oauth2", Grant: "clientCredentials", TokenUrl: " https://auth.test/token ", ClientId: "app", ClientSecret: " s p ace "),
+        };
+
+        var auth = Assert.IsType<Missive.Domain.Requests.OAuth2Auth>(RequestMapper.ToDomain(dto).Value.Auth);
+
+        Assert.Equal(" s p ace ", auth.ClientSecret);
+        Assert.Equal("https://auth.test/token", auth.TokenUrl);
+    }
 }

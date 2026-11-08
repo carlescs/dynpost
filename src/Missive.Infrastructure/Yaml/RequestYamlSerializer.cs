@@ -149,6 +149,23 @@ public static class RequestYamlSerializer
                     }
 
                     break;
+                case OAuth2Auth oauth:
+                    // The grant is always written: it decides which of the other keys matter.
+                    map.Scalar("type", "oauth2");
+                    map.Scalar("grant", RequestMapper.GrantName(oauth.Grant));
+                    ScalarIfNotEmpty(map, "authUrl", oauth.AuthUrl);
+                    ScalarIfNotEmpty(map, "tokenUrl", oauth.TokenUrl);
+                    ScalarIfNotEmpty(map, "redirectUri", oauth.RedirectUri);
+                    ScalarIfNotEmpty(map, "clientId", oauth.ClientId);
+                    ScalarIfNotEmpty(map, "clientSecret", oauth.ClientSecret);
+                    ScalarIfNotEmpty(map, "scope", oauth.Scope);
+                    ScalarIfNotEmpty(map, "audience", oauth.Audience);
+                    if (oauth.Credentials == OAuth2ClientAuthentication.Body)
+                    {
+                        map.Scalar("credentials", "body");
+                    }
+
+                    break;
             }
         });
     }
@@ -234,8 +251,37 @@ public static class RequestYamlSerializer
                 "query" => ApiKeyLocation.Query,
                 var other => throw new RequestFormatException($"'{other}' is not a supported API key location."),
             }),
+            "oauth2" => ReadOAuth2(Field),
             _ => throw new RequestFormatException($"'{type}' is not a supported auth type."),
         };
+    }
+
+    private static OAuth2Auth ReadOAuth2(Func<string, string> field)
+    {
+        var grantName = field("grant");
+        var grant = OAuth2Grant.ClientCredentials;
+        if (grantName.Length > 0 && !RequestMapper.TryParseGrant(grantName, out grant))
+        {
+            throw new RequestFormatException($"'{grantName}' is not a supported OAuth 2.0 grant (use clientCredentials or authorizationCode).");
+        }
+
+        var credentials = field("credentials").ToLowerInvariant() switch
+        {
+            "" or "header" => OAuth2ClientAuthentication.Header,
+            "body" => OAuth2ClientAuthentication.Body,
+            var other => throw new RequestFormatException($"'{other}' is not a supported way to send the client credentials (use header or body)."),
+        };
+
+        return new OAuth2Auth(
+            grant,
+            field("tokenUrl"),
+            field("clientId"),
+            field("clientSecret"),
+            field("authUrl"),
+            field("redirectUri"),
+            field("scope"),
+            field("audience"),
+            credentials);
     }
 
     private static RequestBody ReadBody(YamlMappingNode root)

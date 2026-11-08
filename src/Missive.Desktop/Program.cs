@@ -6,6 +6,7 @@ using Missive.Application.Folders;
 using Missive.Application.Git;
 using Missive.Application.Http;
 using Missive.Application.Interchange;
+using Missive.Application.OAuth2;
 using Missive.Application.Requests;
 using Missive.Application.Settings;
 using Missive.Application.Updates;
@@ -17,6 +18,7 @@ using Missive.Infrastructure.Environments;
 using Missive.Infrastructure.Git;
 using Missive.Infrastructure.Http;
 using Missive.Infrastructure.Interchange;
+using Missive.Infrastructure.OAuth2;
 using Missive.Infrastructure.Settings;
 using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
@@ -80,6 +82,9 @@ internal static class Program
             .AddSingleton<IWorkspaceStateStore, YamlWorkspaceStateStore>()
             .AddSingleton<ICookieJarStore, JsonCookieJarStore>()
             .AddSingleton<ICapturedValueStore, YamlCapturedValueStore>()
+            .AddSingleton<IOAuth2TokenStore, JsonOAuth2TokenStore>()
+            .AddSingleton<IAuthorizationBrowser, LoopbackAuthorizationBrowser>()
+            .AddSingleton<OAuth2Tokens>()
             .AddSingleton(TimeProvider.System)
             .AddSingleton<IGitService, GitCliService>()
             .AddSingleton<IRequestFileFormat, YamlRequestFileFormat>()
@@ -117,6 +122,10 @@ internal static class Program
             .AddTransient<ClearCookies>()
             .AddTransient<ListCapturedValues>()
             .AddTransient<ClearCapturedValues>()
+            .AddTransient<GetOAuth2Token>()
+            .AddTransient<GetOAuth2TokenStatus>()
+            .AddTransient<ClearOAuth2Token>()
+            .AddTransient<CancelOAuth2SignIn>()
             .AddTransient<CreateFolder>()
             .AddTransient<RenameFolder>()
             .AddTransient<MoveFolder>()

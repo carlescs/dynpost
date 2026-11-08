@@ -95,6 +95,25 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string CaptureClear = "capture.clear";
 
+    /// <summary>
+    /// Obtains a new OAuth 2.0 token for the auth in the editor and the selected environment
+    /// ('Get new token'); the authorization code grant opens the system browser and waits for the
+    /// user to sign in. Payload: <see cref="OAuth2TokenPayload"/>. Result: the token's status.
+    /// </summary>
+    public const string OAuth2TokenGet = "oauth2.token.get";
+
+    /// <summary>
+    /// The cached OAuth 2.0 token for the auth in the editor and the selected environment.
+    /// Payload: <see cref="OAuth2TokenPayload"/>. Result: the token's status, or <c>null</c>.
+    /// </summary>
+    public const string OAuth2TokenStatus = "oauth2.token.status";
+
+    /// <summary>Forgets the cached OAuth 2.0 token. Payload: <see cref="OAuth2TokenPayload"/>. Result: none.</summary>
+    public const string OAuth2TokenClear = "oauth2.token.clear";
+
+    /// <summary>Stops waiting for a browser sign-in. Payload: none. Result: whether one was in progress.</summary>
+    public const string OAuth2SignInCancel = "oauth2.signIn.cancel";
+
     /// <summary>Creates a folder. Payload: <see cref="CreateFolderPayload"/>. Result: folder.</summary>
     public const string FolderCreate = "folder.create";
 
@@ -284,6 +303,9 @@ internal sealed record CapturedValuesPayload(string Environment);
 
 /// <param name="Name">The variable to forget; omitted forgets every captured value.</param>
 internal sealed record ClearCapturedValuesPayload(string Environment, string? Name = null);
+
+/// <param name="Auth">The auth settings as they are in the editor (saved or not).</param>
+internal sealed record OAuth2TokenPayload(AuthDto Auth);
 
 internal sealed record DeleteCookiePayload(string Environment, string Name, string Domain, string Path);
 

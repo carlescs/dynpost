@@ -1,6 +1,7 @@
 using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
+using Missive.Application.OAuth2;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
 using Missive.Domain.Workspaces;
@@ -116,7 +117,7 @@ public sealed class CreateEnvironment(IEnvironmentStore store, ISecretStore secr
 /// <summary>
 /// Saves changes to an environment. Like requests, the file is renamed to match a new name when
 /// its file name is still the slug of the old name. Secret values are stored on this computer;
-/// they, the cookies and the captured values follow a renamed file.
+/// they, the cookies, the captured values and the OAuth 2.0 tokens follow a renamed file.
 /// </summary>
 public sealed class SaveEnvironment(
     IEnvironmentStore store,
@@ -124,6 +125,7 @@ public sealed class SaveEnvironment(
     IWorkspaceStateStore state,
     ICookieJarStore cookieJars,
     ICapturedValueStore captures,
+    IOAuth2TokenStore tokens,
     CurrentWorkspace current)
 {
     public async Task<Result<SavedEnvironmentDto>> ExecuteAsync(string id, EnvironmentDto dto, CancellationToken cancellationToken = default)
@@ -177,6 +179,7 @@ public sealed class SaveEnvironment(
 
             await CookieJars.MoveAsync(cookieJars, root.Value, id, savedId, cancellationToken);
             await CapturedValues.MoveAsync(captures, root.Value, id, savedId, cancellationToken);
+            await OAuth2TokenCache.MoveAsync(tokens, root.Value, id, savedId, cancellationToken);
         }
 
         if (!environment.Value.CookieJar)
@@ -213,13 +216,14 @@ public sealed class SaveEnvironment(
     }
 }
 
-/// <summary>Deletes an environment file and the secret values, cookies and captured values stored for it.</summary>
+/// <summary>Deletes an environment file and the secret values, cookies, captured values and OAuth 2.0 tokens stored for it.</summary>
 public sealed class DeleteEnvironment(
     IEnvironmentStore store,
     ISecretStore secrets,
     IWorkspaceStateStore state,
     ICookieJarStore cookieJars,
     ICapturedValueStore captures,
+    IOAuth2TokenStore tokens,
     CurrentWorkspace current)
 {
     public async Task<Result<Unit>> ExecuteAsync(string id, CancellationToken cancellationToken = default)
@@ -261,6 +265,7 @@ public sealed class DeleteEnvironment(
 
         await CookieJars.RemoveAsync(cookieJars, root.Value, id, cancellationToken);
         await CapturedValues.RemoveAsync(captures, root.Value, id, cancellationToken);
+        await OAuth2TokenCache.RemoveAsync(tokens, root.Value, id, cancellationToken);
         return Unit.Value;
     }
 }

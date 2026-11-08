@@ -194,8 +194,15 @@
             </select>
           </div>
         }
+        @case ('oauth2') {
+          <app-oauth2-auth
+            [auth]="doc.auth"
+            [sent]="doc.response"
+            (authChange)="patchAuth($event)"
+          />
+        }
       }
-      @if (doc.auth.type !== 'none') {
+      @if (doc.auth.type !== 'none' && doc.auth.type !== 'oauth2') {
         <p class="mt-3 text-xs text-slate-500">
           These values are saved in the request file. Use a variable such as
           <code>{{ secretExample }}</code> to keep secrets out of it.

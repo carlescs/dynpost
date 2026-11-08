@@ -217,6 +217,22 @@ internal static partial class InsomniaFormat
                     auth.Str("key") ?? string.Empty,
                     auth.Str("value") ?? string.Empty,
                     auth.Str("addTo") == "queryParams" ? ApiKeyLocation.Query : ApiKeyLocation.Header);
+            case "oauth2":
+                if (InterchangeText.OAuth2Grant(auth.Str("grantType"), owner, warnings) is not { } grant)
+                {
+                    return RequestAuth.None;
+                }
+
+                return new OAuth2Auth(
+                    grant,
+                    auth.Str("accessTokenUrl") ?? string.Empty,
+                    auth.Str("clientId") ?? string.Empty,
+                    auth.Str("clientSecret") ?? string.Empty,
+                    grant == OAuth2Grant.AuthorizationCode ? auth.Str("authorizationUrl") ?? string.Empty : string.Empty,
+                    InterchangeText.LoopbackRedirect(auth.Str("redirectUrl"), grant, owner, warnings),
+                    auth.Str("scope") ?? string.Empty,
+                    auth.Str("audience") ?? string.Empty,
+                    auth.Bool("credentialsInBody") ? OAuth2ClientAuthentication.Body : OAuth2ClientAuthentication.Header);
             case var type:
                 warnings.Add($"'{owner}' uses {type} auth, which Missive doesn't support; it was imported without auth.");
                 return RequestAuth.None;
@@ -400,6 +416,33 @@ internal static partial class InsomniaFormat
             ["value"] = apiKey.Value,
             ["addTo"] = apiKey.In == ApiKeyLocation.Query ? "queryParams" : "header",
         },
+        OAuth2Auth oauth => oauth.Grant == OAuth2Grant.ClientCredentials
+            ? new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["grantType"] = "client_credentials",
+                ["accessTokenUrl"] = oauth.TokenUrl,
+                ["clientId"] = oauth.ClientId,
+                ["clientSecret"] = oauth.ClientSecret,
+                ["scope"] = oauth.Scope,
+                ["audience"] = oauth.Audience,
+                ["credentialsInBody"] = oauth.Credentials == OAuth2ClientAuthentication.Body,
+            }
+            : new JsonObject
+            {
+                ["type"] = "oauth2",
+                ["grantType"] = "authorization_code",
+                ["authorizationUrl"] = oauth.AuthUrl,
+                ["accessTokenUrl"] = oauth.TokenUrl,
+                ["redirectUrl"] = oauth.RedirectUri,
+                ["clientId"] = oauth.ClientId,
+                ["clientSecret"] = oauth.ClientSecret,
+                ["scope"] = oauth.Scope,
+                ["audience"] = oauth.Audience,
+                ["credentialsInBody"] = oauth.Credentials == OAuth2ClientAuthentication.Body,
+                ["usePkce"] = true,
+                ["pkceMethod"] = "S256",
+            },
         _ => new JsonObject(),
     };
 

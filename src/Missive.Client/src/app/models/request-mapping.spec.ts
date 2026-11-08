@@ -31,6 +31,38 @@ describe('request mapping', () => {
       expect(toRequestDto({ ...content, auth: EMPTY_AUTH }).auth).toEqual({ type: 'none' });
     });
 
+    it('sends the OAuth 2.0 fields the grant uses', () => {
+      const oauth = {
+        ...EMPTY_AUTH,
+        type: 'oauth2' as const,
+        authUrl: 'https://auth.test/authorize',
+        tokenUrl: 'https://auth.test/token',
+        redirectUri: 'http://127.0.0.1:8765/cb',
+        clientId: 'app',
+        clientSecret: '{{secret}}',
+        scope: 'read',
+      };
+      expect(toRequestDto({ ...content, auth: oauth }).auth).toEqual({
+        type: 'oauth2',
+        grant: 'clientCredentials',
+        authUrl: '',
+        tokenUrl: 'https://auth.test/token',
+        redirectUri: '',
+        clientId: 'app',
+        clientSecret: '{{secret}}',
+        scope: 'read',
+        audience: '',
+        credentials: 'header',
+      });
+      expect(
+        toRequestDto({ ...content, auth: { ...oauth, grant: 'authorizationCode' } }).auth,
+      ).toMatchObject({
+        grant: 'authorizationCode',
+        authUrl: 'https://auth.test/authorize',
+        redirectUri: 'http://127.0.0.1:8765/cb',
+      });
+    });
+
     it('drops the body content when there is no body', () => {
       expect(toRequestDto({ ...content, bodyType: 'none' }).body).toEqual({
         type: 'none',

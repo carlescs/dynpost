@@ -65,7 +65,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       out of git)
 - [ ] Collections as folders, with optional folder-level defaults
 - [x] Environments with `{{variable}}` substitution
-- [x] Auth helpers: Basic, Bearer token and API key
+- [x] Auth helpers: Basic, Bearer token, API key and OAuth 2.0 (client
+      credentials, and authorization code with PKCE in the system browser)
 - [ ] Local response history (kept out of git)
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
       (switch, create, check out, delete), remotes, and clear reporting of
@@ -93,7 +94,7 @@ my-api/
 │   ├── _folder.yaml        # optional folder-level defaults (headers, auth)
 │   ├── get-user.yaml
 │   └── create-user.yaml
-└── .missive/               # local only, git-ignored: secrets, cookies, captured values, history, UI state
+└── .missive/               # local only, git-ignored: secrets, cookies, captured values, OAuth 2.0 tokens, history, UI state
 ```
 
 A request file:
@@ -128,9 +129,9 @@ params:
   ~debug: "true"     # disabled
 ```
 
-Auth types are `basic` (`username`, `password`), `bearer` (`token`) and
+Auth types are `basic` (`username`, `password`), `bearer` (`token`),
 `apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
-instead of a header). Body types are `json`, `text`, `form` and `urlencoded`.
+instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form` and `urlencoded`.
 `form` (multipart) and `urlencoded` bodies hold one `name=value` pair per line;
 `urlencoded` values are sent as written, so percent-encode them yourself.
 
@@ -257,7 +258,7 @@ of which can be marked **Secret**. New environments are saved as a file named af
 (`Staging` → `staging.yaml`); renaming one renames its file too, unless the file
 name was chosen by hand, and its secret values, cookies, captured values and
 selection follow. Deleting an environment also removes its stored secret values,
-cookies and captured values.
+cookies, captured values and OAuth 2.0 tokens.
 
 **Keep cookies between requests** turns on the environment's cookie jar (off by
 default). Cookies that responses set, including redirects on the way, are then
@@ -285,7 +286,8 @@ rules such as CORS don't apply. When sending:
   the environment doesn't define (or a secret with no value on this computer)
   is not sent; the undefined names are listed with a hint on where to set them.
 - Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
-  query parameter; a header you set yourself takes precedence. JSON, text and
+  query parameter; a header you set yourself takes precedence. OAuth 2.0 first
+  gets a token if it needs one (see [OAuth 2.0](#oauth-20)). JSON, text and
   `urlencoded` bodies get a matching `Content-Type` unless you set one.
 - A `User-Agent: Missive` header is added unless you set one. Compressed
   responses are decompressed. No cookies are kept between requests unless the
@@ -326,6 +328,52 @@ or zoomed, with selectable text), images are previewed, and other binary bodies
 are not shown (use **Save** to get them). Bodies over 20 MB are cut off. Responses are kept in memory per open
 request only; nothing is written to the workspace. The bodies of the latest
 responses (up to 64 MB in all) are kept by the backend so they can be saved.
+
+## OAuth 2.0
+
+Pick **OAuth 2.0** on a request's **Auth** tab to have Missive get the access
+token for you and send it as a Bearer token — the "get a token first" step
+other clients need a script for. Two grants are supported:
+
+- **Client credentials**: the app signs in as itself with its client id and
+  secret. Missive asks the token endpoint for a token the first time you send,
+  and again whenever it has expired.
+- **Authorization code (PKCE)**: a user signs in. **Get new token** opens the
+  sign-in page in your system browser and waits (up to 5 minutes, or until you
+  click **Cancel**) for the authorization server to redirect back to Missive on
+  a loopback address — `http://127.0.0.1:<free port>/callback`, or the
+  **Redirect URL** you set if the client only allows a registered one (it must
+  be an `http` URL on `127.0.0.1`, `localhost` or `[::1]`). PKCE (`S256`) and a
+  random `state` are always used. Sending without a token asks you to sign in;
+  an expired token is renewed with its refresh token when there is one.
+
+```yaml
+auth:
+  type: oauth2
+  grant: authorizationCode     # or clientCredentials
+  authUrl: https://auth.example.com/authorize
+  tokenUrl: https://auth.example.com/oauth/token
+  redirectUri: http://127.0.0.1:8765/callback   # optional
+  clientId: missive
+  clientSecret: "{{clientSecret}}"
+  scope: openid profile
+  audience: https://api.example.com             # optional, for Auth0 and similar
+  credentials: body            # optional: send the id and secret as form fields
+```
+
+Keys are written in that order, and empty ones and `credentials: header` (the
+default, a Basic `Authorization` header to the token endpoint) are left out;
+`authUrl` and `redirectUri` only apply to the authorization code grant. Every
+value can use `{{variables}}`: keep the client secret in a **secret** variable
+of the environment so it never reaches the request file or git.
+
+Tokens are kept on this computer only, per environment, in
+`.missive/oauth2-tokens.json` (with their refresh tokens and expiry), and are
+shared by every request with the same token URL, authorization URL, client id,
+scope and audience. They follow a renamed environment and are deleted with it.
+The Auth tab shows whether there is a token and when it expires; **Clear**
+forgets it. Like other credentials, the token is masked in the response's
+**Request** tab.
 
 ## Capturing response values
 
@@ -370,11 +418,15 @@ content, in JSON or YAML:
 
 | Format | What is imported |
 | --- | --- |
-| Postman collection v2.0 / v2.1 | Folders, requests, auth (inherited from folders and the collection), bodies; collection variables become an environment. Path variables (`/users/:id`) become their value, or `{{id}}` if they have none. |
+| Postman collection v2.0 / v2.1 | Folders, requests, auth (inherited from folders and the collection, OAuth 2.0 included), bodies; collection variables become an environment. Path variables (`/users/:id`) become their value, or `{{id}}` if they have none. |
 | Postman environment | An environment; `secret` variables stay secret (their values go to `.missive/secrets.yaml`). |
-| Insomnia export v4 | Folders, requests and environments: each sub-environment becomes an environment that includes the base environment's variables. `{{ _.name }}` references become `{{name}}`. |
+| Insomnia export v4 | Folders, requests (with their auth, OAuth 2.0 included) and environments: each sub-environment becomes an environment that includes the base environment's variables. `{{ _.name }}` references become `{{name}}`. |
 | HAR 1.2 (browser dev tools) | One request per entry, in a folder per host, without connection headers such as `Host`. |
-| OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer or API key auth using secret `{{username}}`/`{{password}}`, `{{token}}` or `{{apiKey}}` variables, which you fill in. Path parameters without an example become `{{variables}}`. |
+| OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer, API key or OAuth 2.0 auth using secret `{{username}}`/`{{password}}`, `{{token}}`, `{{apiKey}}` or `{{clientId}}`/`{{clientSecret}}` variables, which you fill in (OAuth 2.0 schemes use their client credentials or authorization code flow and the scopes the operation requires; others get a Bearer `{{token}}`). Path parameters without an example become `{{variables}}`. |
+
+OAuth 2.0 settings whose redirect URL is a web page (such as Postman's own
+callback) get Missive's automatic loopback redirect instead, which the OAuth
+client may need to allow; this is listed after the import.
 
 Request descriptions are imported from Postman and Insomnia, and from an
 OpenAPI operation's `description` (its `summary` names the request).
@@ -383,7 +435,7 @@ Imported requests are saved as ordinary request files in a new folder named
 after the collection (`Shop`, or `Shop 2` if that name is taken), and
 environments as new environment files; nothing that already exists is changed.
 What Missive can't represent is skipped and listed after the import: other auth
-types (OAuth 2, digest, …), file uploads, scripts, and HTTP methods other than
+types (digest, OAuth 1, the OAuth 2 implicit and password grants, …), file uploads, scripts, and HTTP methods other than
 `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` and `OPTIONS`. Repeated query
 parameters or headers keep their first value, and a GraphQL body becomes the
 equivalent JSON body.
