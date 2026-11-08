@@ -26,6 +26,9 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string WorkspaceRecent = "workspace.recent";
 
+    /// <summary>Removes a folder from recently opened workspaces. Payload: <see cref="RemoveRecentWorkspacePayload"/>. Result: none.</summary>
+    public const string WorkspaceRecentRemove = "workspace.recent.remove";
+
     /// <summary>Re-reads the open workspace. Payload: none. Result: workspace.</summary>
     public const string WorkspaceTree = "workspace.tree";
 
@@ -275,6 +278,7 @@ internal sealed record BridgeRequest(string Id, string Type, JsonElement? Payloa
 internal sealed record BridgeResponse(string Id, bool Ok, object? Payload = null, Error? Error = null);
 
 internal sealed record OpenWorkspacePayload(string Path);
+internal sealed record RemoveRecentWorkspacePayload(string Path);
 
 internal sealed record SetThemePayload(string Theme);
 

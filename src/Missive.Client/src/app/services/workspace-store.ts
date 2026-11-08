@@ -99,6 +99,16 @@ export class WorkspaceStore {
     await this.switchWorkspace(() => this.bridge.send('workspace.open', { path }));
   }
 
+  /** Removes a workspace from the recently opened list. */
+  async removeRecent(path: string): Promise<void> {
+    try {
+      await this.bridge.send('workspace.recent.remove', { path });
+      this.recent.update((recent) => recent.filter((workspace) => workspace.path !== path));
+    } catch (error) {
+      this.report(error);
+    }
+  }
+
   /**
    * Replaces the open workspace with the one `open` returns (`null` when the user cancelled),
    * closing the open documents.

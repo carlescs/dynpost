@@ -43,28 +43,19 @@
       </select>
     </label>
   }
-  <div #recentMenu class="relative flex items-center">
-    <button
-      type="button"
-      class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50"
-      title="Open a workspace folder"
-      [disabled]="store.opening()"
-      (click)="store.openFolder()"
-    >
-      <fa-icon [icon]="faFolderOpen" /> Open folder
-    </button>
+  <div #recentMenu class="relative">
     @if (otherRecent().length) {
       <button
         type="button"
-        class="flex h-7 w-5 items-center justify-center rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50"
-        title="Open a recent workspace"
+        class="flex items-center gap-2 rounded px-3 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
+        title="Switch to a recent workspace"
         aria-label="Recent workspaces"
         aria-controls="recent-panel"
         [attr.aria-expanded]="recentOpen()"
         [disabled]="store.opening()"
         (click)="toggleRecent()"
       >
-        <fa-icon [icon]="faChevronDown" />
+        Recent workspaces <fa-icon class="text-xs text-slate-400" [icon]="faChevronDown" />
       </button>
     }
     @if (recentOpen()) {
@@ -75,18 +66,40 @@
         class="adaptive absolute top-full right-0 z-50 mt-1 w-72 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
       >
         @for (recent of otherRecent(); track recent.path) {
-          <button
-            type="button"
-            role="menuitem"
-            class="flex w-full min-w-0 flex-col px-3 py-1.5 text-left hover:bg-slate-100"
-            [title]="recent.path"
-            (click)="openRecent(recent.path)"
-          >
-            <span class="truncate">{{ recent.name }}</span>
-            <span class="truncate text-xs text-slate-500">{{ recent.path }}</span>
-          </button>
+          <div class="flex min-w-0 items-center hover:bg-slate-100" role="none">
+            <button
+              type="button"
+              role="menuitem"
+              class="flex min-w-0 flex-1 flex-col px-3 py-1.5 text-left"
+              [title]="recent.path"
+              (click)="openRecent(recent.path)"
+            >
+              <span class="truncate">{{ recent.name }}</span>
+              <span class="truncate text-xs text-slate-500">{{ recent.path }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="mr-1 flex size-7 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-rose-600"
+              [attr.aria-label]="'Remove ' + recent.name + ' from recent workspaces'"
+              [title]="'Remove ' + recent.name + ' from recent workspaces'"
+              (click)="store.removeRecent(recent.path)"
+            >
+              <fa-icon [icon]="faXmark" />
+            </button>
+          </div>
         }
       </div>
+      <button
+        type="button"
+        class="flex size-8 items-center justify-center rounded text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50"
+        title="Open workspace folder"
+        aria-label="Open workspace folder"
+        [disabled]="store.opening()"
+        (click)="store.openFolder()"
+      >
+        <fa-icon [icon]="faFolderOpen" />
+      </button>
     }
   </div>
   <div class="relative">

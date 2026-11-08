@@ -40,6 +40,7 @@ const sample = (
  */
 export class MockBackend {
   private readonly root = '/browser-preview/my-api';
+  private readonly recentWorkspaces = [{ name: 'my-api (browser preview)', path: this.root }];
   private readonly folders = new Set(['users', 'orders']);
   private readonly files = new Map<string, RequestDto>([
     ['users/get-user.yaml', sample('Get user', 'GET', '{{baseUrl}}/users/1')],
@@ -122,7 +123,13 @@ export class MockBackend {
     }
     if (request.type === 'workspace.openLast') return ok(null);
     if (request.type === 'workspace.recent') {
-      return ok([{ name: 'my-api (browser preview)', path: this.root }]);
+      return ok(this.recentWorkspaces);
+    }
+    if (request.type === 'workspace.recent.remove') {
+      const path = payload?.['path'] as string;
+      const index = this.recentWorkspaces.findIndex((recent) => recent.path === path);
+      if (index >= 0) this.recentWorkspaces.splice(index, 1);
+      return ok(null);
     }
     if (request.type === 'settings.get') return ok({ theme: this.theme });
     if (request.type === 'settings.setTheme') {
