@@ -71,4 +71,22 @@ describe('AppHeader', () => {
 
     expect(root.querySelector('#recent-panel')).toBeNull();
   });
+
+  it('closes the panel when the last recent workspace is removed', async () => {
+    const { fixture, send } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+
+    toggle(root).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    send.mockResolvedValue(undefined);
+    root.querySelector<HTMLButtonElement>('#recent-panel [aria-label^="Remove"]')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(send).toHaveBeenCalledWith('workspace.recent.remove', { path: '/home/me/other' });
+    expect(root.querySelector('#recent-panel')).toBeNull();
+    expect(root.querySelector('button[aria-controls="recent-panel"]')).toBeNull();
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Open workspace folder');
+  });
 });

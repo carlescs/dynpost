@@ -30,6 +30,7 @@
         type="button"
         class="relative flex size-5 shrink-0 items-center justify-center rounded text-xs text-slate-400 hover:bg-slate-200 hover:text-slate-700"
         [attr.aria-label]="'Close ' + name"
+        [title]="'Close ' + name"
         (click)="close(tab)"
       >
         @if (dirty) {

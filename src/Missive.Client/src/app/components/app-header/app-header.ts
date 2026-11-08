@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faChevronDown,
@@ -50,6 +50,19 @@ export class AppHeader {
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faXmark = faXmark;
+
+  constructor() {
+    // Removing the last other recent workspace (or a reload finding none) leaves nothing to
+    // show, and the button that toggles the panel disappears with it: close the panel rather
+    // than leave an empty box open, and keep focus in the header.
+    effect(() => {
+      if (!this.recentOpen() || this.otherRecent().length) return;
+      this.recentOpen.set(false);
+      this.host.nativeElement
+        .querySelector<HTMLButtonElement>('[aria-label="Open workspace folder"]')
+        ?.focus();
+    });
+  }
 
   protected toggleRecent(): void {
     const open = !this.recentOpen();
