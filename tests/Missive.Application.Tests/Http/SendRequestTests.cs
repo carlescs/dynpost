@@ -3,6 +3,7 @@ using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Http;
+using Missive.Application.OAuth2;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
@@ -48,8 +49,20 @@ public class SendRequestTests
             .Returns(Unit.Value);
     }
 
+    private readonly IOAuth2TokenStore _tokens = Substitute.For<IOAuth2TokenStore>();
+    private readonly IAuthorizationBrowser _browser = Substitute.For<IAuthorizationBrowser>();
+
     private SendRequest CreateSendRequest() =>
-        new(_sender, _inFlight, new ActiveEnvironment(_environments, _secrets, _captures, _state, _current), _bodies, _cookies, _captures, _current, _time);
+        new(
+            _sender,
+            _inFlight,
+            new ActiveEnvironment(_environments, _secrets, _captures, _state, _current),
+            _bodies,
+            _cookies,
+            _captures,
+            _current,
+            _time,
+            new OAuth2Tokens(_sender, _tokens, _browser, _time));
 
     /// <summary>Opens a workspace with <paramref name="environment"/> selected as <c>dev.yaml</c>.</summary>
     private void SelectEnvironment(EnvironmentDefinition environment, Dictionary<string, string>? secrets = null)
@@ -101,6 +114,40 @@ public class SendRequestTests
                 && r.Url.AbsoluteUri == "https://api.example.com/users?page=2"
                 && r.Headers.Contains(KeyValuePair.Create("Authorization", "Bearer abc"))),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_OAuth2_GetsATokenFirstAndSendsIt()
+    {
+        _sender.SendAsync(Arg.Is<OutgoingRequest>(r => r.Url.Host == "auth.example.com"), Arg.Any<CancellationToken>())
+            .Returns(Response("""{"access_token":"tok-1","expires_in":3600}"""));
+        _sender.SendAsync(Arg.Is<OutgoingRequest>(r => r.Url.Host == "api.example.com"), Arg.Any<CancellationToken>())
+            .Returns(Response("{}"));
+        var request = Request() with
+        {
+            Auth = new AuthDto("oauth2", Grant: "clientCredentials", TokenUrl: "https://auth.example.com/token", ClientId: "app"),
+        };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r => r.Url.Host == "api.example.com" && r.Headers.Contains(KeyValuePair.Create("Authorization", "Bearer tok-1"))),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_OAuth2_InvalidRequestsDontFetchATokenFirst()
+    {
+        var request = Request(url: "") with
+        {
+            Auth = new AuthDto("oauth2", Grant: "clientCredentials", TokenUrl: "https://auth.example.com/token", ClientId: "app"),
+        };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error?.Code);
+        await _sender.DidNotReceiveWithAnyArgs().SendAsync(default!);
     }
 
     [Fact]

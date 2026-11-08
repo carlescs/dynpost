@@ -6,6 +6,7 @@ using Missive.Application.Folders;
 using Missive.Application.Git;
 using Missive.Application.Http;
 using Missive.Application.Interchange;
+using Missive.Application.OAuth2;
 using Missive.Domain.Git;
 using Missive.Application.Requests;
 using Missive.Application.Settings;
@@ -115,6 +116,14 @@ internal static class BridgeHandlers
                 (p, ct) => Use<ListCapturedValues>().ExecuteAsync(p.Environment, ct))
             .Register<ClearCapturedValuesPayload, IReadOnlyList<CapturedValueDto>>(BridgeMessageTypes.CaptureClear,
                 (p, ct) => Use<ClearCapturedValues>().ExecuteAsync(p.Environment, p.Name, ct))
+            .Register<OAuth2TokenPayload, OAuth2TokenDto>(BridgeMessageTypes.OAuth2TokenGet,
+                (p, ct) => Use<GetOAuth2Token>().ExecuteAsync(p.Auth, ct))
+            .Register<OAuth2TokenPayload, OAuth2TokenDto?>(BridgeMessageTypes.OAuth2TokenStatus,
+                (p, ct) => Use<GetOAuth2TokenStatus>().ExecuteAsync(p.Auth, ct))
+            .Register<OAuth2TokenPayload, Unit?>(BridgeMessageTypes.OAuth2TokenClear,
+                async (p, ct) => NoValue(await Use<ClearOAuth2Token>().ExecuteAsync(p.Auth, ct)))
+            .Register(BridgeMessageTypes.OAuth2SignInCancel,
+                _ => Task.FromResult(Result<bool>.Success(Use<CancelOAuth2SignIn>().Execute())))
             .Register<CreateFolderPayload, FolderDto>(BridgeMessageTypes.FolderCreate,
                 (p, _) => Task.FromResult(Use<CreateFolder>().Execute(p.Parent, p.Name)))
             .Register<RenameFolderPayload, FolderDto>(BridgeMessageTypes.FolderRename,

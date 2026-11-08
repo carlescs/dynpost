@@ -31,6 +31,7 @@ import { KeyValueTable } from '../../../../components/key-value-table/key-value-
 import { ResponseViewer } from '../response-viewer/response-viewer';
 import { VariableInput } from '../../../../components/variable-input/variable-input';
 import { MarkdownView } from '../../../../components/markdown-view/markdown-view';
+import { OAuth2Auth } from '../oauth2-auth/oauth2-auth';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
 
@@ -43,6 +44,7 @@ type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
     CodeEditor,
     VariableInput,
     MarkdownView,
+    OAuth2Auth,
   ],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './request-editor.html',

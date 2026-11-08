@@ -10,13 +10,36 @@ export interface KeyValueDto {
 }
 
 export interface AuthDto {
-  type: 'none' | 'basic' | 'bearer' | 'apiKey';
+  type: 'none' | 'basic' | 'bearer' | 'apiKey' | 'oauth2';
   username?: string | null;
   password?: string | null;
   token?: string | null;
   key?: string | null;
   value?: string | null;
   in?: 'header' | 'query' | null;
+  /** OAuth 2.0 only, like the fields below. */
+  grant?: 'clientCredentials' | 'authorizationCode' | null;
+  authUrl?: string | null;
+  tokenUrl?: string | null;
+  redirectUri?: string | null;
+  clientId?: string | null;
+  clientSecret?: string | null;
+  scope?: string | null;
+  audience?: string | null;
+  /** How the client secret is sent to the token endpoint. */
+  credentials?: 'header' | 'body' | null;
+}
+
+/** A cached OAuth 2.0 token, as far as the UI needs to know (the token itself stays in the host). */
+export interface OAuth2TokenDto {
+  /** ISO 8601 date-times. */
+  obtained: string;
+  /** `null` when the server didn't say. */
+  expires?: string | null;
+  expired: boolean;
+  /** Whether it can be renewed without signing in again. */
+  refreshable: boolean;
+  scope: string;
 }
 
 export interface BodyDto {
@@ -490,6 +513,17 @@ export interface BridgeMessages {
     payload: { environment: string; name?: string };
     result: CapturedValueDto[];
   };
+  /**
+   * Obtains a new OAuth 2.0 token for the auth in the editor and the selected environment; the
+   * authorization code grant opens the system browser and waits for the user to sign in.
+   */
+  'oauth2.token.get': { payload: { auth: AuthDto }; result: OAuth2TokenDto };
+  /** The cached OAuth 2.0 token for the auth in the editor, or `null` (also for incomplete settings). */
+  'oauth2.token.status': { payload: { auth: AuthDto }; result: OAuth2TokenDto | null };
+  /** Forgets the cached OAuth 2.0 token for the auth in the editor. */
+  'oauth2.token.clear': { payload: { auth: AuthDto }; result: null };
+  /** Stops waiting for a browser sign-in; `true` when one was in progress. */
+  'oauth2.signIn.cancel': { payload: void; result: boolean };
   /** Creates a folder inside `parent` (`''` is the workspace root). */
   'folder.create': { payload: { parent: string; name: string }; result: FolderDto };
   /** Renames a folder within its parent; the result is its new path. */

@@ -3,8 +3,10 @@ namespace Missive.Application.Requests;
 public sealed record KeyValueDto(string Key, string Value, bool Enabled = true);
 
 /// <summary>Auth settings. Only the fields used by <see cref="Type"/> are meaningful.</summary>
-/// <param name="Type"><c>none</c>, <c>basic</c>, <c>bearer</c> or <c>apiKey</c>.</param>
+/// <param name="Type"><c>none</c>, <c>basic</c>, <c>bearer</c>, <c>apiKey</c> or <c>oauth2</c>.</param>
 /// <param name="In">For API keys: <c>header</c> or <c>query</c>.</param>
+/// <param name="Grant">For OAuth 2.0: <c>clientCredentials</c> or <c>authorizationCode</c>.</param>
+/// <param name="Credentials">For OAuth 2.0: how the client secret is sent, <c>header</c> or <c>body</c>.</param>
 public sealed record AuthDto(
     string Type,
     string? Username = null,
@@ -12,7 +14,16 @@ public sealed record AuthDto(
     string? Token = null,
     string? Key = null,
     string? Value = null,
-    string? In = null);
+    string? In = null,
+    string? Grant = null,
+    string? AuthUrl = null,
+    string? TokenUrl = null,
+    string? RedirectUri = null,
+    string? ClientId = null,
+    string? ClientSecret = null,
+    string? Scope = null,
+    string? Audience = null,
+    string? Credentials = null);
 
 /// <param name="Type"><c>none</c>, <c>json</c>, <c>text</c>, <c>form</c> or <c>urlencoded</c>.</param>
 public sealed record BodyDto(string Type, string Content);

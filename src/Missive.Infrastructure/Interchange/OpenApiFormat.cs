@@ -398,6 +398,47 @@ internal static partial class OpenApiFormat
         return [(host, url)];
     }
 
+    /// <summary>
+    /// OAuth 2.0 auth for a scheme with a client credentials or authorization code flow (preferred
+    /// in that order), asking for the scopes the requirement lists; <c>null</c> when it has neither.
+    /// The client id and secret become secret variables to fill in. A relative URL is taken to be
+    /// on the server, <c>{{baseUrl}}</c>.
+    /// </summary>
+    private static OAuth2Auth? OAuth2(Context context, JsonObject scheme, JsonNode? scopes)
+    {
+        string Url(string? url) =>
+            url is null ? string.Empty : url.Contains("://", StringComparison.Ordinal) ? url : "{{" + BaseUrl + "}}" + (url.StartsWith('/') ? url : "/" + url);
+
+        OAuth2Auth Auth(OAuth2Grant grant, JsonObject flow)
+        {
+            context.UseAuthVariable("clientId");
+            context.UseAuthVariable("clientSecret");
+            var scope = string.Join(' ', scopes is JsonArray list ? list.Select(s => s.Text()).OfType<string>() : []);
+            return new OAuth2Auth(
+                grant,
+                Url(flow.Str("tokenUrl")),
+                "{{clientId}}",
+                "{{clientSecret}}",
+                grant == OAuth2Grant.AuthorizationCode ? Url(flow.Str("authorizationUrl")) : string.Empty,
+                Scope: scope);
+        }
+
+        if (context.Swagger)
+        {
+            return scheme.Str("flow") switch
+            {
+                "application" => Auth(OAuth2Grant.ClientCredentials, scheme),
+                "accessCode" => Auth(OAuth2Grant.AuthorizationCode, scheme),
+                _ => null,
+            };
+        }
+
+        var flows = scheme.Obj("flows");
+        return flows.Obj("clientCredentials") is { } credentials ? Auth(OAuth2Grant.ClientCredentials, credentials)
+            : flows.Obj("authorizationCode") is { } code ? Auth(OAuth2Grant.AuthorizationCode, code)
+            : null;
+    }
+
     /// <summary>The auth for the first security requirement Missive can use.</summary>
     private static RequestAuth Security(Context context, JsonNode? requirements, string owner)
     {
@@ -430,6 +471,11 @@ internal static partial class OpenApiFormat
                 {
                     context.UseAuthVariable("apiKey");
                     return new ApiKeyAuth(keyName, "{{apiKey}}", scheme.Str("in") == "query" ? ApiKeyLocation.Query : ApiKeyLocation.Header);
+                }
+
+                if (type == "oauth2" && OAuth2(context, scheme, requirement[schemeName]) is { } oauth)
+                {
+                    return oauth;
                 }
 
                 if (type is "oauth2" or "openIdConnect")

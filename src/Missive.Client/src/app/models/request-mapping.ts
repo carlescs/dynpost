@@ -1,4 +1,4 @@
-import { RequestDto, WorkspaceNodeDto } from './messages';
+import { AuthDto, RequestDto, WorkspaceNodeDto } from './messages';
 import {
   AUTH_TYPES,
   BODY_TYPES,
@@ -17,6 +17,15 @@ export const EMPTY_AUTH: RequestAuth = {
   key: '',
   value: '',
   in: 'header',
+  grant: 'clientCredentials',
+  authUrl: '',
+  tokenUrl: '',
+  redirectUri: '',
+  clientId: '',
+  clientSecret: '',
+  scope: '',
+  audience: '',
+  credentials: 'header',
 };
 
 function toMethod(value: string | null | undefined): HttpMethod {
@@ -39,6 +48,15 @@ export function fromRequestDto(dto: RequestDto): RequestContent {
       key: dto.auth.key ?? '',
       value: dto.auth.value ?? '',
       in: dto.auth.in === 'query' ? 'query' : 'header',
+      grant: dto.auth.grant === 'authorizationCode' ? 'authorizationCode' : 'clientCredentials',
+      authUrl: dto.auth.authUrl ?? '',
+      tokenUrl: dto.auth.tokenUrl ?? '',
+      redirectUri: dto.auth.redirectUri ?? '',
+      clientId: dto.auth.clientId ?? '',
+      clientSecret: dto.auth.clientSecret ?? '',
+      scope: dto.auth.scope ?? '',
+      audience: dto.auth.audience ?? '',
+      credentials: dto.auth.credentials === 'body' ? 'body' : 'header',
     },
     bodyType: BODY_TYPES.includes(dto.body.type) ? dto.body.type : 'none',
     body: dto.body.content,
@@ -56,18 +74,40 @@ export function toRequestDto(content: RequestContent): RequestDto {
     url: content.url,
     params: content.params.map((r) => ({ ...r })),
     headers: content.headers.map((r) => ({ ...r })),
-    auth:
-      auth.type === 'basic'
-        ? { type: 'basic', username: auth.username, password: auth.password }
-        : auth.type === 'bearer'
-          ? { type: 'bearer', token: auth.token }
-          : auth.type === 'apiKey'
-            ? { type: 'apiKey', key: auth.key, value: auth.value, in: auth.in }
-            : { type: 'none' },
+    auth: toAuthDto(auth),
     body: { type: content.bodyType, content: content.bodyType === 'none' ? '' : content.body },
     description: content.description,
     captures: content.captures.map((c) => ({ ...c })),
   };
+}
+
+/** The DTO of the auth settings: only the fields of the chosen type (and grant) are sent. */
+export function toAuthDto(auth: RequestAuth): AuthDto {
+  switch (auth.type) {
+    case 'basic':
+      return { type: 'basic', username: auth.username, password: auth.password };
+    case 'bearer':
+      return { type: 'bearer', token: auth.token };
+    case 'apiKey':
+      return { type: 'apiKey', key: auth.key, value: auth.value, in: auth.in };
+    case 'oauth2': {
+      const code = auth.grant === 'authorizationCode';
+      return {
+        type: 'oauth2',
+        grant: auth.grant,
+        authUrl: code ? auth.authUrl : '',
+        tokenUrl: auth.tokenUrl,
+        redirectUri: code ? auth.redirectUri : '',
+        clientId: auth.clientId,
+        clientSecret: auth.clientSecret,
+        scope: auth.scope,
+        audience: auth.audience,
+        credentials: auth.credentials,
+      };
+    }
+    default:
+      return { type: 'none' };
+  }
 }
 
 export function fromNodeDto(node: WorkspaceNodeDto): WorkspaceNode {

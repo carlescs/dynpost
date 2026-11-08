@@ -228,10 +228,32 @@ internal static partial class PostmanFormat
                     AuthParam(auth!, type, "key"),
                     AuthParam(auth!, type, "value"),
                     AuthParam(auth!, type, "in") == "query" ? ApiKeyLocation.Query : ApiKeyLocation.Header);
+            case "oauth2":
+                return ImportOAuth2(auth!, owner, warnings);
             default:
                 warnings.Add($"'{owner}' uses {type} auth, which Missive doesn't support; it was imported without auth.");
                 return RequestAuth.None;
         }
+    }
+
+    private static RequestAuth ImportOAuth2(JsonObject auth, string owner, List<string> warnings)
+    {
+        string Param(string key) => AuthParam(auth, "oauth2", key);
+        if (InterchangeText.OAuth2Grant(Param("grant_type"), owner, warnings) is not { } grant)
+        {
+            return RequestAuth.None;
+        }
+
+        return new OAuth2Auth(
+            grant,
+            Param("accessTokenUrl"),
+            Param("clientId"),
+            Param("clientSecret"),
+            grant == OAuth2Grant.AuthorizationCode ? Param("authUrl") : string.Empty,
+            InterchangeText.LoopbackRedirect(Param("redirect_uri"), grant, owner, warnings),
+            Param("scope"),
+            Param("audience"),
+            Param("client_authentication") == "body" ? OAuth2ClientAuthentication.Body : OAuth2ClientAuthentication.Header);
     }
 
     /// <summary>An auth setting: v2.1 lists <c>{ key, value }</c> pairs, v2.0 uses an object.</summary>
@@ -411,6 +433,20 @@ internal static partial class PostmanFormat
                 ("key", apiKey.Key),
                 ("value", apiKey.Value),
                 ("in", apiKey.In == ApiKeyLocation.Query ? "query" : "header")),
+            OAuth2Auth oauth => Auth("oauth2",
+            [
+                ("grant_type", oauth.Grant == OAuth2Grant.ClientCredentials ? "client_credentials" : "authorization_code_with_pkce"),
+                .. oauth.Grant == OAuth2Grant.AuthorizationCode
+                    ? new[] { ("authUrl", oauth.AuthUrl), ("redirect_uri", oauth.RedirectUri), ("challengeAlgorithm", "S256") }
+                    : [],
+                ("accessTokenUrl", oauth.TokenUrl),
+                ("clientId", oauth.ClientId),
+                ("clientSecret", oauth.ClientSecret),
+                ("scope", oauth.Scope),
+                ("audience", oauth.Audience),
+                ("client_authentication", oauth.Credentials == OAuth2ClientAuthentication.Body ? "body" : "header"),
+                ("addTokenTo", "header"),
+            ]),
             _ => null,
         };
     }

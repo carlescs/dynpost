@@ -6,6 +6,7 @@ using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Http;
 using Missive.Application.Interchange;
+using Missive.Application.OAuth2;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Http;
@@ -46,6 +47,9 @@ public sealed class SendBridgeTests : IDisposable
             .AddSingleton(Substitute.For<ISecretStore>())
             .AddSingleton(Substitute.For<ICapturedValueStore>())
             .AddSingleton(Substitute.For<IWorkspaceStateStore>())
+            .AddSingleton(Substitute.For<IOAuth2TokenStore>())
+            .AddSingleton(Substitute.For<IAuthorizationBrowser>())
+            .AddSingleton<OAuth2Tokens>()
             .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
             .AddTransient<CancelRequest>()
@@ -53,6 +57,10 @@ public sealed class SendBridgeTests : IDisposable
             .AddTransient<ListCookies>()
             .AddTransient<DeleteCookie>()
             .AddTransient<ClearCookies>()
+            .AddTransient<GetOAuth2Token>()
+            .AddTransient<GetOAuth2TokenStatus>()
+            .AddTransient<ClearOAuth2Token>()
+            .AddTransient<CancelOAuth2SignIn>()
             .BuildServiceProvider();
         _router = BridgeHandlers.Create(_services, _dialogs);
     }
@@ -178,6 +186,43 @@ public sealed class SendBridgeTests : IDisposable
         var cleared = await SendAsync("cookie.clear", """{ "environment": "dev.yaml" }""");
         Assert.True(cleared.GetProperty("ok").GetBoolean(), cleared.ToString());
         Assert.Empty(jars);
+    }
+
+    [Fact]
+    public async Task OAuth2Token_IsObtainedReportedAndCleared()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(new HttpResponseData(
+            200, "OK", [KeyValuePair.Create("Content-Type", "application/json")],
+            Encoding.UTF8.GetBytes("""{"access_token":"tok","expires_in":60,"refresh_token":"r"}"""), false, TimeSpan.Zero));
+        const string auth = """
+            { "auth": { "type": "oauth2", "grant": "clientCredentials", "tokenUrl": "https://auth.test/token", "clientId": "app", "scope": "read" } }
+            """;
+
+        var none = await SendAsync("oauth2.token.status", auth);
+        Assert.True(none.GetProperty("ok").GetBoolean(), none.ToString());
+        Assert.Equal(JsonValueKind.Null, none.GetProperty("payload").ValueKind);
+
+        var got = await SendAsync("oauth2.token.get", auth);
+        Assert.True(got.GetProperty("ok").GetBoolean(), got.ToString());
+        Assert.True(got.GetProperty("payload").GetProperty("refreshable").GetBoolean());
+        Assert.False(got.GetProperty("payload").GetProperty("expired").GetBoolean());
+        Assert.Equal("read", got.GetProperty("payload").GetProperty("scope").GetString());
+        Assert.False(got.GetProperty("payload").TryGetProperty("accessToken", out _));
+
+        var status = await SendAsync("oauth2.token.status", auth);
+        Assert.Equal(JsonValueKind.Object, status.GetProperty("payload").ValueKind);
+
+        Assert.True((await SendAsync("oauth2.token.clear", auth)).GetProperty("ok").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, (await SendAsync("oauth2.token.status", auth)).GetProperty("payload").ValueKind);
+    }
+
+    [Fact]
+    public async Task OAuth2Token_IncompleteSettings_AreReportedOnGet()
+    {
+        var got = await SendAsync("oauth2.token.get", """{ "auth": { "type": "oauth2", "grant": "authorizationCode" } }""");
+
+        Assert.False(got.GetProperty("ok").GetBoolean());
+        Assert.Equal("invalid_request", got.GetProperty("error").GetProperty("code").GetString());
     }
 
     private async Task<JsonElement> SendAsync(string type, string payload)

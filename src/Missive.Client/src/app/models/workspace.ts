@@ -6,7 +6,7 @@ export type HttpMethod = (typeof HTTP_METHODS)[number];
 export const BODY_TYPES = ['none', 'json', 'text', 'form', 'urlencoded'] as const;
 export type BodyType = (typeof BODY_TYPES)[number];
 
-export const AUTH_TYPES = ['none', 'basic', 'bearer', 'apiKey'] as const;
+export const AUTH_TYPES = ['none', 'basic', 'bearer', 'apiKey', 'oauth2'] as const;
 export type AuthType = (typeof AUTH_TYPES)[number];
 
 export interface KeyValue {
@@ -17,6 +17,10 @@ export interface KeyValue {
 
 export type ApiKeyLocation = 'header' | 'query';
 
+export const OAUTH2_GRANTS = ['clientCredentials', 'authorizationCode'] as const;
+export type OAuth2Grant = (typeof OAUTH2_GRANTS)[number];
+export type OAuth2Credentials = 'header' | 'body';
+
 /** Auth settings. Fields for other types are kept while editing so switching type loses nothing. */
 export interface RequestAuth {
   type: AuthType;
@@ -26,6 +30,15 @@ export interface RequestAuth {
   key: string;
   value: string;
   in: ApiKeyLocation;
+  grant: OAuth2Grant;
+  authUrl: string;
+  tokenUrl: string;
+  redirectUri: string;
+  clientId: string;
+  clientSecret: string;
+  scope: string;
+  audience: string;
+  credentials: OAuth2Credentials;
 }
 
 /** The editable content of a request file. */
@@ -107,6 +120,12 @@ export const AUTH_LABELS: Record<AuthType, string> = {
   basic: 'Basic',
   bearer: 'Bearer token',
   apiKey: 'API key',
+  oauth2: 'OAuth 2.0',
+};
+
+export const OAUTH2_GRANT_LABELS: Record<OAuth2Grant, string> = {
+  clientCredentials: 'Client credentials',
+  authorizationCode: 'Authorization code (PKCE)',
 };
 
 export const BODY_LABELS: Record<BodyType, string> = {

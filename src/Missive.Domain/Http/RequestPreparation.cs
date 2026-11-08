@@ -20,7 +20,11 @@ public static class RequestPreparation
     /// auth and builds the body. Disabled parameters and headers are left out. A header the request
     /// sets explicitly wins over the one auth would add. A URL without a scheme gets <c>http://</c>.
     /// </summary>
-    public static PreparedRequest Prepare(HttpRequestDefinition request, IReadOnlyDictionary<string, string> variables)
+    /// <param name="accessToken">
+    /// The OAuth 2.0 access token to send when the request uses <see cref="OAuth2Auth"/>; it is
+    /// obtained beforehand, from the token endpoint or the token cache.
+    /// </param>
+    public static PreparedRequest Prepare(HttpRequestDefinition request, IReadOnlyDictionary<string, string> variables, string? accessToken = null)
     {
         var errors = new List<string>();
         var missing = new SortedSet<string>(StringComparer.Ordinal);
@@ -29,7 +33,7 @@ public static class RequestPreparation
         var url = Resolve(request.Url).Trim();
         var query = Resolved(request.Params, Resolve);
         var headers = Resolved(request.Headers, Resolve);
-        ApplyAuth(request.Auth, Resolve, headers, query, errors);
+        ApplyAuth(request.Auth, Resolve, headers, query, errors, accessToken);
         var body = BuildBody(request.Body, Resolve);
 
         if (missing.Count > 0)
@@ -56,7 +60,8 @@ public static class RequestPreparation
         Func<string, string> resolve,
         List<KeyValuePair<string, string>> headers,
         List<KeyValuePair<string, string>> query,
-        List<string> errors)
+        List<string> errors,
+        string? accessToken)
     {
         switch (auth)
         {
@@ -92,6 +97,18 @@ public static class RequestPreparation
                 else
                 {
                     AddHeaderUnlessSet(headers, key, value);
+                }
+
+                break;
+
+            case OAuth2Auth:
+                if (string.IsNullOrEmpty(accessToken))
+                {
+                    errors.Add("There is no OAuth 2.0 access token yet: use 'Get new token' on the Auth tab.");
+                }
+                else
+                {
+                    AddHeaderUnlessSet(headers, AuthorizationHeader, $"Bearer {accessToken}");
                 }
 
                 break;

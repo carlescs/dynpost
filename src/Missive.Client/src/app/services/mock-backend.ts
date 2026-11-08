@@ -1,5 +1,6 @@
 import {
   Theme,
+  AuthDto,
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
   CaptureDto,
@@ -8,6 +9,7 @@ import {
   CookieDto,
   ERROR_CODES,
   EnvironmentDto,
+  OAuth2TokenDto,
   RequestDto,
   ResponseDto,
   WorkspaceDto,
@@ -245,6 +247,21 @@ export class MockBackend {
         else this.captured.delete(id);
         return ok(this.capturedList(id));
       }
+      case 'oauth2.token.status':
+        return ok(this.oauth2Tokens.get(this.oauth2Key(payload?.['auth'] as AuthDto)) ?? null);
+      case 'oauth2.token.get': {
+        const auth = payload?.['auth'] as AuthDto;
+        if (!auth.tokenUrl || !auth.clientId) {
+          return fail(ERROR_CODES.invalidRequest, 'Enter the OAuth 2.0 token URL and client id.');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return ok(this.newOAuth2Token(auth));
+      }
+      case 'oauth2.token.clear':
+        this.oauth2Tokens.delete(this.oauth2Key(payload?.['auth'] as AuthDto));
+        return ok(null);
+      case 'oauth2.signIn.cancel':
+        return ok(false);
       case 'environment.delete': {
         const id = payload?.['id'] as string;
         this.environments.delete(id);
@@ -375,6 +392,32 @@ export class MockBackend {
     }
   }
 
+  /** OAuth 2.0 tokens by environment and settings, like the host's cache (but in memory). */
+  private readonly oauth2Tokens = new Map<string, OAuth2TokenDto>();
+
+  private oauth2Key(auth: AuthDto): string {
+    return [
+      this.activeEnvironment ?? '',
+      auth.grant,
+      auth.tokenUrl,
+      auth.clientId,
+      auth.scope,
+    ].join('\n');
+  }
+
+  private newOAuth2Token(auth: AuthDto): OAuth2TokenDto {
+    const now = Date.now();
+    const token: OAuth2TokenDto = {
+      obtained: new Date(now).toISOString(),
+      expires: new Date(now + 3600_000).toISOString(),
+      expired: false,
+      refreshable: auth.grant === 'authorizationCode',
+      scope: auth.scope ?? '',
+    };
+    this.oauth2Tokens.set(this.oauth2Key(auth), token);
+    return token;
+  }
+
   /**
    * Pretends to send a request: after a short delay it answers with an echo of what would be
    * sent. Like the host, it resolves variables from the selected environment and refuses
@@ -405,6 +448,16 @@ export class MockBackend {
       body: { ...dto.body, content: resolve(dto.body.content) },
     };
 
+    if (dto.auth.type === 'oauth2' && !this.oauth2Tokens.has(this.oauth2Key(dto.auth))) {
+      if (dto.auth.grant === 'authorizationCode') {
+        return fail(
+          'oauth2.sign_in_required',
+          "There is no OAuth 2.0 access token yet: use 'Get new token' on the Auth tab to sign in.",
+        );
+      }
+      this.newOAuth2Token(dto.auth);
+    }
+
     const enabled = (rows: RequestDto['params']) => rows.filter((r) => r.enabled && r.key);
     const text = [
       dto.url,
@@ -414,6 +467,9 @@ export class MockBackend {
       dto.auth.password ?? '',
       dto.auth.key ?? '',
       dto.auth.value ?? '',
+      dto.auth.tokenUrl ?? '',
+      dto.auth.clientId ?? '',
+      dto.auth.clientSecret ?? '',
       dto.body.content,
     ].join('\n');
     const missing = [...new Set([...text.matchAll(VARIABLE_PATTERN)].map((m) => m[1]))];

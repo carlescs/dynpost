@@ -1,0 +1,155 @@
+@let a = auth();
+<div class="mt-3 grid max-w-2xl grid-cols-[auto_1fr] items-center gap-2 text-sm">
+  <label for="oauth2-grant">Grant</label>
+  <select
+    id="oauth2-grant"
+    class="justify-self-start rounded border border-slate-300 px-2 py-1"
+    [value]="a.grant"
+    (change)="patch({ grant: $any($event.target).value })"
+  >
+    @for (grant of grants; track grant) {
+      <option [value]="grant" [selected]="grant === a.grant">{{ grantLabels[grant] }}</option>
+    }
+  </select>
+  @if (a.grant === 'authorizationCode') {
+    <label for="oauth2-auth-url">Authorization URL</label>
+    <input
+      id="oauth2-auth-url"
+      [class]="fieldClass"
+      spellcheck="false"
+      placeholder="https://auth.example.com/authorize"
+      [value]="a.authUrl"
+      (input)="patch({ authUrl: $any($event.target).value })"
+    />
+  }
+  <label for="oauth2-token-url">Token URL</label>
+  <input
+    id="oauth2-token-url"
+    [class]="fieldClass"
+    spellcheck="false"
+    placeholder="https://auth.example.com/oauth/token"
+    [value]="a.tokenUrl"
+    (input)="patch({ tokenUrl: $any($event.target).value })"
+  />
+  <label for="oauth2-client-id">Client id</label>
+  <input
+    id="oauth2-client-id"
+    [class]="fieldClass"
+    spellcheck="false"
+    [value]="a.clientId"
+    (input)="patch({ clientId: $any($event.target).value })"
+  />
+  <label for="oauth2-client-secret">Client secret</label>
+  <input
+    id="oauth2-client-secret"
+    [class]="fieldClass"
+    spellcheck="false"
+    [placeholder]="secretExample"
+    [value]="a.clientSecret"
+    (input)="patch({ clientSecret: $any($event.target).value })"
+  />
+  <label for="oauth2-scope">Scope</label>
+  <input
+    id="oauth2-scope"
+    [class]="fieldClass"
+    spellcheck="false"
+    placeholder="read write"
+    [value]="a.scope"
+    (input)="patch({ scope: $any($event.target).value })"
+  />
+  <label for="oauth2-audience">Audience</label>
+  <input
+    id="oauth2-audience"
+    [class]="fieldClass"
+    spellcheck="false"
+    placeholder="Optional"
+    [value]="a.audience"
+    (input)="patch({ audience: $any($event.target).value })"
+  />
+  @if (a.grant === 'authorizationCode') {
+    <label for="oauth2-redirect">Redirect URL</label>
+    <input
+      id="oauth2-redirect"
+      [class]="fieldClass"
+      spellcheck="false"
+      placeholder="Automatic: http://127.0.0.1:<free port>/callback"
+      [value]="a.redirectUri"
+      (input)="patch({ redirectUri: $any($event.target).value })"
+    />
+  }
+  <label for="oauth2-credentials">Send credentials</label>
+  <select
+    id="oauth2-credentials"
+    class="justify-self-start rounded border border-slate-300 px-2 py-1"
+    [value]="a.credentials"
+    (change)="patch({ credentials: $any($event.target).value })"
+  >
+    <option value="header" [selected]="a.credentials === 'header'">As Basic auth header</option>
+    <option value="body" [selected]="a.credentials === 'body'">In the request body</option>
+  </select>
+</div>
+
+<div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+  <button
+    type="button"
+    class="flex items-center gap-1.5 rounded bg-sky-600 px-3 py-1 text-white hover:bg-sky-700 disabled:opacity-50"
+    [disabled]="getting()"
+    (click)="getToken()"
+  >
+    <fa-icon
+      [icon]="getting() ? faSpinner : faArrowsRotate"
+      [animation]="getting() ? 'spin' : undefined"
+    />
+    Get new token
+  </button>
+  @if (getting() && a.grant === 'authorizationCode') {
+    <span class="text-slate-500">Sign in in your browser…</span>
+    <button
+      type="button"
+      class="flex items-center gap-1.5 rounded border border-slate-300 px-3 py-1 hover:bg-slate-100"
+      (click)="cancelSignIn()"
+    >
+      <fa-icon [icon]="faBan" />
+      Cancel
+    </button>
+  }
+  @if (status(); as s) {
+    <span class="text-slate-600" data-testid="oauth2-status">
+      @if (s.expired) {
+        Token expired{{ s.refreshable ? '; it is refreshed when you send' : '' }}.
+      } @else if (s.expires) {
+        Token valid until {{ formatTime(s.expires) }}.
+      } @else {
+        Token obtained {{ formatTime(s.obtained) }}.
+      }
+      @if (s.scope) {
+        Scope: <code>{{ s.scope }}</code
+        >.
+      }
+    </span>
+    <button
+      type="button"
+      class="flex items-center gap-1.5 rounded border border-slate-300 px-3 py-1 hover:bg-slate-100"
+      (click)="clearToken()"
+    >
+      <fa-icon [icon]="faTrash" />
+      Clear
+    </button>
+  } @else if (!getting()) {
+    <span class="text-slate-500" data-testid="oauth2-status">
+      @if (a.grant === 'clientCredentials') {
+        No token yet: one is obtained when you send.
+      } @else {
+        No token yet.
+      }
+    </span>
+  }
+</div>
+@if (error(); as message) {
+  <p class="mt-2 text-sm text-rose-600" role="alert">{{ message }}</p>
+}
+<p class="mt-3 text-xs text-slate-500">
+  These settings are saved in the request file: use a secret variable such as
+  <code>{{ secretExample }}</code> for the client secret. The access token is sent as a Bearer token
+  and kept on this computer for the selected environment, never in the request file.
+</p>

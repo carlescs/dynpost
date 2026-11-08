@@ -101,10 +101,45 @@ public static class RequestMapper
         BasicAuth basic => new AuthDto("basic", Username: basic.Username, Password: basic.Password),
         BearerAuth bearer => new AuthDto("bearer", Token: bearer.Token),
         ApiKeyAuth apiKey => new AuthDto("apiKey", Key: apiKey.Key, Value: apiKey.Value, In: apiKey.In == ApiKeyLocation.Query ? "query" : "header"),
+        OAuth2Auth oauth => new AuthDto(
+            "oauth2",
+            Grant: GrantName(oauth.Grant),
+            AuthUrl: oauth.AuthUrl,
+            TokenUrl: oauth.TokenUrl,
+            RedirectUri: oauth.RedirectUri,
+            ClientId: oauth.ClientId,
+            ClientSecret: oauth.ClientSecret,
+            Scope: oauth.Scope,
+            Audience: oauth.Audience,
+            Credentials: oauth.Credentials == OAuth2ClientAuthentication.Body ? "body" : "header"),
         _ => new AuthDto("none"),
     };
 
-    private static Result<RequestAuth> ToDomain(AuthDto? auth) => auth?.Type?.ToLowerInvariant() switch
+    /// <summary>The name of a grant in request files and DTOs.</summary>
+    public static string GrantName(OAuth2Grant grant) => grant switch
+    {
+        OAuth2Grant.ClientCredentials => "clientCredentials",
+        OAuth2Grant.AuthorizationCode => "authorizationCode",
+        _ => throw new ArgumentOutOfRangeException(nameof(grant)),
+    };
+
+    public static bool TryParseGrant(string? name, out OAuth2Grant grant)
+    {
+        foreach (var candidate in Enum.GetValues<OAuth2Grant>())
+        {
+            if (string.Equals(GrantName(candidate), name, StringComparison.OrdinalIgnoreCase))
+            {
+                grant = candidate;
+                return true;
+            }
+        }
+
+        grant = OAuth2Grant.ClientCredentials;
+        return false;
+    }
+
+    /// <summary>Builds the domain auth from its DTO.</summary>
+    public static Result<RequestAuth> ToDomain(AuthDto? auth) => auth?.Type?.ToLowerInvariant() switch
     {
         null or "" or "none" => RequestAuth.None,
         "basic" => new BasicAuth(auth.Username ?? string.Empty, auth.Password ?? string.Empty),
@@ -115,8 +150,41 @@ public static class RequestMapper
             "query" => new ApiKeyAuth(auth.Key ?? string.Empty, auth.Value ?? string.Empty, ApiKeyLocation.Query),
             _ => Result<RequestAuth>.Failure(ErrorCodes.InvalidRequest, $"'{auth.In}' is not a supported API key location."),
         },
+        "oauth2" => OAuth2ToDomain(auth),
         _ => Result<RequestAuth>.Failure(ErrorCodes.InvalidRequest, $"'{auth.Type}' is not a supported auth type."),
     };
+
+    private static Result<RequestAuth> OAuth2ToDomain(AuthDto auth)
+    {
+        var grant = OAuth2Grant.ClientCredentials;
+        if (!string.IsNullOrEmpty(auth.Grant) && !TryParseGrant(auth.Grant, out grant))
+        {
+            return Invalid($"'{auth.Grant}' is not a supported OAuth 2.0 grant.");
+        }
+
+        var credentials = auth.Credentials?.ToLowerInvariant() switch
+        {
+            null or "" or "header" => OAuth2ClientAuthentication.Header,
+            "body" => OAuth2ClientAuthentication.Body,
+            _ => (OAuth2ClientAuthentication?)null,
+        };
+        if (credentials is null)
+        {
+            return Invalid($"'{auth.Credentials}' is not a supported way to send the client credentials.");
+        }
+
+        static string Field(string? value) => (value ?? string.Empty).Trim();
+        return new OAuth2Auth(
+            grant,
+            Field(auth.TokenUrl),
+            Field(auth.ClientId),
+            Field(auth.ClientSecret),
+            grant == OAuth2Grant.AuthorizationCode ? Field(auth.AuthUrl) : string.Empty,
+            grant == OAuth2Grant.AuthorizationCode ? Field(auth.RedirectUri) : string.Empty,
+            Field(auth.Scope),
+            Field(auth.Audience),
+            credentials.Value);
+    }
 
     private static List<KeyValueEntry> ToEntries(IReadOnlyList<KeyValueDto>? rows) =>
         (rows ?? [])
