@@ -4,12 +4,13 @@ import {
   faArrowsRotate,
   faCircleCheck,
   faCircleExclamation,
+  faPen,
   faPlus,
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 
-/** Lists the workspace's environments: pick the one requests are sent with, or open one to edit. */
+/** Lists the workspace's environments: click one to send requests with it, or its pen icon to edit it. */
 @Component({
   selector: 'app-environments-view',
   imports: [FaIconComponent],
@@ -20,6 +21,7 @@ export class EnvironmentsView {
   protected readonly store = inject(EnvironmentStore);
   protected readonly workspace = inject(WorkspaceStore);
   protected readonly faPlus = faPlus;
+  protected readonly faPen = faPen;
   protected readonly faArrowsRotate = faArrowsRotate;
   protected readonly faCircleCheck = faCircleCheck;
   protected readonly faCircleExclamation = faCircleExclamation;
