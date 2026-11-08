@@ -1,0 +1,146 @@
+using Missive.Application.Runs;
+using Missive.Domain.Runs;
+using Missive.Domain.Workspaces;
+using Missive.Infrastructure.Runs;
+
+namespace Missive.Infrastructure.Tests.Runs;
+
+public sealed class RunInfrastructureTests : IDisposable
+{
+    private readonly string _root = Directory.CreateTempSubdirectory("missive-runs-").FullName;
+
+    public void Dispose() => Directory.Delete(_root, recursive: true);
+
+    private const string Yaml = """
+        name: Users smoke load
+        requests:
+          - users/get-user.yaml
+          - users/create-user.yaml
+        load:
+          threads: 10
+          iterations: 50
+          rampUp: 10s
+          thinkTime: { min: 100ms, max: 500ms }
+          maxRps: 100
+        data:
+          file: perf/users.csv
+          mode: perThread
+          onEof: stop
+        assert:
+          "*":
+            status: 2xx
+          users/create-user.yaml:
+            status: [201]
+            maxTime: 800ms
+            bodyContains: '"id"'
+        thresholds:
+          p95: 500ms
+          errorRate: 1%
+        """;
+
+    [Fact]
+    public void Parse_ReadsTheWholePlan()
+    {
+        var result = new YamlRunPlanFormat().Parse(Yaml);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        var plan = result.Value;
+        Assert.Equal("Users smoke load", plan.Name);
+        Assert.Equal(["users/get-user.yaml", "users/create-user.yaml"], plan.Requests.Select(r => r.Value));
+        Assert.Equal(10, plan.Load.Threads);
+        Assert.Equal(50, plan.Load.Iterations);
+        Assert.Equal(TimeSpan.FromSeconds(10), plan.Load.RampUp);
+        Assert.Equal(TimeSpan.FromMilliseconds(100), plan.Load.ThinkMin);
+        Assert.Equal(TimeSpan.FromMilliseconds(500), plan.Load.ThinkMax);
+        Assert.Equal(100, plan.Load.MaxRps);
+        Assert.Equal(new RunDataSource(WorkspacePath.Parse("perf/users.csv"), SelectionMode.PerThread, EndBehavior.Stop), plan.Data);
+        Assert.Equal(["2xx"], plan.Assertions["*"].Status);
+        Assert.Equal(["201"], plan.Assertions["users/create-user.yaml"].Status);
+        Assert.Equal("\"id\"", plan.Assertions["users/create-user.yaml"].BodyContains);
+        Assert.Equal(TimeSpan.FromMilliseconds(500), plan.Thresholds.P95);
+        Assert.Equal(1, plan.Thresholds.ErrorRatePercent);
+        Assert.Empty(plan.Validate());
+    }
+
+    [Fact]
+    public void Parse_ReadsAFixedThinkTimeAndDuration()
+    {
+        var result = new YamlRunPlanFormat().Parse("name: x\nrequests: [a.yaml]\nload:\n  threads: 1\n  duration: 1m\n  thinkTime: 200ms\n");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(TimeSpan.FromMinutes(1), result.Value.Load.Duration);
+        Assert.Equal(TimeSpan.FromMilliseconds(200), result.Value.Load.ThinkMin);
+        Assert.Equal(TimeSpan.FromMilliseconds(200), result.Value.Load.ThinkMax);
+    }
+
+    [Theory]
+    [InlineData("name: x\nrequests: [a.yaml]\n", "'load' is required")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload:\n  threads: many\n", "load.threads")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload:\n  duration: soon\n", "load.duration")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nassert:\n  '*':\n    status: 20\n", "status")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\ndata:\n  file: a.csv\n  mode: shuffle\n", "data.mode")]
+    [InlineData("name: x\nrequests: [../a.yaml]\nload: {threads: 1, iterations: 1}\n", "not a valid workspace path")]
+    public void Parse_ReportsProblems(string yaml, string expected)
+    {
+        var result = new YamlRunPlanFormat().Parse(yaml);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(expected, result.Error!.Message);
+    }
+
+    [Fact]
+    public async Task CsvReader_ReadsHeaderAndQuotedValues()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "perf"));
+        await File.WriteAllTextAsync(Path.Combine(_root, "perf", "users.csv"), "id,name\r\n1,\"Doe, Jane\"\r\n2,\"say \"\"hi\"\"\"\r\n\r\n");
+
+        var rows = await new CsvRunDataReader().ReadCsvAsync(_root, WorkspacePath.Parse("perf/users.csv"));
+
+        Assert.True(rows.IsSuccess, rows.Error?.Message);
+        Assert.Equal(2, rows.Value.Count);
+        Assert.Equal("Doe, Jane", rows.Value[0]["name"]);
+        Assert.Equal("say \"hi\"", rows.Value[1]["name"]);
+    }
+
+    [Fact]
+    public async Task CsvReader_RejectsRaggedRows()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_root, "d.csv"), "a,b\n1\n");
+
+        var rows = await new CsvRunDataReader().ReadCsvAsync(_root, WorkspacePath.Parse("d.csv"));
+
+        Assert.Contains("Row 2", rows.Error!.Message);
+    }
+
+    [Fact]
+    public async Task PlanStore_ListsPlansAndWritesOnlyChanges()
+    {
+        var store = new FileSystemRunPlanStore();
+        var path = WorkspacePath.Parse("perf/smoke.run.yaml");
+
+        Assert.True((await store.WriteAsync(_root, path, "name: a\n")).Value);
+        Assert.False((await store.WriteAsync(_root, path, "name: a\n")).Value);
+        Directory.CreateDirectory(Path.Combine(_root, ".missive"));
+        await File.WriteAllTextAsync(Path.Combine(_root, ".missive", "hidden.run.yaml"), "x");
+        await File.WriteAllTextAsync(Path.Combine(_root, "request.yaml"), "x");
+
+        Assert.Equal([path], store.List(_root).Value);
+        Assert.Equal("name: a\n", (await store.ReadAsync(_root, path)).Value);
+    }
+
+    [Fact]
+    public async Task RunStore_SavesListsAndReadsRuns()
+    {
+        var store = new JsonRunStore();
+        var stats = new StatsDto(3, 1, 33.33, 1, 2, 2, 3, 3, 3, 3, 1.5, 0, 10, new Dictionary<string, long> { ["200"] = 2 }, new Dictionary<string, long>());
+        var run = new RunResultDto("20260101-000000-abc123", "p.run.yaml", "P", "completed", DateTimeOffset.UnixEpoch, 2000, 2, 0, stats, [], [], [], true, [], [], null);
+
+        Assert.True((await store.SaveAsync(_root, run)).IsSuccess);
+
+        var list = (await store.ListAsync(_root, "p.run.yaml")).Value;
+        Assert.Equal(run.RunId, Assert.Single(list).RunId);
+        Assert.Empty((await store.ListAsync(_root, "other.run.yaml")).Value);
+        Assert.Equal(3, (await store.GetAsync(_root, run.RunId)).Value.Total.Samples);
+        Assert.False((await store.GetAsync(_root, "../x")).IsSuccess);
+    }
+}

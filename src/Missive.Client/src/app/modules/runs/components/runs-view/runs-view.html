@@ -1,0 +1,55 @@
+<header class="flex h-9 shrink-0 items-center justify-between px-3">
+  <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Load runs</h2>
+  @if (workspace.workspace()) {
+    <div class="flex gap-0.5">
+      <button
+        type="button"
+        [class]="headerButton"
+        title="New run plan"
+        aria-label="New run plan"
+        (click)="store.create()"
+      >
+        <fa-icon [icon]="faPlus" />
+      </button>
+      <button
+        type="button"
+        [class]="headerButton"
+        title="Reload from disk"
+        aria-label="Reload from disk"
+        (click)="store.refresh()"
+      >
+        <fa-icon [icon]="faArrowsRotate" />
+      </button>
+    </div>
+  }
+</header>
+
+@if (!workspace.workspace()) {
+  <p class="px-3 py-1 text-sm text-slate-500">Open a workspace folder to use its run plans.</p>
+} @else if (!store.plans().length) {
+  <p class="px-3 py-1 text-sm text-slate-500">
+    No run plans yet. A plan is a <code>*.run.yaml</code> file.
+  </p>
+} @else {
+  <ul class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm" aria-label="Run plans">
+    @for (plan of store.plans(); track plan.path) {
+      <li>
+        <button
+          type="button"
+          class="flex w-full min-w-0 flex-col px-3 py-1 text-left hover:bg-slate-100"
+          [class.bg-slate-100]="store.draft()?.path === plan.path && store.showing()"
+          [title]="plan.error ?? plan.path"
+          (click)="store.open(plan.path)"
+        >
+          <span class="flex items-center gap-2 truncate">
+            @if (plan.error) {
+              <fa-icon class="text-red-500" [icon]="faCircleExclamation" />
+            }
+            {{ plan.name ?? plan.path }}
+          </span>
+          <span class="truncate text-xs text-slate-400">{{ plan.path }}</span>
+        </button>
+      </li>
+    }
+  </ul>
+}

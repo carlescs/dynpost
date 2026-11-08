@@ -73,6 +73,8 @@
       }
       @if (environments.draft(); as draft) {
         <app-environment-editor [draft]="draft" />
+      } @else if (runs.showing() && runs.draft()) {
+        <app-run-editor />
       } @else if (store.activeDocument(); as doc) {
         <app-request-editor [document]="doc" />
       } @else {

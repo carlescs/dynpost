@@ -2,13 +2,18 @@ import { Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faCodeBranch, faFolderTree, faLayerGroup } from '@fortawesome/free-solid-svg-icons';
+import {
+  faCodeBranch,
+  faFolderTree,
+  faGaugeHigh,
+  faLayerGroup,
+} from '@fortawesome/free-solid-svg-icons';
 import { GitStore } from '../../services/git-store';
 import { filter, map } from 'rxjs';
 import { WorkspaceStore } from '../../services/workspace-store';
 
-/** The routed modules, one per activity: `#/explorer`, `#/environments` and `#/git`. */
-type Activity = 'explorer' | 'environments' | 'git';
+/** The routed modules, one per activity: `#/explorer`, `#/environments`, `#/runs` and `#/git`. */
+type Activity = 'explorer' | 'environments' | 'runs' | 'git';
 
 @Component({
   selector: 'app-activity-bar',
@@ -33,6 +38,7 @@ export class ActivityBar {
   protected readonly items: { view: Activity; label: string; icon: typeof faFolderTree }[] = [
     { view: 'explorer', label: 'Explorer', icon: faFolderTree },
     { view: 'environments', label: 'Environments', icon: faLayerGroup },
+    { view: 'runs', label: 'Load runs', icon: faGaugeHigh },
     { view: 'git', label: 'Source control', icon: faCodeBranch },
   ];
 

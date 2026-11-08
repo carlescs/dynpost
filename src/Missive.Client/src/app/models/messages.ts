@@ -447,8 +447,136 @@ export interface RecentWorkspaceDto {
   path: string;
 }
 
+/** A load run plan file (`*.run.yaml`) of the workspace. */
+export interface RunPlanFileDto {
+  path: string;
+  /** The plan's name; `null` when the file can't be read. */
+  name: string | null;
+  /** Why the file can't be read. */
+  error: string | null;
+}
+
+/** A run plan open for editing. */
+export interface RunPlanDocumentDto {
+  path: string;
+  yaml: string;
+  /** Why the plan can't be run yet, or `null` when it can. */
+  error: string | null;
+}
+
+/** Aggregate numbers of a set of samples; times are in milliseconds. */
+export interface RunStatsDto {
+  samples: number;
+  errors: number;
+  errorPercent: number;
+  min: number;
+  average: number;
+  median: number;
+  p90: number;
+  p95: number;
+  p99: number;
+  max: number;
+  /** Requests per second. */
+  throughput: number;
+  bytesSent: number;
+  bytesReceived: number;
+  statusCodes: Record<string, number>;
+  errorReasons: Record<string, number>;
+}
+
+export interface RunRequestStatsDto {
+  request: string;
+  stats: RunStatsDto;
+}
+
+/** One second of a run: samples sent, how many failed and their average latency. */
+export interface RunTimelinePointDto {
+  second: number;
+  samples: number;
+  errors: number;
+  averageMs: number;
+}
+
+export interface RunThresholdDto {
+  name: string;
+  limit: string;
+  actual: string;
+  passed: boolean;
+}
+
+/** A request sent during a run. Only failed and slow ones are kept. */
+export interface RunSampleDto {
+  request: string;
+  thread: number;
+  iteration: number;
+  atMs: number;
+  latencyMs: number;
+  status: number | null;
+  error: string | null;
+  method: string;
+  url: string | null;
+  dataRow: Record<string, string> | null;
+  responsePreview: string | null;
+}
+
+export type RunState = 'running' | 'completed' | 'cancelled' | 'failed';
+
+/** A run, live or finished. */
+export interface RunResultDto {
+  runId: string;
+  planPath: string;
+  planName: string;
+  state: RunState;
+  startedAt: string;
+  elapsedMs: number;
+  threads: number;
+  activeThreads: number;
+  total: RunStatsDto;
+  requests: RunRequestStatsDto[];
+  timeline: RunTimelinePointDto[];
+  thresholds: RunThresholdDto[];
+  /** Whether the thresholds held; `null` while running, when cancelled or without a result. */
+  passed: boolean | null;
+  failedSamples: RunSampleDto[];
+  slowestSamples: RunSampleDto[];
+  message: string | null;
+}
+
+/** An earlier run of a plan. */
+export interface RunSummaryDto {
+  runId: string;
+  planPath: string;
+  planName: string;
+  state: RunState;
+  startedAt: string;
+  elapsedMs: number;
+  passed: boolean | null;
+  samples: number;
+  errors: number;
+  errorPercent: number;
+  p95: number;
+  throughput: number;
+}
+
 /** Every message type with its payload and result. */
 export interface BridgeMessages {
+  /** The run plans (`*.run.yaml`) of the workspace. */
+  'runPlan.list': { payload: void; result: RunPlanFileDto[] };
+  /** Opens a run plan for editing; a plan that can't be run still opens. */
+  'runPlan.open': { payload: { path: string }; result: RunPlanDocumentDto };
+  /** Saves the text of a run plan, creating the file when needed. */
+  'runPlan.save': { payload: { path: string; yaml: string }; result: RunPlanDocumentDto };
+  /**
+   * Starts a load run in the background. Runs of more than 200 threads fail with
+   * `confirmation_required` until `confirmLarge` is set.
+   */
+  'run.start': { payload: { path: string; confirmLarge?: boolean }; result: { runId: string } };
+  /** Stops a run; its partial results are kept. */
+  'run.cancel': { payload: { runId: string }; result: null };
+  /** The current numbers of a run (polled), or the saved ones of a finished run. */
+  'run.progress': { payload: { runId: string }; result: RunResultDto };
+  /** The earlier runs of a plan, newest first. */
+  'run.list': { payload: { path: string }; result: RunSummaryDto[] };
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
   /** Reads the per-user settings (kept in the host's settings file). */
   'settings.get': { payload: void; result: AppSettingsDto };
@@ -659,6 +787,7 @@ export const ERROR_CODES = {
   folderNotEmpty: 'folder_not_empty',
   io: 'io_error',
   updateFailed: 'update_failed',
+  confirmationRequired: 'confirmation_required',
   networkError: 'http.network_error',
   timeout: 'http.timeout',
   cancelled: 'http.cancelled',

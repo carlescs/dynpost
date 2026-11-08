@@ -12,6 +12,9 @@ import {
   OAuth2TokenDto,
   RequestDto,
   ResponseDto,
+  RunPlanDocumentDto,
+  RunResultDto,
+  RunStatsDto,
   WorkspaceDto,
   WorkspaceNodeDto,
 } from '../models/messages';
@@ -92,6 +95,37 @@ export class MockBackend {
   /** Values requests captured, by environment id and variable name. */
   private readonly captured = new Map<string, Map<string, string>>();
 
+  /** Run plan files by path. */
+  private readonly runPlans = new Map<string, string>([
+    [
+      'perf/users-smoke.run.yaml',
+      [
+        'name: Users smoke load',
+        'requests:',
+        '  - users/get-user.yaml',
+        '  - users/create-user.yaml',
+        'load:',
+        '  threads: 10',
+        '  iterations: 20',
+        '  rampUp: 2s',
+        '  thinkTime: 100ms',
+        'assert:',
+        '  users/create-user.yaml:',
+        '    status: 201',
+        'thresholds:',
+        '  p95: 500ms',
+        '  errorRate: 1%',
+        '',
+      ].join('\n'),
+    ],
+  ]);
+  /** Simulated runs by id: when they started and, once stopped, when they ended. */
+  private readonly runs = new Map<
+    string,
+    { path: string; name: string; startedAt: number; endedAt: number | null }
+  >();
+  private static readonly RUN_MS = 6000;
+
   async handle(request: BridgeRequestEnvelope): Promise<BridgeResponseEnvelope> {
     const ok = (payload: unknown): BridgeResponseEnvelope => ({
       id: request.id,
@@ -123,6 +157,9 @@ export class MockBackend {
       return ok(!!cancel);
     }
     if (request.type === 'workspace.openLast') return ok(null);
+    if (request.type.startsWith('runPlan.') || request.type.startsWith('run.')) {
+      return this.handleRuns(request, ok, fail);
+    }
     if (request.type === 'workspace.recent') {
       return ok(this.recentWorkspaces);
     }
@@ -770,6 +807,175 @@ export class MockBackend {
       return [...folders, ...files];
     };
     return { name: 'my-api (browser preview)', root: this.root, nodes: nodes('') };
+  }
+
+  private handleRuns(
+    request: BridgeRequestEnvelope,
+    ok: (payload: unknown) => BridgeResponseEnvelope,
+    fail: (code: string, message: string) => BridgeResponseEnvelope,
+  ): BridgeResponseEnvelope {
+    const payload = request.payload as Record<string, unknown> | undefined;
+    const path = payload?.['path'] as string;
+    const document = (yaml: string): RunPlanDocumentDto => ({
+      path,
+      yaml,
+      error: /^name:\s*\S/m.test(yaml) ? null : 'The plan needs a name.',
+    });
+    switch (request.type) {
+      case 'runPlan.list':
+        return ok(
+          [...this.runPlans]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([planPath, yaml]) => ({
+              path: planPath,
+              name: /^name:\s*(.+)$/m.exec(yaml)?.[1] ?? null,
+              error: null,
+            })),
+        );
+      case 'runPlan.open': {
+        const yaml = this.runPlans.get(path);
+        return yaml === undefined
+          ? fail(ERROR_CODES.notFound, 'The run plan does not exist.')
+          : ok(document(yaml));
+      }
+      case 'runPlan.save': {
+        const yaml = payload?.['yaml'] as string;
+        this.runPlans.set(path, yaml);
+        return ok(document(yaml));
+      }
+      case 'run.start': {
+        const yaml = this.runPlans.get(path);
+        if (yaml === undefined) return fail(ERROR_CODES.notFound, 'The run plan does not exist.');
+        const problem = document(yaml).error;
+        if (problem) return fail(ERROR_CODES.invalidFile, problem);
+        const threads = Number(/threads:\s*(\d+)/.exec(yaml)?.[1] ?? 1);
+        if (threads > 200 && !payload?.['confirmLarge']) {
+          return fail(
+            ERROR_CODES.confirmationRequired,
+            `This run starts ${threads} threads, which is a lot for a desktop app.`,
+          );
+        }
+        const runId = `run-${this.runs.size + 1}`;
+        const name = /^name:\s*(.+)$/m.exec(yaml)?.[1] ?? path;
+        this.runs.set(runId, { path, name, startedAt: Date.now(), endedAt: null });
+        return ok({ runId });
+      }
+      case 'run.cancel': {
+        const run = this.runs.get(payload?.['runId'] as string);
+        if (!run) return fail('run_not_found', 'There is no such run.');
+        run.endedAt ??= Date.now();
+        return ok(null);
+      }
+      case 'run.progress': {
+        const run = this.runs.get(payload?.['runId'] as string);
+        return run
+          ? ok(this.simulateRun(payload?.['runId'] as string, run))
+          : fail('run_not_found', 'There is no such run.');
+      }
+      case 'run.list':
+        return ok(
+          [...this.runs]
+            .filter(
+              ([, run]) => run.path === path && Date.now() - run.startedAt >= MockBackend.RUN_MS,
+            )
+            .reverse()
+            .map(([id, run]) => {
+              const result = this.simulateRun(id, run);
+              return {
+                runId: id,
+                planPath: run.path,
+                planName: run.name,
+                state: result.state,
+                startedAt: result.startedAt,
+                elapsedMs: result.elapsedMs,
+                passed: result.passed,
+                samples: result.total.samples,
+                errors: result.total.errors,
+                errorPercent: result.total.errorPercent,
+                p95: result.total.p95,
+                throughput: result.total.throughput,
+              };
+            }),
+        );
+      default:
+        return fail(ERROR_CODES.unknownMessage, `Unknown message type '${request.type}'.`);
+    }
+  }
+
+  /** Fake numbers that grow while the simulated run lasts, so the dashboard can be tried out. */
+  private simulateRun(
+    runId: string,
+    run: { path: string; name: string; startedAt: number; endedAt: number | null },
+  ): RunResultDto {
+    const elapsed = Math.min((run.endedAt ?? Date.now()) - run.startedAt, MockBackend.RUN_MS);
+    const finished = run.endedAt !== null || elapsed >= MockBackend.RUN_MS;
+    const seconds = Math.floor(elapsed / 1000);
+    const samples = Math.floor((elapsed / 1000) * 40);
+    const errors = Math.floor(samples * 0.02);
+    const stats = (scale: number): RunStatsDto => ({
+      samples: Math.floor(samples * scale),
+      errors: Math.floor(errors * scale),
+      errorPercent: samples ? 2 : 0,
+      min: 12,
+      average: 85,
+      median: 70,
+      p90: 160,
+      p95: 210,
+      p99: 380,
+      max: 450,
+      throughput: 40 * scale,
+      bytesSent: samples * 200 * scale,
+      bytesReceived: samples * 1500 * scale,
+      statusCodes: { '200': Math.floor(samples * 0.98 * scale), '500': Math.floor(errors * scale) },
+      errorReasons: errors ? { 'HTTP 500': Math.floor(errors * scale) } : {},
+    });
+    const total = stats(1);
+    const thresholds = [
+      { name: 'p95', limit: '500ms', actual: '210ms', passed: true },
+      { name: 'errorRate', limit: '1%', actual: '2%', passed: false },
+    ];
+    return {
+      runId,
+      planPath: run.path,
+      planName: run.name,
+      state: finished ? (run.endedAt !== null ? 'cancelled' : 'completed') : 'running',
+      startedAt: new Date(run.startedAt).toISOString(),
+      elapsedMs: elapsed,
+      threads: 10,
+      activeThreads: finished ? 0 : 10,
+      total,
+      requests: [
+        { request: 'users/get-user.yaml', stats: stats(0.5) },
+        { request: 'users/create-user.yaml', stats: stats(0.5) },
+      ],
+      timeline: Array.from({ length: seconds + 1 }, (_, second) => ({
+        second,
+        samples: 40,
+        errors: second % 3 === 0 ? 1 : 0,
+        averageMs: 70 + ((second * 17) % 40),
+      })),
+      thresholds,
+      passed: finished && run.endedAt === null ? thresholds.every((t) => t.passed) : null,
+      failedSamples: errors
+        ? [
+            {
+              request: 'users/create-user.yaml',
+              thread: 3,
+              iteration: 4,
+              atMs: 2500,
+              latencyMs: 450,
+              status: 500,
+              error: 'HTTP 500',
+              method: 'POST',
+              url: 'https://api.example.com/users',
+              dataRow: null,
+              responsePreview: '{"error":"boom"}',
+            },
+          ]
+        : [],
+      slowestSamples: [],
+      message: null,
+    };
   }
 }
 

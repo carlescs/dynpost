@@ -10,6 +10,8 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { DocumentTabs } from './components/document-tabs/document-tabs';
 import { EnvironmentEditor } from './modules/environments/components/environment-editor/environment-editor';
+import { RunEditor } from './modules/runs/components/run-editor/run-editor';
+import { RunStore } from './services/run-store';
 import { EnvironmentStore } from './services/environment-store';
 import { RequestEditor } from './modules/explorer/components/request-editor/request-editor';
 import { CommitView } from './modules/git/components/commit-view/commit-view';
@@ -36,6 +38,7 @@ import { WorkspaceStore } from './services/workspace-store';
     CommitView,
     DiffView,
     EnvironmentEditor,
+    RunEditor,
     FaIconComponent,
   ],
   selector: 'app-root',
@@ -50,6 +53,7 @@ export class App implements OnInit {
   protected readonly git = inject(GitStore);
   protected readonly history = inject(GitHistoryStore);
   protected readonly environments = inject(EnvironmentStore);
+  protected readonly runs = inject(RunStore);
   protected readonly interchange = inject(InterchangeStore);
   private readonly updates = inject(UpdateStore);
   private readonly theme = inject(ThemeStore);

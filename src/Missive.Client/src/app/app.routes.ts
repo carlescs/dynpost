@@ -16,6 +16,10 @@ export const routes: Routes = [
       import('./modules/environments/environments.routes').then((m) => m.ENVIRONMENTS_ROUTES),
   },
   {
+    path: 'runs',
+    loadChildren: () => import('./modules/runs/runs.routes').then((m) => m.RUNS_ROUTES),
+  },
+  {
     path: 'git',
     loadChildren: () => import('./modules/git/git.routes').then((m) => m.GIT_ROUTES),
   },

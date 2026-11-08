@@ -8,6 +8,7 @@ using Missive.Application.Http;
 using Missive.Application.Interchange;
 using Missive.Application.OAuth2;
 using Missive.Application.Requests;
+using Missive.Application.Runs;
 using Missive.Application.Settings;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
@@ -19,6 +20,7 @@ using Missive.Infrastructure.Git;
 using Missive.Infrastructure.Http;
 using Missive.Infrastructure.Interchange;
 using Missive.Infrastructure.OAuth2;
+using Missive.Infrastructure.Runs;
 using Missive.Infrastructure.Settings;
 using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
@@ -91,6 +93,11 @@ internal static class Program
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
             .AddSingleton<ResponseBodies>()
+            .AddSingleton<IRunPlanStore, FileSystemRunPlanStore>()
+            .AddSingleton<IRunPlanFormat, YamlRunPlanFormat>()
+            .AddSingleton<IRunDataReader, CsvRunDataReader>()
+            .AddSingleton<IRunStore, JsonRunStore>()
+            .AddSingleton<RunRegistry>()
             .AddSingleton<IExternalFiles, LocalExternalFiles>()
             .AddSingleton<ICollectionImporter, CollectionImporter>()
             .AddSingleton<ICollectionExporter, PostmanCollectionExporter>()
@@ -138,6 +145,13 @@ internal static class Program
             .AddTransient<SaveEnvironment>()
             .AddTransient<DeleteEnvironment>()
             .AddTransient<SelectEnvironment>()
+            .AddTransient<ListRunPlans>()
+            .AddTransient<OpenRunPlan>()
+            .AddTransient<SaveRunPlan>()
+            .AddTransient<StartRun>()
+            .AddTransient<CancelRun>()
+            .AddTransient<GetRunProgress>()
+            .AddTransient<ListRuns>()
             .AddTransient<GetGitStatus>()
             .AddTransient<InitRepository>()
             .AddTransient<CommitChanges>()
