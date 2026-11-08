@@ -26,7 +26,7 @@ interface BranchForm {
  * The repository's branches, in a collapsible section of the Source control view: switch to a
  * local branch, create one from the current commit, check out a remote branch as a local
  * tracking branch, merge a local or remote branch into the current one, or delete a local
- * branch. Remote branches are never deleted.
+ * branch or a branch on its remote.
  */
 @Component({
   selector: 'app-git-branches',
@@ -132,6 +132,22 @@ export class GitBranches {
       }
       return this.git.deleteBranch(branch.name, true);
     });
+  }
+
+  protected async removeRemote(branch: GitBranch): Promise<void> {
+    const local = branch.localName ?? branch.name;
+    const tracked = branch.trackedBy
+      ? ` The local branch '${branch.trackedBy}' is kept, but its upstream will be gone.`
+      : '';
+    if (
+      !confirm(
+        `Delete the branch '${local}' on the remote '${branch.remote}'? It is deleted for ` +
+          `everyone who uses the remote, and can't be undone from Missive.${tracked}`,
+      )
+    ) {
+      return;
+    }
+    await this.track(branch.name, () => this.git.deleteRemoteBranch(branch.name));
   }
 
   protected formatDate(iso: string | null): string {

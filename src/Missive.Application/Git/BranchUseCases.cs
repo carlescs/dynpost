@@ -149,7 +149,7 @@ public sealed class CheckoutRemoteBranch(IGitService git, CurrentWorkspace works
 public sealed record DeleteBranchRequest(string Name, bool Force = false);
 
 /// <summary>
-/// Deletes a local branch, never the current one and never a remote one. A branch whose commits
+/// Deletes a local branch, never the current one; the remote is left alone (see <see cref="DeleteRemoteBranch"/>). A branch whose commits
 /// would be lost is only deleted with <see cref="DeleteBranchRequest.Force"/>.
 /// </summary>
 public sealed class DeleteBranch(IGitService git, CurrentWorkspace workspace)
@@ -174,6 +174,35 @@ public sealed class DeleteBranch(IGitService git, CurrentWorkspace workspace)
         }
 
         var deleted = await git.DeleteBranchAsync(root, branch.Name, request.Force, cancellationToken);
+        return deleted.IsFailure ? deleted.Error! : await BranchContext.ReadAsync(git, root, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Deletes a branch on its remote after the user confirmed it, so it is gone for everyone who
+/// fetches. Local branches, including one that tracked it, are kept; the current branch's
+/// upstream then shows as deleted.
+/// </summary>
+public sealed class DeleteRemoteBranch(IGitService git, CurrentWorkspace workspace)
+{
+    /// <param name="remoteBranch">The remote-tracking branch, e.g. <c>origin/feature</c>.</param>
+    public async Task<Result<GitBranchesResult>> ExecuteAsync(string remoteBranch, CancellationToken cancellationToken = default)
+    {
+        var context = await BranchContext.LoadAsync(git, workspace, cancellationToken);
+        if (context.IsFailure)
+        {
+            return context.Error!;
+        }
+
+        var (root, current) = context.Value;
+        var trimmed = remoteBranch?.Trim() ?? string.Empty;
+        var branch = current.Branches.FirstOrDefault(b => b.IsRemote && string.Equals(b.Name, trimmed, StringComparison.Ordinal));
+        if (branch is null)
+        {
+            return GitErrors.BranchNotFound(trimmed);
+        }
+
+        var deleted = await git.DeleteRemoteBranchAsync(root, branch, cancellationToken);
         return deleted.IsFailure ? deleted.Error! : await BranchContext.ReadAsync(git, root, cancellationToken);
     }
 }

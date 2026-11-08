@@ -205,6 +205,16 @@
             >
               <fa-icon [icon]="faCodeMerge" />
             </button>
+            <button
+              type="button"
+              class="flex size-6 shrink-0 items-center justify-center rounded text-slate-500 enabled:hover:bg-rose-100 enabled:hover:text-rose-700 disabled:opacity-50"
+              [title]="'Delete ' + branch.name + ' on the remote'"
+              [attr.aria-label]="'Delete ' + branch.name + ' on the remote'"
+              [disabled]="git.busy() !== null"
+              (click)="removeRemote(branch)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
           </li>
         }
       </ul>

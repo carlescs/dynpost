@@ -455,6 +455,52 @@ public sealed class GitCliService : IGitService
         return Unit.Value;
     }
 
+    public async Task<Result<Unit>> DeleteRemoteBranchAsync(
+        string workspacePath,
+        GitBranch remoteBranch,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        if (remoteBranch.Remote is not { } remote)
+        {
+            return GitErrors.BranchNotFound(remoteBranch.Name);
+        }
+
+        // A full ref, so a tag of the same name can't be deleted instead.
+        var push = await RunAsync(
+            workspacePath,
+            ["push", "--porcelain", "--delete", "--", remote, "refs/heads/" + remoteBranch.LocalName],
+            cancellationToken);
+        if (push.IsFailure)
+        {
+            return push.Error!;
+        }
+
+        var rejected = push.Value.StandardOutput.Split('\n').Where(line => line.StartsWith('!')).ToList();
+        if (rejected.Count > 0 || !push.Value.Succeeded)
+        {
+            var details = Details(push.Value);
+            if (details.Contains("remote ref does not exist", StringComparison.OrdinalIgnoreCase))
+            {
+                // Already deleted by someone else: drop the stale remote-tracking branch too.
+                await RunAsync(
+                    workspacePath,
+                    ["update-ref", "-d", "refs/remotes/" + remoteBranch.Name],
+                    cancellationToken);
+                return Unit.Value;
+            }
+
+            return GitFailure.Classify("push", rejected.Count > 0 ? string.Join('\n', rejected) + "\n" + details : details);
+        }
+
+        return Unit.Value;
+    }
+
     public async Task<Result<BranchMergeResult>> MergeBranchAsync(
         string workspacePath,
         GitBranch branch,
