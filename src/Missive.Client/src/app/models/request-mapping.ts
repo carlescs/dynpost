@@ -60,6 +60,7 @@ export function fromRequestDto(dto: RequestDto): RequestContent {
     },
     bodyType: BODY_TYPES.includes(dto.body.type) ? dto.body.type : 'none',
     body: dto.body.content,
+    bodyVariables: dto.body.type === 'graphql' ? (dto.body.variables ?? '{}') : '',
     description: dto.description ?? '',
     captures: (dto.captures ?? []).map((c) => ({ ...c })),
   };
@@ -75,7 +76,11 @@ export function toRequestDto(content: RequestContent): RequestDto {
     params: content.params.map((r) => ({ ...r })),
     headers: content.headers.map((r) => ({ ...r })),
     auth: toAuthDto(auth),
-    body: { type: content.bodyType, content: content.bodyType === 'none' ? '' : content.body },
+    body: {
+      type: content.bodyType,
+      content: content.bodyType === 'none' ? '' : content.body,
+      ...(content.bodyType === 'graphql' ? { variables: content.bodyVariables } : {}),
+    },
     description: content.description,
     captures: content.captures.map((c) => ({ ...c })),
   };

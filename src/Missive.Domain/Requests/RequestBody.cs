@@ -7,10 +7,11 @@ public enum BodyType
     Text,
     Form,
     UrlEncoded,
+    Graphql,
 }
 
 /// <summary>The request body. <see cref="BodyType.None"/> means the request has no body.</summary>
-public sealed record RequestBody(BodyType Type, string Content)
+public sealed record RequestBody(BodyType Type, string Content, string Variables = "")
 {
     public static RequestBody None { get; } = new(BodyType.None, string.Empty);
 }

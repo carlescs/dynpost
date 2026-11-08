@@ -191,11 +191,29 @@ public class ImportFormatTests
 
         Assert.Equal(new RequestBody(BodyType.Json, "{\"a\":1}"), requests[2].Body);
 
-        Assert.Equal(BodyType.Json, requests[3].Body.Type);
-        Assert.Contains("\"query\": \"{ me { id } }\"", requests[3].Body.Content);
-        Assert.Contains("\"x\": 1", requests[3].Body.Content);
+        Assert.Equal(new RequestBody(BodyType.Graphql, "{ me { id } }", "{\"x\":1}"), requests[3].Body);
 
         Assert.Contains(parsed.Warnings, w => w.Contains("PURGE"));
+    }
+
+    [Fact]
+    public void Insomnia_ImportsGraphqlQueryAndVariables()
+    {
+        var parsed = Parse("""
+            {
+              "_type": "export", "__export_format": 4,
+              "resources": [
+                { "_id": "wrk_1", "_type": "workspace", "parentId": null, "name": "GraphQL" },
+                { "_id": "req_1", "_type": "request", "parentId": "wrk_1", "name": "Query",
+                  "method": "POST", "url": "https://example.test/graphql",
+                  "body": { "mimeType": "application/graphql", "text": "query { me }", "variables": "{\"id\":\"{{ _.userId }}\"}" } }
+              ]
+            }
+            """);
+
+        Assert.Equal(
+            new RequestBody(BodyType.Graphql, "query { me }", "{\"id\":\"{{userId}}\"}"),
+            Assert.Single(parsed.Collection.Root.Requests).Body);
     }
 
     [Fact]

@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Missive.Domain.Requests;
 
 namespace Missive.Domain.Http;
@@ -34,7 +36,7 @@ public static class RequestPreparation
         var query = Resolved(request.Params, Resolve);
         var headers = Resolved(request.Headers, Resolve);
         ApplyAuth(request.Auth, Resolve, headers, query, errors, accessToken);
-        var body = BuildBody(request.Body, Resolve);
+        var body = BuildBody(request.Body, Resolve, errors);
 
         if (missing.Count > 0)
         {
@@ -45,7 +47,11 @@ public static class RequestPreparation
         var uri = BuildUrl(url, query, errors, reportInvalid: missing.Count == 0);
 
         return errors.Count == 0 && uri is not null
-            ? new PreparedRequest(new OutgoingRequest(request.Method.ToName(), uri, headers, body), [], [])
+            ? new PreparedRequest(new OutgoingRequest(
+                request.Body.Type == BodyType.Graphql ? "POST" : request.Method.ToName(),
+                uri,
+                headers,
+                body), [], [])
             : new PreparedRequest(null, errors, [.. missing]);
     }
 
@@ -123,9 +129,10 @@ public static class RequestPreparation
         }
     }
 
-    private static OutgoingBody? BuildBody(RequestBody body, Func<string, string> resolve) => body.Type switch
+    private static OutgoingBody? BuildBody(RequestBody body, Func<string, string> resolve, List<string> errors) => body.Type switch
     {
         BodyType.Json => new TextBody(resolve(body.Content), "application/json"),
+        BodyType.Graphql => BuildGraphqlBody(body, resolve, errors),
         BodyType.Text => new TextBody(resolve(body.Content), "text/plain"),
         // One name=value pair per line (or already joined with '&'), sent as written.
         BodyType.UrlEncoded => new TextBody(
@@ -139,6 +146,31 @@ public static class RequestPreparation
             .ToList()),
         _ => null,
     };
+
+    private static OutgoingBody? BuildGraphqlBody(RequestBody body, Func<string, string> resolve, List<string> errors)
+    {
+        var variables = resolve(body.Variables);
+        JsonObject variablesObject;
+        try
+        {
+            variablesObject = string.IsNullOrWhiteSpace(variables)
+                ? new JsonObject()
+                : JsonNode.Parse(variables) as JsonObject
+                    ?? throw new JsonException();
+        }
+        catch (JsonException)
+        {
+            errors.Add("GraphQL variables must be a valid JSON object.");
+            return null;
+        }
+
+        var payload = new JsonObject
+        {
+            ["query"] = resolve(body.Content),
+            ["variables"] = variablesObject,
+        };
+        return new TextBody(payload.ToJsonString(), "application/json");
+    }
 
     private static IEnumerable<string> Lines(string content) =>
         content.Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0);

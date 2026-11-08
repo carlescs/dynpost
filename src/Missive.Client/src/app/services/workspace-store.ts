@@ -196,6 +196,7 @@ export class WorkspaceStore {
       auth: { ...EMPTY_AUTH },
       bodyType: 'none',
       body: '',
+      bodyVariables: '',
       description: '',
       captures: [],
       dirty: true,

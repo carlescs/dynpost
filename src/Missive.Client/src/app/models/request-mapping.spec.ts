@@ -11,6 +11,7 @@ const content: RequestContent = {
   auth: { ...EMPTY_AUTH, type: 'bearer', token: 't0k', username: 'kept while editing' },
   bodyType: 'json',
   body: '{"name":"Ada"}',
+  bodyVariables: '',
   description: '# Notes',
   captures: [{ variable: 'token', expression: '$.token' }],
 };
@@ -75,6 +76,17 @@ describe('request mapping', () => {
       expect(dto.params).toEqual(content.params);
       expect(dto.params[0]).not.toBe(content.params[0]);
     });
+
+    it('sends GraphQL query and variables separately', () => {
+      expect(
+        toRequestDto({
+          ...content,
+          bodyType: 'graphql',
+          body: 'query { me }',
+          bodyVariables: '{"id": 1}',
+        }).body,
+      ).toEqual({ type: 'graphql', content: 'query { me }', variables: '{"id": 1}' });
+    });
   });
 
   describe('fromRequestDto', () => {
@@ -93,7 +105,7 @@ describe('request mapping', () => {
         params: [],
         headers: [],
         auth: { type: 'oauth', in: 'cookie' },
-        body: { type: 'graphql', content: 'x' },
+        body: { type: 'unknown', content: 'x' },
       } as unknown as RequestDto;
       const result = fromRequestDto(dto);
       expect(result.method).toBe('PATCH');
@@ -102,6 +114,23 @@ describe('request mapping', () => {
       expect(result.description).toBe('');
       expect(result.captures).toEqual([]);
       expect(fromRequestDto({ ...dto, method: 'BREW' }).method).toBe('GET');
+    });
+
+    it('reads GraphQL query and variables', () => {
+      const dto: RequestDto = {
+        name: 'GraphQL',
+        method: 'POST',
+        url: 'https://example.test/graphql',
+        params: [],
+        headers: [],
+        auth: { type: 'none' },
+        body: { type: 'graphql', content: 'query { me }', variables: '{"id": 1}' },
+      };
+      expect(fromRequestDto(dto)).toMatchObject({
+        bodyType: 'graphql',
+        body: 'query { me }',
+        bodyVariables: '{"id": 1}',
+      });
     });
   });
 

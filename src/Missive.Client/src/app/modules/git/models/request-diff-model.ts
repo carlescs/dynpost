@@ -11,6 +11,7 @@ export const EMPTY_REQUEST: RequestContent = {
   auth: EMPTY_AUTH,
   bodyType: 'none',
   body: '',
+  bodyVariables: '',
   description: '',
   captures: [],
 };
@@ -177,7 +178,9 @@ export function requestChanges(before: RequestContent, after: RequestContent): R
       ),
     body:
       before.bodyType !== after.bodyType ||
-      (after.bodyType !== 'none' && before.body !== after.body),
+      (after.bodyType !== 'none' &&
+        (before.body !== after.body ||
+          (before.bodyType === 'graphql' && before.bodyVariables !== after.bodyVariables))),
     capture: changedRows(diffRows(captureRows(before), captureRows(after))),
     docs: before.description !== after.description,
   };

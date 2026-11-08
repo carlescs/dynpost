@@ -177,7 +177,7 @@ internal static partial class InsomniaFormat
         };
 
         var converted = InterchangeText.MapText(request, FromInsomnia);
-        if (TemplateTag().IsMatch(converted.Url + converted.Body.Content + string.Join(' ', converted.Headers.Select(h => h.Value))))
+        if (TemplateTag().IsMatch(converted.Url + converted.Body.Content + converted.Body.Variables + string.Join(' ', converted.Headers.Select(h => h.Value))))
         {
             warnings.Add($"'{name}' uses Insomnia template tags ({{% … %}}), which Missive doesn't run; they were kept as text.");
         }
@@ -246,11 +246,45 @@ internal static partial class InsomniaFormat
             return RequestBody.None;
         }
 
+        if (InterchangeText.MediaType(body.Str("mimeType")) == "application/graphql")
+        {
+            return new RequestBody(
+                BodyType.Graphql,
+                body.Str("text") ?? string.Empty,
+                body.Str("variables") ?? string.Empty);
+        }
+
         var mimeType = body.Str("mimeType");
+        if (InterchangeText.IsJson(mimeType) && ImportGraphqlJson(body.Str("text")) is { } graphql)
+        {
+            return graphql;
+        }
+
         var fields = body.Arr("params").Where(p => !p.Bool("disabled") && p.Str("name") is not null).ToList();
         if (fields.Any(f => f.Str("type") == "file"))
         {
             warnings.Add($"Skipped the file fields of '{owner}': Missive bodies can't attach files.");
+        }
+
+        private static RequestBody? ImportGraphqlJson(string? text)
+        {
+            try
+            {
+                if (JsonNode.Parse(text ?? string.Empty) is not JsonObject payload || payload.Str("query") is not { } query)
+                {
+                    return null;
+                }
+
+                var variables = payload.Get("variables");
+                var variablesText = variables is JsonValue value && value.TryGetValue<string>(out var stringValue)
+                    ? stringValue
+                    : variables?.ToJsonString() ?? string.Empty;
+                return new RequestBody(BodyType.Graphql, query, variablesText);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return null;
+            }
         }
 
         var pairs = fields
@@ -274,12 +308,6 @@ internal static partial class InsomniaFormat
                     }
 
                     return RequestBody.None;
-                }
-
-                if (InterchangeText.MediaType(mimeType) == "application/graphql")
-                {
-                    warnings.Add($"The GraphQL body of '{owner}' was imported as a JSON body.");
-                    return new RequestBody(BodyType.Json, text);
                 }
 
                 return new RequestBody(type, text);
@@ -459,9 +487,36 @@ internal static partial class InsomniaFormat
                 ["mimeType"] = InterchangeText.MediaTypeOf(body.Type),
                 ["text"] = body.Content,
             },
+            BodyType.Graphql => ExportGraphqlBody(body),
             BodyType.UrlEncoded => new JsonObject { ["mimeType"] = "application/x-www-form-urlencoded", ["params"] = Fields(encoded: true) },
             BodyType.Form => new JsonObject { ["mimeType"] = "multipart/form-data", ["params"] = Fields(encoded: false) },
             _ => new JsonObject(),
+        };
+    }
+
+    private static JsonObject ExportGraphqlBody(RequestBody body)
+    {
+        JsonNode variables;
+        try
+        {
+            variables = string.IsNullOrWhiteSpace(body.Variables)
+                ? new JsonObject()
+                : JsonNode.Parse(body.Variables) ?? new JsonObject();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            variables = JsonValue.Create(body.Variables)!;
+        }
+
+        var payload = new JsonObject
+        {
+            ["query"] = body.Content,
+            ["variables"] = variables,
+        };
+        return new JsonObject
+        {
+            ["mimeType"] = "application/json",
+            ["text"] = InterchangeText.Write(payload),
         };
     }
 

@@ -3,7 +3,7 @@ import { CaptureDto, ResponseDto } from './messages';
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
-export const BODY_TYPES = ['none', 'json', 'text', 'form', 'urlencoded'] as const;
+export const BODY_TYPES = ['none', 'json', 'text', 'form', 'urlencoded', 'graphql'] as const;
 export type BodyType = (typeof BODY_TYPES)[number];
 
 export const AUTH_TYPES = ['none', 'basic', 'bearer', 'apiKey', 'oauth2'] as const;
@@ -51,6 +51,7 @@ export interface RequestContent {
   auth: RequestAuth;
   bodyType: BodyType;
   body: string;
+  bodyVariables: string;
   /** Notes about the request, in Markdown. */
   description: string;
   /** Values to capture from a successful response into variables. */
@@ -134,4 +135,5 @@ export const BODY_LABELS: Record<BodyType, string> = {
   text: 'Raw text',
   form: 'Form data',
   urlencoded: 'x-www-form-urlencoded',
+  graphql: 'GraphQL',
 };
