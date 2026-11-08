@@ -717,6 +717,36 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Fetch_PrunesRemoteBranchesDeletedOnTheRemote()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "push", "--quiet", "origin", "HEAD:refs/heads/feature");
+        TestGit.Run(bob, "fetch", "--quiet");
+        TestGit.Run(alice, "push", "--quiet", "origin", "--delete", "feature");
+
+        var fetch = await _git.FetchAsync(bob);
+
+        Assert.True(fetch.IsSuccess, fetch.Error?.Message);
+        var branches = (await _git.ListBranchesAsync(bob)).Value;
+        Assert.DoesNotContain(branches, b => b.IsRemote && b.Name == "origin/feature");
+    }
+
+    [Fact]
+    public async Task Pull_PrunesRemoteBranchesDeletedOnTheRemote()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "push", "--quiet", "origin", "HEAD:refs/heads/feature");
+        TestGit.Run(bob, "fetch", "--quiet");
+        TestGit.Run(alice, "push", "--quiet", "origin", "--delete", "feature");
+
+        var pull = await _git.PullAsync(bob);
+
+        Assert.True(pull.IsSuccess, pull.Error?.Message);
+        var branches = (await _git.ListBranchesAsync(bob)).Value;
+        Assert.DoesNotContain(branches, b => b.IsRemote && b.Name == "origin/feature");
+    }
+
+    [Fact]
     public async Task Fetch_UpdatesTheCommitsToPull()
     {
         var (alice, bob) = InitTwoClones();

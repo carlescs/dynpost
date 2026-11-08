@@ -1078,8 +1078,9 @@ public sealed class GitCliService : IGitService
             return headBefore.Error!;
         }
 
-        // Always merge: rebasing would rewrite the user's local commits.
-        List<string> arguments = ["pull", "--no-rebase", "--no-edit"];
+        // Always merge: rebasing would rewrite the user's local commits. --prune drops
+        // remote-tracking branches deleted on the remote, as a fetch does.
+        List<string> arguments = ["pull", "--no-rebase", "--no-edit", "--prune"];
         if (allowUnrelatedHistories)
         {
             arguments.Add("--allow-unrelated-histories");
@@ -1279,7 +1280,7 @@ public sealed class GitCliService : IGitService
             return remote.Error!;
         }
 
-        var fetch = await RunCheckedAsync(workspacePath, "fetch", ["fetch", "--quiet", "--", remote.Value], cancellationToken);
+        var fetch = await RunCheckedAsync(workspacePath, "fetch", ["fetch", "--quiet", "--prune", "--", remote.Value], cancellationToken);
         if (fetch.IsFailure)
         {
             return fetch.Error!;

@@ -153,8 +153,7 @@ export class GitStore {
       (status) => {
         this.status.set(status);
         void this.loadRemotes();
-        // Branches are read once the Branches section is opened, then kept current.
-        if (this.branches() !== null) void this.loadBranches();
+        this.reloadBranchesIfShown();
         void this.loadIdentity();
       },
     );
@@ -167,6 +166,8 @@ export class GitStore {
       () => this.bridge.send('git.fetch'),
       (status) => {
         this.status.set(status);
+        // A fetch adds and prunes remote-tracking branches.
+        this.reloadBranchesIfShown();
         this.notice.set({
           kind: 'info',
           text: status.upstreamGone
@@ -282,6 +283,7 @@ export class GitStore {
       () => this.bridge.send('git.pull'),
       (r) => {
         this.status.set(r.status);
+        this.reloadBranchesIfShown();
         this.notice.set(PULL_NOTICES[r.outcome]);
         // A pull can add, change or remove request and environment files.
         void this.workspace.refresh();
@@ -297,6 +299,8 @@ export class GitStore {
       () => this.bridge.send('git.push'),
       (status) => {
         this.status.set(status);
+        // Pushing a new branch creates its remote-tracking branch.
+        this.reloadBranchesIfShown();
         this.notice.set({ kind: 'info', text: `Pushed to ${status.upstream ?? 'the remote'}.` });
       },
     );
@@ -307,7 +311,10 @@ export class GitStore {
       this.busy.set('fetch');
       try {
         const status = await this.bridge.send('git.fetch');
-        if (this.root() === root) this.status.set(status);
+        if (this.root() === root) {
+          this.status.set(status);
+          this.reloadBranchesIfShown();
+        }
       } catch {
         // Keep the rejection; a pull fetches anyway.
       } finally {
@@ -411,6 +418,11 @@ export class GitStore {
         (s) => this.status.set(s),
       );
     return ok;
+  }
+
+  /** Branches are read once the Branches section is opened, then kept current. */
+  private reloadBranchesIfShown(): void {
+    if (this.branches() !== null) void this.loadBranches();
   }
 
   /** Reads the branches; failures leave the last list (the status shows git errors). */

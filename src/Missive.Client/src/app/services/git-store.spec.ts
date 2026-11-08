@@ -138,6 +138,17 @@ describe('GitStore', () => {
     await vi.waitFor(() => expect(store.branches()).toHaveLength(2));
   });
 
+  it('reloads the shown branches after a fetch, dropping ones deleted on the remote', async () => {
+    handlers['git.branch.list'] = () => ({ status: status(), branches: [main, feature] });
+    await store.loadBranches();
+    handlers['git.fetch'] = () => status();
+    handlers['git.branch.list'] = () => ({ status: status(), branches: [main] });
+
+    await store.fetch();
+
+    await vi.waitFor(() => expect(store.branches()).toEqual([main]));
+  });
+
   it('switches branches and reloads the workspace from disk', async () => {
     handlers['git.branch.switch'] = () => ({
       status: status({ branch: 'feature' }),
