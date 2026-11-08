@@ -22,6 +22,19 @@ describe('AppHeader', () => {
   const toggle = (root: HTMLElement) =>
     root.querySelector<HTMLButtonElement>('button[aria-controls="recent-panel"]')!;
 
+  it('shows the open folder button next to the toggle without opening the panel', () => {
+    const { fixture, store } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    const openFolder = vi.spyOn(store, 'openFolder').mockResolvedValue();
+
+    const button = root.querySelector<HTMLButtonElement>('[aria-label="Open workspace folder"]')!;
+    expect(button.parentElement).toBe(toggle(root).parentElement);
+    button.click();
+
+    expect(openFolder).toHaveBeenCalled();
+    expect(root.querySelector('#recent-panel')).toBeNull();
+  });
+
   it('opens the recent workspaces when the toggle is clicked', async () => {
     const { fixture } = setup();
     const root: HTMLElement = fixture.nativeElement;
