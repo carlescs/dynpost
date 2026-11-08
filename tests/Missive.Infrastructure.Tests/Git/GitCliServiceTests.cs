@@ -769,6 +769,36 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteRemoteBranch_FollowsARenamingFetchRefspec()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "push", "--quiet", "origin", "HEAD:refs/heads/release", "HEAD:refs/heads/stable");
+        TestGit.Run(bob, "config", "--add", "remote.origin.fetch", "^refs/heads/stable");
+        TestGit.Run(bob, "config", "--add", "remote.origin.fetch", "+refs/heads/release:refs/remotes/origin/stable");
+        TestGit.Run(bob, "fetch", "--quiet");
+        var stable = (await _git.ListBranchesAsync(bob)).Value.Single(b => b.Name == "origin/stable");
+
+        var deleted = await _git.DeleteRemoteBranchAsync(bob, stable);
+
+        Assert.True(deleted.IsSuccess, deleted.Error?.Message);
+        Assert.Equal(string.Empty, TestGit.Run(alice, "ls-remote", "--heads", "origin", "release").Trim());
+        Assert.NotEqual(string.Empty, TestGit.Run(alice, "ls-remote", "--heads", "origin", "stable").Trim());
+    }
+
+    [Theory]
+    [InlineData("+refs/heads/*:refs/remotes/origin/*", "refs/remotes/origin/feature/x", "refs/heads/feature/x")]
+    [InlineData("+refs/heads/release:refs/remotes/origin/stable", "refs/remotes/origin/stable", "refs/heads/release")]
+    [InlineData("+refs/heads/*:refs/remotes/origin/*\n+refs/heads/release:refs/remotes/origin/stable", "refs/remotes/origin/stable", null)]
+    [InlineData("+refs/heads/*:refs/remotes/origin/*\n^refs/heads/secret", "refs/remotes/origin/secret", null)]
+    [InlineData("+refs/heads/main:refs/remotes/origin/main", "refs/remotes/origin/feature", null)]
+    [InlineData("+refs/tags/*:refs/remotes/origin/*", "refs/remotes/origin/v1", null)]
+    [InlineData("+refs/heads/*:refs/remotes/origin/*", "refs/remotes/other/x", null)]
+    public void MapTrackingRefToRemoteRef_FollowsTheFetchRefspecs(string refspecs, string trackingRef, string? expected)
+    {
+        Assert.Equal(expected, GitCliService.MapTrackingRefToRemoteRef(refspecs.Split('\n'), trackingRef));
+    }
+
+    [Fact]
     public async Task DeleteRemoteBranch_AlreadyDeletedOnTheRemote_DropsTheStaleBranch()
     {
         var (alice, bob) = InitTwoClones();

@@ -149,6 +149,20 @@ describe('GitStore', () => {
     await vi.waitFor(() => expect(store.branches()).toEqual([main]));
   });
 
+  it('reloads the shown branches after a failed pull, keeping its error', async () => {
+    handlers['git.branch.list'] = () => ({ status: status(), branches: [main, feature] });
+    await store.loadBranches();
+    handlers['git.pull'] = () => {
+      throw new BridgeError('git.upstream_gone', 'Gone.');
+    };
+    handlers['git.branch.list'] = () => ({ status: status(), branches: [main] });
+
+    await store.pull();
+
+    expect(store.error()?.code).toBe('git.upstream_gone');
+    await vi.waitFor(() => expect(store.branches()).toEqual([main]));
+  });
+
   it('deletes a branch on the remote and shows the remaining branches', async () => {
     handlers['git.branch.deleteRemote'] = () => ({ status: status(), branches: [main] });
 

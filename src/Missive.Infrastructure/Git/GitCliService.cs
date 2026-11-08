@@ -471,10 +471,24 @@ public sealed class GitCliService : IGitService
             return GitErrors.BranchNotFound(remoteBranch.Name);
         }
 
+        // The branch's name on the remote comes from the remote's fetch refspecs, which may rename
+        // it (+refs/heads/release:refs/remotes/origin/stable): never guess it from the local name.
+        var refspecs = await RunAsync(workspacePath, ["config", "--get-all", $"remote.{remote}.fetch"], cancellationToken);
+        if (refspecs.IsFailure)
+        {
+            return refspecs.Error!;
+        }
+
+        var lines = refspecs.Value.Succeeded ? refspecs.Value.StandardOutput.Split('\n') : [];
+        if (MapTrackingRefToRemoteRef(lines, "refs/remotes/" + remoteBranch.Name) is not { } remoteRef)
+        {
+            return GitErrors.RemoteBranchUnmapped(remoteBranch.Name);
+        }
+
         // A full ref, so a tag of the same name can't be deleted instead.
         var push = await RunAsync(
             workspacePath,
-            ["push", "--porcelain", "--delete", "--", remote, "refs/heads/" + remoteBranch.LocalName],
+            ["push", "--porcelain", "--delete", "--", remote, remoteRef],
             cancellationToken);
         if (push.IsFailure)
         {
@@ -488,17 +502,85 @@ public sealed class GitCliService : IGitService
             if (details.Contains("remote ref does not exist", StringComparison.OrdinalIgnoreCase))
             {
                 // Already deleted by someone else: drop the stale remote-tracking branch too.
-                await RunAsync(
+                return Done(await RunCheckedAsync(
                     workspacePath,
+                    "update-ref",
                     ["update-ref", "-d", "refs/remotes/" + remoteBranch.Name],
-                    cancellationToken);
-                return Unit.Value;
+                    cancellationToken));
             }
 
             return GitFailure.Classify("push", rejected.Count > 0 ? string.Join('\n', rejected) + "\n" + details : details);
         }
 
         return Unit.Value;
+    }
+
+    /// <summary>
+    /// Maps a remote-tracking ref (<c>refs/remotes/origin/x</c>) back to the remote branch it is
+    /// fetched from, through the remote's fetch refspecs (<c>+refs/heads/*:refs/remotes/origin/*</c>).
+    /// Returns <c>null</c> unless exactly one <c>refs/heads/</c> branch not excluded by a negative
+    /// refspec maps to it.
+    /// </summary>
+    internal static string? MapTrackingRefToRemoteRef(IEnumerable<string> refspecs, string trackingRef)
+    {
+        var specs = refspecs.Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+        var exclusions = specs.Where(s => s.StartsWith('^')).Select(s => s[1..]).ToList();
+        string? match = null;
+        foreach (var spec in specs.Where(s => !s.StartsWith('^')))
+        {
+            var colon = spec.IndexOf(':');
+            if (colon < 0)
+            {
+                continue;
+            }
+
+            var source = spec[..colon].TrimStart('+');
+            var destination = spec[(colon + 1)..];
+            string? candidate;
+            if (!destination.Contains('*'))
+            {
+                candidate = destination == trackingRef && !source.Contains('*') ? source : null;
+            }
+            else
+            {
+                candidate = MatchGlob(destination, trackingRef) is { } part && source.Count(c => c == '*') == 1
+                    ? source.Replace("*", part)
+                    : null;
+            }
+
+            // A negative refspec means the candidate isn't fetched, so it isn't where the ref comes from.
+            if (candidate is null
+                || exclusions.Any(p => p.Contains('*') ? MatchGlob(p, candidate) is not null : p == candidate))
+            {
+                continue;
+            }
+
+            if (match is not null && match != candidate)
+            {
+                return null;
+            }
+
+            match = candidate;
+        }
+
+        return match is not null && match.StartsWith("refs/heads/", StringComparison.Ordinal) ? match : null;
+    }
+
+    /// <summary>What the single <c>*</c> of <paramref name="pattern"/> matches in <paramref name="value"/>, or <c>null</c>.</summary>
+    private static string? MatchGlob(string pattern, string value)
+    {
+        var star = pattern.IndexOf('*');
+        if (star < 0 || pattern.IndexOf('*', star + 1) >= 0)
+        {
+            return null;
+        }
+
+        var (head, tail) = (pattern[..star], pattern[(star + 1)..]);
+        return value.Length >= head.Length + tail.Length
+               && value.StartsWith(head, StringComparison.Ordinal)
+               && value.EndsWith(tail, StringComparison.Ordinal)
+            ? value[head.Length..(value.Length - tail.Length)]
+            : null;
     }
 
     public async Task<Result<BranchMergeResult>> MergeBranchAsync(
