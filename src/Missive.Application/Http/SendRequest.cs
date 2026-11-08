@@ -53,7 +53,7 @@ public sealed class SendRequest(
         // An OAuth 2.0 token is only worth obtaining for a request that can be sent: check it first
         // with a stand-in token.
         var oauth = definition.Value.Auth as OAuth2Auth;
-        var prepared = RequestPreparation.Prepare(definition.Value, variables.Value.Values, oauth is null ? null : "token");
+        var prepared = RequestPreparation.Prepare(definition.Value, variables.Value.Values, oauth is null ? null : "token", root);
         if (!prepared.IsValid)
         {
             return new Error(ErrorCodes.InvalidRequest, variables.Value.Explain(prepared.Errors, prepared.MissingVariables));
@@ -101,7 +101,7 @@ public sealed class SendRequest(
                     return token.Error!;
                 }
 
-                var withToken = RequestPreparation.Prepare(definition.Value, variables.Value.Values, token.Value.AccessToken).Request!;
+                var withToken = RequestPreparation.Prepare(definition.Value, variables.Value.Values, token.Value.AccessToken, root).Request!;
                 outgoing = withToken with { Cookies = outgoing.Cookies };
             }
 

@@ -8,6 +8,7 @@ public enum BodyType
     Form,
     UrlEncoded,
     Graphql,
+    Binary,
 }
 
 /// <summary>The request body. <see cref="BodyType.None"/> means the request has no body.</summary>

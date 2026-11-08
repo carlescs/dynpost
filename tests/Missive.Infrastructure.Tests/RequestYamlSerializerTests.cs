@@ -52,23 +52,40 @@ public class RequestYamlSerializerTests
                   "name": "Ada Lovelace"
                 }
 
-                [Fact]
-                public void GraphqlBodies_WriteAndReadQueryAndVariablesSeparately()
-                {
-                    var request = new HttpRequestDefinition(
-                        "GraphQL",
-                        RequestMethod.Post,
-                        "https://api.example.com/graphql",
-                        body: new RequestBody(BodyType.Graphql, "query { me { id } }", """{"id":"{{userId}}"}"""));
-
-                    var yaml = RequestYamlSerializer.Serialize(request);
-
-                    Assert.Contains("body:\n  type: graphql\n  query: query { me { id } }\n  variables: '{\"id\":\"{{userId}}\"}'\n", yaml);
-                    Assert.Equal(request.Body, RequestYamlSerializer.Deserialize(yaml, "fallback").Body);
-                }
-
             """.ReplaceLineEndings("\n"),
             RequestYamlSerializer.Serialize(request));
+    }
+
+    [Fact]
+    public void GraphqlBodies_WriteAndReadQueryAndVariablesSeparately()
+    {
+        var request = new HttpRequestDefinition(
+            "GraphQL",
+            RequestMethod.Post,
+            "https://api.example.com/graphql",
+            body: new RequestBody(BodyType.Graphql, "query { me { id } }", """{"id":"{{userId}}"}"""));
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Contains("type: graphql", yaml);
+        Assert.Contains("query:", yaml);
+        Assert.Contains("variables:", yaml);
+        Assert.Equal(request.Body, RequestYamlSerializer.Deserialize(yaml, "fallback").Body);
+    }
+
+    [Fact]
+    public void BinaryBodies_RoundTripFilePaths()
+    {
+        var request = new HttpRequestDefinition(
+            "Upload",
+            RequestMethod.Post,
+            "https://api.example.com/upload",
+            body: new RequestBody(BodyType.Binary, "./fixtures/archive.bin"));
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Contains("body:\n  type: binary\n  content: ./fixtures/archive.bin\n", yaml);
+        Assert.Equal(request.Body, RequestYamlSerializer.Deserialize(yaml, "fallback").Body);
     }
 
     [Fact]

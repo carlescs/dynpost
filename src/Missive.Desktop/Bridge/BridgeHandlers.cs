@@ -78,6 +78,30 @@ internal static class BridgeHandlers
             })
             .Register<LoadRequestPayload, RequestDto>(BridgeMessageTypes.RequestLoad,
                 (p, ct) => Use<LoadRequest>().ExecuteAsync(p.Path, ct))
+            .Register(BridgeMessageTypes.RequestPickFile, async _ =>
+            {
+                var path = await dialogs.PickFileAsync("Select request body file", [new FileFilter("All files", ["*.*"])]);
+                if (path is null)
+                {
+                    return Result<PickedRequestFileDto?>.Success(null);
+                }
+
+                var root = Use<CurrentWorkspace>().Root;
+                var absolutePath = Path.GetFullPath(path);
+                if (root is null)
+                {
+                    return Result<PickedRequestFileDto?>.Success(new PickedRequestFileDto(absolutePath, true));
+                }
+
+                var relativePath = Path.GetRelativePath(Path.GetFullPath(root), absolutePath);
+                var isAbsolute = Path.IsPathRooted(relativePath)
+                    || relativePath == ".."
+                    || relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    || relativePath.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
+                return Result<PickedRequestFileDto?>.Success(isAbsolute
+                    ? new PickedRequestFileDto(absolutePath, true)
+                    : new PickedRequestFileDto(relativePath.Replace('\\', '/'), false));
+            })
             .Register<CreateRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestCreate,
                 (p, ct) => Use<CreateRequest>().ExecuteAsync(p.Folder, p.Request, ct))
             .Register<SaveRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestSave,

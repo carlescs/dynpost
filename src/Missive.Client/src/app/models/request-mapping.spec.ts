@@ -87,6 +87,12 @@ describe('request mapping', () => {
         }).body,
       ).toEqual({ type: 'graphql', content: 'query { me }', variables: '{"id": 1}' });
     });
+
+    it('sends a binary body file path', () => {
+      expect(
+        toRequestDto({ ...content, bodyType: 'binary', body: './fixtures/data.bin' }).body,
+      ).toEqual({ type: 'binary', content: './fixtures/data.bin' });
+    });
   });
 
   describe('fromRequestDto', () => {
@@ -130,6 +136,22 @@ describe('request mapping', () => {
         bodyType: 'graphql',
         body: 'query { me }',
         bodyVariables: '{"id": 1}',
+      });
+    });
+
+    it('reads a binary body file path', () => {
+      const dto: RequestDto = {
+        name: 'Upload',
+        method: 'POST',
+        url: 'https://example.test/upload',
+        params: [],
+        headers: [],
+        auth: { type: 'none' },
+        body: { type: 'binary', content: './fixtures/data.bin' },
+      };
+      expect(fromRequestDto(dto)).toMatchObject({
+        bodyType: 'binary',
+        body: './fixtures/data.bin',
       });
     });
   });

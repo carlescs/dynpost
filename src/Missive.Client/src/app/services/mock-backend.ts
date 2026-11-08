@@ -109,6 +109,7 @@ export class MockBackend {
     if (request.type === 'request.send') {
       return this.send(request.id, payload?.['id'] as string, payload?.['request'] as RequestDto);
     }
+    if (request.type === 'request.pickFile') return ok(null);
     if (request.type === 'response.saveBody') {
       // No save dialog in a browser: pretend the user picked a file in their downloads folder.
       const name = this.bodies.get(payload?.['id'] as string);

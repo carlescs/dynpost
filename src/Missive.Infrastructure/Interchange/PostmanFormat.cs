@@ -291,7 +291,15 @@ internal static partial class PostmanFormat
 
             case "formdata":
                 return new RequestBody(BodyType.Form, InterchangeText.FormBody(Fields(body.Arr("formdata"), owner, warnings)));
+            case "file":
+                var filePath = body.Obj("file").Str("src") ?? body.Obj("file").Str("fileName");
+                if (!string.IsNullOrWhiteSpace(filePath))
+                {
+                    return new RequestBody(BodyType.Binary, filePath);
+                }
 
+                warnings.Add($"'{owner}' has a file body with no file path; it was imported without a body.");
+                return RequestBody.None;
             case "graphql":
                 var graphql = body.Obj("graphql");
                 return new RequestBody(
@@ -315,11 +323,26 @@ internal static partial class PostmanFormat
         {
             if (field.Str("type") == "file")
             {
-                warnings.Add($"Skipped the file field '{field.Str("key")}' of '{owner}': Missive bodies can't attach files.");
-                continue;
-            }
+                var path = field.Str("src") ?? field.Str("fileName");
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    warnings.Add($"Skipped the file field '{field.Str("key")}' of '{owner}': the import has no file path.");
+                    continue;
+                }
 
-            result.Add(KeyValuePair.Create(field.Str("key")!, field.Str("value") ?? string.Empty));
+                var contentType = field.Str("contentType");
+                var value = $"@{path}";
+                if (!string.IsNullOrWhiteSpace(contentType))
+                {
+                    value += $";type={contentType}";
+                }
+
+                result.Add(KeyValuePair.Create(field.Str("key")!, value));
+            }
+            else
+            {
+                result.Add(KeyValuePair.Create(field.Str("key")!, field.Str("value") ?? string.Empty));
+            }
         }
 
         return result;

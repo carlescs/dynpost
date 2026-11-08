@@ -50,6 +50,9 @@ internal static class BridgeMessageTypes
     /// <summary>Reads a request file. Payload: <see cref="LoadRequestPayload"/>. Result: request.</summary>
     public const string RequestLoad = "request.load";
 
+    /// <summary>Shows a native file picker for a request body. Payload: none. Result: file path or null if cancelled.</summary>
+    public const string RequestPickFile = "request.pickFile";
+
     /// <summary>Saves a new request in a folder. Payload: <see cref="CreateRequestPayload"/>. Result: saved request.</summary>
     public const string RequestCreate = "request.create";
 
@@ -290,6 +293,7 @@ internal sealed record ExportWorkspacePayload(string Format, bool IncludeEnviron
 internal sealed record ImportCollectionPayload(string Folder = "");
 
 internal sealed record LoadRequestPayload(string Path);
+internal sealed record PickedRequestFileDto(string Path, bool IsAbsolute);
 
 internal sealed record CreateRequestPayload(string Folder, RequestDto Request);
 

@@ -101,10 +101,21 @@ internal static class HarFormat
         var mimeType = postData.Str("mimeType");
         var type = InterchangeText.BodyTypeFor(mimeType);
         var text = postData.Str("text") ?? string.Empty;
-        var fields = postData.Arr("params")
-            .Where(p => p.Str("name") is not null && p.Str("fileName") is null)
-            .Select(p => KeyValuePair.Create(p.Str("name")!, p.Str("value") ?? string.Empty))
-            .ToList();
+        var fields = new List<KeyValuePair<string, string>>();
+        foreach (var field in postData.Arr("params").Where(p => p.Str("name") is not null))
+        {
+            if (field.Str("fileName") is { Length: > 0 } fileName)
+            {
+                var contentType = field.Str("contentType");
+                fields.Add(KeyValuePair.Create(
+                    field.Str("name")!,
+                    $"@{fileName}{(string.IsNullOrWhiteSpace(contentType) ? string.Empty : $";type={contentType}")}"));
+            }
+            else
+            {
+                fields.Add(KeyValuePair.Create(field.Str("name")!, field.Str("value") ?? string.Empty));
+            }
+        }
 
         return type switch
         {
@@ -112,6 +123,7 @@ internal static class HarFormat
                 ? InterchangeText.UrlEncodedBody(fields)
                 : string.Join('\n', text.Split('&', StringSplitOptions.RemoveEmptyEntries))),
             BodyType.Form => fields.Count > 0 ? new RequestBody(type, InterchangeText.FormBody(fields)) : RequestBody.None,
+            _ when postData.Str("fileName") is { Length: > 0 } fileName => new RequestBody(BodyType.Binary, fileName),
             _ => text.Length == 0 ? RequestBody.None : new RequestBody(type, text),
         };
     }

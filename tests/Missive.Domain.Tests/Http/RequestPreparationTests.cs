@@ -211,7 +211,46 @@ public class RequestPreparationTests
         var body = Assert.IsType<MultipartBody>(PrepareValid(post).Body);
 
         Assert.Equal(
-            [KeyValuePair.Create("name", "Ada"), KeyValuePair.Create("note", "a=b"), KeyValuePair.Create("flag", "")],
+            [new MultipartField("name", "Ada"), new MultipartField("note", "a=b"), new MultipartField("flag", "")],
             body.Fields);
+    }
+
+    [Fact]
+    public void Prepare_ResolvesBinaryAndMultipartFilesAgainstWorkspace()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var request = new HttpRequestDefinition(
+            "Upload",
+            RequestMethod.Post,
+            "https://example.com",
+            body: new RequestBody(BodyType.Form, "title=Ada\navatar=@fixtures/ada.png;type=image/png"));
+
+        var prepared = RequestPreparation.Prepare(request, NoVariables, workspaceRoot: root);
+
+        Assert.True(prepared.IsValid, string.Join(" ", prepared.Errors));
+        Assert.Equal(
+            [
+                new MultipartField("title", "Ada"),
+                new MultipartField("avatar", FilePath: Path.Combine(root, "fixtures", "ada.png"), ContentType: "image/png"),
+            ],
+            Assert.IsType<MultipartBody>(prepared.Request!.Body).Fields);
+
+        var binary = RequestPreparation.Prepare(request with { Body = new RequestBody(BodyType.Binary, "fixtures/ada.png") },
+            NoVariables, workspaceRoot: root);
+        Assert.True(binary.IsValid, string.Join(" ", binary.Errors));
+        Assert.Equal(new BinaryBody(Path.Combine(root, "fixtures", "ada.png")), binary.Request!.Body);
+    }
+
+    [Fact]
+    public void Prepare_RejectsRelativeFilePathsOutsideWorkspace()
+    {
+        var prepared = RequestPreparation.Prepare(
+            new HttpRequestDefinition("Upload", RequestMethod.Post, "https://example.com",
+                body: new RequestBody(BodyType.Binary, "../outside.bin")),
+            NoVariables,
+            workspaceRoot: Path.GetTempPath());
+
+        Assert.False(prepared.IsValid);
+        Assert.Contains(prepared.Errors, error => error.Contains("must stay inside the workspace"));
     }
 }

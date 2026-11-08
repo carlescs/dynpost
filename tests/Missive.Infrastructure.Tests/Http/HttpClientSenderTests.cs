@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Missive.Application.Common;
 using Missive.Application.Http;
 using Missive.Domain.Http;
 using Missive.Infrastructure.Http;
@@ -85,11 +86,49 @@ public sealed class HttpClientSenderTests
         var handler = Respond();
         using var sender = new HttpClientSender(new HttpClient(handler));
 
-        await sender.SendAsync(Request("POST", [KeyValuePair.Create("Content-Type", "text/plain")], new MultipartBody([KeyValuePair.Create("name", "Ada")])));
+        await sender.SendAsync(Request("POST", [KeyValuePair.Create("Content-Type", "text/plain")], new MultipartBody([new MultipartField("name", "Ada")])));
 
         Assert.Equal("multipart/form-data", handler.Request!.Content!.Headers.ContentType!.MediaType);
         Assert.Contains("name=name", handler.Body);
         Assert.Contains("Ada", handler.Body);
+    }
+
+    [Fact]
+    public async Task SendAsync_SendsBinaryAndMultipartFileContent()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".png");
+        await File.WriteAllBytesAsync(path, [65, 66]);
+        try
+        {
+            var handler = Respond();
+            using var sender = new HttpClientSender(new HttpClient(handler));
+
+            var binary = await sender.SendAsync(Request("POST", body: new BinaryBody(path)));
+            Assert.True(binary.IsSuccess, binary.Error?.Message);
+            Assert.Equal("AB", handler.Body);
+            Assert.Equal("application/octet-stream", handler.Request!.Content!.Headers.ContentType!.MediaType);
+
+            await sender.SendAsync(Request("POST", body: new MultipartBody([
+                new MultipartField("avatar", FilePath: path, ContentType: "image/png"),
+            ])));
+            Assert.Contains("filename=", handler.Body);
+            Assert.Contains("Content-Type: image/png", handler.Body);
+            Assert.Contains("AB", handler.Body);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task SendAsync_ReportsMissingBodyFiles()
+    {
+        using var sender = new HttpClientSender(new HttpClient(Respond()));
+
+        var result = await sender.SendAsync(Request("POST", body: new BinaryBody(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")))));
+
+        Assert.Equal(ErrorCodes.Io, result.Error?.Code);
     }
 
     [Fact]
