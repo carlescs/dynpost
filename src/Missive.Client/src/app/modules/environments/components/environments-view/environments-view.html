@@ -71,14 +71,24 @@
         <button
           type="button"
           class="flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 text-left"
-          [title]="env.error ?? 'Edit environments/' + env.id"
+          [title]="env.error ?? 'Send requests with ' + env.name"
           [disabled]="!!env.error"
-          (click)="store.edit(env.id)"
+          (click)="store.select(env.id)"
         >
           <span class="truncate" [class.text-rose-700]="env.error">{{ env.name }}</span>
           @if (env.error) {
             <fa-icon class="shrink-0 text-rose-600" [icon]="faCircleExclamation" />
           }
+        </button>
+        <button
+          type="button"
+          class="flex shrink-0 items-center rounded p-1 text-slate-400 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+          [title]="'Edit environments/' + env.id"
+          [attr.aria-label]="'Edit ' + env.name"
+          [disabled]="!!env.error"
+          (click)="store.edit(env.id)"
+        >
+          <fa-icon [icon]="faPen" />
         </button>
       </li>
     }

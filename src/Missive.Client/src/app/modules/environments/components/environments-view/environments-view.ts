@@ -4,6 +4,7 @@ import {
   faArrowsRotate,
   faCircleCheck,
   faCircleExclamation,
+  faPen,
   faPlus,
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentStore } from '../../../../services/environment-store';
@@ -19,6 +20,7 @@ import { WorkspaceStore } from '../../../../services/workspace-store';
 export class EnvironmentsView {
   protected readonly store = inject(EnvironmentStore);
   protected readonly workspace = inject(WorkspaceStore);
+  protected readonly faPen = faPen;
   protected readonly faPlus = faPlus;
   protected readonly faArrowsRotate = faArrowsRotate;
   protected readonly faCircleCheck = faCircleCheck;
