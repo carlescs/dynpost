@@ -220,6 +220,13 @@ Desktop → Application
 
 ## Issues and pull requests
 
+- Every commit message follows Conventional Commits (`feat:`, `fix:`,
+  `docs:`, `ci:`, ... with an optional scope such as `fix(client):`; lower-case
+  subject). CI runs commitlint (`commitlint.config.mjs`) on each commit of a
+  pull request and semantic-release reads them on `main`, so check a message
+  with `npx commitlint --from HEAD~1 --to HEAD` (after `npm ci` at the repo
+  root) before pushing. Pull request titles follow the same format.
+
 - When merging a pull request that closes an issue, document the outcome in the
   issue itself: add a comment summarizing what was implemented (behavior,
   user-visible changes, notable design decisions, anything left out or deferred)
