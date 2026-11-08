@@ -409,7 +409,7 @@ exports diff cleanly.
 
 When the workspace folder is a git repository, Missive shows which request and
 environment files changed, lets you commit them with a message, pulls and
-pushes the current branch, and switches, creates, merges and deletes branches. It uses your existing git credentials. Missive never
+pushes the current branch, and switches, creates, merges and deletes branches (local or on the remote). It uses your existing git credentials. Missive never
 force-pushes and never resolves conflicts automatically: conflicting files are
 reported so you can resolve them (in Missive's editor or your own tools).
 
@@ -508,7 +508,12 @@ configuration, hooks and credential helpers apply as usual. In detail:
     can't be deleted. If the branch has commits that aren't merged into its
     upstream or the current branch, git keeps it and Missive asks a second
     time, saying the commits will be lost, before deleting it anyway
-    (`git branch -D`). Remote branches are never deleted.
+    (`git branch -D`). Nothing is deleted on the remote.
+  - **Delete on the remote** (the trash button on a remote branch) deletes that
+    branch on its remote after a confirmation (`git push --delete`, never
+    forced), for everyone who uses the remote. Local branches are kept; one
+    that tracked it shows its upstream as deleted. A branch someone else
+    already deleted is simply dropped from the list.
 - **Remotes** lists the repository's remotes with their URLs. You can add one,
   rename it or change its URL (`git remote add`, `rename`, `set-url`), or
   remove it after confirming (`git remote remove`, which also drops its

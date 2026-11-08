@@ -747,6 +747,43 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteRemoteBranch_DeletesItOnTheRemote_AndKeepsTheLocalBranch()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "checkout", "--quiet", "-b", "feature");
+        TestGit.Run(alice, "push", "--quiet", "--set-upstream", "origin", "feature");
+        TestGit.Run(alice, "tag", "feature");
+        TestGit.Run(alice, "push", "--quiet", "origin", "refs/tags/feature");
+        TestGit.Run(alice, "checkout", "--quiet", "main");
+        TestGit.Run(bob, "fetch", "--quiet");
+        var remote = (await _git.ListBranchesAsync(alice)).Value.Single(b => b.Name == "origin/feature");
+
+        var deleted = await _git.DeleteRemoteBranchAsync(alice, remote);
+
+        Assert.True(deleted.IsSuccess, deleted.Error?.Message);
+        var branches = (await _git.ListBranchesAsync(alice)).Value;
+        Assert.DoesNotContain(branches, b => b.Name == "origin/feature");
+        Assert.Contains(branches, b => !b.IsRemote && b.Name == "feature");
+        Assert.Equal(string.Empty, TestGit.Run(bob, "ls-remote", "--heads", "origin", "feature").Trim());
+        Assert.NotEqual(string.Empty, TestGit.Run(bob, "ls-remote", "--tags", "origin", "feature").Trim());
+    }
+
+    [Fact]
+    public async Task DeleteRemoteBranch_AlreadyDeletedOnTheRemote_DropsTheStaleBranch()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "push", "--quiet", "origin", "HEAD:refs/heads/feature");
+        TestGit.Run(bob, "fetch", "--quiet");
+        TestGit.Run(alice, "push", "--quiet", "origin", "--delete", "feature");
+        var remote = (await _git.ListBranchesAsync(bob)).Value.Single(b => b.Name == "origin/feature");
+
+        var deleted = await _git.DeleteRemoteBranchAsync(bob, remote);
+
+        Assert.True(deleted.IsSuccess, deleted.Error?.Message);
+        Assert.DoesNotContain((await _git.ListBranchesAsync(bob)).Value, b => b.Name == "origin/feature");
+    }
+
+    [Fact]
     public async Task Fetch_UpdatesTheCommitsToPull()
     {
         var (alice, bob) = InitTwoClones();

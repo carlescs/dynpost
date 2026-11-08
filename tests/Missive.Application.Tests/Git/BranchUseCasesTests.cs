@@ -26,6 +26,7 @@ public class BranchUseCasesTests
         _git.CreateBranchAsync(default!, default!, default).ReturnsForAnyArgs(Ok(Unit.Value));
         _git.CheckoutRemoteBranchAsync(default!, default!, default!).ReturnsForAnyArgs(Ok(Unit.Value));
         _git.DeleteBranchAsync(default!, default!, default).ReturnsForAnyArgs(Ok(Unit.Value));
+        _git.DeleteRemoteBranchAsync(default!, default!).ReturnsForAnyArgs(Ok(Unit.Value));
         _git.MergeBranchAsync(default!, default!).ReturnsForAnyArgs(Ok(BranchMergeResult.Of(MergeOutcome.Merged)));
     }
 
@@ -206,6 +207,24 @@ public class BranchUseCasesTests
         var result = await new DeleteBranch(_git, _workspace).ExecuteAsync(new DeleteBranchRequest("feature"));
 
         Assert.Equal(GitErrors.BranchNotMergedCode, result.Error?.Code);
+    }
+
+    [Fact]
+    public async Task DeleteRemote_DeletesTheRemoteBranchAndReturnsTheNewState()
+    {
+        var result = await new DeleteRemoteBranch(_git, _workspace).ExecuteAsync(" origin/topic ");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _git.Received(1).DeleteRemoteBranchAsync(WorkspacePath, RemoteTopic, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteRemote_NeverALocalBranch()
+    {
+        var result = await new DeleteRemoteBranch(_git, _workspace).ExecuteAsync("feature");
+
+        Assert.Equal(GitErrors.BranchNotFoundCode, result.Error?.Code);
+        await _git.DidNotReceiveWithAnyArgs().DeleteRemoteBranchAsync(default!, default!);
     }
 
     [Theory]

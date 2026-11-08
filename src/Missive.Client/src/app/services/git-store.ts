@@ -484,6 +484,15 @@ export class GitStore {
     );
   }
 
+  /** Deletes a branch on its remote (`origin/x`); local branches that tracked it are kept. */
+  deleteRemoteBranch(name: string): Promise<boolean> {
+    return this.runBranch(
+      () => this.bridge.send('git.branch.deleteRemote', { name }),
+      `Deleted ${name} on the remote.`,
+      false,
+    );
+  }
+
   /**
    * Merges a local or remote-tracking branch into the current one, then reloads the workspace and
    * open tabs from disk. Conflicts are left for the user to resolve, as after a pull. Resolves to

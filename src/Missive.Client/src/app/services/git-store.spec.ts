@@ -149,6 +149,16 @@ describe('GitStore', () => {
     await vi.waitFor(() => expect(store.branches()).toEqual([main]));
   });
 
+  it('deletes a branch on the remote and shows the remaining branches', async () => {
+    handlers['git.branch.deleteRemote'] = () => ({ status: status(), branches: [main] });
+
+    expect(await store.deleteRemoteBranch('origin/feature')).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.branch.deleteRemote', { name: 'origin/feature' });
+    expect(store.branches()).toEqual([main]);
+    expect(store.notice()?.text).toBe('Deleted origin/feature on the remote.');
+  });
+
   it('switches branches and reloads the workspace from disk', async () => {
     handlers['git.branch.switch'] = () => ({
       status: status({ branch: 'feature' }),

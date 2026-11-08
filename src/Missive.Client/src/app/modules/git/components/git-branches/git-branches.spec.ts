@@ -25,6 +25,7 @@ describe('GitBranches', () => {
     switchBranch: any;
     checkoutRemoteBranch: any;
     deleteBranch: any;
+    deleteRemoteBranch: any;
     mergeBranch: any;
     createBranch: any;
     dismissError: any;
@@ -65,6 +66,7 @@ describe('GitBranches', () => {
       switchBranch: vi.fn().mockResolvedValue(true),
       checkoutRemoteBranch: vi.fn().mockResolvedValue(true),
       deleteBranch: vi.fn().mockResolvedValue(true),
+      deleteRemoteBranch: vi.fn().mockResolvedValue(true),
       mergeBranch: vi.fn().mockResolvedValue(true),
       createBranch: vi.fn().mockResolvedValue(true),
       dismissError: vi.fn(),
@@ -122,6 +124,29 @@ describe('GitBranches', () => {
 
     expect(git.deleteBranch).toHaveBeenCalledTimes(1);
     expect(git.dismissError).toHaveBeenCalled();
+  });
+
+  it('deletes a branch on the remote after a confirmation, warning about a tracking branch', async () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    const fixture = await render();
+
+    button(fixture.nativeElement, 'Delete origin/main on the remote')!.click();
+    await fixture.whenStable();
+
+    expect(confirm.mock.calls[0][0]).toContain("Delete the branch 'main' on the remote 'origin'?");
+    expect(confirm.mock.calls[0][0]).toContain("The local branch 'main' is kept");
+    expect(git.deleteRemoteBranch).toHaveBeenCalledWith('origin/main');
+  });
+
+  it('does not delete a remote branch when the confirmation is declined', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    const fixture = await render();
+
+    button(fixture.nativeElement, 'Delete origin/topic on the remote')!.click();
+    await fixture.whenStable();
+
+    expect(git.deleteRemoteBranch).not.toHaveBeenCalled();
   });
 
   it('creates a branch from the form', async () => {

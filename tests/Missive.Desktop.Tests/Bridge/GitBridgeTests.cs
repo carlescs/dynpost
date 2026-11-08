@@ -56,6 +56,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<CreateBranch>()
             .AddTransient<CheckoutRemoteBranch>()
             .AddTransient<DeleteBranch>()
+            .AddTransient<DeleteRemoteBranch>()
             .AddTransient<MergeBranch>()
             .AddTransient<ListRemotes>()
             .AddTransient<AddRemote>()
@@ -471,6 +472,25 @@ public sealed class GitBridgeTests : IDisposable
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         await _git.Received(1).DeleteBranchAsync(Folder, "old", true, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GitBranchDeleteRemote_DeletesTheRemoteBranch()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", null, 0, 0, false, [])));
+        var topic = new GitBranch("origin/topic", "origin", false, null, "b2", null, "Topic");
+        _git.ListBranchesAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<GitBranch>>.Success([
+            new GitBranch("main", null, true, null, "a1", null, "Init"),
+            topic,
+        ]));
+        _git.DeleteRemoteBranchAsync(default!, default!).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+
+        var response = await SendAsync("git.branch.deleteRemote", """{ "name": "origin/topic" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        await _git.Received(1).DeleteRemoteBranchAsync(Folder, topic, Arg.Any<CancellationToken>());
     }
 
     [Fact]

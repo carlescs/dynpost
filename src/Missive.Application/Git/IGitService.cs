@@ -173,9 +173,16 @@ public interface IGitService
     /// <summary>
     /// Deletes a local branch. Without <paramref name="force"/> a branch with commits that aren't
     /// merged (into its upstream or the current branch) is kept, failing with
-    /// <see cref="GitErrors.BranchNotMergedCode"/>. Remote branches are never deleted.
+    /// <see cref="GitErrors.BranchNotMergedCode"/>. Never touches the remote.
     /// </summary>
     Task<Result<Unit>> DeleteBranchAsync(string workspacePath, string branch, bool force, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a branch on its remote (<c>git push --delete</c>, never forced), which also drops
+    /// its remote-tracking branch. Local branches that tracked it are kept.
+    /// </summary>
+    /// <param name="remoteBranch">The remote-tracking branch, e.g. <c>origin/feature</c>.</param>
+    Task<Result<Unit>> DeleteRemoteBranchAsync(string workspacePath, GitBranch remoteBranch, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Merges a local or remote-tracking branch into the current branch (<c>git merge --no-edit
