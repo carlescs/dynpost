@@ -15,6 +15,7 @@ import {
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faCircleExclamation,
+  faExpand,
   faLeftRight,
   faMagnifyingGlassMinus,
   faMagnifyingGlassPlus,
@@ -31,7 +32,7 @@ const GUTTER = 16;
 const MAX_CANVAS_PIXELS = 16_777_216;
 const MAX_CANVAS_SIDE = 8192;
 
-type Zoom = number | 'fit';
+type Zoom = number | 'page' | 'width';
 
 interface PageSlot {
   page: PDFPageProxy;
@@ -58,7 +59,7 @@ export class PdfViewer {
   /** The PDF file's bytes. */
   readonly data = input.required<Uint8Array<ArrayBuffer>>();
 
-  protected readonly zoom = signal<Zoom>('fit');
+  protected readonly zoom = signal<Zoom>('width');
   protected readonly document = signal<PDFDocumentProxy | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly pageCount = computed(() => this.document()?.numPages ?? 0);
@@ -70,6 +71,7 @@ export class PdfViewer {
   protected readonly faMagnifyingGlassMinus = faMagnifyingGlassMinus;
   protected readonly faMagnifyingGlassPlus = faMagnifyingGlassPlus;
   protected readonly faLeftRight = faLeftRight;
+  protected readonly faExpand = faExpand;
   protected readonly faSpinner = faSpinner;
   protected readonly faCircleExclamation = faCircleExclamation;
 
@@ -77,6 +79,8 @@ export class PdfViewer {
   private readonly scroller = viewChild.required<ElementRef<HTMLElement>>('scroller');
   /** The scroll area's inner width, updated as it resizes. */
   private readonly width = signal(0);
+  /** The scroll area's inner height, updated as it resizes. */
+  private readonly height = signal(0);
   private pdfjs: PdfJs | null = null;
   private slots: PageSlot[] = [];
   private observer: IntersectionObserver | null = null;
@@ -84,7 +88,10 @@ export class PdfViewer {
   constructor() {
     afterNextRender(() => {
       const element = this.scroller().nativeElement;
-      const resize = new ResizeObserver(() => this.width.set(element.clientWidth));
+      const resize = new ResizeObserver(() => {
+        this.width.set(element.clientWidth);
+        this.height.set(element.clientHeight);
+      });
       resize.observe(element);
       this.destroyRef.onDestroy(() => resize.disconnect());
     });
@@ -117,12 +124,15 @@ export class PdfViewer {
       })();
     });
 
-    // Lays the pages out again when the document, the zoom or (when fitting) the width changes.
+    // Lays the pages out again when the document, the zoom or fit dimensions change.
     effect((onCleanup) => {
       const document = this.document();
       const zoom = this.zoom();
-      const width = zoom === 'fit' ? this.width() : 0;
-      if (!document || (zoom === 'fit' && width === 0)) return;
+      const width = zoom === 'width' || zoom === 'page' ? this.width() : 0;
+      const height = zoom === 'page' ? this.height() : 0;
+      if (!document) return;
+      if ((zoom === 'width' || zoom === 'page') && width === 0) return;
+      if (zoom === 'page' && height === 0) return;
       let cancelled = false;
       onCleanup(() => {
         cancelled = true;
@@ -134,7 +144,7 @@ export class PdfViewer {
             Array.from({ length: document.numPages }, (_, i) => document.getPage(i + 1)),
           );
           if (cancelled) return;
-          this.layout(pages, zoom, width);
+          this.layout(pages, zoom, width, height);
         } catch (e) {
           if (!cancelled) this.error.set(describeError(this.pdfjs, e));
         }
@@ -152,11 +162,18 @@ export class PdfViewer {
   }
 
   /** Creates an empty, correctly sized box per page and draws each one as it comes into view. */
-  private layout(pages: PDFPageProxy[], zoom: Zoom, width: number): void {
+  private layout(pages: PDFPageProxy[], zoom: Zoom, width: number, height: number): void {
     const container = this.scroller().nativeElement;
-    // Fit to width uses the widest page so that no page needs horizontal scrolling.
-    const widest = Math.max(...pages.map((p) => p.getViewport({ scale: 1 }).width));
-    const scale = zoom === 'fit' ? Math.max(0.1, (width - 2 * GUTTER) / widest) : zoom;
+    const viewports = pages.map((page) => page.getViewport({ scale: 1 }));
+    // Fit modes use the largest page so that every page stays within the scroller.
+    const widest = Math.max(...viewports.map((viewport) => viewport.width));
+    const tallest = Math.max(...viewports.map((viewport) => viewport.height));
+    const scale =
+      zoom === 'width'
+        ? Math.max(0.1, (width - 2 * GUTTER) / widest)
+        : zoom === 'page'
+          ? Math.max(0.1, Math.min((width - 2 * GUTTER) / widest, (height - 2 * GUTTER) / tallest))
+          : zoom;
     this.scale.set(scale);
 
     this.observer = new IntersectionObserver(
