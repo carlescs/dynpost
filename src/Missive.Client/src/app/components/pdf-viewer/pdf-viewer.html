@@ -29,12 +29,36 @@
     <button
       type="button"
       class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="100% zoom"
+      aria-label="100% zoom"
+      [class.bg-slate-200]="zoom() === 1"
+      [attr.aria-pressed]="zoom() === 1"
+      [disabled]="!document()"
+      (click)="zoom.set(1)"
+    >
+      100%
+    </button>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="Fit page"
+      aria-label="Fit page"
+      [class.bg-slate-200]="zoom() === 'page'"
+      [attr.aria-pressed]="zoom() === 'page'"
+      [disabled]="!document()"
+      (click)="zoom.set('page')"
+    >
+      <fa-icon [icon]="faExpand" />
+    </button>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
       title="Fit to width"
       aria-label="Fit to width"
-      [class.bg-slate-200]="zoom() === 'fit'"
-      [attr.aria-pressed]="zoom() === 'fit'"
+      [class.bg-slate-200]="zoom() === 'width'"
+      [attr.aria-pressed]="zoom() === 'width'"
       [disabled]="!document()"
-      (click)="zoom.set('fit')"
+      (click)="zoom.set('width')"
     >
       <fa-icon [icon]="faLeftRight" />
     </button>
