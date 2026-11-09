@@ -421,6 +421,13 @@ export interface GitRemote {
   pushUrl: string;
 }
 
+/** What the About page shows. */
+export interface AboutInfo {
+  version: string;
+  runtime: string;
+  operatingSystem: string;
+}
+
 export interface UpdateStatus {
   /**
    * `unsupported`: this copy cannot update itself (not installed). `upToDate`: no newer version.
@@ -754,6 +761,8 @@ export interface BridgeMessages {
   };
   /** Removes a remote and its remote-tracking branches. */
   'git.remote.remove': { payload: { name: string }; result: GitRemote[] };
+  /** Reads the app version and the platform it runs on. */
+  'about.get': { payload: void; result: AboutInfo };
   /** Looks for a newer version of the app and downloads it, without installing it. */
   'update.check': { payload: void; result: UpdateStatus };
   /** Installs the downloaded update and restarts the app; on success no response arrives. */

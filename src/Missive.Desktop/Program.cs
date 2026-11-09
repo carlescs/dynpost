@@ -10,6 +10,7 @@ using Missive.Application.OAuth2;
 using Missive.Application.Requests;
 using Missive.Application.Runs;
 using Missive.Application.Settings;
+using Missive.Application.About;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
@@ -22,6 +23,7 @@ using Missive.Infrastructure.Interchange;
 using Missive.Infrastructure.OAuth2;
 using Missive.Infrastructure.Runs;
 using Missive.Infrastructure.Settings;
+using Missive.Infrastructure.About;
 using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
 using Missive.Infrastructure.Yaml;
@@ -104,6 +106,8 @@ internal static class Program
             .AddSingleton<ICollectionExporter, InsomniaExporter>()
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
             .AddSingleton<IAppUpdater>(new VelopackAppUpdater(ReleasesRepository))
+            .AddSingleton<IAppInfo, AssemblyAppInfo>()
+            .AddTransient<GetAboutInfo>()
             .AddTransient<GetAppSettings>()
             .AddTransient<SetTheme>()
             .AddTransient<CheckForUpdate>()

@@ -283,6 +283,9 @@ internal static class BridgeMessageTypes
     /// <summary>Removes a remote. Payload: <see cref="GitRemoteNamePayload"/>. Result: remotes.</summary>
     public const string GitRemoteRemove = "git.remote.remove";
 
+    /// <summary>Reads the app version and platform. Payload: none. Result: about info.</summary>
+    public const string AboutGet = "about.get";
+
     /// <summary>
     /// Looks for a newer version of the app and downloads it. Payload: none. Result: update status.
     /// </summary>

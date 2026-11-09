@@ -147,7 +147,18 @@
             ></span>
           </span>
         </button>
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="showAbout()"
+        >
+          <fa-icon class="w-4 text-slate-500" [icon]="faCircleInfo" />
+          <span class="flex-1">About Missive</span>
+        </button>
       </div>
     }
   </div>
 </div>
+@if (aboutOpen()) {
+  <app-about-dialog (closed)="aboutOpen.set(false)" />
+}
