@@ -174,6 +174,13 @@ export class MockBackend {
       this.theme = payload?.['theme'] as Theme;
       return ok({ theme: this.theme });
     }
+    if (request.type === 'about.get') {
+      return ok({
+        version: 'browser preview',
+        runtime: navigator.userAgent,
+        operatingSystem: navigator.platform,
+      });
+    }
     // The browser preview is never installed, so it cannot update itself.
     if (request.type === 'update.check') return ok({ state: 'unsupported' });
     if (request.type === 'update.restart') {

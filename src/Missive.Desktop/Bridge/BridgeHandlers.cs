@@ -11,6 +11,7 @@ using Missive.Domain.Git;
 using Missive.Application.Requests;
 using Missive.Application.Runs;
 using Missive.Application.Settings;
+using Missive.Application.About;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -249,6 +250,8 @@ internal static class BridgeHandlers
                 ct => Use<GetAppSettings>().ExecuteAsync(ct))
             .Register<SetThemePayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetTheme,
                 (p, ct) => Use<SetTheme>().ExecuteAsync(p.Theme, ct))
+            .Register(BridgeMessageTypes.AboutGet,
+                _ => Task.FromResult(Result<AboutDto>.Success(Use<GetAboutInfo>().Execute())))
             .Register(BridgeMessageTypes.UpdateCheck,
                 ct => Use<CheckForUpdate>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.UpdateRestart,

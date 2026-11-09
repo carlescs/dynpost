@@ -3,6 +3,7 @@ import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faChevronDown,
   faCircleArrowUp,
+  faCircleInfo,
   faGear,
   faMoon,
   faFolderOpen,
@@ -10,6 +11,7 @@ import {
   faPaperPlane,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
+import { AboutDialog } from '../about-dialog/about-dialog';
 import { EnvironmentStore } from '../../services/environment-store';
 import { ThemeStore } from '../../services/theme-store';
 import { UpdateStore } from '../../services/update-store';
@@ -18,7 +20,7 @@ import { WorkspaceStore } from '../../services/workspace-store';
 /** Main application header: app name, open workspace and global options. */
 @Component({
   selector: 'app-header',
-  imports: [FaIconComponent],
+  imports: [FaIconComponent, AboutDialog],
   host: {
     class:
       'always-dark flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
@@ -36,6 +38,7 @@ export class AppHeader {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly menuOpen = signal(false);
   protected readonly recentOpen = signal(false);
+  protected readonly aboutOpen = signal(false);
   /** Always rendered, unlike the panel, so it contains the click that opens the panel. */
   private readonly recentMenu = viewChild.required<ElementRef<HTMLElement>>('recentMenu');
   /** Recent workspaces other than the open one. */
@@ -44,6 +47,7 @@ export class AppHeader {
   );
   protected readonly faChevronDown = faChevronDown;
   protected readonly faGear = faGear;
+  protected readonly faCircleInfo = faCircleInfo;
   protected readonly faMoon = faMoon;
   protected readonly faCircleArrowUp = faCircleArrowUp;
   protected readonly faPaperPlane = faPaperPlane;
@@ -81,6 +85,11 @@ export class AppHeader {
     const target = event.target as Node;
     if (!this.host.nativeElement.contains(target)) this.menuOpen.set(false);
     if (!this.recentMenu().nativeElement.contains(target)) this.recentOpen.set(false);
+  }
+
+  protected showAbout(): void {
+    this.menuOpen.set(false);
+    this.aboutOpen.set(true);
   }
 
   protected onEscape(): void {
