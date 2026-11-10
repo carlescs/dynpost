@@ -14,6 +14,8 @@ export interface PlanAssertion {
 export interface PlanForm {
   name: string;
   requests: string[];
+  /** The request paths that stay in the list but are not sent. */
+  disabled: string[];
   /** `sequential` (or empty), `shuffle`, `random` or `roundRobin`. */
   order: string;
   /** The weight of each request path that has one (used with the `random` order). */
@@ -57,7 +59,7 @@ export function picksOneRequest(order: string): boolean {
 type Path = (string | number)[];
 
 const ORDER: Record<string, string[]> = {
-  '': ['name', 'requests', 'order', 'weights', 'load', 'data', 'assert', 'thresholds'],
+  '': ['name', 'requests', 'disabled', 'order', 'weights', 'load', 'data', 'assert', 'thresholds'],
   load: ['threads', 'iterations', 'duration', 'rampUp', 'thinkTime', 'maxRps'],
   data: ['file', 'mode', 'onEof'],
   assert: [],
@@ -80,6 +82,7 @@ export function readPlanForm(yaml: string): PlanForm | null {
   const requests = doc.getIn(['requests'], true);
   const assertNode = doc.getIn(['assert'], true);
   const weightsNode = doc.getIn(['weights'], true);
+  const disabledNode = doc.getIn(['disabled'], true);
 
   const status = (path: Path): string => {
     const node = doc.getIn(path, true);
@@ -92,6 +95,9 @@ export function readPlanForm(yaml: string): PlanForm | null {
     name: text(['name']),
     requests: isSeq(requests)
       ? requests.items.map((item) => String(isScalar(item) ? item.value : ''))
+      : [],
+    disabled: isSeq(disabledNode)
+      ? disabledNode.items.map((item) => String(isScalar(item) ? item.value : ''))
       : [],
     order: text(['order']),
     weights: isMap(weightsNode)
@@ -138,13 +144,23 @@ export function setPlanValue(yaml: string, path: Path, value: string): string {
   return edit(yaml, (doc) => assign(doc, path, value));
 }
 
-/** Replaces the request list, dropping the weights of requests that are no longer in it. */
+/**
+ * Replaces the request list, dropping the weights and disabled marks of requests that are no
+ * longer in it.
+ */
 export function setPlanRequests(yaml: string, requests: string[]): string {
   return edit(yaml, (doc) => {
     if (requests.length === 0) {
       doc.deleteIn(['requests']);
     } else {
       doc.setIn(['requests'], doc.createNode(requests));
+    }
+    const disabled = readDisabled(doc);
+    if (disabled.some((path) => !requests.includes(path))) {
+      writeDisabled(
+        doc,
+        disabled.filter((path) => requests.includes(path)),
+      );
     }
     const weights = doc.getIn(['weights'], true);
     if (isMap(weights)) {
@@ -153,6 +169,15 @@ export function setPlanRequests(yaml: string, requests: string[]): string {
         if (!requests.includes(key)) prune(doc, ['weights', key]);
       }
     }
+  });
+}
+
+/** Turns a request of the plan on or off; disabled requests stay listed but are not sent. */
+export function setPlanRequestEnabled(yaml: string, path: string, enabled: boolean): string {
+  return edit(yaml, (doc) => {
+    const disabled = readDisabled(doc);
+    if (enabled === !disabled.includes(path)) return;
+    writeDisabled(doc, enabled ? disabled.filter((p) => p !== path) : [...disabled, path]);
   });
 }
 
@@ -200,6 +225,16 @@ export function addAssertion(yaml: string, key: string): string {
 
 export function removeAssertion(yaml: string, key: string): string {
   return edit(yaml, (doc) => prune(doc, ['assert', key]));
+}
+
+function readDisabled(doc: Document): string[] {
+  const node = doc.getIn(['disabled'], true);
+  return isSeq(node) ? node.items.map((item) => String(isScalar(item) ? item.value : '')) : [];
+}
+
+function writeDisabled(doc: Document, disabled: string[]): void {
+  if (disabled.length === 0) doc.deleteIn(['disabled']);
+  else doc.setIn(['disabled'], doc.createNode(disabled));
 }
 
 /** Applies a change to the parsed text; text that isn't a YAML mapping is returned untouched. */
