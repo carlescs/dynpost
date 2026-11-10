@@ -4,6 +4,7 @@ import {
   removeAssertion,
   setAssertionStatus,
   setPlanOrder,
+  setPlanRequestEnabled,
   setPlanRequests,
   setPlanThinkTime,
   setPlanValue,
@@ -46,6 +47,26 @@ describe('run plan form', () => {
       '2',
     );
     expect(setPlanRequests(plan, ['a.yaml'])).not.toContain('weights');
+  });
+
+  it('turns requests off and on with the disabled list', () => {
+    const two = setPlanRequests(PLAN, ['a.yaml', 'b.yaml']);
+    const off = setPlanRequestEnabled(two, 'b.yaml', false);
+    expect(off).toContain('  - b.yaml\ndisabled:\n  - b.yaml\nload:');
+    expect(readPlanForm(off)!.disabled).toEqual(['b.yaml']);
+    expect(setPlanRequestEnabled(off, 'b.yaml', false)).toBe(off);
+    expect(setPlanRequestEnabled(off, 'b.yaml', true)).toBe(two);
+    expect(readPlanForm(PLAN)!.disabled).toEqual([]);
+  });
+
+  it('drops the disabled mark of removed requests', () => {
+    const plan = setPlanRequestEnabled(
+      setPlanRequests(PLAN, ['a.yaml', 'b.yaml']),
+      'b.yaml',
+      false,
+    );
+    expect(setPlanRequests(plan, ['a.yaml'])).not.toContain('disabled');
+    expect(setPlanRequests(plan, ['b.yaml', 'a.yaml'])).toContain('disabled:\n  - b.yaml');
   });
 
   it('returns null for invalid yaml', () => {
