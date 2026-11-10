@@ -38,6 +38,53 @@ public sealed class GetRunProgress(RunRegistry registry, IRunStore store, Curren
     }
 }
 
+/// <summary>
+/// A page of the request log of a run, live or finished: the samples kept, in the order they
+/// finished, optionally only the failed ones.
+/// </summary>
+public sealed class GetRunSamples(RunRegistry registry, IRunStore store, CurrentWorkspace current)
+{
+    public const int MaxPageSize = 500;
+
+    public async Task<Result<RunSamplesPageDto>> ExecuteAsync(
+        string runId,
+        int offset,
+        int limit,
+        bool failedOnly,
+        CancellationToken cancellationToken = default)
+    {
+        if (registry.Find(runId) is { } run)
+        {
+            return Page(run.Log(), run.Sent, offset, limit, failedOnly);
+        }
+
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        var saved = await store.GetAsync(root.Value, runId, cancellationToken);
+        if (!saved.IsSuccess)
+        {
+            return saved.Error!;
+        }
+
+        var samples = await store.GetSamplesAsync(root.Value, runId, cancellationToken);
+        return samples.IsSuccess
+            ? Page(samples.Value, saved.Value.Total.Samples, offset, limit, failedOnly)
+            : samples.Error!;
+    }
+
+    public static RunSamplesPageDto Page(IReadOnlyList<SampleDto> log, long sent, int offset, int limit, bool failedOnly)
+    {
+        var matching = failedOnly ? log.Where(sample => sample.Error is not null).ToList() : log;
+        var start = Math.Clamp(offset, 0, matching.Count);
+        var count = Math.Min(Math.Clamp(limit, 1, MaxPageSize), matching.Count - start);
+        return new RunSamplesPageDto(start, matching.Count, log.Count, sent, matching.Skip(start).Take(count).ToList());
+    }
+}
+
 /// <summary>The earlier runs of a plan, newest first.</summary>
 public sealed class ListRuns(IRunStore store, CurrentWorkspace current)
 {

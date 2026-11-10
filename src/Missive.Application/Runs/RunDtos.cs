@@ -29,7 +29,10 @@ public sealed record TimelinePointDto(int Second, long Samples, long Errors, dou
 
 public sealed record ThresholdDto(string Name, string Limit, string Actual, bool Passed);
 
-/// <summary>One request sent during a run. Only failed and slow samples are kept.</summary>
+/// <summary>
+/// One request sent during a run. The run result keeps only failed and slow samples; the request
+/// log keeps the first <see cref="ActiveRun.MaxLoggedSamples"/> of them all.
+/// </summary>
 public sealed record SampleDto(
     string Request,
     int Thread,
@@ -61,6 +64,18 @@ public sealed record RunResultDto(
     IReadOnlyList<SampleDto> FailedSamples,
     IReadOnlyList<SampleDto> SlowestSamples,
     string? Message);
+
+/// <summary>A page of the request log of a run.</summary>
+/// <param name="Offset">The position of the first sample of the page among the matching ones.</param>
+/// <param name="Matching">How many logged samples match the filter.</param>
+/// <param name="Logged">How many samples the log keeps (at most <see cref="ActiveRun.MaxLoggedSamples"/>).</param>
+/// <param name="Sent">How many requests the run sent, logged or not.</param>
+public sealed record RunSamplesPageDto(
+    int Offset,
+    int Matching,
+    int Logged,
+    long Sent,
+    IReadOnlyList<SampleDto> Samples);
 
 public sealed record RunSummaryDto(
     string RunId,

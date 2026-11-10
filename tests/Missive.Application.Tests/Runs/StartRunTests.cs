@@ -36,6 +36,7 @@ public class StartRunTests
         _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
             .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/users/{{id}}"));
         _runs.SaveAsync(Root, Arg.Any<RunResultDto>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
+        _runs.SaveSamplesAsync(Root, Arg.Any<string>(), Arg.Any<IReadOnlyList<SampleDto>>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
     }
 
     private StartRun Create()
@@ -115,6 +116,66 @@ public class StartRunTests
         Assert.Equal(12, run.Requests.Single().Stats.Samples);
         Assert.True(run.Passed);
         await _runs.Received(1).SaveAsync(Root, Arg.Is<RunResultDto>(r => r.RunId == started.Value.RunId), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_LogsEveryRequestWithItsResponseAndSavesTheLog()
+    {
+        UsePlan(Plan(threads: 2, iterations: 3));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response(body: "{\"id\":1}"));
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/users"));
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        var page = (await new GetRunSamples(_registry, _runs, _current).ExecuteAsync(run.RunId, 0, 4, false)).Value;
+        Assert.Equal(6, page.Logged);
+        Assert.Equal(6, page.Matching);
+        Assert.Equal(6, page.Sent);
+        Assert.Equal(4, page.Samples.Count);
+        Assert.All(page.Samples, sample => Assert.Equal("{\"id\":1}", sample.ResponsePreview));
+        Assert.Empty(run.SlowestSamples.Where(sample => sample.ResponsePreview is not null));
+        await _runs.Received(1).SaveSamplesAsync(
+            Root,
+            run.RunId,
+            Arg.Is<IReadOnlyList<SampleDto>>(samples => samples.Count == 6),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetRunSamples_ReadsTheLogOfAFinishedRunFromTheStore()
+    {
+        var stats = new StatsDto(3, 1, 33.33, 1, 2, 2, 3, 3, 3, 3, 1.5, 0, 10, new Dictionary<string, long>(), new Dictionary<string, long>());
+        _runs.GetAsync(Root, "old", Arg.Any<CancellationToken>())
+            .Returns(new RunResultDto("old", PlanFile, "Smoke", "completed", DateTimeOffset.UnixEpoch, 1000, 1, 0, stats, [], [], [], true, [], [], null));
+        SampleDto Sample(int iteration, string? error) =>
+            new("users/get.yaml", 1, iteration, iteration * 10, 5, error is null ? 200 : 500, error, "GET", "https://api.test", null, null);
+        _runs.GetSamplesAsync(Root, "old", Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<SampleDto>>.Success([Sample(1, null), Sample(2, "HTTP 500"), Sample(3, null)]));
+
+        var page = (await new GetRunSamples(_registry, _runs, _current).ExecuteAsync("old", 0, 10, true)).Value;
+
+        Assert.Equal(3, page.Logged);
+        Assert.Equal(1, page.Matching);
+        Assert.Equal(3, page.Sent);
+        Assert.Equal(2, Assert.Single(page.Samples).Iteration);
+    }
+
+    [Fact]
+    public void GetRunSamples_PagesWithinTheLog()
+    {
+        var log = Enumerable.Range(0, 7)
+            .Select(i => new SampleDto("a.yaml", 1, i, i, 1, 200, null, "GET", null, null, null))
+            .ToList();
+
+        var page = GetRunSamples.Page(log, 20, 5, 10, false);
+
+        Assert.Equal(5, page.Offset);
+        Assert.Equal([5, 6], page.Samples.Select(s => s.Iteration));
+        Assert.Equal(7, GetRunSamples.Page(log, 20, 50, 10, false).Offset);
+        Assert.Empty(GetRunSamples.Page(log, 20, 50, 10, false).Samples);
+        Assert.Single(GetRunSamples.Page(log, 20, 0, 0, false).Samples);
     }
 
     [Fact]

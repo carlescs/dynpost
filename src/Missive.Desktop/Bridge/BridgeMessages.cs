@@ -183,6 +183,12 @@ internal static class BridgeMessageTypes
     /// <summary>The live (or saved) numbers of a run, polled by the dashboard. Payload: <see cref="RunIdPayload"/>. Result: run.</summary>
     public const string RunProgress = "run.progress";
 
+    /// <summary>
+    /// A page of the request log of a run, live or finished. Payload: <see cref="RunSamplesPayload"/>.
+    /// Result: samples page.
+    /// </summary>
+    public const string RunSamples = "run.samples";
+
     /// <summary>The earlier runs of a plan, newest first. Payload: <see cref="RunPlanPathPayload"/>. Result: run summaries.</summary>
     public const string RunList = "run.list";
 
@@ -448,3 +454,5 @@ internal sealed record SaveRunPlanPayload(string Path, string Yaml);
 internal sealed record StartRunPayload(string Path, bool ConfirmLarge = false);
 
 internal sealed record RunIdPayload(string RunId);
+
+internal sealed record RunSamplesPayload(string RunId, int Offset = 0, int Limit = 100, bool FailedOnly = false);

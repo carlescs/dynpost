@@ -487,6 +487,16 @@ its numbers), each threshold with its verdict, the latency spread of every
 request, status codes, error reasons, the failed and slowest requests (expand
 one for its data row and response) and the earlier runs of the plan.
 
+The **Requests** tab next to **Dashboard** (or the **All requests** link on the
+dashboard) shows a table of every request the run sent, in the order they
+finished: time into the run, virtual user, iteration, method and URL, status,
+latency and result. Click a row for its data row, failure and a preview of the
+response; filter to the failed requests and page through the table. It follows
+a live run too. The first 10,000 requests of a run are kept, in
+`.missive/runs/samples/<run id>.json`. Each zone of the editor, the plan and
+the results, has a maximize button that gives it the full width; press it
+again to restore the side-by-side layout.
+
 ```yaml
 name: Checkout smoke
 requests:

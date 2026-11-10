@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faBan,
@@ -7,6 +7,7 @@ import {
   faCircleCheck,
   faCircleXmark,
   faSpinner,
+  faTableList,
   faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
@@ -44,6 +45,8 @@ const THRESHOLD_NAMES: Record<string, string> = {
 })
 export class RunResults {
   readonly run = input.required<RunResultDto>();
+  /** Asks to show the table of every request sent with its response. */
+  readonly showRequests = output<void>();
 
   protected readonly stateLabels = RUN_STATE_LABELS;
   protected readonly stateColors = RUN_STATE_COLORS;
@@ -52,6 +55,7 @@ export class RunResults {
   protected readonly faCircleXmark = faCircleXmark;
   protected readonly faTriangleExclamation = faTriangleExclamation;
   protected readonly faChevronRight = faChevronRight;
+  protected readonly faTableList = faTableList;
   protected readonly formatMs = formatMs;
   protected readonly formatElapsed = formatElapsed;
   protected readonly formatBytes = formatBytes;

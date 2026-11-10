@@ -34,6 +34,15 @@
     <span class="min-w-0 flex-1 truncate font-semibold" [title]="result.planName">
       {{ result.planName }}
     </span>
+    <button
+      type="button"
+      class="flex shrink-0 items-center gap-1.5 text-xs font-medium text-sky-700 hover:underline"
+      title="Show every request sent with its response"
+      data-show-requests
+      (click)="showRequests.emit()"
+    >
+      <fa-icon [icon]="faTableList" /> All requests
+    </button>
     <dl class="flex gap-4 text-xs text-slate-500">
       <div>
         <dt class="mr-1 inline">Started</dt>
@@ -323,3 +332,12 @@
     </section>
   }
 }
+
+<button
+  type="button"
+  class="flex items-center gap-1.5 self-start text-xs font-medium text-sky-700 hover:underline"
+  data-show-requests
+  (click)="showRequests.emit()"
+>
+  <fa-icon [icon]="faTableList" /> View all requests and responses
+</button>

@@ -8,7 +8,10 @@ using static Missive.Infrastructure.Workspaces.WorkspaceFiles;
 
 namespace Missive.Infrastructure.Runs;
 
-/// <summary>Keeps each finished run as <c>.missive/runs/&lt;run id&gt;.json</c>, which is git-ignored.</summary>
+/// <summary>
+/// Keeps each finished run as <c>.missive/runs/&lt;run id&gt;.json</c> and its request log as
+/// <c>.missive/runs/samples/&lt;run id&gt;.json</c>; both are git-ignored.
+/// </summary>
 public sealed class JsonRunStore : IRunStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -28,6 +31,48 @@ public sealed class JsonRunStore : IRunStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new Error(ErrorCodes.Io, $"Could not save the run: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<Unit>> SaveSamplesAsync(string root, string runId, IReadOnlyList<SampleDto> samples, CancellationToken cancellationToken = default)
+    {
+        if (!IsValidId(runId))
+        {
+            return new Error(ErrorCodes.InvalidPath, $"'{runId}' is not a run id.");
+        }
+
+        try
+        {
+            await GitIgnoreFile.EnsureIgnoredAsync(root, cancellationToken);
+            await WriteIfChangedAsync(SamplesPath(root, runId), JsonSerializer.Serialize(samples, JsonOptions) + "\n", cancellationToken);
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not save the request log of the run: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<IReadOnlyList<SampleDto>>> GetSamplesAsync(string root, string runId, CancellationToken cancellationToken = default)
+    {
+        if (!IsValidId(runId))
+        {
+            return new Error(ErrorCodes.InvalidPath, $"'{runId}' is not a run id.");
+        }
+
+        try
+        {
+            var text = await ReadIfExistsAsync(SamplesPath(root, runId), cancellationToken);
+            IReadOnlyList<SampleDto> samples = text is null ? [] : JsonSerializer.Deserialize<List<SampleDto>>(text, JsonOptions) ?? [];
+            return Result<IReadOnlyList<SampleDto>>.Success(samples);
+        }
+        catch (JsonException)
+        {
+            return Result<IReadOnlyList<SampleDto>>.Success([]);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not read the request log of the run: {ex.Message}");
         }
     }
 
@@ -130,6 +175,11 @@ public sealed class JsonRunStore : IRunStore
                 if (run is not null && run.PlanPath == planPath)
                 {
                     File.Delete(file);
+                    var samples = SamplesPath(root, run.RunId);
+                    if (File.Exists(samples))
+                    {
+                        File.Delete(samples);
+                    }
                 }
             }
 
@@ -144,6 +194,8 @@ public sealed class JsonRunStore : IRunStore
     private static WorkspacePath RunsFolder { get; } = WorkspacePath.Root.Combine(WorkspaceLayout.LocalFolder).Combine("runs");
 
     private static string FilePath(string root, string runId) => FullPath(root, RunsFolder.Combine(runId + ".json"));
+
+    private static string SamplesPath(string root, string runId) => FullPath(root, RunsFolder.Combine("samples").Combine(runId + ".json"));
 
     private static bool IsValidId(string runId) => runId.Length is > 0 and <= 64 && runId.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
 

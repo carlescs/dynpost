@@ -14,6 +14,8 @@ import {
   ResponseDto,
   RunPlanDocumentDto,
   RunResultDto,
+  RunSampleDto,
+  RunSamplesPageDto,
   RunStatsDto,
   WorkspaceDto,
   WorkspaceNodeDto,
@@ -928,6 +930,25 @@ export class MockBackend {
           ? ok(this.simulateRun(payload?.['runId'] as string, run))
           : fail('run_not_found', 'There is no such run.');
       }
+      case 'run.samples': {
+        const runId = payload?.['runId'] as string;
+        const run = this.runs.get(runId);
+        if (!run) return fail('run_not_found', 'There is no such run.');
+        const sent = this.simulateRun(runId, run).total.samples;
+        const log = Array.from({ length: Math.min(sent, 10_000) }, (_, i) =>
+          this.simulateSample(i),
+        );
+        const matching = payload?.['failedOnly'] ? log.filter((s) => s.error) : log;
+        const offset = Math.min(Math.max(0, payload?.['offset'] as number), matching.length);
+        const limit = Math.min(Math.max(1, payload?.['limit'] as number), 500);
+        return ok({
+          offset,
+          matching: matching.length,
+          logged: log.length,
+          sent,
+          samples: matching.slice(offset, offset + limit),
+        } satisfies RunSamplesPageDto);
+      }
       case 'run.list':
         return ok(
           [...this.runs]
@@ -956,6 +977,27 @@ export class MockBackend {
       default:
         return fail(ERROR_CODES.unknownMessage, `Unknown message type '${request.type}'.`);
     }
+  }
+
+  /** The `index`th fake request of a simulated run: one in fifty fails. */
+  private simulateSample(index: number): RunSampleDto {
+    const create = index % 2 === 1;
+    const failed = index % 50 === 49;
+    return {
+      request: create ? 'users/create-user.yaml' : 'users/get-user.yaml',
+      thread: (index % 10) + 1,
+      iteration: Math.floor(index / 10) + 1,
+      atMs: index * 25,
+      latencyMs: 40 + ((index * 37) % 200),
+      status: failed ? 500 : create ? 201 : 200,
+      error: failed ? 'HTTP 500' : null,
+      method: create ? 'POST' : 'GET',
+      url: create ? 'https://api.example.com/users' : `https://api.example.com/users/${index}`,
+      dataRow: null,
+      responsePreview: failed
+        ? '{"error":"boom"}'
+        : JSON.stringify({ id: index, name: `User ${index}` }, null, 2),
+    };
   }
 
   /** Fake numbers that grow while the simulated run lasts, so the dashboard can be tried out. */
