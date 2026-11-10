@@ -162,6 +162,7 @@ internal static class Program
             .AddTransient<CancelRun>()
             .AddTransient<GetRunProgress>()
             .AddTransient<GetRunSamples>()
+            .AddTransient<GetRunResponse>()
             .AddTransient<ListRuns>()
             .AddTransient<DeleteRun>()
             .AddTransient<ClearRuns>()

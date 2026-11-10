@@ -41,6 +41,8 @@ export interface PlanForm {
   dataMode: string;
   dataOnEof: string;
   bodies: PlanBody[];
+  /** Whether each logged response body is saved to a file (`saveResponses: true`). */
+  saveResponses: boolean;
   assertions: PlanAssertion[];
   thresholds: Record<ThresholdKey, string>;
 }
@@ -79,6 +81,7 @@ const ORDER: Record<string, string[]> = {
     'load',
     'data',
     'bodies',
+    'saveResponses',
     'assert',
     'thresholds',
   ],
@@ -154,6 +157,7 @@ export function readPlanForm(yaml: string): PlanForm | null {
           };
         })
       : [],
+    saveResponses: doc.get('saveResponses') === true,
     assertions: isMap(assertNode)
       ? assertNode.items.map((pair) => {
           const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
@@ -234,6 +238,14 @@ export function setPlanRequestEnabled(yaml: string, path: string, enabled: boole
 /** Sets how users take the requests; the default (`sequential`) is left out of the file. */
 export function setPlanOrder(yaml: string, order: string): string {
   return setPlanValue(yaml, ['order'], order === 'sequential' ? '' : order);
+}
+
+/** Turns saving responses on (`saveResponses: true`) or off (the default, left out of the file). */
+export function setPlanSaveResponses(yaml: string, save: boolean): string {
+  return edit(yaml, (doc) => {
+    if (save) doc.set('saveResponses', true);
+    else doc.delete('saveResponses');
+  });
 }
 
 /** Sets the think time: a single value, or a `min`/`max` range when both differ. */

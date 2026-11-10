@@ -466,6 +466,30 @@
       </select>
     </section>
 
+    <!-- Responses -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faFloppyDisk" /></span>
+        <h3 class="flex-1 font-semibold">Responses</h3>
+      </div>
+      <label class="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          class="mt-1"
+          data-save-responses
+          [checked]="form.saveResponses"
+          (change)="setSaveResponses($event)"
+        />
+        <span class="flex flex-col gap-0.5">
+          Save whole responses
+          <span class="text-xs text-slate-500">
+            Writes the body of each logged request to <code>.missive/runs/responses/</code>, so it
+            can be opened from the run's requests (PDFs in the previewer).
+          </span>
+        </span>
+      </label>
+    </section>
+
     <!-- Assertions -->
     <section [class]="card">
       <div class="flex items-center gap-2">

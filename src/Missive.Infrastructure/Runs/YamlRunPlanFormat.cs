@@ -14,7 +14,8 @@ namespace Missive.Infrastructure.Runs;
 /// request path), <c>load</c>
 /// (<c>threads</c>, <c>iterations</c> or <c>duration</c>, <c>rampUp</c>, <c>thinkTime</c>,
 /// <c>maxRps</c>), <c>data</c> (<c>file</c>, <c>mode</c>, <c>onEof</c>), <c>bodies</c> (per
-/// request path: <c>folder</c>, <c>pattern</c>, <c>mode</c>, <c>onEof</c>), <c>assert</c>
+/// request path: <c>folder</c>, <c>pattern</c>, <c>mode</c>, <c>onEof</c>), <c>saveResponses</c>
+/// (<c>true</c> to keep each logged response body in a file), <c>assert</c>
 /// (per request path, or <c>"*"</c> for all: <c>status</c>, <c>maxTime</c>, <c>bodyContains</c>,
 /// <c>bodyNotContains</c>) and <c>thresholds</c> (<c>p50</c>, <c>p90</c>, <c>p95</c>, <c>p99</c>,
 /// <c>average</c>, <c>errorRate</c>, <c>throughput</c>).
@@ -56,7 +57,8 @@ public sealed class YamlRunPlanFormat : IRunPlanFormat
             ParseOrder(YamlNodes.OptionalString(root, "order")),
             ParseWeights(YamlNodes.OptionalMapping(root, "weights")),
             ParseDisabled(root),
-            ParseBodies(YamlNodes.OptionalMapping(root, "bodies")));
+            ParseBodies(YamlNodes.OptionalMapping(root, "bodies")),
+            YamlNodes.OptionalBoolean(root, "saveResponses"));
     }
 
     private static List<string> ParseDisabled(YamlMappingNode root) =>

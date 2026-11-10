@@ -487,7 +487,7 @@ its numbers), each threshold with its verdict, the latency spread of every
 request, status codes, error reasons, the failed and slowest requests (expand
 one for its data row, body file and response) and the earlier runs of the plan.
 Hover an earlier run and press its trash button to delete it with its request
-log, or press **Clear** above the list to delete them all; both ask first, keep
+log and saved responses, or press **Clear** above the list to delete them all; both ask first, keep
 the plan itself, and wait until a running plan stops.
 
 The **Requests** tab next to **Dashboard** (or the **All requests** link on the
@@ -496,7 +496,17 @@ finished: time into the run, virtual user, iteration, method and URL, status,
 latency and result. Click a row for its data row, body file, failure and a preview of the
 response; filter to the failed requests and page through the table. It follows
 a live run too. The first 10,000 requests of a run are kept, in
-`.missive/runs/samples/<run id>.json`. Each zone of the editor, the plan and
+`.missive/runs/samples/<run id>.json`.
+
+The response preview keeps only the start of each body. To keep whole responses,
+turn on **Save whole responses** in the plan (`saveResponses: true`): the body
+of each logged request is written to
+`.missive/runs/responses/<run id>/<n>.<ext>` (named by its number in the run,
+with an extension for its media type, such as `12.json`), and its row shows
+where. A saved PDF response opens in the PDF previewer from its row; the
+previewer, here and in the response viewer, has a maximize button that makes it
+fill the window (press it again or Esc to restore). Saved responses are
+deleted with the plan's runs. Each zone of the editor, the plan and
 the results, has a maximize button that gives it the full width; press it
 again to restore the side-by-side layout.
 
@@ -527,6 +537,9 @@ bodies:              # per request: send a file of a folder as its body
     pattern: "*.json"  # optional: only files whose names match
     mode: random       # sequential (default), random or perThread
     onEof: recycle     # recycle (default) or stop
+  mode: perThread    # or shared
+  onEof: wrap        # or stop
+saveResponses: true  # keep each logged response body in .missive/runs/responses/
 assert:
   "*":
     status: 200-299

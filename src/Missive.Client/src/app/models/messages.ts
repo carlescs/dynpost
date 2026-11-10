@@ -544,9 +544,17 @@ export interface RunSampleDto {
   method: string;
   url: string | null;
   dataRow: Record<string, string> | null;
+  /** The start of the response body as text; `null` for PDFs. */
   responsePreview: string | null;
   /** The body folder file the request sent, if its body came from one (absent in older runs). */
   bodyFile?: string | null;
+  /** The media type of the response, when it has one. */
+  contentType?: string | null;
+  /**
+   * The file the whole response body was saved to, when the plan has `saveResponses`; read it
+   * with `run.response`.
+   */
+  responseFile?: string | null;
 }
 
 export type RunState = 'running' | 'completed' | 'cancelled' | 'failed';
@@ -628,6 +636,8 @@ export interface BridgeMessages {
     payload: { runId: string; offset: number; limit: number; failedOnly?: boolean };
     result: RunSamplesPageDto;
   };
+  /** The whole body of a response a run saved (`responseFile` of a sample), as base64. */
+  'run.response': { payload: { runId: string; file: string }; result: { body: string } };
   /** The earlier runs of a plan, newest first. */
   'run.list': { payload: { path: string }; result: RunSummaryDto[] };
   /** Deletes an earlier run and its request log; a run in progress can't be deleted. */

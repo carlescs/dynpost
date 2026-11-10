@@ -10,7 +10,8 @@ namespace Missive.Infrastructure.Runs;
 
 /// <summary>
 /// Keeps each finished run as <c>.missive/runs/&lt;run id&gt;.json</c> and its request log as
-/// <c>.missive/runs/samples/&lt;run id&gt;.json</c>; both are git-ignored.
+/// <c>.missive/runs/samples/&lt;run id&gt;.json</c>; the responses a run saves (when its plan has
+/// <c>saveResponses</c>) go to <c>.missive/runs/responses/&lt;run id&gt;/</c>. All are git-ignored.
 /// </summary>
 public sealed class JsonRunStore : IRunStore
 {
@@ -73,6 +74,47 @@ public sealed class JsonRunStore : IRunStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new Error(ErrorCodes.Io, $"Could not read the request log of the run: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<Unit>> SaveResponseAsync(string root, string runId, string name, byte[] body, CancellationToken cancellationToken = default)
+    {
+        if (!IsValidId(runId) || !RunResponseFiles.IsValidName(name))
+        {
+            return new Error(ErrorCodes.InvalidPath, $"'{runId}/{name}' is not a run response.");
+        }
+
+        try
+        {
+            await GitIgnoreFile.EnsureIgnoredAsync(root, cancellationToken);
+            var path = ResponsePath(root, runId, name);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllBytesAsync(path, body, cancellationToken);
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not save the response: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<byte[]>> GetResponseAsync(string root, string runId, string name, CancellationToken cancellationToken = default)
+    {
+        if (!IsValidId(runId) || !RunResponseFiles.IsValidName(name))
+        {
+            return new Error(ErrorCodes.InvalidPath, $"'{runId}/{name}' is not a run response.");
+        }
+
+        try
+        {
+            var path = ResponsePath(root, runId, name);
+            return File.Exists(path)
+                ? await File.ReadAllBytesAsync(path, cancellationToken)
+                : new Error(RunErrorCodes.ResponseNotFound, $"The response '{name}' of the run was not saved or has been deleted.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not read the response: {ex.Message}");
         }
     }
 
@@ -174,11 +216,17 @@ public sealed class JsonRunStore : IRunStore
                 return Task.FromResult<Result<Unit>>(new Error(RunErrorCodes.RunNotFound, $"There is no run '{runId}'."));
             }
 
-            // The request log first, so a failure never leaves a log without its run.
+            // The request log and responses first, so a failure never leaves them without their run.
             var samples = SamplesPath(root, runId);
             if (File.Exists(samples))
             {
                 File.Delete(samples);
+            }
+
+            var responses = ResponsesFolder(root, runId);
+            if (Directory.Exists(responses))
+            {
+                Directory.Delete(responses, recursive: true);
             }
 
             File.Delete(file);
@@ -211,6 +259,12 @@ public sealed class JsonRunStore : IRunStore
                     {
                         File.Delete(samples);
                     }
+
+                    var responses = ResponsesFolder(root, run.RunId);
+                    if (Directory.Exists(responses))
+                    {
+                        Directory.Delete(responses, recursive: true);
+                    }
                 }
             }
 
@@ -227,6 +281,10 @@ public sealed class JsonRunStore : IRunStore
     private static string FilePath(string root, string runId) => FullPath(root, RunsFolder.Combine(runId + ".json"));
 
     private static string SamplesPath(string root, string runId) => FullPath(root, RunsFolder.Combine("samples").Combine(runId + ".json"));
+
+    private static string ResponsesFolder(string root, string runId) => FullPath(root, RunsFolder.Combine("responses").Combine(runId));
+
+    private static string ResponsePath(string root, string runId, string name) => Path.Combine(ResponsesFolder(root, runId), name);
 
     private static bool IsValidId(string runId) => runId.Length is > 0 and <= 64 && runId.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
 

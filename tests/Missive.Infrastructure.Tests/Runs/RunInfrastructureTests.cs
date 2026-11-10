@@ -186,6 +186,15 @@ public sealed class RunInfrastructureTests : IDisposable
         Assert.Contains("'bodies/b.txt' is not UTF-8 text", invalid.Error.Message);
     }
 
+    [Fact]
+    public void Parse_ReadsWhetherToSaveResponses()
+    {
+        var format = new YamlRunPlanFormat();
+
+        Assert.True(format.Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nsaveResponses: true\n").Value.SaveResponses);
+        Assert.False(format.Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.SaveResponses);
+    }
+
     [Theory]
     [InlineData("name: x\nrequests: [a.yaml]\norder: backwards\nload: {threads: 1, iterations: 1}\n", "'order'")]
     [InlineData("name: x\nrequests: [a.yaml]\nweights: {a.yaml: lots}\nload: {threads: 1, iterations: 1}\n", "weights.a.yaml")]
@@ -290,6 +299,21 @@ public sealed class RunInfrastructureTests : IDisposable
     }
 
     [Fact]
+    public async Task RunStore_SavesAndReadsTheResponsesOfARun()
+    {
+        var store = new JsonRunStore();
+        byte[] pdf = [0x25, 0x50, 0x44, 0x46, 0x00, 0xFF];
+
+        Assert.True((await store.SaveResponseAsync(_root, "run-1", "1.pdf", pdf)).IsSuccess);
+
+        Assert.Equal(pdf, (await store.GetResponseAsync(_root, "run-1", "1.pdf")).Value);
+        Assert.True(File.Exists(Path.Combine(_root, ".missive", "runs", "responses", "run-1", "1.pdf")));
+        Assert.Equal(RunErrorCodes.ResponseNotFound, (await store.GetResponseAsync(_root, "run-1", "2.pdf")).Error!.Code);
+        Assert.False((await store.GetResponseAsync(_root, "run-1", "../1.pdf")).IsSuccess);
+        Assert.False((await store.SaveResponseAsync(_root, "../x", "1.pdf", pdf)).IsSuccess);
+    }
+
+    [Fact]
     public async Task PlanStore_MovesPlansWithoutOverwriting()
     {
         var store = new FileSystemRunPlanStore();
@@ -343,9 +367,12 @@ public sealed class RunInfrastructureTests : IDisposable
         Assert.True((await store.DeletePlanAsync(_root, "gone.run.yaml")).IsSuccess);
         await store.SaveAsync(_root, Run("run-1", "gone.run.yaml"));
         await store.SaveSamplesAsync(_root, "run-1", [new SampleDto("a.yaml", 1, 1, 0, 1, 200, null, "GET", null, null, null)]);
+        await store.SaveResponseAsync(_root, "run-1", "1.json", [0x7B, 0x7D]);
         await store.SaveAsync(_root, Run("run-2", "other.run.yaml"));
 
         Assert.True((await store.DeletePlanAsync(_root, "gone.run.yaml")).IsSuccess);
+
+        Assert.False(Directory.Exists(Path.Combine(_root, ".missive", "runs", "responses", "run-1")));
 
         Assert.Empty((await store.GetSamplesAsync(_root, "run-1")).Value);
 
@@ -363,9 +390,11 @@ public sealed class RunInfrastructureTests : IDisposable
             new(id, "a.run.yaml", "P", "completed", DateTimeOffset.UnixEpoch, 2000, 2, 0, stats, [], [], [], true, [], [], null);
         await store.SaveAsync(_root, Run("run-1"));
         await store.SaveSamplesAsync(_root, "run-1", [new SampleDto("a.yaml", 1, 1, 0, 1, 200, null, "GET", null, null, null)]);
+        await store.SaveResponseAsync(_root, "run-1", "1.json", [1, 2]);
         await store.SaveAsync(_root, Run("run-2"));
 
         Assert.True((await store.DeleteAsync(_root, "run-1")).IsSuccess);
+        Assert.Equal(RunErrorCodes.ResponseNotFound, (await store.GetResponseAsync(_root, "run-1", "1.json")).Error!.Code);
 
         Assert.Equal("run-2", Assert.Single((await store.ListAsync(_root, "a.run.yaml")).Value).RunId);
         Assert.Equal(RunErrorCodes.RunNotFound, (await store.GetAsync(_root, "run-1")).Error!.Code);

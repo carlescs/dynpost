@@ -1,5 +1,6 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { decodeBase64 } from '../../../../models/base64';
 import { ResponseDto } from '../../../../models/messages';
 import { PdfViewer } from '../../../../components/pdf-viewer/pdf-viewer';
 
@@ -72,11 +73,4 @@ export function withPreviewPolicy(html: string): string {
   return doctype
     ? doctype[0] + meta + html.slice(doctype[0].length)
     : meta + html.replace(/^\uFEFF/, '');
-}
-
-function decodeBase64(base64: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
 }
