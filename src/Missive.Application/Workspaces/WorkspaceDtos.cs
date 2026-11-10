@@ -6,12 +6,14 @@ namespace Missive.Application.Workspaces;
 /// <param name="Kind"><c>folder</c> or <c>request</c>.</param>
 /// <param name="Method">For requests that could be read: the HTTP method.</param>
 /// <param name="Error">For request files that could not be read: why.</param>
+/// <param name="LocalOnly">For requests: whether the file is kept on this computer only, never committed.</param>
 public sealed record WorkspaceNodeDto(
     string Path,
     string Name,
     string Kind,
     string? Method = null,
     string? Error = null,
-    IReadOnlyList<WorkspaceNodeDto>? Children = null);
+    IReadOnlyList<WorkspaceNodeDto>? Children = null,
+    bool LocalOnly = false);
 
 public sealed record WorkspaceDto(string Name, string Root, IReadOnlyList<WorkspaceNodeDto> Nodes);

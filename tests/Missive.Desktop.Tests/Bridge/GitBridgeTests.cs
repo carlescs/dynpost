@@ -5,9 +5,11 @@ using Missive.Application.Git;
 using Missive.Application.Requests;
 using Missive.Application.Settings;
 using Missive.Application.Workspaces;
+using Missive.Application.Sharing;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Git;
 using Missive.Domain.Requests;
+using Missive.Domain.Workspaces;
 using NSubstitute;
 
 namespace Missive.Desktop.Tests.Bridge;
@@ -17,6 +19,7 @@ public sealed class GitBridgeTests : IDisposable
 {
     private const string Folder = "/work/my-api";
 
+    private readonly ILocalOnlyFiles _localFiles = CreateLocalFiles();
     private readonly IGitService _git = Substitute.For<IGitService>();
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
@@ -29,6 +32,7 @@ public sealed class GitBridgeTests : IDisposable
     {
         _services = new ServiceCollection()
             .AddSingleton(_git)
+            .AddSingleton(_localFiles)
             .AddSingleton(_repository)
             .AddSingleton(_settings)
             .AddSingleton(_current)
@@ -528,4 +532,11 @@ public sealed class GitBridgeTests : IDisposable
 
     private static string? ErrorCode(JsonElement response) =>
         response.GetProperty("error").GetProperty("code").GetString();
+
+    private static ILocalOnlyFiles CreateLocalFiles()
+    {
+        var files = Substitute.For<ILocalOnlyFiles>();
+        files.List(Arg.Any<string>()).Returns(new HashSet<WorkspacePath>());
+        return files;
+    }
 }

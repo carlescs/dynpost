@@ -72,6 +72,11 @@
             <fa-icon class="shrink-0 text-rose-600" [icon]="faCircleExclamation" />
           }
         </button>
+        <app-sharing-toggle
+          [localOnly]="!!env.localOnly"
+          [name]="env.name"
+          (toggled)="store.toggleLocalOnly(env)"
+        />
         <button
           type="button"
           class="flex size-5 shrink-0 items-center justify-center rounded enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"

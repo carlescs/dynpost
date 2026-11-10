@@ -204,6 +204,12 @@ Desktop → Application
 - Pull always merges (`--no-rebase`); conflicts are left in the working tree and
   reported. Files under `.missive/` are excluded from status and commits even
   if the `.gitignore` entry is missing.
+- Local-only requests, environments and run plans (`Application/Sharing`) are
+  anchored lines in the workspace `.gitignore`
+  (`Infrastructure/Sharing/GitIgnoreLocalOnlyFiles.cs`); making one local-only
+  also untracks it (`git rm --cached`), and `CommitAsync` commits such staged
+  removals through a temporary index because `commit --only` would re-add them.
+  Use cases that rename, move, copy or delete files keep those lines in step.
 - Never force-push, rewrite history, or auto-resolve conflicts. Report
   conflicts and errors to the user clearly.
 - Don't commit or push without an explicit user action.

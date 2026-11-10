@@ -8,7 +8,9 @@ import {
   faFileImport,
   faFolderOpen,
   faFolderPlus,
+  faLaptop,
   faPlus,
+  faShareNodes,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 import { InterchangeStore } from '../../../../services/interchange-store';
@@ -36,6 +38,8 @@ export class ExplorerView {
   protected readonly includeEnvironments = signal(true);
   protected readonly faPlus = faPlus;
   protected readonly faClone = faClone;
+  protected readonly faLaptop = faLaptop;
+  protected readonly faShareNodes = faShareNodes;
   protected readonly faFileExport = faFileExport;
   protected readonly faFileImport = faFileImport;
   protected readonly faFolderOpen = faFolderOpen;

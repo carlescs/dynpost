@@ -141,6 +141,17 @@
         <fa-icon [icon]="faClone" />
         Duplicate {{ menu.node.kind === 'folder' ? 'folder' : 'request' }}
       </button>
+      @if (menu.node.kind === 'request') {
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="state.toggleLocalOnly(menu.node)"
+        >
+          <fa-icon [icon]="menu.node.localOnly ? faShareNodes : faLaptop" />
+          {{ menu.node.localOnly ? 'Share through git' : 'Keep on this computer only' }}
+        </button>
+      }
       <button
         type="button"
         role="menuitem"

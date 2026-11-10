@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
 
@@ -9,7 +10,7 @@ namespace Missive.Application.Requests;
 /// file named after it (<c>get-user-copy.yaml</c>, or <c>get-user-copy-2.yaml</c> if that is
 /// taken); the original is left untouched.
 /// </summary>
-public sealed class DuplicateRequest(IWorkspaceRepository repository, CurrentWorkspace current)
+public sealed class DuplicateRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
 {
     public const string CopySuffix = " copy";
 
@@ -64,8 +65,15 @@ public sealed class DuplicateRequest(IWorkspaceRepository repository, CurrentWor
         }
 
         var written = await repository.WriteRequestAsync(root.Value, target, copy, cancellationToken);
-        return written.IsSuccess
+        if (!written.IsSuccess)
+        {
+            return written.Error!;
+        }
+
+        // The copy of a local-only request is local-only too.
+        var followed = localFiles.Copy(root.Value, requestPath, target);
+        return followed.IsSuccess
             ? new SavedRequestDto(target.Value, RequestMapper.ToDto(copy))
-            : written.Error!;
+            : followed.Error!;
     }
 }

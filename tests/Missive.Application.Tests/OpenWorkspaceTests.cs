@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Domain.Requests;
@@ -10,12 +11,14 @@ namespace Missive.Application.Tests;
 public class OpenWorkspaceTests
 {
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
+    private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
     private readonly CurrentWorkspace _current = new();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
     private AppSettings _storedSettings = AppSettings.Default;
 
     public OpenWorkspaceTests()
     {
+        _localFiles.List(Arg.Any<string>()).Returns(new HashSet<WorkspacePath>());
         _settings.UpdateAsync(Arg.Any<Func<AppSettings, AppSettings>>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
@@ -39,7 +42,7 @@ public class OpenWorkspaceTests
                 Result<HttpRequestDefinition>.Failure(ErrorCodes.InvalidFile, "bad yaml")),
         ]));
 
-        var result = await new OpenWorkspace(_repository, _current, _settings).ExecuteAsync("/work/my-api");
+        var result = await new OpenWorkspace(_repository, _localFiles, _current, _settings).ExecuteAsync("/work/my-api");
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/work/my-api", _current.Root);
@@ -60,7 +63,7 @@ public class OpenWorkspaceTests
         _current.Open("/work/previous");
         _repository.FolderExists("/nope").Returns(false);
 
-        var result = await new OpenWorkspace(_repository, _current, _settings).ExecuteAsync("/nope");
+        var result = await new OpenWorkspace(_repository, _localFiles, _current, _settings).ExecuteAsync("/nope");
 
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
         Assert.Equal("/work/previous", _current.Root);
@@ -69,7 +72,7 @@ public class OpenWorkspaceTests
     [Fact]
     public async Task GetWorkspaceTree_RequiresAnOpenWorkspace()
     {
-        var result = await new GetWorkspaceTree(_repository, _current).ExecuteAsync();
+        var result = await new GetWorkspaceTree(_repository, _localFiles, _current).ExecuteAsync();
 
         Assert.Equal(ErrorCodes.NoWorkspace, result.Error?.Code);
     }

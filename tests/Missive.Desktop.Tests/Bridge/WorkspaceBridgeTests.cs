@@ -2,9 +2,11 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Missive.Application.Common;
 using Missive.Application.Folders;
+using Missive.Application.Git;
 using Missive.Application.Requests;
 using Missive.Application.Settings;
 using Missive.Application.Workspaces;
+using Missive.Application.Sharing;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Requests;
 using Missive.Domain.Workspaces;
@@ -17,6 +19,8 @@ public sealed class WorkspaceBridgeTests : IDisposable
 {
     private const string Root = "/work/my-api";
 
+    private readonly ILocalOnlyFiles _localFiles = CreateLocalFiles();
+    private readonly IGitService _git = Substitute.For<IGitService>();
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
     private readonly ServiceProvider _services;
@@ -26,9 +30,12 @@ public sealed class WorkspaceBridgeTests : IDisposable
     {
         _services = new ServiceCollection()
             .AddSingleton(_repository)
+            .AddSingleton(_localFiles)
             .AddSingleton(_settings)
             .AddSingleton<CurrentWorkspace>()
+            .AddSingleton(_git)
             .AddTransient<DuplicateRequest>()
+            .AddTransient<SetLocalOnly>()
             .AddTransient<DuplicateFolder>()
             .AddTransient<GetRecentWorkspaces>()
             .AddTransient<RemoveRecentWorkspace>()
@@ -102,10 +109,32 @@ public sealed class WorkspaceBridgeTests : IDisposable
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task SharingSet_MakesTheFileLocalOnly()
+    {
+        var path = WorkspacePath.Parse("environments/local.yaml");
+        _repository.FileExists(Root, path).Returns(true);
+        _localFiles.Set(Root, path, true).Returns(true);
+        _git.StopTrackingAsync(Root, "environments/local.yaml", Arg.Any<CancellationToken>()).Returns(Unit.Value);
+
+        var response = await SendAsync("sharing.set", """{ "path": "environments/local.yaml", "localOnly": true }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.True(response.GetProperty("payload").GetProperty("localOnly").GetBoolean());
+        _localFiles.Received(1).Set(Root, path, true);
+    }
+
     private async Task<JsonElement> SendAsync(string type, string payload)
     {
         var json = await _router.HandleAsync($$"""{ "id": "1", "type": "{{type}}", "payload": {{payload}} }""");
         Assert.NotNull(json);
         return JsonDocument.Parse(json).RootElement;
+    }
+
+    private static ILocalOnlyFiles CreateLocalFiles()
+    {
+        var files = Substitute.For<ILocalOnlyFiles>();
+        files.List(Arg.Any<string>()).Returns(new HashSet<WorkspacePath>());
+        return files;
     }
 }

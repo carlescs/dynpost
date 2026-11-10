@@ -105,6 +105,8 @@ export interface WorkspaceNode {
   method?: HttpMethod;
   /** Only for requests whose file could not be read: why. */
   error?: string;
+  /** Only for requests: kept on this computer only, never committed. */
+  localOnly?: boolean;
   children?: WorkspaceNode[];
 }
 

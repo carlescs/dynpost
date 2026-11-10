@@ -31,6 +31,18 @@ public interface IGitService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Stops tracking a workspace file without touching it on disk (<c>git rm --cached</c>), so the
+    /// next commit removes it from the repository. A file git doesn't track is left as it is.
+    /// </summary>
+    Task<Result<Unit>> StopTrackingAsync(string workspacePath, string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Undoes <see cref="StopTrackingAsync"/> before it is committed: the file's index entry goes
+    /// back to its last committed state (<c>git reset</c>). Nothing is staged otherwise.
+    /// </summary>
+    Task<Result<Unit>> RestoreTrackingAsync(string workspacePath, string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Throws away the given uncommitted changes: modified and deleted files go back to their last
     /// committed content, new files (staged or untracked) are deleted, and a rename is undone.
     /// </summary>

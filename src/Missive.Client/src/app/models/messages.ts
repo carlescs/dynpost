@@ -206,6 +206,8 @@ export interface EnvironmentSummaryDto {
   name: string;
   /** Why the file can't be read, if it can't. */
   error?: string | null;
+  /** Whether the file is kept on this computer only, never committed. */
+  localOnly?: boolean;
 }
 
 export interface EnvironmentListDto {
@@ -226,6 +228,8 @@ export interface WorkspaceNodeDto {
   method?: string | null;
   error?: string | null;
   children?: WorkspaceNodeDto[] | null;
+  /** For requests: whether the file is kept on this computer only, never committed. */
+  localOnly?: boolean;
 }
 
 export interface WorkspaceDto {
@@ -461,6 +465,20 @@ export interface RunPlanFileDto {
   name: string | null;
   /** Why the file can't be read. */
   error: string | null;
+  /** Whether the file is kept on this computer only, never committed. */
+  localOnly?: boolean;
+}
+
+/** Whether a request, environment or run plan file is shared through git. */
+export interface SharingDto {
+  path: string;
+  /** Kept on this computer only: git-ignored and no longer tracked. */
+  localOnly: boolean;
+}
+
+/** The workspace path of an environment file, for `sharing.set`. */
+export function environmentPath(id: string): string {
+  return `environments/${id}`;
 }
 
 /** A run plan open for editing. */
@@ -633,6 +651,12 @@ export interface BridgeMessages {
   'request.move': { payload: { path: string; folder: string }; result: { path: string } };
   /** Deletes a request file. */
   'request.delete': { payload: { path: string }; result: null };
+  /**
+   * Shares a request, environment (`environments/<id>`) or run plan file through git, or keeps
+   * it on this computer only: it is added to `.gitignore` and stops being tracked, so the next
+   * commit removes it from the repository while the file stays on disk.
+   */
+  'sharing.set': { payload: { path: string; localOnly: boolean }; result: SharingDto };
   /**
    * Sends a request (saved or not) from the host and waits for the response. `id` is chosen by
    * the UI and can be passed to `request.cancel`.
