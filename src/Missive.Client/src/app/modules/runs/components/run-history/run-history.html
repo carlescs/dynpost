@@ -1,0 +1,41 @@
+<h3 class="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">History</h3>
+<ul class="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
+  @for (row of rows(); track row.run.runId) {
+    <li>
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 border-l-2 px-3 py-1.5 text-left text-xs hover:bg-slate-50"
+        [class]="selected() === row.run.runId ? 'border-sky-600 bg-sky-50' : 'border-transparent'"
+        [attr.aria-current]="selected() === row.run.runId ? 'true' : null"
+        (click)="select.emit(row.run.runId)"
+      >
+        <fa-icon class="text-sm" [class]="row.color" [icon]="row.icon" [title]="row.label" />
+        <span class="min-w-0 flex-1">
+          <span class="block truncate font-medium">
+            {{ row.run.startedAt | date: 'MMM d, HH:mm:ss' }}
+          </span>
+          <span class="block truncate text-slate-500">
+            {{ row.label }} · {{ row.run.samples | number }} requests in
+            {{ formatElapsed(row.run.elapsedMs) }}
+          </span>
+        </span>
+        <span class="w-16 shrink-0 text-right">
+          <span class="block font-medium">{{ row.run.errorPercent | number: '1.0-1' }}%</span>
+          <span class="block text-slate-500">errors</span>
+        </span>
+        <span class="w-24 shrink-0">
+          <span class="flex items-baseline justify-between">
+            <span class="text-slate-500">p95</span>
+            <span class="font-medium">{{ formatMs(row.run.p95) }}</span>
+          </span>
+          <span class="mt-0.5 block h-1 rounded-full bg-slate-100">
+            <span
+              class="block h-1 min-w-1 rounded-full bg-sky-600"
+              [style.width.%]="row.bar"
+            ></span>
+          </span>
+        </span>
+      </button>
+    </li>
+  }
+</ul>

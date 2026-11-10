@@ -1,0 +1,325 @@
+@let result = run();
+
+<!-- State -->
+<div [class]="card + ' overflow-hidden'">
+  @if (result.state === 'running') {
+    <div class="h-1 animate-pulse bg-sky-500"></div>
+  }
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+    <span
+      class="flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+      [class]="stateColors[result.state]"
+      data-state
+    >
+      <fa-icon
+        [icon]="stateIcons[result.state]"
+        [animation]="result.state === 'running' ? 'spin' : undefined"
+      />
+      {{ stateLabels[result.state] }}
+    </span>
+    @if (result.passed !== null) {
+      <span
+        class="flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+        [class]="
+          result.passed
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border-rose-200 bg-rose-50 text-rose-700'
+        "
+        data-verdict
+      >
+        <fa-icon [icon]="result.passed ? faCircleCheck : faCircleXmark" />
+        {{ result.passed ? 'Thresholds passed' : 'Thresholds failed' }}
+      </span>
+    }
+    <span class="min-w-0 flex-1 truncate font-semibold" [title]="result.planName">
+      {{ result.planName }}
+    </span>
+    <dl class="flex gap-4 text-xs text-slate-500">
+      <div>
+        <dt class="mr-1 inline">Started</dt>
+        <dd class="inline font-medium text-slate-700">
+          {{ result.startedAt | date: 'MMM d, HH:mm:ss' }}
+        </dd>
+      </div>
+      <div>
+        <dt class="mr-1 inline">Elapsed</dt>
+        <dd class="inline font-medium text-slate-700">{{ formatElapsed(result.elapsedMs) }}</dd>
+      </div>
+      <div>
+        <dt class="mr-1 inline">Users</dt>
+        <dd class="inline font-medium text-slate-700">
+          @if (result.state === 'running') {
+            {{ result.activeThreads }}/{{ result.threads }}
+          } @else {
+            {{ result.threads }}
+          }
+        </dd>
+      </div>
+    </dl>
+  </div>
+  @if (result.message) {
+    <p class="border-t border-rose-200 bg-rose-50 px-3 py-2 text-rose-700" role="alert">
+      {{ result.message }}
+    </p>
+  }
+</div>
+
+<!-- Headline numbers -->
+<dl class="grid grid-cols-3 gap-2">
+  @for (tile of tiles(); track tile.label) {
+    <div [class]="card + ' px-3 py-2'">
+      <dt class="flex items-center gap-1.5 text-xs text-slate-500">
+        {{ tile.label }}
+        @if (tile.alert) {
+          <fa-icon class="text-rose-600" [icon]="faTriangleExclamation" />
+        }
+      </dt>
+      <dd class="text-xl leading-tight font-semibold">
+        {{ tile.value }}
+        @if (tile.unit) {
+          <span class="text-xs font-normal text-slate-500">{{ tile.unit }}</span>
+        }
+      </dd>
+      <dd class="truncate text-xs text-slate-500">{{ tile.detail }}</dd>
+    </div>
+  }
+</dl>
+
+<!-- Over time -->
+@if (result.timeline.length) {
+  <section [class]="card + ' p-3'">
+    <app-run-chart [points]="result.timeline" />
+  </section>
+}
+
+<!-- Thresholds -->
+@if (result.thresholds.length) {
+  <section>
+    <h3 [class]="heading + ' mb-1.5'">Thresholds</h3>
+    <ul class="grid grid-cols-2 gap-2">
+      @for (t of result.thresholds; track t.name) {
+        <li
+          class="flex items-center gap-2.5 rounded-lg border px-3 py-2"
+          [class]="t.passed ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'"
+          data-threshold
+        >
+          <fa-icon
+            class="text-base"
+            [class]="t.passed ? 'text-emerald-700' : 'text-rose-700'"
+            [icon]="t.passed ? faCircleCheck : faCircleXmark"
+            [title]="t.passed ? 'Passed' : 'Failed'"
+          />
+          <div class="min-w-0">
+            <div class="font-semibold">{{ thresholdName(t.name) }}: {{ t.actual }}</div>
+            <div class="text-xs text-slate-600">
+              {{ t.passed ? 'Within' : 'Outside' }} the limit of {{ t.limit }}
+            </div>
+          </div>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<!-- Per request -->
+@if (requests().length) {
+  <section>
+    <div class="mb-1.5 flex items-center gap-3">
+      <h3 [class]="heading + ' flex-1'">Requests</h3>
+      <span class="flex items-center gap-1 text-[10px] text-slate-500">
+        <span class="h-1 w-3 rounded-full bg-slate-300"></span> min–max
+      </span>
+      <span class="flex items-center gap-1 text-[10px] text-slate-500">
+        <span class="h-2 w-3 rounded-full bg-sky-600"></span> median–p95
+      </span>
+      <span class="flex items-center gap-1 text-[10px] text-slate-500">
+        <span class="h-3 w-0.5 bg-slate-900"></span> average
+      </span>
+    </div>
+    <ul [class]="card + ' divide-y divide-slate-200'">
+      @for (r of requests(); track r.request) {
+        <li class="flex flex-col gap-1.5 px-3 py-2" data-request>
+          <div class="flex items-baseline gap-2">
+            <span class="min-w-0 flex-1 truncate font-medium" [title]="r.request">
+              {{ r.request }}
+            </span>
+            <span class="shrink-0 text-xs text-slate-500">
+              {{ r.stats.samples | number }} requests
+            </span>
+            @if (r.stats.errors > 0) {
+              <span
+                class="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-1.5 text-xs font-medium text-rose-700"
+              >
+                {{ r.stats.errors | number }} failed ({{ r.stats.errorPercent | number: '1.0-1' }}%)
+              </span>
+            }
+          </div>
+          <div class="relative h-3" [title]="spreadTitle(r.stats)">
+            <div class="absolute inset-x-0 top-1 h-1 rounded-full bg-slate-100"></div>
+            <div
+              class="absolute top-1 h-1 min-w-0.5 rounded-full bg-slate-300"
+              [style.left.%]="r.range.left"
+              [style.width.%]="r.range.width"
+            ></div>
+            <div
+              class="absolute top-0.5 h-2 min-w-0.5 rounded-full bg-sky-600"
+              [style.left.%]="r.typical.left"
+              [style.width.%]="r.typical.width"
+            ></div>
+            <div
+              class="absolute top-0 h-3 w-0.5 -translate-x-1/2 bg-slate-900 ring-1 ring-white"
+              [style.left.%]="r.average"
+            ></div>
+          </div>
+          <dl class="flex justify-between text-xs text-slate-500">
+            @for (
+              stat of [
+                ['Average', r.stats.average],
+                ['Median', r.stats.median],
+                ['p95', r.stats.p95],
+                ['Max', r.stats.max],
+              ];
+              track stat[0]
+            ) {
+              <div>
+                <dt class="mr-1 inline">{{ stat[0] }}</dt>
+                <dd class="inline font-medium text-slate-700">{{ formatMs($any(stat[1])) }}</dd>
+              </div>
+            }
+          </dl>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<!-- Status codes -->
+@if (statusCodes().length) {
+  <section>
+    <h3 [class]="heading + ' mb-1.5'">Status codes</h3>
+    <div class="flex h-2.5 gap-0.5 overflow-hidden rounded-full">
+      @for (s of statusCodes(); track s.key) {
+        <div
+          class="min-w-1"
+          [class]="statusFill(s.key)"
+          [style.flex-grow]="s.count"
+          [title]="s.key + ': ' + s.count"
+        ></div>
+      }
+    </div>
+    <ul class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      @for (s of statusCodes(); track s.key) {
+        <li class="flex items-center gap-1.5" data-status>
+          <span class="size-2 rounded-sm" [class]="statusFill(s.key)"></span>
+          <span class="font-semibold">{{ s.key }}</span>
+          <span class="text-slate-500">
+            {{ s.count | number }} ({{ s.percent | number: '1.0-1' }}%)
+          </span>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<!-- Why requests failed -->
+@if (errorReasons().length) {
+  <section>
+    <h3 [class]="heading + ' mb-1.5'">Errors</h3>
+    <ul class="flex flex-col gap-1.5">
+      @for (e of errorReasons(); track e.key) {
+        <li data-error>
+          <div class="flex items-baseline gap-2">
+            <span class="min-w-0 flex-1 truncate" [title]="e.key">{{ e.key }}</span>
+            <span class="shrink-0 text-xs font-medium">{{ e.count | number }}</span>
+          </div>
+          <div class="h-1 rounded-full bg-slate-100">
+            <div class="h-1 min-w-1 rounded-full bg-rose-600" [style.width.%]="e.percent"></div>
+          </div>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<!-- Samples kept -->
+@for (
+  group of [
+    { title: 'Failed requests', samples: result.failedSamples },
+    { title: 'Slowest requests', samples: result.slowestSamples },
+  ];
+  track group.title
+) {
+  @if (group.samples.length) {
+    <section>
+      <h3 [class]="heading + ' mb-1.5'">{{ group.title }}</h3>
+      <ul [class]="card + ' divide-y divide-slate-200'">
+        @for (s of group.samples; track $index) {
+          <li>
+            <details class="group" data-sample>
+              <summary
+                class="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-50"
+              >
+                <fa-icon
+                  class="text-[10px] text-slate-400 transition-transform group-open:rotate-90"
+                  [icon]="faChevronRight"
+                />
+                <span class="w-10 shrink-0 font-bold" [class]="methodColor(s.method)">
+                  {{ s.method }}
+                </span>
+                <span class="min-w-0 flex-1 truncate" [title]="s.url ?? s.request">
+                  {{ s.url ?? s.request }}
+                </span>
+                @if (s.status !== null) {
+                  <span class="flex shrink-0 items-center gap-1 font-semibold">
+                    <span class="size-2 rounded-sm" [class]="statusFill(s.status)"></span>
+                    {{ s.status }}
+                  </span>
+                } @else if (s.error) {
+                  <span
+                    class="max-w-32 shrink-0 truncate font-medium text-rose-700"
+                    [title]="s.error"
+                  >
+                    {{ s.error }}
+                  </span>
+                }
+                <span class="w-14 shrink-0 text-right text-slate-500">
+                  {{ formatMs(s.latencyMs) }}
+                </span>
+              </summary>
+              <div class="flex flex-col gap-2 bg-slate-50 px-3 py-2 text-xs">
+                <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                  <dt class="text-slate-500">Request</dt>
+                  <dd class="truncate">{{ s.request }}</dd>
+                  <dt class="text-slate-500">Sent</dt>
+                  <dd>
+                    {{ formatElapsed(s.atMs) }} into the run, by user {{ s.thread }} (iteration
+                    {{ s.iteration }})
+                  </dd>
+                  @if (s.error) {
+                    <dt class="text-slate-500">Failure</dt>
+                    <dd class="text-rose-700">{{ s.error }}</dd>
+                  }
+                  @if (dataRow(s).length) {
+                    <dt class="text-slate-500">Data row</dt>
+                    <dd class="flex flex-wrap gap-1">
+                      @for (entry of dataRow(s); track entry[0]) {
+                        <span class="rounded bg-slate-200 px-1.5 font-mono">
+                          {{ entry[0] }}={{ entry[1] }}
+                        </span>
+                      }
+                    </dd>
+                  }
+                </dl>
+                @if (s.responsePreview) {
+                  <pre
+                    class="max-h-40 overflow-auto rounded border border-slate-200 bg-white p-2 font-mono whitespace-pre-wrap"
+                    >{{ s.responsePreview }}</pre>
+                }
+              </div>
+            </details>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+}

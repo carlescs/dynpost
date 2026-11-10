@@ -451,6 +451,14 @@ visual form or as YAML text; the form keeps comments and unknown keys); results
 are saved locally under `.missive/runs/` and never committed. Runs use the
 selected environment and send no cookies.
 
+The visual form lists the requests as steps you can drag into order, sums up the
+load (users × iterations × requests) and sketches the users over time with the
+ramp-up. Next to it, the results dashboard follows the run live: headline
+numbers, requests per second and average latency over time (hover a second for
+its numbers), each threshold with its verdict, the latency spread of every
+request, status codes, error reasons, the failed and slowest requests (expand
+one for its data row and response) and the earlier runs of the plan.
+
 ```yaml
 name: Checkout smoke
 requests:

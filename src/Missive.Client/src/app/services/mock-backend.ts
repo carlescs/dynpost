@@ -919,17 +919,18 @@ export class MockBackend {
     const seconds = Math.floor(elapsed / 1000);
     const samples = Math.floor((elapsed / 1000) * 40);
     const errors = Math.floor(samples * 0.02);
-    const stats = (scale: number): RunStatsDto => ({
+    /** `scale` is the share of the samples, `slow` stretches the latencies. */
+    const stats = (scale: number, slow = 1): RunStatsDto => ({
       samples: Math.floor(samples * scale),
       errors: Math.floor(errors * scale),
       errorPercent: samples ? 2 : 0,
-      min: 12,
-      average: 85,
-      median: 70,
-      p90: 160,
-      p95: 210,
-      p99: 380,
-      max: 450,
+      min: 12 * slow,
+      average: 85 * slow,
+      median: 70 * slow,
+      p90: 160 * slow,
+      p95: 210 * slow,
+      p99: 380 * slow,
+      max: 450 * slow,
       throughput: 40 * scale,
       bytesSent: samples * 200 * scale,
       bytesReceived: samples * 1500 * scale,
@@ -952,13 +953,13 @@ export class MockBackend {
       activeThreads: finished ? 0 : 10,
       total,
       requests: [
-        { request: 'users/get-user.yaml', stats: stats(0.5) },
+        { request: 'users/get-user.yaml', stats: stats(0.5, 0.6) },
         { request: 'users/create-user.yaml', stats: stats(0.5) },
       ],
       timeline: Array.from({ length: seconds + 1 }, (_, second) => ({
         second,
-        samples: 40,
-        errors: second % 3 === 0 ? 1 : 0,
+        samples: Math.min(40, 16 + second * 12),
+        errors: second % 3 === 2 ? 2 : 0,
         averageMs: 70 + ((second * 17) % 40),
       })),
       thresholds,
@@ -980,7 +981,23 @@ export class MockBackend {
             },
           ]
         : [],
-      slowestSamples: [],
+      slowestSamples: samples
+        ? [
+            {
+              request: 'users/get-user.yaml',
+              thread: 7,
+              iteration: 2,
+              atMs: 900,
+              latencyMs: 270,
+              status: 200,
+              error: null,
+              method: 'GET',
+              url: 'https://api.example.com/users/42',
+              dataRow: { userId: '42' },
+              responsePreview: '{"id":42,"name":"Ada"}',
+            },
+          ]
+        : [],
       message: null,
     };
   }
