@@ -63,6 +63,19 @@ public sealed class FileSystemRunPlanStore : IRunPlanStore
         }
     }
 
+    public Result<Unit> Delete(string root, WorkspacePath path)
+    {
+        try
+        {
+            File.Delete(FullPath(root, path));
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not delete '{path}': {ex.Message}");
+        }
+    }
+
     private static void Collect(string root, WorkspacePath folder, List<WorkspacePath> plans)
     {
         var directory = new DirectoryInfo(FullPath(root, folder));

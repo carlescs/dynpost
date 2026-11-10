@@ -19,6 +19,9 @@ public interface IRunPlanStore
 
     /// <summary>Renames a plan file; fails rather than overwrite an existing file.</summary>
     Result<Unit> Move(string root, WorkspacePath from, WorkspacePath to);
+
+    /// <summary>Deletes a plan file.</summary>
+    Result<Unit> Delete(string root, WorkspacePath path);
 }
 
 /// <summary>The file format of a run plan.</summary>
@@ -49,4 +52,7 @@ public interface IRunStore
 
     /// <summary>Points the saved runs of the plan at <paramref name="from"/> to its new path, so its history follows a rename.</summary>
     Task<Result<Unit>> MovePlanAsync(string root, string from, string to, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the saved runs of the plan at <paramref name="planPath"/>.</summary>
+    Task<Result<Unit>> DeletePlanAsync(string root, string planPath, CancellationToken cancellationToken = default);
 }

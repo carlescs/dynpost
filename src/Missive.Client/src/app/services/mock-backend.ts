@@ -872,6 +872,13 @@ export class MockBackend {
         this.runPlans.set(savedPath, yaml);
         return ok({ ...document(yaml), path: savedPath });
       }
+      case 'runPlan.delete': {
+        if (!this.runPlans.delete(path)) {
+          return fail(ERROR_CODES.notFound, 'The run plan does not exist.');
+        }
+        for (const [runId, run] of this.runs) if (run.path === path) this.runs.delete(runId);
+        return ok(null);
+      }
       case 'run.start': {
         const yaml = this.runPlans.get(path);
         if (yaml === undefined) return fail(ERROR_CODES.notFound, 'The run plan does not exist.');

@@ -190,4 +190,33 @@ public sealed class RunInfrastructureTests : IDisposable
         Assert.Equal("run-1", Assert.Single((await store.ListAsync(_root, "new.run.yaml")).Value).RunId);
         Assert.Single((await store.ListAsync(_root, "other.run.yaml")).Value);
     }
+
+    [Fact]
+    public async Task PlanStore_DeletesPlans()
+    {
+        var store = new FileSystemRunPlanStore();
+        var path = WorkspacePath.Parse("a.run.yaml");
+        await store.WriteAsync(_root, path, "name: a\n");
+
+        Assert.True(store.Delete(_root, path).IsSuccess);
+        Assert.False(store.Exists(_root, path));
+    }
+
+    [Fact]
+    public async Task RunStore_DeletesTheHistoryOfAPlan()
+    {
+        var store = new JsonRunStore();
+        var stats = new StatsDto(3, 1, 33.33, 1, 2, 2, 3, 3, 3, 3, 1.5, 0, 10, new Dictionary<string, long>(), new Dictionary<string, long>());
+        RunResultDto Run(string id, string plan) =>
+            new(id, plan, "P", "completed", DateTimeOffset.UnixEpoch, 2000, 2, 0, stats, [], [], [], true, [], [], null);
+        Assert.True((await store.DeletePlanAsync(_root, "gone.run.yaml")).IsSuccess);
+        await store.SaveAsync(_root, Run("run-1", "gone.run.yaml"));
+        await store.SaveAsync(_root, Run("run-2", "other.run.yaml"));
+
+        Assert.True((await store.DeletePlanAsync(_root, "gone.run.yaml")).IsSuccess);
+
+        Assert.Empty((await store.ListAsync(_root, "gone.run.yaml")).Value);
+        Assert.False((await store.GetAsync(_root, "run-1")).IsSuccess);
+        Assert.Single((await store.ListAsync(_root, "other.run.yaml")).Value);
+    }
 }

@@ -33,11 +33,13 @@
 } @else {
   <ul class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm" aria-label="Run plans">
     @for (plan of store.plans(); track plan.path) {
-      <li>
+      <li
+        class="group flex items-center hover:bg-slate-100"
+        [class.bg-slate-100]="store.draft()?.path === plan.path && store.showing()"
+      >
         <button
           type="button"
-          class="flex w-full min-w-0 flex-col px-3 py-1 text-left hover:bg-slate-100"
-          [class.bg-slate-100]="store.draft()?.path === plan.path && store.showing()"
+          class="flex min-w-0 flex-1 flex-col py-1 pl-3 text-left"
           [title]="plan.error ?? plan.path"
           (click)="store.open(plan.path)"
         >
@@ -48,6 +50,15 @@
             {{ plan.name ?? plan.path }}
           </span>
           <span class="truncate text-xs text-slate-400">{{ plan.path }}</span>
+        </button>
+        <button
+          type="button"
+          class="mr-2 flex size-6 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-rose-700 focus:opacity-100"
+          title="Delete run plan"
+          [attr.aria-label]="'Delete run plan ' + (plan.name ?? plan.path)"
+          (click)="store.delete(plan.path)"
+        >
+          <fa-icon [icon]="faTrash" />
         </button>
       </li>
     }

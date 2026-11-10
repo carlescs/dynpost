@@ -576,6 +576,8 @@ export interface BridgeMessages {
    * still named after the old name; the result has the path it was saved to.
    */
   'runPlan.save': { payload: { path: string; yaml: string }; result: RunPlanDocumentDto };
+  /** Deletes a run plan file and its saved runs; a plan that is being run can't be deleted. */
+  'runPlan.delete': { payload: { path: string }; result: null };
   /**
    * Starts a load run in the background. Runs of more than 200 threads fail with
    * `confirmation_required` until `confirmLarge` is set.

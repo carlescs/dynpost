@@ -122,6 +122,32 @@ export class RunStore {
     }
   }
 
+  /** Deletes a plan file and its saved runs after asking; closes it if it is open. */
+  async delete(path: string): Promise<void> {
+    const open = this.draft()?.path === path;
+    if (open && this.running()) {
+      this.error.set('Stop the running plan before deleting it.');
+      return;
+    }
+    const name = this.plans().find((plan) => plan.path === path)?.name ?? path;
+    if (!confirm(`Delete the run plan '${name}' (${path}) and its saved runs?`)) return;
+    try {
+      await this.bridge.send('runPlan.delete', { path });
+      if (this.draft()?.path === path) {
+        this.stopPolling();
+        this.run.set(null);
+        this.history.set([]);
+        this.confirmation.set(null);
+        this.showing.set(false);
+        this.draft.set(null);
+      }
+      this.error.set(null);
+    } catch (error) {
+      this.report(error);
+    }
+    await this.refresh();
+  }
+
   edit(yaml: string): void {
     this.draft.update((draft) => (draft ? { ...draft, yaml } : draft));
   }

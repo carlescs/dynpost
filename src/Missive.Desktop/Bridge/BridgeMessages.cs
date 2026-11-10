@@ -162,6 +162,9 @@ internal static class BridgeMessageTypes
     /// <summary>Saves the text of a run plan, creating the file if needed. Payload: <see cref="SaveRunPlanPayload"/>. Result: plan document.</summary>
     public const string RunPlanSave = "runPlan.save";
 
+    /// <summary>Deletes a run plan file and its saved runs. Payload: <see cref="RunPlanPathPayload"/>. Result: none.</summary>
+    public const string RunPlanDelete = "runPlan.delete";
+
     /// <summary>
     /// Starts a load run in the background. Payload: <see cref="StartRunPayload"/>. Result: run id.
     /// Fails with <c>confirmation_required</c> for very large runs until <c>confirmLarge</c> is set.

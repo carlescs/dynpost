@@ -140,6 +140,8 @@ internal static class BridgeHandlers
                 (p, ct) => Use<OpenRunPlan>().ExecuteAsync(p.Path, ct))
             .Register<SaveRunPlanPayload, RunPlanDocumentDto>(BridgeMessageTypes.RunPlanSave,
                 (p, ct) => Use<SaveRunPlan>().ExecuteAsync(p.Path, p.Yaml, ct))
+            .Register<RunPlanPathPayload, Unit?>(BridgeMessageTypes.RunPlanDelete,
+                async (p, ct) => NoValue(await Use<DeleteRunPlan>().ExecuteAsync(p.Path, ct)))
             .Register<StartRunPayload, StartedRunDto>(BridgeMessageTypes.RunStart,
                 (p, ct) => Use<StartRun>().ExecuteAsync(p.Path, p.ConfirmLarge, ct))
             .Register<RunIdPayload, Unit?>(BridgeMessageTypes.RunCancel,
