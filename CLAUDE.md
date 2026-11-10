@@ -76,7 +76,9 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   dialogs (`Desktop/Bridge/IFileDialogs.cs`).
 - Sending: `Infrastructure/Http/HttpClientSender.cs` sends through one shared,
   pooled `SocketsHttpHandler` so connections are reused (a handler per send
-  exhausts ephemeral ports in load runs); its connect callback and plaintext
+  exhausts ephemeral ports in load runs); idle pooled connections close after
+  15 seconds, and a send that fails on a reused connection the server already
+  dropped (reset or closed before any response) is sent again; its connect callback and plaintext
   stream filter time the DNS, connect and TLS phases of each new connection for
   the send that opened it (passed in the request's `Options`); it follows redirects and keeps cookies itself
   (the handler's `AllowAutoRedirect` and `UseCookies` stay off) so every hop

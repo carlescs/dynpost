@@ -13,6 +13,7 @@ internal sealed class ConnectionTimings
     private TimeSpan? _connect;
     private TimeSpan? _tls;
     private long _connectedAt;
+    private int _opened;
 
     public TimeSpan? Dns
     {
@@ -38,6 +39,21 @@ internal sealed class ConnectionTimings
             {
                 return (_dns ?? TimeSpan.Zero) + (_connect ?? TimeSpan.Zero) + (_tls ?? TimeSpan.Zero);
             }
+        }
+    }
+
+    /// <summary>How many connections have been opened for the send so far, including failed attempts.</summary>
+    public int Opened
+    {
+        get { lock (_lock) { return _opened; } }
+    }
+
+    /// <summary>Records that a new connection is being opened.</summary>
+    public void Opening()
+    {
+        lock (_lock)
+        {
+            _opened++;
         }
     }
 

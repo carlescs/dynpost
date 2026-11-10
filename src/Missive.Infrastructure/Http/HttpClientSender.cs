@@ -35,6 +35,19 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     /// <summary>How long a pooled connection is used before it's replaced, so DNS changes are picked up.</summary>
     private static readonly TimeSpan PooledConnectionLifetime = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// How long a pooled connection may sit idle before it's closed. Kept short: servers, proxies
+    /// and firewalls drop idle connections, and a request sent over one that is already gone fails
+    /// with a reset ("An existing connection was forcibly closed by the remote host").
+    /// </summary>
+    private static readonly TimeSpan PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// How many times a request that failed on a reused connection is sent again. Each failure
+    /// drops that connection from the pool, so a few retries also get past several stale ones.
+    /// </summary>
+    public const int MaxStaleConnectionRetries = 3;
+
     /// <summary>Carries a send's timings to the handler callbacks of the connection it opens.</summary>
     private static readonly HttpRequestOptionsKey<ConnectionTimings> TimingsKey = new("Missive.ConnectionTimings");
 
@@ -73,6 +86,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         UseCookies = false,
         ConnectTimeout = TimeSpan.FromSeconds(30),
         PooledConnectionLifetime = PooledConnectionLifetime,
+        PooledConnectionIdleTimeout = PooledConnectionIdleTimeout,
         ConnectCallback = (context, cancellationToken) =>
             ConnectAsync(context.DnsEndPoint, TimingsOf(context.InitialRequestMessage), cancellationToken),
         // Called once the connection is ready to carry requests: after the TLS handshake for https.
@@ -105,6 +119,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         var redirects = new List<RedirectHop>();
         var wait = TimeSpan.Zero;
         long bytesSent = 0;
+        var staleRetries = 0;
         var stopwatch = Stopwatch.StartNew();
         try
         {
@@ -120,7 +135,23 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                 bytesSent += message.Content?.Headers.ContentLength ?? 0;
                 var hopStart = stopwatch.Elapsed;
                 var setupBefore = timings.Setup;
-                var response = await _client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+                var openedBefore = timings.Opened;
+                HttpResponseMessage response;
+                try
+                {
+                    response = await _client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+                }
+                catch (HttpRequestException ex) when (staleRetries < MaxStaleConnectionRetries
+                    && timings.Opened == openedBefore
+                    && IsStaleConnectionFailure(ex))
+                {
+                    // The request went out on a pooled connection the other end had already closed:
+                    // nothing was answered, so send it again (as browsers do).
+                    staleRetries++;
+                    bytesSent -= message.Content?.Headers.ContentLength ?? 0;
+                    continue;
+                }
+
                 wait += stopwatch.Elapsed - hopStart - (timings.Setup - setupBefore);
 
                 var responseHeaders = response.Headers
@@ -185,6 +216,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     /// <summary>Resolves the host and opens a TCP connection, timing each step.</summary>
     private static async ValueTask<Stream> ConnectAsync(DnsEndPoint endPoint, ConnectionTimings? timings, CancellationToken cancellationToken)
     {
+        timings?.Opening();
         var host = endPoint.Host.Trim('[', ']');
         var started = Stopwatch.GetTimestamp();
         var addresses = IPAddress.TryParse(host, out var address)
@@ -513,6 +545,15 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
 
         return (buffer.ToArray(), false);
     }
+
+    /// <summary>
+    /// Whether a send that didn't open a connection of its own failed the way a request sent over a
+    /// connection closed at the other end does: reset, or closed before any response arrived.
+    /// <see cref="SocketsHttpHandler"/> doesn't retry these itself.
+    /// </summary>
+    private static bool IsStaleConnectionFailure(HttpRequestException ex) =>
+        ex.HttpRequestError is HttpRequestError.ResponseEnded
+        || (ex.HttpRequestError is HttpRequestError.Unknown && ex.InnerException is IOException);
 
     /// <summary>The most specific message of the failure, e.g. "Connection refused".</summary>
     private static string Describe(HttpRequestException ex)
