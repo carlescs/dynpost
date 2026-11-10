@@ -21,6 +21,7 @@ describe('RunStore', () => {
       'run.start': () => ({ runId: 'r1' }),
       'run.progress': () => result(),
       'run.list': () => [],
+      'runPlan.delete': () => null,
     };
     send = vi.fn(async (type: string, payload: unknown) => {
       const handler = handlers[type];
@@ -141,5 +142,42 @@ describe('RunStore', () => {
     expect(store.running()).toBe(true);
     expect(send).not.toHaveBeenCalledWith('runPlan.open', { path: 'b.run.yaml' });
     expect(send).not.toHaveBeenCalledWith('run.progress', { runId: 'old-run' });
+  });
+
+  it('deletes a plan after confirming and closes it when open', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await store.open('a.run.yaml');
+    handlers['runPlan.list'] = () => [];
+
+    await store.delete('a.run.yaml');
+
+    expect(confirm).toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith('runPlan.delete', { path: 'a.run.yaml' });
+    expect(store.draft()).toBeNull();
+    expect(store.showing()).toBe(false);
+    expect(store.plans()).toEqual([]);
+    confirm.mockRestore();
+  });
+
+  it('keeps the plan when the deletion is not confirmed', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    await store.delete('a.run.yaml');
+
+    expect(send).not.toHaveBeenCalledWith('runPlan.delete', expect.anything());
+    confirm.mockRestore();
+  });
+
+  it('does not delete the open plan while it is running', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await store.open('a.run.yaml');
+    store.run.set(result({ state: 'running' }));
+
+    await store.delete('a.run.yaml');
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalledWith('runPlan.delete', expect.anything());
+    expect(store.error()).toContain('Stop the running plan');
+    confirm.mockRestore();
   });
 });

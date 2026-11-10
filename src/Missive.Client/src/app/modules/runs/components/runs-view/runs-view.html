@@ -56,6 +56,15 @@
           [name]="plan.name ?? plan.path"
           (toggled)="store.toggleLocalOnly(plan)"
         />
+        <button
+          type="button"
+          class="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-rose-700 focus:opacity-100"
+          title="Delete run plan"
+          [attr.aria-label]="'Delete run plan ' + (plan.name ?? plan.path)"
+          (click)="store.delete(plan.path)"
+        >
+          <fa-icon [icon]="faTrash" />
+        </button>
       </li>
     }
   </ul>

@@ -6,6 +6,7 @@ import {
   faPlay,
   faSliders,
   faStop,
+  faTrash,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
@@ -26,6 +27,7 @@ export class RunEditor {
   protected readonly faPlay = faPlay;
   protected readonly faStop = faStop;
   protected readonly faXmark = faXmark;
+  protected readonly faTrash = faTrash;
   protected readonly faSliders = faSliders;
   protected readonly faCode = faCode;
   protected readonly faChartColumn = faChartColumn;

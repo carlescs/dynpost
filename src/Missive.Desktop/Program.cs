@@ -156,6 +156,7 @@ internal static class Program
             .AddTransient<ListRunPlans>()
             .AddTransient<OpenRunPlan>()
             .AddTransient<SaveRunPlan>()
+            .AddTransient<DeleteRunPlan>()
             .AddTransient<StartRun>()
             .AddTransient<CancelRun>()
             .AddTransient<GetRunProgress>()

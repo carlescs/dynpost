@@ -31,6 +31,16 @@
     }
     <button
       type="button"
+      class="flex size-7 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-rose-700 disabled:opacity-50"
+      title="Delete run plan"
+      aria-label="Delete run plan"
+      [disabled]="store.running()"
+      (click)="store.delete(draft.path)"
+    >
+      <fa-icon [icon]="faTrash" />
+    </button>
+    <button
+      type="button"
       class="flex size-7 items-center justify-center rounded text-slate-500 hover:bg-slate-200"
       title="Close"
       aria-label="Close"

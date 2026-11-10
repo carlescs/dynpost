@@ -179,6 +179,50 @@ public sealed class SaveRunPlan(
     }
 }
 
+/// <summary>
+/// Deletes a run plan file and its saved runs (local history that would otherwise be orphaned).
+/// A plan that is being run can't be deleted.
+/// </summary>
+public sealed class DeleteRunPlan(
+    IRunPlanStore store,
+    IRunStore runs,
+    RunRegistry registry,
+    ILocalOnlyFiles localFiles,
+    CurrentWorkspace current)
+{
+    public async Task<Result<Unit>> ExecuteAsync(string path, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        var parsed = RunPlanPaths.Parse(path);
+        if (!root.IsSuccess || !parsed.IsSuccess)
+        {
+            return root.IsSuccess ? parsed.Error! : root.Error!;
+        }
+
+        if (!store.Exists(root.Value, parsed.Value))
+        {
+            return new Error(ErrorCodes.NotFound, $"The run plan '{path}' does not exist.");
+        }
+
+        if (registry.IsBusy(root.Value, parsed.Value.Value))
+        {
+            return new Error(ErrorCodes.InvalidRequest, "Stop the run of this plan before deleting it.");
+        }
+
+        var deleted = store.Delete(root.Value, parsed.Value);
+        if (!deleted.IsSuccess)
+        {
+            return deleted.Error!;
+        }
+
+        // Best effort: a leftover .gitignore line for a deleted file does no harm, and run history
+        // is local and only a convenience, so neither failure undoes the delete.
+        localFiles.Remove(root.Value, parsed.Value);
+        await runs.DeletePlanAsync(root.Value, parsed.Value.Value, cancellationToken);
+        return Unit.Value;
+    }
+}
+
 internal static class RunPlanChecks
 {
     /// <summary>Why a parsed plan can't be run, or <c>null</c> when it can.</summary>

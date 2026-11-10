@@ -114,6 +114,33 @@ public sealed class JsonRunStore : IRunStore
         }
     }
 
+    public async Task<Result<Unit>> DeletePlanAsync(string root, string planPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var folder = FullPath(root, RunsFolder);
+            if (!Directory.Exists(folder))
+            {
+                return Unit.Value;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(folder, "*.json"))
+            {
+                var run = await ReadAsync(file, cancellationToken);
+                if (run is not null && run.PlanPath == planPath)
+                {
+                    File.Delete(file);
+                }
+            }
+
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not delete the runs of '{planPath}': {ex.Message}");
+        }
+    }
+
     private static WorkspacePath RunsFolder { get; } = WorkspacePath.Root.Combine(WorkspaceLayout.LocalFolder).Combine("runs");
 
     private static string FilePath(string root, string runId) => FullPath(root, RunsFolder.Combine(runId + ".json"));

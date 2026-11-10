@@ -454,7 +454,9 @@ are saved locally under `.missive/runs/` and never committed. Runs use the
 selected environment and send no cookies. Like requests, a plan whose file is
 named after it (`checkout-smoke.run.yaml` for "Checkout smoke") is renamed
 along with it, and its earlier runs follow; files with hand-picked names keep
-them.
+them. Deleting a plan (the trash button next to it in the list or in its
+editor) removes its file and its saved runs, after asking; a plan can't be
+deleted while it is running.
 
 The visual form lists the requests as steps you can drag into order, sums up the
 load (users × iterations × requests) and sketches the users over time with the
