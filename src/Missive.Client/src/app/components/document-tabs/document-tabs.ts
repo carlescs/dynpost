@@ -77,8 +77,8 @@ export class DocumentTabs {
   }
 
   protected close(tab: Tab): void {
-    if (tab.kind === 'request') this.store.close(tab.doc.id);
-    else if (tab.kind === 'environment') this.environments.close(tab.key);
-    else this.runs.close(tab.key);
+    if (tab.kind === 'request') void this.store.close(tab.doc.id);
+    else if (tab.kind === 'environment') void this.environments.close(tab.key);
+    else void this.runs.close(tab.key);
   }
 }

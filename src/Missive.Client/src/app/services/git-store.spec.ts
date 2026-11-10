@@ -4,6 +4,7 @@ import { GitBranch, GitStatus, WorkspaceDto } from '../models/messages';
 import { Bridge, BridgeError } from './bridge';
 import { GitStore } from './git-store';
 import { WorkspaceStore } from './workspace-store';
+import { Dialogs } from './dialogs';
 
 const workspace = { name: 'api', root: '/home/me/api', nodes: [] } as unknown as WorkspaceDto;
 
@@ -29,6 +30,8 @@ const main: GitBranch = {
 const feature: GitBranch = { ...main, name: 'feature', current: false, upstream: null };
 
 describe('GitStore', () => {
+  let dialogs: { confirm: Mock };
+  beforeEach(() => (dialogs = { confirm: vi.fn().mockResolvedValue(true) }));
   let send: Mock;
   let handlers: Record<string, (payload: any) => unknown>;
   let store: GitStore;
@@ -48,7 +51,10 @@ describe('GitStore', () => {
       return handler(payload);
     });
     TestBed.configureTestingModule({
-      providers: [{ provide: Bridge, useValue: { isDesktop: true, send } }],
+      providers: [
+        { provide: Bridge, useValue: { isDesktop: true, send } },
+        { provide: Dialogs, useValue: dialogs },
+      ],
     });
     store = TestBed.inject(GitStore);
     workspaceStore = TestBed.inject(WorkspaceStore);
@@ -198,14 +204,13 @@ describe('GitStore', () => {
     workspaceStore.documents.set([
       { id: 'a.yaml', key: 'a', path: 'a.yaml', dirty: true, saving: false } as never,
     ]);
-    const confirm = vi.fn().mockReturnValue(false);
-    vi.stubGlobal('confirm', confirm);
+    const confirm = vi.fn().mockResolvedValue(false);
+    dialogs.confirm = confirm;
 
     expect(await store.switchBranch('feature')).toBe(false);
 
     expect(confirm.mock.calls[0][0]).toContain('1 open tab has unsaved changes');
     expect(send).not.toHaveBeenCalledWith('git.branch.switch', expect.anything());
-    vi.unstubAllGlobals();
   });
 
   it('reports a switch refused over uncommitted changes', async () => {
@@ -263,15 +268,14 @@ describe('GitStore', () => {
     workspaceStore.documents.set([
       { id: 'a.yaml', key: 'a', path: 'a.yaml', dirty: true, saving: false } as never,
     ]);
-    const confirm = vi.fn().mockReturnValue(false);
-    vi.stubGlobal('confirm', confirm);
+    const confirm = vi.fn().mockResolvedValue(false);
+    dialogs.confirm = confirm;
 
     expect(await store.mergeBranch(feature)).toBe(false);
 
     expect(confirm.mock.calls[0][0]).toContain('Merge feature into main?');
     expect(confirm.mock.calls[0][0]).toContain('overwrite the merged versions');
     expect(send).not.toHaveBeenCalledWith('git.branch.merge', expect.anything());
-    vi.unstubAllGlobals();
   });
 
   it('asks for an identity when a merge commit has none', async () => {

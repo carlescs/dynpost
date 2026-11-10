@@ -4,11 +4,14 @@ import { ERROR_CODES, RunResultDto } from '../models/messages';
 import { Bridge, BridgeError } from './bridge';
 import { RunStore, isRunPlanDirty } from './run-store';
 import { WorkspaceStore } from './workspace-store';
+import { Dialogs } from './dialogs';
 
 const result = (patch: Partial<RunResultDto> = {}): RunResultDto =>
   ({ runId: 'r1', state: 'completed', ...patch }) as RunResultDto;
 
 describe('RunStore', () => {
+  let dialogs: { confirm: Mock };
+  beforeEach(() => (dialogs = { confirm: vi.fn().mockResolvedValue(true) }));
   let send: Mock;
   let handlers: Record<string, (payload: any) => unknown>;
   let store: RunStore;
@@ -30,7 +33,10 @@ describe('RunStore', () => {
       return handler(payload);
     });
     TestBed.configureTestingModule({
-      providers: [{ provide: Bridge, useValue: { isDesktop: true, send } }],
+      providers: [
+        { provide: Bridge, useValue: { isDesktop: true, send } },
+        { provide: Dialogs, useValue: dialogs },
+      ],
     });
     store = TestBed.inject(RunStore);
     workspace = TestBed.inject(WorkspaceStore);
@@ -182,18 +188,17 @@ describe('RunStore', () => {
   });
 
   it('closes a tab, asking first when it has unsaved changes', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(false));
     await store.open('a.run.yaml');
     store.edit(key(), 'name: B\n');
 
-    store.close(key());
+    await store.close(key());
     expect(store.drafts()).toHaveLength(1);
 
-    confirm.mockReturnValue(true);
-    store.close(key());
+    confirm.mockResolvedValue(true);
+    await store.close(key());
     expect(store.drafts()).toEqual([]);
     expect(workspace.tabs()).toEqual([]);
-    confirm.mockRestore();
   });
 
   it('keeps a running plan open and its history shut', async () => {
@@ -202,7 +207,7 @@ describe('RunStore', () => {
       drafts.map((d) => ({ ...d, run: result({ state: 'running' }) })),
     );
 
-    store.close(key());
+    await store.close(key());
     await store.show(key(), 'old-run');
 
     expect(store.drafts()).toHaveLength(1);
@@ -212,7 +217,7 @@ describe('RunStore', () => {
   });
 
   it('deletes a plan after confirming and closes its tab', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(true));
     await store.open('a.run.yaml');
     handlers['runPlan.list'] = () => [];
 
@@ -223,20 +228,18 @@ describe('RunStore', () => {
     expect(store.drafts()).toEqual([]);
     expect(workspace.tabs()).toEqual([]);
     expect(store.plans()).toEqual([]);
-    confirm.mockRestore();
   });
 
   it('keeps the plan when the deletion is not confirmed', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(false));
 
     await store.delete('a.run.yaml');
 
     expect(send).not.toHaveBeenCalledWith('runPlan.delete', expect.anything());
-    confirm.mockRestore();
   });
 
   it('does not delete the open plan while it is running', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(true));
     await store.open('a.run.yaml');
     store.drafts.update((drafts) =>
       drafts.map((d) => ({ ...d, run: result({ state: 'running' }) })),
@@ -247,6 +250,5 @@ describe('RunStore', () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalledWith('runPlan.delete', expect.anything());
     expect(store.draft()?.failure).toContain('Stop the running plan');
-    confirm.mockRestore();
   });
 });

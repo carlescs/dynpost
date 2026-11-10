@@ -3,6 +3,7 @@ import { Mock } from 'vitest';
 import { RequestDto, WorkspaceDto } from '../models/messages';
 import { Bridge, BridgeError } from './bridge';
 import { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, WorkspaceStore } from './workspace-store';
+import { Dialogs } from './dialogs';
 
 const workspace: WorkspaceDto = {
   name: 'api',
@@ -28,18 +29,21 @@ const request: RequestDto = {
 };
 
 describe('WorkspaceStore', () => {
+  let dialogs: { confirm: Mock };
+  beforeEach(() => (dialogs = { confirm: vi.fn().mockResolvedValue(true) }));
   let send: Mock;
   let store: WorkspaceStore;
 
   beforeEach(() => {
     send = vi.fn();
     TestBed.configureTestingModule({
-      providers: [{ provide: Bridge, useValue: { isDesktop: true, send } }],
+      providers: [
+        { provide: Bridge, useValue: { isDesktop: true, send } },
+        { provide: Dialogs, useValue: dialogs },
+      ],
     });
     store = TestBed.inject(WorkspaceStore);
   });
-
-  afterEach(() => vi.unstubAllGlobals());
 
   /** Answers bridge messages by type. */
   function respond(handlers: Record<string, (payload: any) => unknown>): void {
@@ -200,18 +204,18 @@ describe('WorkspaceStore', () => {
     expect(store.error()).toContain('Gone');
   });
 
-  it('asks before closing a document with unsaved changes', () => {
-    const confirm = vi.fn().mockReturnValue(false);
-    vi.stubGlobal('confirm', confirm);
+  it('asks before closing a document with unsaved changes', async () => {
+    const confirm = vi.fn().mockResolvedValue(false);
+    dialogs.confirm = confirm;
     store.newRequest();
     const id = store.activeId()!;
 
-    store.close(id);
+    await store.close(id);
     expect(confirm).toHaveBeenCalledOnce();
     expect(store.documents()).toHaveLength(1);
 
-    confirm.mockReturnValue(true);
-    store.close(id);
+    confirm.mockResolvedValue(true);
+    await store.close(id);
     expect(store.documents()).toHaveLength(0);
     expect(store.activeTab()).toBeNull();
   });
@@ -337,8 +341,8 @@ describe('WorkspaceStore', () => {
   });
 
   it('asks before keeping a request local-only, then re-reads the tree', async () => {
-    const confirm = vi.fn().mockReturnValue(false);
-    vi.stubGlobal('confirm', confirm);
+    const confirm = vi.fn().mockResolvedValue(false);
+    dialogs.confirm = confirm;
     respond({
       'sharing.set': (payload) => payload,
       'workspace.tree': () => workspace,
@@ -349,7 +353,7 @@ describe('WorkspaceStore', () => {
     expect(confirm).toHaveBeenCalledOnce();
     expect(send).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
+    confirm.mockResolvedValue(true);
     await store.setRequestLocalOnly(node, true);
     expect(send).toHaveBeenCalledWith('sharing.set', { path: 'users/get.yaml', localOnly: true });
     expect(store.sharingChanged()).toBe(1);
@@ -357,7 +361,7 @@ describe('WorkspaceStore', () => {
 
   it('shares a file again without asking, and reports failures', async () => {
     const confirm = vi.fn();
-    vi.stubGlobal('confirm', confirm);
+    dialogs.confirm = confirm;
     respond({ 'sharing.set': () => Promise.reject(new BridgeError('io_error', 'Read-only')) });
 
     expect(await store.setLocalOnly('environments/dev.yaml', 'Dev', false)).toBe(false);

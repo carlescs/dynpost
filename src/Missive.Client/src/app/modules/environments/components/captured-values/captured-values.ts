@@ -4,6 +4,7 @@ import { faFileImport, faRotate, faTrash } from '@fortawesome/free-solid-svg-ico
 import { CapturedValueDto } from '../../../../models/messages';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
+import { Dialogs } from '../../../../services/dialogs';
 
 /** Lists the values requests captured for an environment and lets the user forget them. */
 @Component({
@@ -13,6 +14,7 @@ import { WorkspaceStore } from '../../../../services/workspace-store';
 })
 export class CapturedValues {
   private readonly store = inject(EnvironmentStore);
+  private readonly dialogs = inject(Dialogs);
   private readonly workspace = inject(WorkspaceStore);
 
   /** The environment's id (its file name). */
@@ -48,7 +50,12 @@ export class CapturedValues {
 
   protected async clear(): Promise<void> {
     const id = this.environmentId();
-    if (!confirm('Forget every value captured for this environment?')) return;
+    const ok = await this.dialogs.confirm('Forget every value captured for this environment?', {
+      title: 'Clear captured values?',
+      confirmLabel: 'Clear',
+      danger: true,
+    });
+    if (!ok) return;
     const left = await this.store.clearCaptured(id);
     if (left && id === this.environmentId()) this.values.set(left);
   }

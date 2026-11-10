@@ -2,6 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { Bridge, BridgeError } from './bridge';
 import { ERROR_CODES, RunPlanFileDto, RunResultDto, RunSummaryDto } from '../models/messages';
 import { WorkspaceStore } from './workspace-store';
+import { DISCARD, Dialogs } from './dialogs';
 
 /** A run plan open in an editor tab, with the run it shows. */
 export interface RunPlanDraft {
@@ -51,6 +52,7 @@ const NEW_PLAN = (name: string) =>
 @Injectable({ providedIn: 'root' })
 export class RunStore {
   private readonly bridge = inject(Bridge);
+  private readonly dialogs = inject(Dialogs);
   private readonly workspace = inject(WorkspaceStore);
   private readonly root = computed(() => this.workspace.workspace()?.root ?? null);
 
@@ -153,8 +155,11 @@ export class RunStore {
       this.report('Stop the running plan before deleting it.', open.key);
       return;
     }
-    if (!confirm(`Delete the run plan '${this.nameOf(path)}' (${path}) and its saved runs?`))
-      return;
+    const ok = await this.dialogs.confirm(
+      `Delete the run plan '${this.nameOf(path)}' (${path}) and its saved runs?`,
+      { title: 'Delete run plan?', confirmLabel: 'Delete', danger: true },
+    );
+    if (!ok) return;
     try {
       await this.bridge.send('runPlan.delete', { path });
       const draft = this.drafts().find((d) => d.path === path);
@@ -247,7 +252,7 @@ export class RunStore {
   }
 
   /** Closes a plan's tab, after asking if it has unsaved changes; a running plan stays open. */
-  close(key: string): void {
+  async close(key: string): Promise<void> {
     const draft = this.find(key);
     if (!draft) return;
     if (isRunPlanRunning(draft)) {
@@ -257,7 +262,10 @@ export class RunStore {
     }
     if (
       isRunPlanDirty(draft) &&
-      !confirm(`Discard unsaved changes to the run plan "${this.nameOf(draft.path)}"?`)
+      !(await this.dialogs.confirm(
+        `Discard unsaved changes to the run plan "${this.nameOf(draft.path)}"?`,
+        DISCARD,
+      ))
     ) {
       return;
     }
