@@ -691,7 +691,7 @@ the file again before committing simply undoes this; after committing, the file
 shows up as a new file to commit.
 
 Renaming, moving, duplicating or deleting a local-only request (or the folder
-that holds it), or renaming or deleting a local-only environment, updates its
+that holds it), or renaming or deleting a local-only environment, or renaming a local-only run plan, updates its
 `.gitignore` line, so it never becomes shared by accident; copies of local-only
 requests are local-only too. Only lines of this exact form count: a file that a
 broader pattern (such as `*.local.yaml`) ignores is not shown as local-only.

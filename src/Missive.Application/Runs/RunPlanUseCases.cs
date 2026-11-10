@@ -80,7 +80,13 @@ public sealed class OpenRunPlan(IRunPlanStore store, IRunPlanFormat format, Curr
 /// new name (and its saved runs follow it); files with hand-picked names keep them, and so does a
 /// plan that is being run.
 /// </summary>
-public sealed class SaveRunPlan(IRunPlanStore store, IRunPlanFormat format, IRunStore runs, RunRegistry registry, CurrentWorkspace current)
+public sealed class SaveRunPlan(
+    IRunPlanStore store,
+    IRunPlanFormat format,
+    IRunStore runs,
+    RunRegistry registry,
+    ILocalOnlyFiles localFiles,
+    CurrentWorkspace current)
 {
     private const int MaxAttempts = 1000;
 
@@ -118,6 +124,14 @@ public sealed class SaveRunPlan(IRunPlanStore store, IRunPlanFormat format, IRun
             }
 
             savedPath = target;
+
+            // A local-only plan must stay out of git under its new file name.
+            var followed = localFiles.Move(root.Value, parsed.Value, target);
+            if (!followed.IsSuccess)
+            {
+                return followed.Error!;
+            }
+
             // Run history is local and only a convenience: a failure here doesn't undo the rename.
             await runs.MovePlanAsync(root.Value, parsed.Value.Value, target.Value, cancellationToken);
         }

@@ -1,5 +1,6 @@
 using Missive.Application.Common;
 using Missive.Application.Runs;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Runs;
 using Missive.Domain.Workspaces;
@@ -15,6 +16,7 @@ public class SaveRunPlanTests
     private readonly IRunPlanFormat _format = Substitute.For<IRunPlanFormat>();
     private readonly IRunStore _runs = Substitute.For<IRunStore>();
     private readonly RunRegistry _registry = new();
+    private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
     private readonly CurrentWorkspace _current = new();
 
     public SaveRunPlanTests()
@@ -34,7 +36,7 @@ public class SaveRunPlanTests
         new Dictionary<string, RunAssertion>(),
         RunThresholds.None);
 
-    private SaveRunPlan Create() => new(_store, _format, _runs, _registry, _current);
+    private SaveRunPlan Create() => new(_store, _format, _runs, _registry, _localFiles, _current);
 
     private void OnDisk(string path, string text)
     {
@@ -53,6 +55,7 @@ public class SaveRunPlanTests
         Assert.Equal("perf/checkout-smoke.run.yaml", saved.Value.Path);
         _store.Received().Move(Root, WorkspacePath.Parse("perf/plan-1.run.yaml"), WorkspacePath.Parse("perf/checkout-smoke.run.yaml"));
         await _runs.Received().MovePlanAsync(Root, "perf/plan-1.run.yaml", "perf/checkout-smoke.run.yaml", Arg.Any<CancellationToken>());
+        _localFiles.Received(1).Move(Root, WorkspacePath.Parse("perf/plan-1.run.yaml"), WorkspacePath.Parse("perf/checkout-smoke.run.yaml"));
     }
 
     [Fact]
