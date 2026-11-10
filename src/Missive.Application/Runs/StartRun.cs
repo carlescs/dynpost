@@ -18,6 +18,9 @@ public static class RunErrorCodes
     public const string ConfirmationRequired = "confirmation_required";
 
     public const string RunNotFound = "run_not_found";
+
+    /// <summary>The run didn't save the response asked for.</summary>
+    public const string ResponseNotFound = "response_not_found";
 }
 
 /// <summary>Keeps track of the runs of this session: the one(s) executing and the recent finished ones.</summary>
@@ -473,14 +476,25 @@ public sealed class StartRun(
 
         var data = response.Value;
         var assertions = run.Plan.AssertionsFor(path);
+        var contentType = data.Headers.FirstOrDefault(h => h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)).Value;
+        var (mediaType, charset) = ResponseBodyDecoder.ParseContentType(contentType);
         string? body = null;
         if (assertions.Any(a => a.BodyContains is not null || a.BodyNotContains is not null))
         {
-            var contentType = data.Headers.FirstOrDefault(h => h.Key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)).Value;
-            var (mediaType, charset) = ResponseBodyDecoder.ParseContentType(contentType);
             body = ResponseBodyDecoder.Decode(data.Body, mediaType, charset).Body;
         }
         var reason = FailureReason(assertions, data, body, latency);
+        // Only samples that are kept (in the log, or as failures) get a preview of their response.
+        var kept = reason is not null || run.LogHasRoom;
+        // A PDF's bytes make no sense as text; it can be opened from its saved file instead.
+        var pdf = mediaType == RunResponseFiles.PdfMediaType;
+        string? file = null;
+        if (kept && run.Plan.SaveResponses && data.Body.Length > 0)
+        {
+            var name = RunResponseFiles.Name(run.NextResponseNumber(), mediaType);
+            var saved = await runStore.SaveResponseAsync(run.Root, run.RunId, name, data.Body, CancellationToken.None);
+            file = saved.IsSuccess ? name : null;
+        }
         var sample = new SampleDto(
             path.Value,
             thread,
@@ -492,8 +506,10 @@ public sealed class StartRun(
             method,
             url,
             row,
-            reason is null && !run.LogHasRoom ? null : ActiveRun.Preview(data.Body),
-            bodyPath);
+            kept && !pdf ? ActiveRun.Preview(data.Body) : null,
+            bodyPath,
+            mediaType,
+            file);
         run.Add(path, sample, data.BytesSent > 0 ? data.BytesSent : sent, data.Body.LongLength);
     }
 

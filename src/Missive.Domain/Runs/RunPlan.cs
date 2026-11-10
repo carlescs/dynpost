@@ -92,6 +92,10 @@ public sealed record RunThresholds(
 /// <param name="Disabled">
 /// Request paths that stay in the list but are not sent; see <see cref="WithoutDisabledRequests"/>.
 /// </param>
+/// <param name="SaveResponses">
+/// Whether the whole body of each logged response is saved to a file, so it can be opened later
+/// (PDFs in the previewer).
+/// </param>
 public sealed record RunPlan(
     string Name,
     IReadOnlyList<WorkspacePath> Requests,
@@ -102,7 +106,8 @@ public sealed record RunPlan(
     RequestOrder Order = RequestOrder.Sequential,
     IReadOnlyDictionary<string, double>? Weights = null,
     IReadOnlyList<string>? Disabled = null,
-    IReadOnlyDictionary<string, RunBodySource>? Bodies = null)
+    IReadOnlyDictionary<string, RunBodySource>? Bodies = null,
+    bool SaveResponses = false)
 {
     public const string AllRequests = "*";
 

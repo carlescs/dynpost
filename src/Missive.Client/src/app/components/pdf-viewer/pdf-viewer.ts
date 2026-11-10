@@ -15,11 +15,13 @@ import {
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faCircleExclamation,
+  faDownLeftAndUpRightToCenter,
   faExpand,
   faLeftRight,
   faMagnifyingGlassMinus,
   faMagnifyingGlassPlus,
   faSpinner,
+  faUpRightAndDownLeftFromCenter,
 } from '@fortawesome/free-solid-svg-icons';
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist';
 import { loadPdfJs, pdfAssetUrls, type PdfJs } from './pdf-loader';
@@ -44,14 +46,20 @@ interface PageSlot {
 
 /**
  * Renders a PDF with pdf.js: one canvas per page, drawn when it scrolls into view, with a text
- * layer on top so text can be selected and copied. Fits the page width by default.
+ * layer on top so text can be selected and copied. Fits the page width by default. It can be
+ * maximized to fill the whole window (Escape restores it).
  */
 @Component({
   selector: 'app-pdf-viewer',
   imports: [FaIconComponent],
   // The pages are created imperatively, so their styles can't be encapsulated.
   encapsulation: ViewEncapsulation.None,
-  host: { class: 'flex min-h-0 flex-1 flex-col' },
+  host: {
+    // An opaque background, so that maximized it hides what is beneath.
+    class: 'flex min-h-0 flex-1 flex-col bg-white',
+    '[class.pdf-viewer-maximized]': 'maximized()',
+    '(document:keydown.escape)': 'maximized.set(false)',
+  },
   styleUrl: './pdf-viewer.scss',
   templateUrl: './pdf-viewer.html',
 })
@@ -60,6 +68,8 @@ export class PdfViewer {
   readonly data = input.required<Uint8Array<ArrayBuffer>>();
 
   protected readonly zoom = signal<Zoom>('width');
+  /** Whether the viewer fills the whole window instead of its place in the page. */
+  protected readonly maximized = signal(false);
   protected readonly document = signal<PDFDocumentProxy | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly pageCount = computed(() => this.document()?.numPages ?? 0);
@@ -73,6 +83,8 @@ export class PdfViewer {
   protected readonly faLeftRight = faLeftRight;
   protected readonly faExpand = faExpand;
   protected readonly faSpinner = faSpinner;
+  protected readonly faMaximize = faUpRightAndDownLeftFromCenter;
+  protected readonly faRestore = faDownLeftAndUpRightToCenter;
   protected readonly faCircleExclamation = faCircleExclamation;
 
   private readonly destroyRef = inject(DestroyRef);

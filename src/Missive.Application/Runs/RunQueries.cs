@@ -94,3 +94,24 @@ public sealed class ListRuns(IRunStore store, CurrentWorkspace current)
         return root.IsSuccess ? await store.ListAsync(root.Value, planPath, cancellationToken) : root.Error!;
     }
 }
+
+/// <summary>The whole body of a response a run saved (its plan has <c>saveResponses</c>).</summary>
+public sealed class GetRunResponse(IRunStore store, CurrentWorkspace current)
+{
+    public async Task<Result<RunResponseDto>> ExecuteAsync(string runId, string file, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        if (!RunResponseFiles.IsValidName(file))
+        {
+            return new Error(RunErrorCodes.ResponseNotFound, $"'{file}' is not a saved response.");
+        }
+
+        var body = await store.GetResponseAsync(root.Value, runId, file, cancellationToken);
+        return body.IsSuccess ? new RunResponseDto(Convert.ToBase64String(body.Value)) : body.Error!;
+    }
+}

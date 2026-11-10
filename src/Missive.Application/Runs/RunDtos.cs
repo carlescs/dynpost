@@ -34,6 +34,12 @@ public sealed record ThresholdDto(string Name, string Limit, string Actual, bool
 /// log keeps the first <see cref="ActiveRun.MaxLoggedSamples"/> of them all.
 /// </summary>
 /// <param name="BodyFile">The workspace path of the body folder file the request sent, if any.</param>
+/// <param name="ResponsePreview">The start of the response body as text; <c>null</c> for PDFs.</param>
+/// <param name="ContentType">The media type of the response, when it has one.</param>
+/// <param name="ResponseFile">
+/// The name of the file the whole response body was saved to, when the plan saves responses
+/// (<see cref="Domain.Runs.RunPlan.SaveResponses"/>); read it with <see cref="GetRunResponse"/>.
+/// </param>
 public sealed record SampleDto(
     string Request,
     int Thread,
@@ -46,7 +52,12 @@ public sealed record SampleDto(
     string? Url,
     IReadOnlyDictionary<string, string>? DataRow,
     string? ResponsePreview,
-    string? BodyFile = null);
+    string? BodyFile = null,
+    string? ContentType = null,
+    string? ResponseFile = null);
+
+/// <summary>A response body saved by a run, as base64.</summary>
+public sealed record RunResponseDto(string Body);
 
 /// <summary>The state of a run, live or finished. <see cref="State"/> is running, completed, cancelled or failed.</summary>
 public sealed record RunResultDto(

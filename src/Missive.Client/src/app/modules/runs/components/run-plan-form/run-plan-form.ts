@@ -7,6 +7,7 @@ import {
   faClock,
   faFileLines,
   faFlagCheckered,
+  faFloppyDisk,
   faGaugeHigh,
   faGripVertical,
   faListCheck,
@@ -32,6 +33,7 @@ import {
   setPlanOrder,
   setPlanRequestEnabled,
   setPlanRequests,
+  setPlanSaveResponses,
   setPlanThinkTime,
   setPlanValue,
 } from '../../../../models/run-plan-form';
@@ -113,6 +115,7 @@ export class RunPlanForm {
   protected readonly faRepeat = faRepeat;
   protected readonly faClock = faClock;
   protected readonly faFileLines = faFileLines;
+  protected readonly faFloppyDisk = faFloppyDisk;
 
   protected readonly field =
     'w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none';
@@ -231,6 +234,10 @@ export class RunPlanForm {
 
   protected setOrder(event: Event): void {
     this.emit(setPlanOrder(this.yaml(), (event.target as HTMLSelectElement).value));
+  }
+
+  protected setSaveResponses(event: Event): void {
+    this.emit(setPlanSaveResponses(this.yaml(), (event.target as HTMLInputElement).checked));
   }
 
   protected setWeight(path: string, event: Event): void {
