@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
@@ -14,9 +13,11 @@ namespace Missive.Infrastructure.Http;
 /// <summary>
 /// Sends requests with <see cref="HttpClient"/>. Responses are decompressed and redirects are
 /// followed here rather than by the handler, so each hop can be reported. Cookies are only kept
-/// when the request comes with a cookie jar. By default every send gets its own connection
-/// handler, which measures DNS, TCP connect and TLS times; a client given to the constructor (in
-/// tests) is shared and has no connection timings.
+/// when the request comes with a cookie jar. By default all sends share one pooled connection
+/// handler, so connections are kept alive and reused (opening one per send and closing it leaves
+/// its port in TIME_WAIT, and a load run then runs out of ephemeral ports); the handler measures
+/// DNS, TCP connect and TLS times for the send that opens a connection. A client given to the
+/// constructor (in tests) has no connection timings.
 /// </summary>
 public sealed class HttpClientSender : IHttpSender, IDisposable
 {
@@ -31,14 +32,22 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
 
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
 
-    private readonly HttpClient? _client;
+    /// <summary>How long a pooled connection is used before it's replaced, so DNS changes are picked up.</summary>
+    private static readonly TimeSpan PooledConnectionLifetime = TimeSpan.FromMinutes(5);
+
+    /// <summary>Carries a send's timings to the handler callbacks of the connection it opens.</summary>
+    private static readonly HttpRequestOptionsKey<ConnectionTimings> TimingsKey = new("Missive.ConnectionTimings");
+
+    private readonly HttpClient _client;
     private readonly bool _ownsClient;
     private readonly TimeSpan _timeout;
     private readonly int _maxBodyBytes;
 
-    /// <summary>Sends each request through a new handler of its own, with connection timings.</summary>
+    /// <summary>Sends requests through a shared, pooled handler of its own, with connection timings.</summary>
     public HttpClientSender()
     {
+        _client = new HttpClient(CreateHandler()) { Timeout = Timeout.InfiniteTimeSpan };
+        _ownsClient = true;
         _timeout = DefaultTimeout;
         _maxBodyBytes = DefaultMaxBodyBytes;
     }
@@ -54,32 +63,36 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     }
 
     /// <summary>
-    /// A handler that doesn't follow redirects or keep cookies itself and reports connection
-    /// phases to <paramref name="timings"/>.
+    /// A pooled handler that doesn't follow redirects or keep cookies itself and reports the
+    /// phases of each new connection to the timings of the request that opened it.
     /// </summary>
-    internal static SocketsHttpHandler CreateHandler(ConnectionTimings timings) => new()
+    internal static SocketsHttpHandler CreateHandler() => new()
     {
         AllowAutoRedirect = false,
         AutomaticDecompression = DecompressionMethods.All,
         UseCookies = false,
         ConnectTimeout = TimeSpan.FromSeconds(30),
-        ConnectCallback = (context, cancellationToken) => ConnectAsync(context.DnsEndPoint, timings, cancellationToken),
-        SslOptions = new SslClientAuthenticationOptions
+        PooledConnectionLifetime = PooledConnectionLifetime,
+        ConnectCallback = (context, cancellationToken) =>
+            ConnectAsync(context.DnsEndPoint, TimingsOf(context.InitialRequestMessage), cancellationToken),
+        // Called once the connection is ready to carry requests: after the TLS handshake for https.
+        PlaintextStreamFilter = (context, _) =>
         {
-            // Called once the server's certificate has arrived, at the end of the handshake. It
-            // accepts exactly what the default validation accepts.
-            RemoteCertificateValidationCallback = (_, _, _, errors) =>
+            if (context.InitialRequestMessage.RequestUri?.Scheme == Uri.UriSchemeHttps)
             {
-                timings.HandshakeDone();
-                return errors == SslPolicyErrors.None;
-            },
+                TimingsOf(context.InitialRequestMessage)?.HandshakeDone();
+            }
+
+            return ValueTask.FromResult(context.PlaintextStream);
         },
     };
+
+    private static ConnectionTimings? TimingsOf(HttpRequestMessage message) =>
+        message.Options.TryGetValue(TimingsKey, out var timings) ? timings : null;
 
     public async Task<Result<HttpResponseData>> SendAsync(OutgoingRequest request, CancellationToken cancellationToken = default)
     {
         var timings = new ConnectionTimings();
-        var client = _client ?? new HttpClient(CreateHandler(timings)) { Timeout = Timeout.InfiniteTimeSpan };
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_timeout);
@@ -103,10 +116,11 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                     return error;
                 }
 
+                message.Options.Set(TimingsKey, timings);
                 bytesSent += message.Content?.Headers.ContentLength ?? 0;
                 var hopStart = stopwatch.Elapsed;
                 var setupBefore = timings.Setup;
-                var response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+                var response = await _client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
                 wait += stopwatch.Elapsed - hopStart - (timings.Setup - setupBefore);
 
                 var responseHeaders = response.Headers
@@ -158,32 +172,25 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         {
             return new Error(ErrorCodes.Io, $"Could not read a request body file: {ex.Message}");
         }
-        finally
-        {
-            if (_client is null)
-            {
-                client.Dispose();
-            }
-        }
     }
 
     public void Dispose()
     {
         if (_ownsClient)
         {
-            _client?.Dispose();
+            _client.Dispose();
         }
     }
 
     /// <summary>Resolves the host and opens a TCP connection, timing each step.</summary>
-    private static async ValueTask<Stream> ConnectAsync(DnsEndPoint endPoint, ConnectionTimings timings, CancellationToken cancellationToken)
+    private static async ValueTask<Stream> ConnectAsync(DnsEndPoint endPoint, ConnectionTimings? timings, CancellationToken cancellationToken)
     {
         var host = endPoint.Host.Trim('[', ']');
         var started = Stopwatch.GetTimestamp();
         var addresses = IPAddress.TryParse(host, out var address)
             ? [address]
             : await Dns.GetHostAddressesAsync(host, cancellationToken);
-        timings.AddDns(Stopwatch.GetElapsedTime(started));
+        timings?.AddDns(Stopwatch.GetElapsedTime(started));
         if (addresses.Length == 0)
         {
             throw new SocketException((int)SocketError.HostNotFound);
@@ -201,7 +208,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
             throw;
         }
 
-        timings.Connected(Stopwatch.GetElapsedTime(started));
+        timings?.Connected(Stopwatch.GetElapsedTime(started));
         return new NetworkStream(socket, ownsSocket: true);
     }
 

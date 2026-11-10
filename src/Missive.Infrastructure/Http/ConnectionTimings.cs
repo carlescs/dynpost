@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace Missive.Infrastructure.Http;
 
 /// <summary>
-/// Connection phases measured by one send's handler: DNS lookups, TCP connects and TLS handshakes,
+/// Connection phases of the connections one send opens: DNS lookups, TCP connects and TLS handshakes,
 /// summed when a send opens several connections (e.g. a redirect to another host).
 /// </summary>
 internal sealed class ConnectionTimings
