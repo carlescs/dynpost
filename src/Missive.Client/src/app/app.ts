@@ -74,13 +74,17 @@ export class App implements OnInit {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
       event.preventDefault();
       const draft = this.environments.draft();
-      if (draft && !this.git.conflict() && !this.git.diff()) void this.environments.save(draft.key);
+      const plan = this.runs.draft();
+      const editing = !this.git.conflict() && !this.git.diff();
+      if (draft && editing) void this.environments.save(draft.key);
+      else if (plan && editing) void this.runs.save(plan.key);
       else void this.store.saveActive();
     } else if (
       (event.ctrlKey || event.metaKey) &&
       !event.altKey &&
       event.key === 'Enter' &&
-      !this.environments.draft()
+      !this.environments.draft() &&
+      !this.runs.draft()
     ) {
       event.preventDefault();
       void this.store.sendActive();

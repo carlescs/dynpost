@@ -465,8 +465,11 @@ Captures are not imported or exported: other tools express them as scripts.
 
 A load run sends a chosen set of requests repeatedly from several concurrent
 virtual users and reports latency percentiles, throughput and errors. The plan
-is a git-tracked `*.run.yaml` file (edit it in the **Load runs** view, with a
-visual form or as YAML text; the form keeps comments and unknown keys); results
+is a git-tracked `*.run.yaml` file (open it from the **Load runs** view in an
+editor tab, next to the open requests and environments, and edit it with a
+visual form or as YAML text; the form keeps comments and unknown keys). Each open
+plan follows its own run, so several plans can run at once; a running plan's tab
+can't be closed until it stops. Results
 are saved locally under `.missive/runs/` and never committed. Runs use the
 selected environment and send no cookies. Like requests, a plan whose file is
 named after it (`checkout-smoke.run.yaml` for "Checkout smoke") is renamed

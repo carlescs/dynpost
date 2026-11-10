@@ -14,6 +14,7 @@ import {
   PullOutcome,
 } from '../models/messages';
 import { EnvironmentStore } from './environment-store';
+import { RunStore, isRunPlanDirty } from './run-store';
 import { WorkspaceStore } from './workspace-store';
 
 export type GitOperation =
@@ -45,6 +46,7 @@ export class GitStore {
   private readonly bridge = inject(Bridge);
   private readonly workspace = inject(WorkspaceStore);
   private readonly environments = inject(EnvironmentStore);
+  private readonly runs = inject(RunStore);
 
   /** Whether git is reachable: the browser dev server has no git backend. */
   readonly available = this.bridge.isDesktop;
@@ -88,7 +90,8 @@ export class GitStore {
   readonly unsavedCount = computed(
     () =>
       this.workspace.documents().filter((d) => d.dirty).length +
-      this.environments.drafts().filter((d) => d.dirty).length,
+      this.environments.drafts().filter((d) => d.dirty).length +
+      this.runs.drafts().filter(isRunPlanDirty).length,
   );
 
   /** Whether the last status read found that the workspace folder is not inside a git repository. */
@@ -222,6 +225,9 @@ export class GitStore {
     }
     for (const draft of this.environments.drafts().filter((d) => d.dirty)) {
       await this.environments.save(draft.key);
+    }
+    for (const plan of this.runs.drafts().filter(isRunPlanDirty)) {
+      await this.runs.save(plan.key);
     }
     await this.refresh();
   }
