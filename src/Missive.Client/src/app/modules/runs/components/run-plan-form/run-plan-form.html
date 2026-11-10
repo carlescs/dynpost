@@ -14,8 +14,20 @@
       <div class="flex items-center gap-2">
         <span [class]="cardIcon"><fa-icon [icon]="faListOl" /></span>
         <h3 class="flex-1 font-semibold">Requests</h3>
-        <span class="text-xs text-slate-500">Each user sends them in this order</span>
+        <select
+          class="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs focus:border-sky-500 focus:outline-none"
+          aria-label="Request order"
+          [value]="order(form)"
+          (change)="setOrder($event)"
+        >
+          @for (option of orders; track option) {
+            <option [value]="option" [selected]="option === order(form)">
+              {{ orderInfo[option].label }}
+            </option>
+          }
+        </select>
       </div>
+      <p class="-mt-1 text-xs text-slate-500" data-order-hint>{{ orderInfo[order(form)].hint }}</p>
       @if (steps().length === 0) {
         <p
           class="rounded-md border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500"
@@ -68,6 +80,23 @@
                 <span class="block truncate text-xs text-slate-500">{{ step.path }}</span>
               }
             </span>
+            @if (order(form) === 'random') {
+              <label
+                class="flex shrink-0 items-center gap-1 text-xs text-slate-500"
+                title="Relative chance of picking this request"
+              >
+                <span class="w-8 text-right" data-share>{{ shares()[$index] }}%</span>
+                <input
+                  type="number"
+                  min="0"
+                  class="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs focus:border-sky-500 focus:outline-none"
+                  aria-label="Weight"
+                  placeholder="1"
+                  [value]="form.weights[step.path] ?? ''"
+                  (change)="setWeight(step.path, $event)"
+                />
+              </label>
+            }
             <button
               type="button"
               [class]="iconButton"
@@ -128,10 +157,16 @@
               >{{ load.threads }} {{ load.threads === 1 ? 'user' : 'users' }}</span
             >
             @if (load.timed) {
-              loop over
-              <span [class]="chip">
-                {{ load.requests }} {{ load.requests === 1 ? 'request' : 'requests' }}
-              </span>
+              @if (load.oneEach) {
+                send
+                <span [class]="chip">1 request</span>
+                at a time
+              } @else {
+                loop over
+                <span [class]="chip">
+                  {{ load.requests }} {{ load.requests === 1 ? 'request' : 'requests' }}
+                </span>
+              }
               for
               <span [class]="chip">{{ form.duration || '…' }}</span>
             } @else {

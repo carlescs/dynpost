@@ -74,7 +74,23 @@ public sealed class RunInfrastructureTests : IDisposable
         Assert.Equal(TimeSpan.FromMilliseconds(200), result.Value.Load.ThinkMax);
     }
 
+    [Fact]
+    public void Parse_ReadsTheOrderAndWeights()
+    {
+        var result = new YamlRunPlanFormat().Parse(
+            "name: x\nrequests: [a.yaml, b.yaml]\norder: random\nweights:\n  a.yaml: 3\n  b.yaml: 0.5\nload: {threads: 1, iterations: 1}\n");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(RequestOrder.Random, result.Value.Order);
+        Assert.Equal(3, result.Value.RequestWeights["a.yaml"]);
+        Assert.Equal(0.5, result.Value.RequestWeights["b.yaml"]);
+        Assert.Equal(RequestOrder.RoundRobin, new YamlRunPlanFormat().Parse("name: x\nrequests: [a.yaml]\norder: roundRobin\nload: {threads: 1, iterations: 1}\n").Value.Order);
+        Assert.Equal(RequestOrder.Sequential, new YamlRunPlanFormat().Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.Order);
+    }
+
     [Theory]
+    [InlineData("name: x\nrequests: [a.yaml]\norder: backwards\nload: {threads: 1, iterations: 1}\n", "'order'")]
+    [InlineData("name: x\nrequests: [a.yaml]\nweights: {a.yaml: lots}\nload: {threads: 1, iterations: 1}\n", "weights.a.yaml")]
     [InlineData("name: x\nrequests: [a.yaml]\n", "'load' is required")]
     [InlineData("name: x\nrequests: [a.yaml]\nload:\n  threads: many\n", "load.threads")]
     [InlineData("name: x\nrequests: [a.yaml]\nload:\n  duration: soon\n", "load.duration")]

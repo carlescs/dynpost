@@ -3,6 +3,7 @@ import {
   readPlanForm,
   removeAssertion,
   setAssertionStatus,
+  setPlanOrder,
   setPlanRequests,
   setPlanThinkTime,
   setPlanValue,
@@ -25,6 +26,26 @@ describe('run plan form', () => {
     expect(form.requests).toEqual(['a.yaml']);
     expect(form.threads).toBe('5');
     expect(form.duration).toBe('');
+  });
+
+  it('reads and writes the request order and weights', () => {
+    let next = setPlanOrder(PLAN, 'random');
+    expect(next).toContain('requests:\n  - a.yaml\norder: random\nload:');
+    next = setPlanValue(next, ['weights', 'a.yaml'], '3');
+    const form = readPlanForm(next)!;
+    expect(form.order).toBe('random');
+    expect(form.weights).toEqual({ 'a.yaml': '3' });
+    expect(next.indexOf('weights:')).toBeLessThan(next.indexOf('load:'));
+    expect(setPlanOrder(next, 'sequential')).not.toContain('order:');
+  });
+
+  it('drops the weights of removed requests', () => {
+    const plan = setPlanValue(
+      setPlanRequests(PLAN, ['a.yaml', 'b.yaml']),
+      ['weights', 'b.yaml'],
+      '2',
+    );
+    expect(setPlanRequests(plan, ['a.yaml'])).not.toContain('weights');
   });
 
   it('returns null for invalid yaml', () => {

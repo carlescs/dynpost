@@ -14,6 +14,10 @@ export interface PlanAssertion {
 export interface PlanForm {
   name: string;
   requests: string[];
+  /** `sequential` (or empty), `shuffle`, `random` or `roundRobin`. */
+  order: string;
+  /** The weight of each request path that has one (used with the `random` order). */
+  weights: Record<string, string>;
   threads: string;
   iterations: string;
   duration: string;
@@ -41,10 +45,19 @@ export type ThresholdKey = (typeof THRESHOLD_KEYS)[number];
 
 export const ASSERT_ALL = '*';
 
+/** The ways a virtual user can take the plan's requests in each iteration. */
+export const REQUEST_ORDERS = ['sequential', 'shuffle', 'random', 'roundRobin'] as const;
+export type RequestOrder = (typeof REQUEST_ORDERS)[number];
+
+/** Whether an order sends one request per iteration rather than all of them. */
+export function picksOneRequest(order: string): boolean {
+  return order === 'random' || order === 'roundRobin';
+}
+
 type Path = (string | number)[];
 
 const ORDER: Record<string, string[]> = {
-  '': ['name', 'requests', 'load', 'data', 'assert', 'thresholds'],
+  '': ['name', 'requests', 'order', 'weights', 'load', 'data', 'assert', 'thresholds'],
   load: ['threads', 'iterations', 'duration', 'rampUp', 'thinkTime', 'maxRps'],
   data: ['file', 'mode', 'onEof'],
   assert: [],
@@ -66,6 +79,7 @@ export function readPlanForm(yaml: string): PlanForm | null {
   const think = doc.getIn(['load', 'thinkTime'], true);
   const requests = doc.getIn(['requests'], true);
   const assertNode = doc.getIn(['assert'], true);
+  const weightsNode = doc.getIn(['weights'], true);
 
   const status = (path: Path): string => {
     const node = doc.getIn(path, true);
@@ -79,6 +93,15 @@ export function readPlanForm(yaml: string): PlanForm | null {
     requests: isSeq(requests)
       ? requests.items.map((item) => String(isScalar(item) ? item.value : ''))
       : [],
+    order: text(['order']),
+    weights: isMap(weightsNode)
+      ? Object.fromEntries(
+          weightsNode.items.map((pair) => {
+            const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
+            return [key, text(['weights', key])];
+          }),
+        )
+      : {},
     threads: text(['load', 'threads']),
     iterations: text(['load', 'iterations']),
     duration: text(['load', 'duration']),
@@ -115,7 +138,7 @@ export function setPlanValue(yaml: string, path: Path, value: string): string {
   return edit(yaml, (doc) => assign(doc, path, value));
 }
 
-/** Replaces the request list. */
+/** Replaces the request list, dropping the weights of requests that are no longer in it. */
 export function setPlanRequests(yaml: string, requests: string[]): string {
   return edit(yaml, (doc) => {
     if (requests.length === 0) {
@@ -123,7 +146,19 @@ export function setPlanRequests(yaml: string, requests: string[]): string {
     } else {
       doc.setIn(['requests'], doc.createNode(requests));
     }
+    const weights = doc.getIn(['weights'], true);
+    if (isMap(weights)) {
+      for (const pair of [...weights.items]) {
+        const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
+        if (!requests.includes(key)) prune(doc, ['weights', key]);
+      }
+    }
   });
+}
+
+/** Sets how users take the requests; the default (`sequential`) is left out of the file. */
+export function setPlanOrder(yaml: string, order: string): string {
+  return setPlanValue(yaml, ['order'], order === 'sequential' ? '' : order);
 }
 
 /** Sets the think time: a single value, or a `min`/`max` range when both differ. */

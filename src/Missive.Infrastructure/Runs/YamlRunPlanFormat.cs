@@ -8,7 +8,9 @@ using YamlDotNet.RepresentationModel;
 namespace Missive.Infrastructure.Runs;
 
 /// <summary>
-/// Reads run plan files. Keys, in order: <c>name</c>, <c>requests</c>, <c>load</c>
+/// Reads run plan files. Keys, in order: <c>name</c>, <c>requests</c>, <c>order</c>
+/// (<c>sequential</c>, <c>shuffle</c>, <c>random</c> or <c>roundRobin</c>), <c>weights</c> (per
+/// request path), <c>load</c>
 /// (<c>threads</c>, <c>iterations</c> or <c>duration</c>, <c>rampUp</c>, <c>thinkTime</c>,
 /// <c>maxRps</c>), <c>data</c> (<c>file</c>, <c>mode</c>, <c>onEof</c>), <c>assert</c>
 /// (per request path, or <c>"*"</c> for all: <c>status</c>, <c>maxTime</c>, <c>bodyContains</c>,
@@ -48,7 +50,36 @@ public sealed class YamlRunPlanFormat : IRunPlanFormat
             ParseLoad(YamlNodes.OptionalMapping(root, "load")),
             ParseData(YamlNodes.OptionalMapping(root, "data")),
             ParseAssertions(YamlNodes.OptionalMapping(root, "assert")),
-            ParseThresholds(YamlNodes.OptionalMapping(root, "thresholds")));
+            ParseThresholds(YamlNodes.OptionalMapping(root, "thresholds")),
+            ParseOrder(YamlNodes.OptionalString(root, "order")),
+            ParseWeights(YamlNodes.OptionalMapping(root, "weights")));
+    }
+
+    private static RequestOrder ParseOrder(string? text) => text switch
+    {
+        null or "sequential" => RequestOrder.Sequential,
+        "shuffle" => RequestOrder.Shuffle,
+        "random" => RequestOrder.Random,
+        "roundRobin" => RequestOrder.RoundRobin,
+        var other => throw new WorkspaceFileFormatException($"'order' must be sequential, shuffle, random or roundRobin, not '{other}'."),
+    };
+
+    private static Dictionary<string, double> ParseWeights(YamlMappingNode? weights)
+    {
+        var result = new Dictionary<string, double>(StringComparer.Ordinal);
+        if (weights is null)
+        {
+            return result;
+        }
+
+        foreach (var (keyNode, _) in weights.Children)
+        {
+            var key = YamlNodes.ScalarText(keyNode, "weights");
+            var path = WorkspacePath.TryParse(key, out var parsed) ? parsed.Value : key;
+            result[path] = Number(weights, key, $"weights.{key}") ?? throw new WorkspaceFileFormatException($"'weights.{key}' must be a number.");
+        }
+
+        return result;
     }
 
     private static RunLoad ParseLoad(YamlMappingNode? load)

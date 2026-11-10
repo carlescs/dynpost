@@ -454,7 +454,8 @@ named after it (`checkout-smoke.run.yaml` for "Checkout smoke") is renamed
 along with it, and its earlier runs follow; files with hand-picked names keep
 them.
 
-The visual form lists the requests as steps you can drag into order, sums up the
+The visual form lists the requests as steps you can drag into order (and picks
+their order, with each request's weight and share for a random pick), sums up the
 load (users × iterations × requests) and sketches the users over time with the
 ramp-up. Next to it, the results dashboard follows the run live: headline
 numbers, requests per second and average latency over time (hover a second for
@@ -467,6 +468,9 @@ name: Checkout smoke
 requests:
   - shop/list-products.yaml
   - shop/create-order.yaml
+order: random        # sequential (default), shuffle, random or roundRobin
+weights:             # with random: relative chance of each request (default 1)
+  shop/list-products.yaml: 4
 load:
   threads: 10        # concurrent virtual users
   iterations: 50     # per thread; or `duration: 2m`
@@ -486,6 +490,14 @@ thresholds:
   errorRate: 1%
   throughput: 50
 ```
+
+`order` sets how each virtual user takes the requests in an iteration:
+`sequential` sends them all in the listed order, `shuffle` sends them all in a
+new random order, `random` sends one request picked at random (more often the
+higher its `weight`; a weight of 0 never picks it), and `roundRobin` sends the
+next request in the list, with each user starting at a different one so the
+requests are spread evenly. With `random` and `roundRobin` an iteration is one
+request, so `iterations` counts requests per user.
 
 Without a `status` assertion, a response with status 400 or higher counts as an
 error. A plan can use up to 5000 threads (each keeps at most one connection busy
