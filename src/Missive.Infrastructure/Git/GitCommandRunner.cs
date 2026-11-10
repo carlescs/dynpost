@@ -24,7 +24,8 @@ internal sealed class GitCommandRunner(string executable)
     public async Task<GitCommandResult> RunAsync(
         string workingDirectory,
         IEnumerable<string> arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         var startInfo = new ProcessStartInfo(executable)
         {
@@ -53,6 +54,11 @@ internal sealed class GitCommandRunner(string executable)
         startInfo.Environment["GIT_OPTIONAL_LOCKS"] = "0";
         // Untranslated messages, so error output can be recognized.
         startInfo.Environment["LC_ALL"] = "C";
+
+        foreach (var (name, value) in environment ?? new Dictionary<string, string>())
+        {
+            startInfo.Environment[name] = value;
+        }
 
         using var process = new Process { StartInfo = startInfo };
         try

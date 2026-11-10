@@ -10,6 +10,7 @@ using Missive.Application.OAuth2;
 using Missive.Application.Requests;
 using Missive.Application.Runs;
 using Missive.Application.Settings;
+using Missive.Application.Sharing;
 using Missive.Application.About;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
@@ -23,6 +24,7 @@ using Missive.Infrastructure.Interchange;
 using Missive.Infrastructure.OAuth2;
 using Missive.Infrastructure.Runs;
 using Missive.Infrastructure.Settings;
+using Missive.Infrastructure.Sharing;
 using Missive.Infrastructure.About;
 using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
@@ -91,6 +93,7 @@ internal static class Program
             .AddSingleton<OAuth2Tokens>()
             .AddSingleton(TimeProvider.System)
             .AddSingleton<IGitService, GitCliService>()
+            .AddSingleton<ILocalOnlyFiles, GitIgnoreLocalOnlyFiles>()
             .AddSingleton<IRequestFileFormat, YamlRequestFileFormat>()
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
@@ -125,6 +128,7 @@ internal static class Program
             .AddTransient<MoveRequest>()
             .AddTransient<DuplicateRequest>()
             .AddTransient<DeleteRequest>()
+            .AddTransient<SetLocalOnly>()
             .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
             .AddTransient<CancelRequest>()

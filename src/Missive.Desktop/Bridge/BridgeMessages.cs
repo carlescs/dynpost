@@ -69,6 +69,12 @@ internal static class BridgeMessageTypes
     public const string RequestDelete = "request.delete";
 
     /// <summary>
+    /// Shares a request, environment or run plan file through git, or keeps it on this computer
+    /// only. Payload: <see cref="SetSharingPayload"/>. Result: the file's sharing.
+    /// </summary>
+    public const string SharingSet = "sharing.set";
+
+    /// <summary>
     /// Sends a request (saved or not) and waits for the response. Payload: <see cref="SendRequestPayload"/>.
     /// Result: response.
     /// </summary>
@@ -362,6 +368,9 @@ internal sealed record CreateFolderPayload(string Parent, string Name);
 internal sealed record RenameFolderPayload(string Path, string Name);
 
 internal sealed record DeleteRequestPayload(string Path);
+
+/// <param name="Path">The workspace-relative file; an environment is <c>environments/&lt;id&gt;</c>.</param>
+internal sealed record SetSharingPayload(string Path, bool LocalOnly);
 
 internal sealed record DuplicateRequestPayload(string Path);
 

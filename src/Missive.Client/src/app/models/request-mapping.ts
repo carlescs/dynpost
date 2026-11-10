@@ -122,6 +122,7 @@ export function fromNodeDto(node: WorkspaceNodeDto): WorkspaceNode {
     kind: node.kind,
     method: node.kind === 'request' && node.method ? toMethod(node.method) : undefined,
     error: node.error ?? undefined,
+    localOnly: node.localOnly || undefined,
     children: node.children?.map(fromNodeDto),
   };
 }

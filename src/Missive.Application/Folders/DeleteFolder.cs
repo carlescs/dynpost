@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
 
@@ -9,7 +10,7 @@ namespace Missive.Application.Folders;
 /// notes, scripts, links, or names that aren't valid workspace paths — so Missive never deletes
 /// files it does not own.
 /// </summary>
-public sealed class DeleteFolder(IWorkspaceRepository repository, CurrentWorkspace current)
+public sealed class DeleteFolder(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
 {
     private const int MaxListed = 3;
 
@@ -50,6 +51,13 @@ public sealed class DeleteFolder(IWorkspaceRepository repository, CurrentWorkspa
                 $"'{folder}' contains files that are not requests ({listed}{more}). Move or delete them first.");
         }
 
-        return repository.DeleteFolder(root.Value, folder);
+        var deleted = repository.DeleteFolder(root.Value, folder);
+        if (deleted.IsSuccess)
+        {
+            // Best effort: leftover .gitignore lines for deleted files do no harm.
+            localFiles.Remove(root.Value, folder);
+        }
+
+        return deleted;
     }
 }

@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
 
@@ -18,7 +19,7 @@ internal static class RunPlanPaths
 }
 
 /// <summary>Lists the run plans of the workspace with their names, or why a file can't be used.</summary>
-public sealed class ListRunPlans(IRunPlanStore store, IRunPlanFormat format, CurrentWorkspace current)
+public sealed class ListRunPlans(IRunPlanStore store, IRunPlanFormat format, ILocalOnlyFiles localFiles, CurrentWorkspace current)
 {
     public async Task<Result<IReadOnlyList<RunPlanFileDto>>> ExecuteAsync(CancellationToken cancellationToken = default)
     {
@@ -34,14 +35,15 @@ public sealed class ListRunPlans(IRunPlanStore store, IRunPlanFormat format, Cur
             return paths.Error!;
         }
 
+        var localOnly = LocalOnlyPaths.ListOrEmpty(localFiles, root.Value);
         var plans = new List<RunPlanFileDto>();
         foreach (var path in paths.Value)
         {
             var text = await store.ReadAsync(root.Value, path, cancellationToken);
             var plan = text.IsSuccess ? format.Parse(text.Value) : text.Error!;
             plans.Add(plan.IsSuccess
-                ? new RunPlanFileDto(path.Value, plan.Value.Name, null)
-                : new RunPlanFileDto(path.Value, null, plan.Error!.Message));
+                ? new RunPlanFileDto(path.Value, plan.Value.Name, null, localOnly.Contains(path))
+                : new RunPlanFileDto(path.Value, null, plan.Error!.Message, localOnly.Contains(path)));
         }
 
         return plans;

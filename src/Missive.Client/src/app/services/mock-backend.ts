@@ -84,6 +84,8 @@ export class MockBackend {
     ],
   ]);
   private activeEnvironment: string | null = 'dev.yaml';
+  /** Files kept on this computer only (git-ignored), by workspace path. */
+  private readonly localOnly = new Set<string>();
   private open = false;
   private theme: Theme = 'light';
   /** Sends in progress, by id: calling the function cancels it. */
@@ -246,7 +248,11 @@ export class MockBackend {
         return ok({
           active: this.activeEnvironment,
           environments: [...this.environments]
-            .map(([id, env]) => ({ id, name: env.name }))
+            .map(([id, env]) => ({
+              id,
+              name: env.name,
+              localOnly: this.localOnly.has(`environments/${id}`),
+            }))
             .sort((a, b) => a.name.localeCompare(b.name)),
         });
       case 'environment.load': {
@@ -424,6 +430,18 @@ export class MockBackend {
         for (const [file, dto] of [...this.files].filter(([f]) => isWithin(f, path)))
           this.files.set(copyPath(file), structuredClone(dto));
         return ok({ path: target });
+      }
+      case 'sharing.set': {
+        const path = payload?.['path'] as string;
+        const localOnly = payload?.['localOnly'] as boolean;
+        const exists =
+          this.files.has(path) ||
+          this.runPlans.has(path) ||
+          (path.startsWith('environments/') && this.environments.has(path.slice(13)));
+        if (!exists) return fail(ERROR_CODES.notFound, `The file '${path}' does not exist.`);
+        if (localOnly) this.localOnly.add(path);
+        else this.localOnly.delete(path);
+        return ok({ path, localOnly });
       }
       case 'request.delete': {
         const path = payload?.['path'] as string;
@@ -809,6 +827,7 @@ export class MockBackend {
           name: dto.name,
           kind: 'request' as const,
           method: dto.method,
+          localOnly: this.localOnly.has(path),
         }))
         .sort(byPath);
       return [...folders, ...files];
@@ -837,6 +856,7 @@ export class MockBackend {
               path: planPath,
               name: /^name:\s*(.+)$/m.exec(yaml)?.[1] ?? null,
               error: null,
+              localOnly: this.localOnly.has(planPath),
             })),
         );
       case 'runPlan.open': {

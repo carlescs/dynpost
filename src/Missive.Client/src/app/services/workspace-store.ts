@@ -35,6 +35,8 @@ export class WorkspaceStore {
   readonly error = signal<string | null>(null);
   /** Incremented whenever a response's captured values were stored, so variables can be re-read. */
   readonly capturesStored = signal(0);
+  /** Incremented whenever a file was made local-only or shared again, so git status can be re-read. */
+  readonly sharingChanged = signal(0);
 
   readonly sidebarOpen = signal(true);
   /** Sidebar width in pixels; kept here so it survives closing and reopening the sidebar. */
@@ -425,6 +427,34 @@ export class WorkspaceStore {
       this.report(error);
       return null;
     }
+  }
+
+  /**
+   * Keeps a request, environment or run plan file on this computer only, or shares it through git
+   * again. Making a file local-only asks the user first. Returns whether the file's sharing changed;
+   * the caller re-reads its list.
+   */
+  async setLocalOnly(path: string, name: string, localOnly: boolean): Promise<boolean> {
+    const question =
+      `Keep "${name}" on this computer only?\n\n` +
+      'It is added to .gitignore. If it was committed before, your next commit removes it from ' +
+      'the repository, but the file stays here; others stop receiving changes to it.';
+    if (localOnly && !confirm(question)) return false;
+
+    try {
+      await this.bridge.send('sharing.set', { path, localOnly });
+      this.error.set(null);
+      this.sharingChanged.update((n) => n + 1);
+      return true;
+    } catch (error) {
+      this.report(error);
+      return false;
+    }
+  }
+
+  /** Makes a request local-only or shared again, then re-reads the tree. */
+  async setRequestLocalOnly(node: WorkspaceNode, localOnly: boolean): Promise<void> {
+    if (await this.setLocalOnly(node.path, node.name, localOnly)) await this.refresh();
   }
 
   /** Deletes a request file, after asking the user, and closes its tab. */

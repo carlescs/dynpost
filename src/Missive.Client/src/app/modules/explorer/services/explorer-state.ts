@@ -41,6 +41,12 @@ export class ExplorerState {
     else void this.store.duplicateRequest(node.path);
   }
 
+  /** Keeps a request on this computer only, or shares it through git again. */
+  toggleLocalOnly(node: WorkspaceNode): void {
+    this.closeMenu();
+    if (node.kind === 'request') void this.store.setRequestLocalOnly(node, !node.localOnly);
+  }
+
   deleteNode(node: WorkspaceNode): void {
     this.closeMenu();
     if (node.kind === 'folder') void this.store.deleteFolder(node.path);

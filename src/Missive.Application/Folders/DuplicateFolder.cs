@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
 
@@ -10,7 +11,7 @@ namespace Missive.Application.Folders;
 /// and only new files are written. Folders holding symbolic links, or names that aren't valid
 /// workspace paths, are refused rather than copied incompletely.
 /// </summary>
-public sealed class DuplicateFolder(IWorkspaceRepository repository, CurrentWorkspace current)
+public sealed class DuplicateFolder(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
 {
     private const int MaxAttempts = 1000;
     private const int MaxListed = 3;
@@ -80,7 +81,9 @@ public sealed class DuplicateFolder(IWorkspaceRepository repository, CurrentWork
             return copied.Error!;
         }
 
-        return new FolderDto(target.Value.Value);
+        // Copies of local-only requests are local-only too.
+        var followed = localFiles.Copy(root.Value, folder, target.Value);
+        return followed.IsSuccess ? new FolderDto(target.Value.Value) : followed.Error!;
     }
 
     private Result<WorkspacePath> FreeCopyPath(string root, WorkspacePath folder)

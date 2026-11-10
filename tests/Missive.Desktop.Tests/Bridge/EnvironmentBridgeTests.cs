@@ -4,8 +4,10 @@ using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Environments;
 using Missive.Application.Workspaces;
+using Missive.Application.Sharing;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Environments;
+using Missive.Domain.Workspaces;
 using NSubstitute;
 
 namespace Missive.Desktop.Tests.Bridge;
@@ -15,6 +17,7 @@ public sealed class EnvironmentBridgeTests : IDisposable
 {
     private const string Root = "/work/my-api";
 
+    private readonly ILocalOnlyFiles _localFiles = CreateLocalFiles();
     private readonly IEnvironmentStore _store = Substitute.For<IEnvironmentStore>();
     private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
     private readonly IWorkspaceStateStore _state = Substitute.For<IWorkspaceStateStore>();
@@ -46,6 +49,7 @@ public sealed class EnvironmentBridgeTests : IDisposable
 
         _services = new ServiceCollection()
             .AddSingleton(current)
+            .AddSingleton(_localFiles)
             .AddSingleton(_store)
             .AddSingleton(_secrets)
             .AddSingleton(_state)
@@ -121,5 +125,12 @@ public sealed class EnvironmentBridgeTests : IDisposable
         var json = await _router.HandleAsync($$"""{ "id": "1", "type": "{{type}}", "payload": {{payload}} }""");
         Assert.NotNull(json);
         return JsonDocument.Parse(json).RootElement;
+    }
+
+    private static ILocalOnlyFiles CreateLocalFiles()
+    {
+        var files = Substitute.For<ILocalOnlyFiles>();
+        files.List(Arg.Any<string>()).Returns(new HashSet<WorkspacePath>());
+        return files;
     }
 }

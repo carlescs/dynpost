@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Folders;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
@@ -13,6 +14,7 @@ public class DuplicateUseCaseTests
     private const string Root = "/work/my-api";
 
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
+    private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
     private readonly CurrentWorkspace _current = new();
 
     public DuplicateUseCaseTests()
@@ -33,7 +35,7 @@ public class DuplicateUseCaseTests
         _repository.ReadRequestAsync(Root, path, Arg.Any<CancellationToken>())
             .Returns(new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1"));
 
-        var result = await new DuplicateRequest(_repository, _current).ExecuteAsync("users/get-user.yaml");
+        var result = await new DuplicateRequest(_repository, _localFiles, _current).ExecuteAsync("users/get-user.yaml");
 
         Assert.Equal("users/get-user-copy.yaml", result.Value.Path);
         Assert.Equal("Get user copy", result.Value.Request.Name);
@@ -54,7 +56,7 @@ public class DuplicateUseCaseTests
         _repository.ReadRequestAsync(Root, path, Arg.Any<CancellationToken>())
             .Returns(new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1"));
 
-        var result = await new DuplicateRequest(_repository, _current).ExecuteAsync("get-user.yaml");
+        var result = await new DuplicateRequest(_repository, _localFiles, _current).ExecuteAsync("get-user.yaml");
 
         Assert.Equal("get-user-copy-2.yaml", result.Value.Path);
     }
@@ -80,8 +82,8 @@ public class DuplicateUseCaseTests
             });
 
         var results = await Task.WhenAll(
-            new DuplicateRequest(_repository, _current).ExecuteAsync("get-user.yaml"),
-            new DuplicateRequest(_repository, _current).ExecuteAsync("get-user.yaml"));
+            new DuplicateRequest(_repository, _localFiles, _current).ExecuteAsync("get-user.yaml"),
+            new DuplicateRequest(_repository, _localFiles, _current).ExecuteAsync("get-user.yaml"));
 
         Assert.Equal(["get-user-copy-2.yaml", "get-user-copy.yaml"], results.Select(r => r.Value.Path).Order());
     }
@@ -94,7 +96,7 @@ public class DuplicateUseCaseTests
         _repository.ReadRequestAsync(Root, path, Arg.Any<CancellationToken>())
             .Returns(Result<HttpRequestDefinition>.Failure(ErrorCodes.InvalidFile, "Bad YAML."));
 
-        var result = await new DuplicateRequest(_repository, _current).ExecuteAsync("broken.yaml");
+        var result = await new DuplicateRequest(_repository, _localFiles, _current).ExecuteAsync("broken.yaml");
 
         Assert.Equal(ErrorCodes.InvalidFile, result.Error?.Code);
         await _repository.DidNotReceiveWithAnyArgs().WriteRequestAsync(default!, default!, default!, default);
@@ -106,7 +108,7 @@ public class DuplicateUseCaseTests
     [InlineData("missing.yaml", ErrorCodes.NotFound)]
     public async Task DuplicateRequest_RejectsInvalidPaths(string path, string code)
     {
-        var result = await new DuplicateRequest(_repository, _current).ExecuteAsync(path);
+        var result = await new DuplicateRequest(_repository, _localFiles, _current).ExecuteAsync(path);
 
         Assert.Equal(code, result.Error?.Code);
     }
@@ -120,7 +122,7 @@ public class DuplicateUseCaseTests
             [P("api/users/admin"), P("api/users/admin/deep")],
             []));
 
-        var result = new DuplicateFolder(_repository, _current).Execute("api/users");
+        var result = new DuplicateFolder(_repository, _localFiles, _current).Execute("api/users");
 
         Assert.Equal("api/users copy", result.Value.Path);
         Received.InOrder(() =>
@@ -148,7 +150,7 @@ public class DuplicateUseCaseTests
             link is null ? [] : [P(link)],
             unsupported is null ? [] : [unsupported]));
 
-        var result = new DuplicateFolder(_repository, _current).Execute("users");
+        var result = new DuplicateFolder(_repository, _localFiles, _current).Execute("users");
 
         Assert.Equal(ErrorCodes.InvalidPath, result.Error?.Code);
         Assert.Contains(link ?? "users/" + unsupported, result.Error!.Message);
@@ -163,7 +165,7 @@ public class DuplicateUseCaseTests
         _repository.EntryExists(Root, P("users copy")).Returns(true);
         _repository.ReadFolderContents(Root, P("users")).Returns(new FolderContents([], [], []));
 
-        var result = new DuplicateFolder(_repository, _current).Execute("users");
+        var result = new DuplicateFolder(_repository, _localFiles, _current).Execute("users");
 
         Assert.Equal("users copy 2", result.Value.Path);
         _repository.Received(1).CreateFolder(Root, P("users copy 2"));
@@ -177,7 +179,7 @@ public class DuplicateUseCaseTests
         _repository.CopyFile(Root, P("users/a.yaml"), P("users copy/a.yaml"))
             .Returns(Result<Unit>.Failure(ErrorCodes.Io, "Disk full."));
 
-        var result = new DuplicateFolder(_repository, _current).Execute("users");
+        var result = new DuplicateFolder(_repository, _localFiles, _current).Execute("users");
 
         Assert.Equal(ErrorCodes.Io, result.Error?.Code);
         _repository.Received(1).DeleteFolder(Root, P("users copy"));
@@ -190,11 +192,37 @@ public class DuplicateUseCaseTests
     [InlineData("missing", ErrorCodes.NotFound)]
     public void DuplicateFolder_RejectsInvalidPaths(string path, string code)
     {
-        var result = new DuplicateFolder(_repository, _current).Execute(path);
+        var result = new DuplicateFolder(_repository, _localFiles, _current).Execute(path);
 
         Assert.Equal(code, result.Error?.Code);
         _repository.DidNotReceiveWithAnyArgs().CreateFolder(default!, default!);
     }
 
     private static WorkspacePath P(string value) => WorkspacePath.Parse(value);
+
+    [Fact]
+    public async Task DuplicateRequest_TheCopyOfALocalOnlyRequestIsLocalOnly()
+    {
+        var path = P("users/get-user.yaml");
+        _repository.FileExists(Root, path).Returns(true);
+        _repository.ReadRequestAsync(Root, path, Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1"));
+        _localFiles.Copy(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
+
+        await new DuplicateRequest(_repository, _localFiles, _current).ExecuteAsync("users/get-user.yaml");
+
+        _localFiles.Received(1).Copy(Root, path, P("users/get-user-copy.yaml"));
+    }
+
+    [Fact]
+    public void DuplicateFolder_CopiesOfLocalOnlyRequestsAreLocalOnly()
+    {
+        _repository.DirectoryExists(Root, P("users")).Returns(true);
+        _repository.ReadFolderContents(Root, P("users")).Returns(new FolderContents([], [], []));
+        _localFiles.Copy(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
+
+        new DuplicateFolder(_repository, _localFiles, _current).Execute("users");
+
+        _localFiles.Received(1).Copy(Root, P("users"), P("users copy"));
+    }
 }

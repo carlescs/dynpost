@@ -64,6 +64,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Optional cookie jar per environment (kept out of git)
 - [x] Capture values from responses into variables (JSONPath or header, kept
       out of git)
+- [x] Keep chosen requests, environments and run plans on this computer only,
+      out of git (see [Local-only files](#local-only-files))
 - [ ] Collections as folders, with optional folder-level defaults
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token, API key and OAuth 2.0 (client
@@ -574,6 +576,7 @@ configuration, hooks and credential helpers apply as usual. In detail:
   Files in `.missive/` are never committed, even if they are not git-ignored.
   Git only sees saved files, so the view warns when open tabs have unsaved
   changes and offers **Save all**.
+- **Local-only files** are left out of git; see below.
 - **Identity**: if git has no name and email to record on commits
   (`user.name`, `user.email`), the view asks for them and saves them for all
   your repositories (`git config --global`) or, if you untick that, for this
@@ -656,6 +659,38 @@ configuration, hooks and credential helpers apply as usual. In detail:
   remove it after confirming (`git remote remove`, which also drops its
   remote-tracking branches; nothing is deleted on the remote). Nothing is
   fetched or pushed when you change remotes.
+
+### Local-only files
+
+Every request, environment and run plan is shared through git by default. To
+keep one on your computer only — say a `local` environment pointing at your own
+machine, or a scratch request — right-click the request in the explorer and
+choose **Keep on this computer only**, or click the laptop button next to an
+environment or run plan (it shows when you hover the row). Local-only items are
+marked with an amber laptop icon; choose **Share through git** or click the
+icon again to share them.
+
+Missive records the choice where git itself sees it: one anchored line per file
+in the workspace's `.gitignore`, so any git tool leaves the file out too:
+
+```gitignore
+.missive/
+/environments/local.yaml
+/users/scratch.yaml
+```
+
+If the file was already committed, Missive also stops tracking it
+(`git rm --cached`; the file stays on disk), so the Source control view lists it
+as deleted. Your next commit removes it from the repository; teammates who pull
+that commit lose their copy, so tell them first if they still need it. Sharing
+the file again before committing simply undoes this; after committing, the file
+shows up as a new file to commit.
+
+Renaming, moving, duplicating or deleting a local-only request (or the folder
+that holds it), or renaming or deleting a local-only environment, updates its
+`.gitignore` line, so it never becomes shared by accident; copies of local-only
+requests are local-only too. Only lines of this exact form count: a file that a
+broader pattern (such as `*.local.yaml`) ignores is not shown as local-only.
 
 ### Resolving merge conflicts
 
