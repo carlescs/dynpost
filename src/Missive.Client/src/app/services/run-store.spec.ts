@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { Mock } from 'vitest';
-import { RunResultDto } from '../models/messages';
-import { Bridge } from './bridge';
-import { RunStore } from './run-store';
+import { ERROR_CODES, RunResultDto } from '../models/messages';
+import { Bridge, BridgeError } from './bridge';
+import { RunStore, isRunPlanDirty } from './run-store';
 import { WorkspaceStore } from './workspace-store';
 import { Dialogs } from './dialogs';
 
@@ -15,6 +15,7 @@ describe('RunStore', () => {
   let send: Mock;
   let handlers: Record<string, (payload: any) => unknown>;
   let store: RunStore;
+  let workspace: WorkspaceStore;
 
   beforeEach(async () => {
     handlers = {
@@ -38,26 +39,86 @@ describe('RunStore', () => {
       ],
     });
     store = TestBed.inject(RunStore);
-    TestBed.inject(WorkspaceStore).workspace.set({ name: 'api', root: '/r' } as never);
+    workspace = TestBed.inject(WorkspaceStore);
+    workspace.workspace.set({ name: 'api', root: '/r' } as never);
     TestBed.tick();
     await vi.waitFor(() => expect(store.plans().length).toBe(1));
   });
 
-  it('opens a plan and tracks unsaved edits', async () => {
+  const key = () => store.draft()!.key;
+  const dirty = () => isRunPlanDirty(store.draft()!);
+
+  it('opens a plan in a tab and tracks unsaved edits', async () => {
     await store.open('a.run.yaml');
-    expect(store.showing()).toBe(true);
-    expect(store.dirty()).toBe(false);
-    store.edit('name: B\n');
-    expect(store.dirty()).toBe(true);
+    expect(workspace.tabs()).toEqual([key()]);
+    expect(workspace.activeTab()).toBe(key());
+    expect(dirty()).toBe(false);
+    store.edit(key(), 'name: B\n');
+    expect(dirty()).toBe(true);
+  });
+
+  it('opens several plans in their own tabs', async () => {
+    await store.open('a.run.yaml');
+    const first = key();
+    await store.open('b.run.yaml');
+
+    expect(store.drafts().map((d) => d.path)).toEqual(['a.run.yaml', 'b.run.yaml']);
+    expect(workspace.tabs()).toHaveLength(2);
+    expect(store.draft()?.path).toBe('b.run.yaml');
+
+    workspace.activateTab(first);
+    expect(store.draft()?.path).toBe('a.run.yaml');
+  });
+
+  it('shows the open tab when opening the same plan again', async () => {
+    await store.open('a.run.yaml');
+    const first = key();
+    store.edit(first, 'name: Unsaved\n');
+    await store.open('b.run.yaml');
+
+    await store.open('a.run.yaml');
+
+    expect(workspace.activeTab()).toBe(first);
+    expect(store.draft()?.yaml).toBe('name: Unsaved\n');
+    expect(send.mock.calls.filter(([type]) => type === 'runPlan.open')).toHaveLength(2);
+  });
+
+  it('is not the active editor while a request tab is active', async () => {
+    await store.open('a.run.yaml');
+    workspace.openTab('request');
+
+    expect(store.draft()).toBeNull();
   });
 
   it('saves pending edits before starting and shows the result', async () => {
     await store.open('a.run.yaml');
-    store.edit('name: B\n');
-    await store.start();
+    store.edit(key(), 'name: B\n');
+    await store.start(key());
     expect(send).toHaveBeenCalledWith('runPlan.save', { path: 'a.run.yaml', yaml: 'name: B\n' });
-    expect(store.dirty()).toBe(false);
-    expect(store.run()?.state).toBe('completed');
+    expect(dirty()).toBe(false);
+    expect(store.draft()?.run?.state).toBe('completed');
+    expect(store.draft()?.starting).toBe(false);
+  });
+
+  it('keeps each plan’s run in its own tab', async () => {
+    await store.open('a.run.yaml');
+    const first = key();
+    await store.start(first);
+    await store.open('b.run.yaml');
+
+    expect(store.draft()?.run).toBeNull();
+    expect(store.drafts().find((d) => d.key === first)?.run?.runId).toBe('r1');
+  });
+
+  it('asks before a very large run', async () => {
+    handlers['run.start'] = () => {
+      throw new BridgeError(ERROR_CODES.confirmationRequired, 'Really?');
+    };
+    await store.open('a.run.yaml');
+
+    await store.start(key());
+
+    expect(store.draft()?.confirmation).toBe('Really?');
   });
 
   it('keeps normalized YAML returned by save as the current draft', async () => {
@@ -67,57 +128,48 @@ describe('RunStore', () => {
       error: null,
     });
     await store.open('a.run.yaml');
-    store.edit('name: B');
+    store.edit(key(), 'name: B');
 
-    await store.save();
+    await store.save(key());
 
     expect(store.draft()?.yaml).toBe('name: B\n');
-    expect(store.dirty()).toBe(false);
+    expect(dirty()).toBe(false);
   });
 
   it('follows the file when saving renames it', async () => {
     handlers['runPlan.save'] = (p) => ({ path: 'renamed.run.yaml', yaml: p.yaml, error: null });
     await store.open('a.run.yaml');
-    store.edit('name: Renamed\n');
+    const tab = key();
+    store.edit(tab, 'name: Renamed\n');
 
-    await store.save();
+    await store.save(tab);
 
     expect(store.draft()?.path).toBe('renamed.run.yaml');
-    expect(store.dirty()).toBe(false);
+    expect(workspace.activeTab()).toBe(tab);
+    expect(dirty()).toBe(false);
   });
 
   it('preserves edits made while a save is in flight', async () => {
     let finishSave!: (value: { path: string; yaml: string; error: null }) => void;
-    handlers['runPlan.save'] = (p) =>
+    handlers['runPlan.save'] = () =>
       new Promise((resolve) => {
         finishSave = resolve;
       });
     await store.open('a.run.yaml');
-    store.edit('name: B\n');
+    store.edit(key(), 'name: B\n');
 
-    const saving = store.save();
-    store.edit('name: C\n');
+    const saving = store.save(key());
+    store.edit(key(), 'name: C\n');
     finishSave({ path: 'a.run.yaml', yaml: 'name: B\n', error: null });
     await saving;
 
     expect(store.draft()?.yaml).toBe('name: C\n');
-    expect(store.dirty()).toBe(true);
+    expect(dirty()).toBe(true);
   });
 
-  it('reuses the existing draft when opening the same plan', async () => {
+  it('does not reset the drafts when the workspace object refreshes at the same root', async () => {
     await store.open('a.run.yaml');
-    store.edit('name: Unsaved\n');
-
-    await store.open('a.run.yaml');
-
-    expect(store.draft()?.yaml).toBe('name: Unsaved\n');
-    expect(send.mock.calls.filter(([type]) => type === 'runPlan.open')).toHaveLength(1);
-  });
-
-  it('does not reset the draft when the workspace object refreshes at the same root', async () => {
-    await store.open('a.run.yaml');
-    store.edit('name: Unsaved\n');
-    const workspace = TestBed.inject(WorkspaceStore);
+    store.edit(key(), 'name: Unsaved\n');
 
     workspace.workspace.set({ name: 'refreshed', root: '/r' } as never);
     TestBed.tick();
@@ -125,32 +177,46 @@ describe('RunStore', () => {
     expect(store.draft()?.yaml).toBe('name: Unsaved\n');
   });
 
-  it('hides the run editor when the currently selected request tab is activated again', async () => {
-    const workspace = TestBed.inject(WorkspaceStore);
-    workspace.activeTab.set('request');
+  it('closes the tabs when another folder is opened', async () => {
     await store.open('a.run.yaml');
-    expect(store.showing()).toBe(true);
 
-    workspace.activateTab('request');
+    workspace.workspace.set({ name: 'other', root: '/o' } as never);
     TestBed.tick();
 
-    expect(store.showing()).toBe(false);
+    expect(store.drafts()).toEqual([]);
+    expect(workspace.tabs()).toEqual([]);
   });
 
-  it('blocks switching plans or history while a run is active', async () => {
+  it('closes a tab, asking first when it has unsaved changes', async () => {
+    const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(false));
     await store.open('a.run.yaml');
-    store.run.set(result({ state: 'running' }));
+    store.edit(key(), 'name: B\n');
 
-    await store.open('b.run.yaml');
-    await store.show('old-run');
+    await store.close(key());
+    expect(store.drafts()).toHaveLength(1);
 
-    expect(store.run()?.runId).toBe('r1');
-    expect(store.running()).toBe(true);
-    expect(send).not.toHaveBeenCalledWith('runPlan.open', { path: 'b.run.yaml' });
+    confirm.mockResolvedValue(true);
+    await store.close(key());
+    expect(store.drafts()).toEqual([]);
+    expect(workspace.tabs()).toEqual([]);
+  });
+
+  it('keeps a running plan open and its history shut', async () => {
+    await store.open('a.run.yaml');
+    store.drafts.update((drafts) =>
+      drafts.map((d) => ({ ...d, run: result({ state: 'running' }) })),
+    );
+
+    await store.close(key());
+    await store.show(key(), 'old-run');
+
+    expect(store.drafts()).toHaveLength(1);
+    expect(store.draft()?.run?.runId).toBe('r1');
+    expect(store.draft()?.failure).toContain('Stop the running plan');
     expect(send).not.toHaveBeenCalledWith('run.progress', { runId: 'old-run' });
   });
 
-  it('deletes a plan after confirming and closes it when open', async () => {
+  it('deletes a plan after confirming and closes its tab', async () => {
     const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(true));
     await store.open('a.run.yaml');
     handlers['runPlan.list'] = () => [];
@@ -159,8 +225,8 @@ describe('RunStore', () => {
 
     expect(confirm).toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith('runPlan.delete', { path: 'a.run.yaml' });
-    expect(store.draft()).toBeNull();
-    expect(store.showing()).toBe(false);
+    expect(store.drafts()).toEqual([]);
+    expect(workspace.tabs()).toEqual([]);
     expect(store.plans()).toEqual([]);
   });
 
@@ -175,12 +241,14 @@ describe('RunStore', () => {
   it('does not delete the open plan while it is running', async () => {
     const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(true));
     await store.open('a.run.yaml');
-    store.run.set(result({ state: 'running' }));
+    store.drafts.update((drafts) =>
+      drafts.map((d) => ({ ...d, run: result({ state: 'running' }) })),
+    );
 
     await store.delete('a.run.yaml');
 
     expect(confirm).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalledWith('runPlan.delete', expect.anything());
-    expect(store.error()).toContain('Stop the running plan');
+    expect(store.draft()?.failure).toContain('Stop the running plan');
   });
 });

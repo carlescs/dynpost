@@ -1,16 +1,33 @@
 # Missive
 
 Missive is a lightweight, cross-platform desktop HTTP client — a simplified take
-on Postman. Its difference: your collections are plain files in a folder you
-choose, and Missive can synchronize that folder with git directly from the app.
-No account, no cloud workspace, no proprietary export format.
+on Postman. Its difference: your collections are plain YAML files in a folder
+you choose, and Missive can commit, pull and push that folder with git directly
+from the app. No account, no cloud workspace, no proprietary export format.
 
-> **Status:** early development. You can open a workspace folder, browse its
-> request files in the explorer (a sidebar you can resize by dragging its edge),
-> edit them in the tabbed request editor and save changes or new requests back
-> to disk, send them with `{{variable}}` values from the selected environment
-> and inspect the response, and sync the folder with git from the Source
-> control view (status, commit, pull, push).
+With Missive you can:
+
+- **Build and send requests** — method, URL, query parameters, headers, auth
+  (Basic, Bearer, API key, OAuth 2.0) and bodies (JSON, text, form-data,
+  URL-encoded, GraphQL, binary), with `{{variable}}` values from the selected
+  environment.
+- **Inspect responses** — status, timing breakdown with redirects, headers,
+  cookies, and a pretty-printed body with HTML and PDF previews.
+- **Organize collections** — nested folders, drag and drop, Markdown docs per
+  request, and values captured from responses into variables.
+- **Sync with git** — status, diffs, commit, pull, push and branches, with
+  clear reporting of merge conflicts, using your existing git setup.
+- **Load test** — `*.run.yaml` plans that send requests from concurrent
+  virtual users, with live statistics and pass/fail thresholds.
+- **Bring your collections** — import from Postman, Insomnia, HAR and
+  OpenAPI/Swagger; export for Postman and Insomnia.
+
+Secrets, cookies, tokens and other local state stay in a git-ignored
+`.missive/` folder and never end up in the repository.
+
+> **Status:** early development — usable day to day, but the file format and
+> features may still change. See [Planned features](#planned-features) for
+> what is done and what is next.
 
 ## Install
 
@@ -448,8 +465,11 @@ Captures are not imported or exported: other tools express them as scripts.
 
 A load run sends a chosen set of requests repeatedly from several concurrent
 virtual users and reports latency percentiles, throughput and errors. The plan
-is a git-tracked `*.run.yaml` file (edit it in the **Load runs** view, with a
-visual form or as YAML text; the form keeps comments and unknown keys); results
+is a git-tracked `*.run.yaml` file (open it from the **Load runs** view in an
+editor tab, next to the open requests and environments, and edit it with a
+visual form or as YAML text; the form keeps comments and unknown keys). Each open
+plan follows its own run, so several plans can run at once; a running plan's tab
+can't be closed until it stops. Results
 are saved locally under `.missive/runs/` and never committed. Runs use the
 selected environment and send no cookies. Like requests, a plan whose file is
 named after it (`checkout-smoke.run.yaml` for "Checkout smoke") is renamed
