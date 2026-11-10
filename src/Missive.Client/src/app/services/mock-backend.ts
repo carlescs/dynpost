@@ -970,6 +970,22 @@ export class MockBackend {
         return /^\d+\.pdf$/.test(payload?.['file'] as string)
           ? ok({ body: MOCK_PDF })
           : fail('response_not_found', 'The response was not saved.');
+      case 'run.delete': {
+        const runId = payload?.['runId'] as string;
+        const run = this.runs.get(runId);
+        if (!run) return fail('run_not_found', 'There is no such run.');
+        if (this.simulateRun(runId, run).state === 'running')
+          return fail('invalid_request', 'Stop the run before deleting it.');
+        this.runs.delete(runId);
+        return ok(null);
+      }
+      case 'run.clear': {
+        const runs = [...this.runs].filter(([, run]) => run.path === path);
+        if (runs.some(([id, run]) => this.simulateRun(id, run).state === 'running'))
+          return fail('invalid_request', 'Stop the run of this plan before clearing its history.');
+        for (const [id] of runs) this.runs.delete(id);
+        return ok(null);
+      }
       case 'run.list':
         return ok(
           [...this.runs]

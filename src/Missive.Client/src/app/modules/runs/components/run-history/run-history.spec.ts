@@ -28,10 +28,17 @@ describe('RunHistory', () => {
     ]);
     fixture.componentRef.setInput('selected', 'r1');
     const selected: string[] = [];
+    const removed: string[] = [];
+    let cleared = 0;
     fixture.componentInstance.select.subscribe((id) => selected.push(id));
+    fixture.componentInstance.remove.subscribe((id) => removed.push(id));
+    fixture.componentInstance.clear.subscribe(() => cleared++);
     fixture.detectChanges();
-    const buttons = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')];
-    return { buttons, selected };
+    const element = fixture.nativeElement as HTMLElement;
+    const buttons = [...element.querySelectorAll<HTMLElement>('button[data-select]')];
+    const deletes = [...element.querySelectorAll<HTMLElement>('button[data-delete]')];
+    const clear = element.querySelector<HTMLElement>('button[data-clear]')!;
+    return { buttons, deletes, clear, selected, removed, cleared: () => cleared };
   }
 
   it('says how each run went', () => {
@@ -60,5 +67,14 @@ describe('RunHistory', () => {
     ]);
     buttons[0].click();
     expect(selected).toEqual(['r2']);
+  });
+
+  it('asks to delete a run or clear the history', () => {
+    const { deletes, clear, selected, removed, cleared } = create();
+    deletes[2].click();
+    clear.click();
+    expect(removed).toEqual(['r0']);
+    expect(selected).toEqual([]);
+    expect(cleared()).toBe(1);
   });
 });

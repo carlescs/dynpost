@@ -1,12 +1,26 @@
-<h3 class="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">History</h3>
+<div class="mb-1.5 flex items-center gap-2">
+  <h3 class="flex-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">History</h3>
+  <button
+    type="button"
+    class="rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-200 hover:text-rose-700"
+    title="Delete every saved run of this plan"
+    data-clear
+    (click)="clear.emit()"
+  >
+    Clear
+  </button>
+</div>
 <ul class="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
   @for (row of rows(); track row.run.runId) {
-    <li>
+    <li
+      class="group flex items-stretch border-l-2"
+      [class]="selected() === row.run.runId ? 'border-sky-600 bg-sky-50' : 'border-transparent'"
+    >
       <button
         type="button"
-        class="flex w-full items-center gap-3 border-l-2 px-3 py-1.5 text-left text-xs hover:bg-slate-50"
-        [class]="selected() === row.run.runId ? 'border-sky-600 bg-sky-50' : 'border-transparent'"
+        class="flex min-w-0 flex-1 items-center gap-3 px-3 py-1.5 text-left text-xs hover:bg-slate-50"
         [attr.aria-current]="selected() === row.run.runId ? 'true' : null"
+        data-select
         (click)="select.emit(row.run.runId)"
       >
         <fa-icon class="text-sm" [class]="row.color" [icon]="row.icon" [title]="row.label" />
@@ -35,6 +49,16 @@
             ></span>
           </span>
         </span>
+      </button>
+      <button
+        type="button"
+        class="flex w-8 shrink-0 items-center justify-center text-xs text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-100 hover:text-rose-700 focus-visible:opacity-100"
+        title="Delete this run"
+        aria-label="Delete this run"
+        data-delete
+        (click)="remove.emit(row.run.runId)"
+      >
+        <fa-icon [icon]="faTrash" />
       </button>
     </li>
   }

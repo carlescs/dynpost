@@ -201,6 +201,43 @@ public sealed class JsonRunStore : IRunStore
         }
     }
 
+    public Task<Result<Unit>> DeleteAsync(string root, string runId, CancellationToken cancellationToken = default)
+    {
+        if (!IsValidId(runId))
+        {
+            return Task.FromResult<Result<Unit>>(new Error(ErrorCodes.InvalidPath, $"'{runId}' is not a run id."));
+        }
+
+        try
+        {
+            var file = FilePath(root, runId);
+            if (!File.Exists(file))
+            {
+                return Task.FromResult<Result<Unit>>(new Error(RunErrorCodes.RunNotFound, $"There is no run '{runId}'."));
+            }
+
+            // The request log and responses first, so a failure never leaves them without their run.
+            var samples = SamplesPath(root, runId);
+            if (File.Exists(samples))
+            {
+                File.Delete(samples);
+            }
+
+            var responses = ResponsesFolder(root, runId);
+            if (Directory.Exists(responses))
+            {
+                Directory.Delete(responses, recursive: true);
+            }
+
+            File.Delete(file);
+            return Task.FromResult<Result<Unit>>(Unit.Value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Task.FromResult<Result<Unit>>(new Error(ErrorCodes.Io, $"Could not delete the run: {ex.Message}"));
+        }
+    }
+
     public async Task<Result<Unit>> DeletePlanAsync(string root, string planPath, CancellationToken cancellationToken = default)
     {
         try

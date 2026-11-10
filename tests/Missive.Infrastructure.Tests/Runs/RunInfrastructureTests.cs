@@ -380,4 +380,26 @@ public sealed class RunInfrastructureTests : IDisposable
         Assert.False((await store.GetAsync(_root, "run-1")).IsSuccess);
         Assert.Single((await store.ListAsync(_root, "other.run.yaml")).Value);
     }
+
+    [Fact]
+    public async Task RunStore_DeletesARun()
+    {
+        var store = new JsonRunStore();
+        var stats = new StatsDto(3, 1, 33.33, 1, 2, 2, 3, 3, 3, 3, 1.5, 0, 10, new Dictionary<string, long>(), new Dictionary<string, long>());
+        RunResultDto Run(string id) =>
+            new(id, "a.run.yaml", "P", "completed", DateTimeOffset.UnixEpoch, 2000, 2, 0, stats, [], [], [], true, [], [], null);
+        await store.SaveAsync(_root, Run("run-1"));
+        await store.SaveSamplesAsync(_root, "run-1", [new SampleDto("a.yaml", 1, 1, 0, 1, 200, null, "GET", null, null, null)]);
+        await store.SaveResponseAsync(_root, "run-1", "1.json", [1, 2]);
+        await store.SaveAsync(_root, Run("run-2"));
+
+        Assert.True((await store.DeleteAsync(_root, "run-1")).IsSuccess);
+        Assert.Equal(RunErrorCodes.ResponseNotFound, (await store.GetResponseAsync(_root, "run-1", "1.json")).Error!.Code);
+
+        Assert.Equal("run-2", Assert.Single((await store.ListAsync(_root, "a.run.yaml")).Value).RunId);
+        Assert.Equal(RunErrorCodes.RunNotFound, (await store.GetAsync(_root, "run-1")).Error!.Code);
+        Assert.Empty((await store.GetSamplesAsync(_root, "run-1")).Value);
+        Assert.Equal(RunErrorCodes.RunNotFound, (await store.DeleteAsync(_root, "run-1")).Error!.Code);
+        Assert.Equal(ErrorCodes.InvalidPath, (await store.DeleteAsync(_root, "../x")).Error!.Code);
+    }
 }

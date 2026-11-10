@@ -198,6 +198,12 @@ internal static class BridgeMessageTypes
     /// <summary>The earlier runs of a plan, newest first. Payload: <see cref="RunPlanPathPayload"/>. Result: run summaries.</summary>
     public const string RunList = "run.list";
 
+    /// <summary>Deletes an earlier run and its request log. Payload: <see cref="RunIdPayload"/>. Result: none.</summary>
+    public const string RunDelete = "run.delete";
+
+    /// <summary>Deletes all the earlier runs of a plan. Payload: <see cref="RunPlanPathPayload"/>. Result: none.</summary>
+    public const string RunClear = "run.clear";
+
     /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
     public const string GitStatus = "git.status";
 
