@@ -26,14 +26,20 @@ public class ExportFormatTests
         RequestMethod.Post,
         "https://auth.test:8443/login",
         auth: new BasicAuth("ada", "{{password}}"),
-        body: new RequestBody(BodyType.UrlEncoded, "user=ada%40example.com\nremember=1"));
+        body: RequestBody.WithFields(BodyType.UrlEncoded, [new FormField("user", "ada@example.com", Encode: true), new FormField("remember", "1")]));
 
     private static readonly HttpRequestDefinition Upload = new(
         "Upload",
         RequestMethod.Put,
         "{{baseUrl}}/files",
         auth: new ApiKeyAuth("api_key", "{{key}}", ApiKeyLocation.Query),
-        body: new RequestBody(BodyType.Form, "title=Report\nkind=pdf"));
+        body: RequestBody.WithFields(BodyType.Form,
+        [
+            new FormField("title", "Report"),
+            new FormField("kind", "pdf", Enabled: false),
+            FormField.File("file", "docs/report.pdf", "application/pdf"),
+            FormField.File("file", "docs/appendix.pdf"),
+        ]));
 
     private static readonly RequestCollection Collection = new(
         new CollectionFolder(

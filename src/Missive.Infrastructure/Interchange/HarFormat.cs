@@ -101,28 +101,20 @@ internal static class HarFormat
         var mimeType = postData.Str("mimeType");
         var type = InterchangeText.BodyTypeFor(mimeType);
         var text = postData.Str("text") ?? string.Empty;
-        var fields = new List<KeyValuePair<string, string>>();
+        var fields = new List<FormField>();
         foreach (var field in postData.Arr("params").Where(p => p.Str("name") is not null))
         {
-            if (field.Str("fileName") is { Length: > 0 } fileName)
-            {
-                var contentType = field.Str("contentType");
-                fields.Add(KeyValuePair.Create(
-                    field.Str("name")!,
-                    $"@{fileName}{(string.IsNullOrWhiteSpace(contentType) ? string.Empty : $";type={contentType}")}"));
-            }
-            else
-            {
-                fields.Add(KeyValuePair.Create(field.Str("name")!, field.Str("value") ?? string.Empty));
-            }
+            fields.Add(field.Str("fileName") is { Length: > 0 } fileName
+                ? FormField.File(field.Str("name")!, fileName, field.Str("contentType") ?? string.Empty)
+                : new FormField(field.Str("name")!, field.Str("value") ?? string.Empty));
         }
 
         return type switch
         {
-            BodyType.UrlEncoded => new RequestBody(type, fields.Count > 0
+            BodyType.UrlEncoded => fields.Count > 0
                 ? InterchangeText.UrlEncodedBody(fields)
-                : string.Join('\n', text.Split('&', StringSplitOptions.RemoveEmptyEntries))),
-            BodyType.Form => fields.Count > 0 ? new RequestBody(type, InterchangeText.FormBody(fields)) : RequestBody.None,
+                : RequestBody.WithFields(type, FormFields.ParseText(text, type)),
+            BodyType.Form => fields.Count > 0 ? InterchangeText.FormBody(fields) : RequestBody.None,
             _ when postData.Str("fileName") is { Length: > 0 } fileName => new RequestBody(BodyType.Binary, fileName),
             _ => text.Length == 0 ? RequestBody.None : new RequestBody(type, text),
         };

@@ -287,10 +287,10 @@ internal static partial class PostmanFormat
                 return new RequestBody(json ? BodyType.Json : BodyType.Text, raw);
 
             case "urlencoded":
-                return new RequestBody(BodyType.UrlEncoded, InterchangeText.UrlEncodedBody(Fields(body.Arr("urlencoded"), owner, warnings)));
+                return InterchangeText.UrlEncodedBody(Fields(body.Arr("urlencoded"), owner, warnings));
 
             case "formdata":
-                return new RequestBody(BodyType.Form, InterchangeText.FormBody(Fields(body.Arr("formdata"), owner, warnings)));
+                return InterchangeText.FormBody(Fields(body.Arr("formdata"), owner, warnings));
             case "file":
                 var filePath = body.Obj("file").Str("src") ?? body.Obj("file").Str("fileName");
                 if (!string.IsNullOrWhiteSpace(filePath))
@@ -316,39 +316,38 @@ internal static partial class PostmanFormat
         }
     }
 
-    private static List<KeyValuePair<string, string>> Fields(IEnumerable<JsonNode> fields, string owner, List<string> warnings)
+    private static List<FormField> Fields(IEnumerable<JsonNode> fields, string owner, List<string> warnings)
     {
-        var result = new List<KeyValuePair<string, string>>();
-        foreach (var field in fields.Where(f => !f.Bool("disabled") && f.Str("key") is not null))
+        var result = new List<FormField>();
+        foreach (var field in fields.Where(f => f.Str("key") is not null))
         {
             var key = field.Str("key");
+            var enabled = !field.Bool("disabled");
             if (string.IsNullOrWhiteSpace(key))
             {
                 warnings.Add($"Skipped a form field of '{owner}' that has no name.");
                 continue;
             }
 
+            var contentType = field.Str("contentType") ?? string.Empty;
             if (field.Str("type") == "file")
             {
-                var path = field.Str("src") ?? field.Str("fileName");
-                if (string.IsNullOrWhiteSpace(path))
+                // Postman keeps several files of one field as an array of paths.
+                var paths = field["src"] is JsonArray array
+                    ? array.Select(item => item is JsonValue value && value.TryGetValue<string>(out var path) ? path : null).ToList()
+                    : [field.Str("src") ?? field.Str("fileName")];
+                paths = paths.Where(path => !string.IsNullOrWhiteSpace(path)).ToList();
+                if (paths.Count == 0)
                 {
                     warnings.Add($"Skipped the file field '{key}' of '{owner}': the import has no file path.");
                     continue;
                 }
 
-                var contentType = field.Str("contentType");
-                var value = $"@{path}";
-                if (!string.IsNullOrWhiteSpace(contentType))
-                {
-                    value += $";type={contentType}";
-                }
-
-                result.Add(KeyValuePair.Create(key, value));
+                result.AddRange(paths.Select(path => FormField.File(key, path!, contentType, enabled: enabled)));
             }
             else
             {
-                result.Add(KeyValuePair.Create(key, field.Str("value") ?? string.Empty));
+                result.Add(new FormField(key, field.Str("value") ?? string.Empty, Enabled: enabled, ContentType: contentType));
             }
         }
 
@@ -473,8 +472,24 @@ internal static partial class PostmanFormat
 
     private static JsonObject? ExportBody(RequestBody body)
     {
-        JsonArray Pairs(bool encoded) => new(InterchangeText.BodyFields(body.Content, encoded)
-            .Select(f => (JsonNode)new JsonObject { ["key"] = f.Key, ["value"] = f.Value, ["type"] = "text" })
+        JsonArray Pairs() => new(InterchangeText.PlainFields(body)
+            .Select(f =>
+            {
+                var field = f.IsFile
+                    ? new JsonObject { ["key"] = f.Name, ["type"] = "file", ["src"] = f.Value }
+                    : new JsonObject { ["key"] = f.Name, ["value"] = f.Value, ["type"] = "text" };
+                if (f.ContentType.Length > 0)
+                {
+                    field["contentType"] = f.ContentType;
+                }
+
+                if (!f.Enabled)
+                {
+                    field["disabled"] = true;
+                }
+
+                return (JsonNode)field;
+            })
             .ToArray());
 
         return body.Type switch
@@ -495,8 +510,8 @@ internal static partial class PostmanFormat
                 },
             },
             BodyType.Text => new JsonObject { ["mode"] = "raw", ["raw"] = body.Content },
-            BodyType.UrlEncoded => new JsonObject { ["mode"] = "urlencoded", ["urlencoded"] = Pairs(encoded: true) },
-            BodyType.Form => new JsonObject { ["mode"] = "formdata", ["formdata"] = Pairs(encoded: false) },
+            BodyType.UrlEncoded => new JsonObject { ["mode"] = "urlencoded", ["urlencoded"] = Pairs() },
+            BodyType.Form => new JsonObject { ["mode"] = "formdata", ["formdata"] = Pairs() },
             _ => null,
         };
     }

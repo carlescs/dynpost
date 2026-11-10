@@ -252,7 +252,11 @@ public sealed class SendRequest(
                     masking.Headers(hop.SentHeaders)))
                 .ToList(),
             response.Sent is { } sent
-                ? new SentRequestDto(sent.Method, masking.Url(sent.Url), masking.Headers(sent.Headers))
+                ? new SentRequestDto(
+                    sent.Method,
+                    masking.Url(sent.Url),
+                    masking.Headers(sent.Headers),
+                    sent.Parts?.Select(part => new SentPartDto(part.Name, part.FileName, part.ContentType, part.Size)).ToList())
                 : null,
             setCookies);
     }

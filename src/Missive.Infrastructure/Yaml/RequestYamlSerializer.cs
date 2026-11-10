@@ -43,6 +43,10 @@ public static class RequestYamlSerializer
                         body.Scalar("variables", request.Body.Variables);
                     }
                 }
+                else if (request.Body.Fields is { Count: > 0 } fields)
+                {
+                    body.MappingSequence("fields", fields, WriteField);
+                }
                 else if (request.Body.Content.Length > 0)
                 {
                     body.Scalar("content", request.Body.Content);
@@ -129,6 +133,35 @@ public static class RequestYamlSerializer
                 map.Scalar(entry.Enabled ? entry.Key : DisabledPrefix + entry.Key, entry.Value);
             }
         });
+    }
+
+    /// <summary>
+    /// Writes a body field: <c>name</c>, then <c>value</c> (text) or <c>file</c> (a path), then
+    /// <c>fileName</c>, <c>contentType</c>, <c>encode</c> and <c>disabled</c> when they are set.
+    /// </summary>
+    private static void WriteField(YamlWriter writer, FormField field)
+    {
+        writer.Scalar("name", field.Name);
+        if (field.IsFile)
+        {
+            writer.Scalar("file", field.Value);
+            ScalarIfNotEmpty(writer, "fileName", field.FileName);
+        }
+        else
+        {
+            ScalarIfNotEmpty(writer, "value", field.Value);
+        }
+
+        ScalarIfNotEmpty(writer, "contentType", field.ContentType);
+        if (field.Encode)
+        {
+            writer.Boolean("encode", true);
+        }
+
+        if (!field.Enabled)
+        {
+            writer.Boolean("disabled", true);
+        }
     }
 
     private static void WriteAuth(YamlWriter writer, RequestAuth auth)
@@ -322,9 +355,51 @@ public static class RequestYamlSerializer
                 type,
                 OptionalString(map, "query") ?? OptionalString(map, "content") ?? string.Empty,
                 OptionalString(map, "variables") ?? string.Empty),
+            BodyType.Form or BodyType.UrlEncoded when Optional(map, "fields") is { } fields && !IsNull(fields) =>
+                RequestBody.WithFields(type, ReadFields(fields)),
             _ => new RequestBody(type, OptionalString(map, "content") ?? string.Empty),
         };
     }
+
+    private static IEnumerable<FormField> ReadFields(YamlNode node)
+    {
+        if (node is not YamlSequenceNode sequence)
+        {
+            throw new RequestFormatException("'body.fields' must be a list of fields.");
+        }
+
+        foreach (var item in sequence.Children)
+        {
+            if (item is not YamlMappingNode field)
+            {
+                throw new RequestFormatException("Each of 'body.fields' must be a mapping with a 'name'.");
+            }
+
+            var name = OptionalString(field, "name") ?? string.Empty;
+            var file = OptionalString(field, "file");
+            if (file is null && Optional(field, "file") is { } fileNode && IsNull(fileNode))
+            {
+                file = string.Empty;
+            }
+
+            yield return new FormField(
+                name,
+                file ?? OptionalString(field, "value") ?? string.Empty,
+                file is null ? FormFieldKind.Text : FormFieldKind.File,
+                !OptionalBoolean(field, "disabled", $"body.fields.{name}"),
+                OptionalString(field, "contentType") ?? string.Empty,
+                file is null ? string.Empty : OptionalString(field, "fileName") ?? string.Empty,
+                OptionalBoolean(field, "encode", $"body.fields.{name}"));
+        }
+    }
+
+    private static bool OptionalBoolean(YamlMappingNode map, string key, string owner) =>
+        OptionalString(map, key)?.ToLowerInvariant() switch
+        {
+            null or "" or "false" => false,
+            "true" => true,
+            var other => throw new RequestFormatException($"'{owner}.{key}' must be true or false, not '{other}'."),
+        };
 
     private static YamlNode? Optional(YamlMappingNode map, string key) =>
         map.Children.TryGetValue(new YamlScalarNode(key), out var node) ? node : null;

@@ -8,7 +8,7 @@ namespace Missive.Infrastructure.Yaml;
 /// A tiny block-style YAML writer with deterministic output: 2-space indent, LF line endings,
 /// plain scalars where they are unambiguous strings, double quotes otherwise, and literal blocks
 /// (<c>|</c>) for multi-line text. It only writes what Missive's files need — nested mappings of
-/// string scalars and sequences of single-line strings — so the output is predictable and diffs stay small.
+/// string scalars, sequences of single-line strings and sequences of such mappings — so the output is predictable and diffs stay small.
 /// </summary>
 internal sealed partial class YamlWriter
 {
@@ -67,6 +67,36 @@ internal sealed partial class YamlWriter
         }
 
         _depth--;
+        return this;
+    }
+
+    /// <summary>
+    /// Writes <c>key:</c> followed by one <c>- </c> item per element, each a mapping that
+    /// <paramref name="item"/> writes (its first key on the <c>- </c> line, the others under it).
+    /// </summary>
+    public YamlWriter MappingSequence<T>(string key, IEnumerable<T> items, Action<YamlWriter, T> item)
+    {
+        Indent();
+        _builder.Append(FormatKey(key)).Append(":\n");
+        var indent = new string(' ', (_depth + 1) * IndentSize);
+        foreach (var element in items)
+        {
+            var inner = new YamlWriter();
+            item(inner, element);
+            // Every line ends with '\n'; blank lines inside literal blocks are kept.
+            var text = inner.ToString();
+            var lines = (text.EndsWith('\n') ? text[..^1] : text).Split('\n');
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Length > 0)
+                {
+                    _builder.Append(indent).Append(i == 0 ? "- " : "  ").Append(lines[i]);
+                }
+
+                _builder.Append('\n');
+            }
+        }
+
         return this;
     }
 
