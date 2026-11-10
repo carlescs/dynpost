@@ -19,6 +19,7 @@ import {
   textChange,
 } from '../../models/request-diff-model';
 import { TextChange } from '../text-change/text-change';
+import { bodyText } from '../../../../models/form-fields';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
 
@@ -89,6 +90,7 @@ export class RequestDiff {
   });
 
   protected split = textChange;
+  protected readonly bodyText = bodyText;
 
   protected methodColor(request: RequestContent): string {
     return METHOD_COLORS[request.method];

@@ -20,6 +20,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { ERROR_CODES, ResponseDto } from '../../../../models/messages';
 import { RequestDocument } from '../../../../models/workspace';
+import { formatSize } from '../../../../models/format-size';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
 import { languageForMediaType } from '../../../../components/code-editor/monaco-loader';
@@ -243,11 +244,7 @@ export class ResponseViewer {
     return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`;
   }
 
-  protected formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
+  protected readonly formatSize = formatSize;
 
   protected isImage(r: ResponseDto): boolean {
     return !!r.contentType?.startsWith('image/') && !r.truncated;

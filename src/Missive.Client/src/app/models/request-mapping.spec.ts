@@ -12,6 +12,7 @@ const content: RequestContent = {
   bodyType: 'json',
   body: '{"name":"Ada"}',
   bodyVariables: '',
+  bodyFields: null,
   description: '# Notes',
   captures: [{ variable: 'token', expression: '$.token' }],
 };
@@ -92,6 +93,61 @@ describe('request mapping', () => {
       expect(
         toRequestDto({ ...content, bodyType: 'binary', body: './fixtures/data.bin' }).body,
       ).toEqual({ type: 'binary', content: './fixtures/data.bin' });
+    });
+  });
+
+  describe('form fields', () => {
+    const fields = [
+      {
+        name: 'meta',
+        value: '{}',
+        kind: 'text' as const,
+        enabled: true,
+        contentType: 'application/json',
+        fileName: '',
+        encode: false,
+      },
+      {
+        name: 'file',
+        value: 'a.png',
+        kind: 'file' as const,
+        enabled: false,
+        contentType: '',
+        fileName: 'b.png',
+        encode: false,
+      },
+    ];
+
+    it('sends the fields of a form body, and only what each field uses', () => {
+      const dto = toRequestDto({ ...content, bodyType: 'form', body: 'old', bodyFields: fields });
+      expect(dto.body).toEqual({
+        type: 'form',
+        content: '',
+        fields: [
+          {
+            name: 'meta',
+            value: '{}',
+            kind: 'text',
+            enabled: true,
+            contentType: 'application/json',
+          },
+          { name: 'file', value: 'a.png', kind: 'file', enabled: false, fileName: 'b.png' },
+        ],
+      });
+      expect(fromRequestDto(dto).bodyFields).toEqual(fields);
+    });
+
+    it('keeps the text of an older file until the fields are edited', () => {
+      const dto = toRequestDto({ ...content, bodyType: 'urlencoded', body: 'a=1' });
+      expect(dto.body).toEqual({ type: 'urlencoded', content: 'a=1' });
+      expect(fromRequestDto(dto)).toMatchObject({ body: 'a=1', bodyFields: null });
+    });
+
+    it('sends the text of other body types even when fields were edited before', () => {
+      expect(toRequestDto({ ...content, bodyFields: fields }).body).toEqual({
+        type: 'json',
+        content: '{"name":"Ada"}',
+      });
     });
   });
 

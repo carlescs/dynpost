@@ -243,6 +243,9 @@ public class RunDomainTests
         Assert.Equal(
             new RequestBody(BodyType.Graphql, "{\"id\":1}", "{\"v\":1}"),
             RunBodies.Replace(new RequestBody(BodyType.Graphql, "query", "{\"v\":1}"), file));
+        Assert.Equal(
+            new RequestBody(BodyType.UrlEncoded, "{\"id\":1}"),
+            RunBodies.Replace(RequestBody.WithFields(BodyType.UrlEncoded, [new FormField("a", "1")]), file));
     }
 
     [Fact]

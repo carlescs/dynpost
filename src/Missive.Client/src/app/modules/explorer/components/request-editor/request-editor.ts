@@ -32,6 +32,8 @@ import { ResponseViewer } from '../response-viewer/response-viewer';
 import { VariableInput } from '../../../../components/variable-input/variable-input';
 import { MarkdownView } from '../../../../components/markdown-view/markdown-view';
 import { OAuth2Auth } from '../oauth2-auth/oauth2-auth';
+import { FormFieldsEditor } from '../form-fields-editor/form-fields-editor';
+import { fieldsOf, isAbsolutePath } from '../../../../models/form-fields';
 import { Bridge } from '../../../../services/bridge';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
@@ -46,6 +48,7 @@ type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
     VariableInput,
     MarkdownView,
     OAuth2Auth,
+    FormFieldsEditor,
   ],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './request-editor.html',
@@ -149,34 +152,22 @@ export class RequestEditor {
     void this.store.cancelSend(this.document().id);
   }
 
-  protected async pickBodyFile(multipart = false): Promise<void> {
+  protected async pickBodyFile(): Promise<void> {
     try {
       const file = await this.bridge.send('request.pickFile');
-      if (!file) return;
-
-      const current = this.document().body;
-      const body = multipart
-        ? `${current.trimEnd()}${current.trim() ? '\n' : ''}file=@${file.path}`
-        : file.path;
-      this.patch({ body });
+      if (file) this.patch({ body: file.path });
     } catch (error) {
-      this.store.error.set(error instanceof Error ? error.message : String(error));
+      this.showError(error);
     }
   }
 
-  protected hasAbsoluteFilePath(body: string, multipart: boolean): boolean {
-    const absolute = (path: string) => /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path);
-    return multipart
-      ? body.split('\n').some((line) => {
-          const eq = line.indexOf('=');
-          if (eq < 0) {
-            return false;
-          }
-          const value = line.slice(eq + 1).trim();
-          return value.startsWith('@') && absolute(value.slice(1).split(';type=')[0]);
-        })
-      : absolute(body.trim());
+  protected showError(error: unknown): void {
+    this.store.error.set(error instanceof Error ? error.message : String(error));
   }
+
+  /** The fields of a form or urlencoded body, also when an older file keeps them as text. */
+  protected readonly bodyFields = computed(() => fieldsOf(this.document()));
+  protected readonly isAbsolutePath = isAbsolutePath;
 
   /** The captures as table rows: variable name and expression. */
   protected captureRows(doc: RequestDocument): KeyValue[] {

@@ -1,0 +1,259 @@
+<div class="mt-2 flex items-center gap-2 text-xs text-slate-500">
+  @if (bulkText() === null) {
+    <span class="flex-1">
+      @if (multipart()) {
+        Each row is a part, sent in this order. Drag rows to reorder them.
+      } @else {
+        Values are sent as written unless <em>Encode</em> is checked.
+      }
+    </span>
+    <button
+      type="button"
+      class="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+      [disabled]="bulkProblem() !== null"
+      [title]="
+        bulkProblem() === null
+          ? 'Edit the fields as name=value text'
+          : 'Bulk edit can\'t show these fields: ' + bulkProblem()
+      "
+      (click)="startBulk()"
+    >
+      Bulk edit
+    </button>
+  } @else {
+    <span class="flex-1">
+      One <code>name=value</code> per line; <code>~</code> before a field disables it.
+      @if (multipart()) {
+        Files are <code>name=&#64;path</code>, optionally followed by
+        <code>;type=image/png</code> and <code>;filename=photo.png</code>.
+      } @else {
+        Values are sent as written, so percent-encode them.
+      }
+    </span>
+    <button
+      type="button"
+      class="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100"
+      (click)="stopBulk()"
+    >
+      Table
+    </button>
+  }
+</div>
+
+@if (bulkText() !== null) {
+  <app-code-editor
+    class="mt-2 min-h-24 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
+    ariaLabel="Body fields as text"
+    [value]="bulkText()!"
+    language="plaintext"
+    [highlightVariables]="true"
+    [variables]="variables()"
+    (valueChange)="bulkChanged($event)"
+    (submit)="submit.emit()"
+  />
+} @else {
+  <div class="mt-2 min-h-0 flex-1 overflow-auto">
+    <div
+      class="flex items-center gap-1 border-b border-slate-200 pb-1 text-left text-xs font-medium text-slate-500"
+    >
+      <span class="w-4 shrink-0"></span>
+      <span class="w-5 shrink-0"></span>
+      <span class="w-32 shrink-0 px-2">Name</span>
+      @if (multipart()) {
+        <span class="w-16 shrink-0 px-1">Kind</span>
+      }
+      <span class="min-w-0 flex-1 px-2">Value</span>
+      @if (multipart()) {
+        <span class="w-44 shrink-0 px-2">Content type</span>
+        <span class="w-32 shrink-0 px-2">File name</span>
+      } @else {
+        <span class="w-16 shrink-0 text-center">Encode</span>
+      }
+      <span class="w-12 shrink-0"></span>
+    </div>
+    <div cdkDropList (cdkDropListDropped)="drop($event)">
+      @for (field of rows(); track $index; let i = $index; let last = $last) {
+        <div
+          class="flex items-start gap-1 border-b border-slate-200 bg-white py-0.5"
+          [class.opacity-60]="!field.enabled"
+          cdkDrag
+          [cdkDragDisabled]="last"
+          data-field-row
+        >
+          <span
+            class="flex h-7 w-4 shrink-0 items-center justify-center text-xs text-slate-400"
+            [class.cursor-grab]="!last"
+            [class.invisible]="last"
+            cdkDragHandle
+            title="Drag to reorder"
+          >
+            <fa-icon [icon]="faGripVertical" />
+          </span>
+          <span class="flex h-7 w-5 shrink-0 items-center justify-center">
+            @if (!last) {
+              <input
+                type="checkbox"
+                [checked]="field.enabled"
+                [attr.aria-label]="'Send ' + (field.name || 'field')"
+                [title]="field.enabled ? 'Sent: uncheck to keep it without sending it' : 'Not sent'"
+                (change)="patch(i, { enabled: $any($event.target).checked })"
+              />
+            }
+          </span>
+          <app-variable-input
+            class="w-32 shrink-0"
+            ariaLabel="Field name"
+            [fieldClass]="cellClass"
+            placeholder="Name"
+            [value]="field.name"
+            [variables]="variables()"
+            (valueChange)="patch(i, { name: $event })"
+          />
+          @if (multipart()) {
+            <select
+              class="h-7 w-16 shrink-0 rounded border border-transparent bg-transparent text-xs hover:border-slate-300"
+              aria-label="Field kind"
+              [value]="field.kind"
+              (change)="setKind(i, $any($event.target).value === 'file')"
+            >
+              <option value="text">Text</option>
+              <option value="file">File</option>
+            </select>
+          }
+          <div class="min-w-0 flex-1">
+            @if (field.kind === 'file' && multipart()) {
+              <div class="flex items-center gap-1">
+                <app-variable-input
+                  class="min-w-0 flex-1"
+                  ariaLabel="File path"
+                  [fieldClass]="cellClass"
+                  placeholder="path/to/file"
+                  [value]="field.value"
+                  [variables]="variables()"
+                  (valueChange)="patch(i, { value: $event })"
+                />
+                <button
+                  type="button"
+                  class="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-xs hover:bg-slate-100"
+                  title="Choose one or more files; extra files are added as rows with the same name"
+                  (click)="pickFiles(i)"
+                >
+                  Choose…
+                </button>
+              </div>
+              @if (!last && fileStatus(field); as status) {
+                <p
+                  class="px-2 pb-0.5 text-xs"
+                  [class]="status.warning ? 'text-amber-700' : 'text-slate-500'"
+                  data-file-status
+                >
+                  @if (status.warning) {
+                    <fa-icon [icon]="faTriangleExclamation" />
+                  }
+                  {{ status.text }}
+                </p>
+              }
+            } @else if (isExpanded(i, field)) {
+              <textarea
+                class="block min-h-20 w-full resize-y rounded border border-slate-200 px-2 py-1 font-mono text-sm focus:border-sky-500 focus:outline-none"
+                aria-label="Field value"
+                placeholder="Value"
+                spellcheck="false"
+                [value]="field.value"
+                (input)="patch(i, { value: $any($event.target).value })"
+              ></textarea>
+            } @else {
+              <app-variable-input
+                ariaLabel="Field value"
+                [fieldClass]="cellClass"
+                placeholder="Value"
+                [value]="field.value"
+                [variables]="variables()"
+                (valueChange)="patch(i, { value: $event })"
+              />
+            }
+          </div>
+          @if (multipart()) {
+            <input
+              class="w-44 shrink-0 min-w-0 rounded px-2 py-1 font-mono text-sm focus:bg-sky-50 focus:outline-none"
+              aria-label="Content type"
+              list="form-part-content-types"
+              [placeholder]="field.kind === 'file' ? 'Auto' : 'Default'"
+              [value]="field.contentType"
+              (input)="patch(i, { contentType: $any($event.target).value })"
+            />
+            @if (field.kind === 'file') {
+              <input
+                class="w-32 shrink-0 min-w-0 rounded px-2 py-1 font-mono text-sm focus:bg-sky-50 focus:outline-none"
+                aria-label="File name"
+                [placeholder]="field.value ? fileNameOf(field.value) : 'File\'s own name'"
+                [value]="field.fileName"
+                (input)="patch(i, { fileName: $any($event.target).value })"
+              />
+            } @else {
+              <span class="w-32 shrink-0"></span>
+            }
+          } @else {
+            <span class="flex h-7 w-16 shrink-0 items-center justify-center">
+              <input
+                type="checkbox"
+                aria-label="Percent-encode"
+                title="Percent-encode the name and value when sending"
+                [checked]="field.encode"
+                (change)="patch(i, { encode: $any($event.target).checked })"
+              />
+            </span>
+          }
+          <span class="flex h-7 w-12 shrink-0 items-center justify-end gap-2 pr-1">
+            @if (field.kind === 'text' || !multipart()) {
+              <button
+                type="button"
+                class="text-slate-400 hover:text-slate-700"
+                [title]="isExpanded(i, field) ? 'Edit on one line' : 'Edit on several lines'"
+                [attr.aria-label]="isExpanded(i, field) ? 'Collapse value' : 'Expand value'"
+                [disabled]="hasLineBreaks(field)"
+                (click)="toggleExpanded(i, field)"
+              >
+                <fa-icon [icon]="isExpanded(i, field) ? faMinimize : faMaximize" />
+              </button>
+            }
+            @if (!last) {
+              <button
+                type="button"
+                class="text-slate-400 hover:text-rose-600"
+                title="Remove field"
+                aria-label="Remove field"
+                (click)="remove(i)"
+              >
+                <fa-icon [icon]="faTrash" />
+              </button>
+            }
+          </span>
+        </div>
+      }
+    </div>
+    @if (multipart()) {
+      <button
+        type="button"
+        class="mt-2 flex items-center gap-1 rounded border border-slate-300 px-2 py-0.5 text-xs hover:bg-slate-100"
+        (click)="pickFiles(fields().length)"
+      >
+        <fa-icon [icon]="faFileArrowUp" /> Add files…
+      </button>
+      <datalist id="form-part-content-types">
+        @for (type of contentTypes; track type) {
+          <option [value]="type"></option>
+        }
+      </datalist>
+    }
+  </div>
+}
+
+<p
+  class="mt-2 flex items-center gap-1 text-xs"
+  [class]="contentTypeHint().warning ? 'text-amber-700' : 'text-slate-500'"
+  data-content-type-hint
+>
+  <fa-icon [icon]="contentTypeHint().warning ? faTriangleExclamation : faCircleInfo" />
+  {{ contentTypeHint().text }}
+</p>

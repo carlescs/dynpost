@@ -26,8 +26,9 @@ public static class RunBodies
     /// <summary>
     /// The request's body with its content taken from <paramref name="file"/>: the file's text
     /// (variables are resolved when the request is prepared) or, for a binary body, its path.
-    /// The body type, and so the Content-Type, stays the request's.
+    /// The body type, and so the Content-Type, stays the request's. A <c>urlencoded</c> body's
+    /// fields are replaced too: the file's text is sent as written.
     /// </summary>
     public static RequestBody Replace(RequestBody body, RunBodyFile file) =>
-        body with { Content = body.Type == BodyType.Binary ? file.Path.Value : file.Text ?? string.Empty };
+        body with { Content = body.Type == BodyType.Binary ? file.Path.Value : file.Text ?? string.Empty, Fields = null };
 }
