@@ -9,6 +9,7 @@ import {
   WorkspaceNode,
 } from '../models/workspace';
 import { EMPTY_AUTH, fromNodeDto, fromRequestDto, toRequestDto } from '../models/request-mapping';
+import { DISCARD, Dialogs } from './dialogs';
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 600;
@@ -24,6 +25,7 @@ export const SIDEBAR_DEFAULT_WIDTH = 256;
 @Injectable({ providedIn: 'root' })
 export class WorkspaceStore {
   private readonly bridge = inject(Bridge);
+  private readonly dialogs = inject(Dialogs);
 
   readonly isDesktop = this.bridge.isDesktop;
   readonly workspace = signal<WorkspaceInfo | null>(null);
@@ -116,7 +118,7 @@ export class WorkspaceStore {
    * closing the open documents.
    */
   private async switchWorkspace(open: () => Promise<WorkspaceDto | null>): Promise<void> {
-    if (!this.confirmDiscard('Open another folder?')) return;
+    if (!(await this.confirmDiscard('Open another folder?'))) return;
     this.opening.set(true);
     try {
       const workspace = await open();
@@ -175,7 +177,7 @@ export class WorkspaceStore {
             ),
           );
         } else {
-          this.close(current.id);
+          this.discard(current);
         }
       }
     }
@@ -439,7 +441,15 @@ export class WorkspaceStore {
       `Keep "${name}" on this computer only?\n\n` +
       'It is added to .gitignore. If it was committed before, your next commit removes it from ' +
       'the repository, but the file stays here; others stop receiving changes to it.';
-    if (localOnly && !confirm(question)) return false;
+    if (
+      localOnly &&
+      !(await this.dialogs.confirm(question, {
+        title: 'Make local-only?',
+        confirmLabel: 'Keep local',
+      }))
+    ) {
+      return false;
+    }
 
     try {
       await this.bridge.send('sharing.set', { path, localOnly });
@@ -463,7 +473,12 @@ export class WorkspaceStore {
     const name = doc?.name || path;
     const question =
       `Delete the request "${name}"?` + (doc?.dirty ? ' Its unsaved changes will be lost.' : '');
-    if (!confirm(question)) return;
+    const ok = await this.dialogs.confirm(question, {
+      title: 'Delete request?',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
       await this.bridge.send('request.delete', { path });
@@ -490,7 +505,12 @@ export class WorkspaceStore {
       `Delete the folder "${path}"` +
       (requests ? ` and the ${requests} request(s) in it?` : '?') +
       (dirty ? ` ${dirty} open request(s) with unsaved changes will be closed.` : '');
-    if (!confirm(question)) return;
+    const ok = await this.dialogs.confirm(question, {
+      title: 'Delete folder?',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
       await this.bridge.send('folder.delete', { path });
@@ -546,11 +566,20 @@ export class WorkspaceStore {
   }
 
   /** Closes a request document's tab, after asking if it has unsaved changes. */
-  close(id: string): void {
+  async close(id: string): Promise<void> {
     const doc = this.documents().find((d) => d.id === id);
     if (!doc) return;
-    if (doc.dirty && !confirm(`Discard unsaved changes to "${doc.name}"?`)) return;
+    if (
+      doc.dirty &&
+      !(await this.dialogs.confirm(`Discard unsaved changes to "${doc.name}"?`, DISCARD))
+    ) {
+      return;
+    }
+    this.discard(doc);
+  }
 
+  /** Closes a request document's tab without asking, cancelling its send if one is running. */
+  private discard(doc: RequestDocument): void {
     if (doc.sendId) {
       void this.bridge.send('request.cancel', { id: doc.sendId }).catch(() => undefined);
     }
@@ -596,9 +625,12 @@ export class WorkspaceStore {
     this.documents.update((docs) => docs.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   }
 
-  private confirmDiscard(question: string): boolean {
+  private async confirmDiscard(question: string): Promise<boolean> {
     const dirty = this.documents().filter((d) => d.dirty).length;
-    return dirty === 0 || confirm(`${question} ${dirty} request(s) have unsaved changes.`);
+    return (
+      dirty === 0 ||
+      this.dialogs.confirm(`${question} ${dirty} request(s) have unsaved changes.`, DISCARD)
+    );
   }
 
   private report(error: unknown): void {

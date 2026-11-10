@@ -1,3 +1,4 @@
+import { DialogRef } from '@angular/cdk/dialog';
 import { TestBed } from '@angular/core/testing';
 import { Bridge } from '../../services/bridge';
 import { AboutDialog } from './about-dialog';
@@ -9,7 +10,10 @@ describe('AboutDialog', () => {
       .mockResolvedValue({ version: '1.2.3', runtime: '.NET 10', operatingSystem: 'Linux' });
     TestBed.configureTestingModule({
       imports: [AboutDialog],
-      providers: [{ provide: Bridge, useValue: { isDesktop: true, send } }],
+      providers: [
+        { provide: Bridge, useValue: { isDesktop: true, send } },
+        { provide: DialogRef, useValue: { close: vi.fn() } },
+      ],
     });
     const fixture = TestBed.createComponent(AboutDialog);
     fixture.detectChanges();

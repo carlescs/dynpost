@@ -30,6 +30,7 @@ import { WorkspaceStore } from '../../../../services/workspace-store';
 import { GitHistoryList } from '../git-history-list/git-history-list';
 import { GitRemotes } from '../git-remotes/git-remotes';
 import { GitBranches } from '../git-branches/git-branches';
+import { Dialogs } from '../../../../services/dialogs';
 
 @Component({
   selector: 'app-git-view',
@@ -39,6 +40,7 @@ import { GitBranches } from '../git-branches/git-branches';
 })
 export class GitView {
   protected readonly git = inject(GitStore);
+  private readonly dialogs = inject(Dialogs);
   protected readonly workspace = inject(WorkspaceStore);
   private readonly history = inject(GitHistoryStore);
   protected readonly badges = STATUS_BADGES;
@@ -79,10 +81,11 @@ export class GitView {
     });
   }
 
-  protected abortMerge(): void {
+  protected async abortMerge(): Promise<void> {
     if (
-      confirm(
-        'Abort the merge? Your branch goes back to how it was before the merge, and any conflict resolutions so far are lost.',
+      await this.dialogs.confirm(
+        'Your branch goes back to how it was before the merge, and any conflict resolutions so far are lost.',
+        { title: 'Abort the merge?', confirmLabel: 'Abort merge', danger: true },
       )
     ) {
       void this.git.abortMerge();
@@ -176,13 +179,14 @@ export class GitView {
   }
 
   /** Pulls, after a warning when unsaved tabs could later overwrite what the pull brings in. */
-  protected pull(): void {
+  protected async pull(): Promise<void> {
     const unsaved = this.git.unsavedCount();
     if (
       unsaved &&
-      !confirm(
-        `${unsaved} open tab(s) have unsaved changes. The pull won't update them, and saving them afterwards would overwrite the pulled versions. Pull anyway?`,
-      )
+      !(await this.dialogs.confirm(
+        `${unsaved} open tab(s) have unsaved changes. The pull won't update them, and saving them afterwards would overwrite the pulled versions.`,
+        { title: 'Pull anyway?', confirmLabel: 'Pull' },
+      ))
     ) {
       return;
     }
@@ -205,7 +209,12 @@ export class GitView {
       targets.length === 1
         ? `your changes to ${targets[0]}`
         : `your changes to ${targets.length} files`;
-    if (!confirm(`Discard ${what}? This cannot be undone.`)) return;
+    const ok = await this.dialogs.confirm(`Discard ${what}? This cannot be undone.`, {
+      title: 'Discard changes?',
+      confirmLabel: 'Discard',
+      danger: true,
+    });
+    if (!ok) return;
     if (await this.git.discard(targets)) {
       this.selected.update((set) => new Set([...set].filter((p) => !targets.includes(p))));
     }

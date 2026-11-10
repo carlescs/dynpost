@@ -15,6 +15,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { GitBranch } from '../../../../models/messages';
 import { GitStore } from '../../../../services/git-store';
+import { Dialogs } from '../../../../services/dialogs';
 
 /** The new-branch form's values. */
 interface BranchForm {
@@ -36,6 +37,7 @@ interface BranchForm {
 })
 export class GitBranches {
   protected readonly git = inject(GitStore);
+  private readonly dialogs = inject(Dialogs);
   protected readonly expanded = signal(false);
   protected readonly form = signal<BranchForm | null>(null);
   /** The branch an operation is running for, to show its spinner. */
@@ -109,23 +111,30 @@ export class GitBranches {
 
   protected async merge(branch: GitBranch): Promise<void> {
     const into = this.git.status()?.branch;
-    if (!confirm(`Merge '${branch.name}' into the current branch '${into}'?`)) return;
+    const ok = await this.dialogs.confirm(
+      `Merge '${branch.name}' into the current branch '${into}'?`,
+      { title: 'Merge branch?', confirmLabel: 'Merge' },
+    );
+    if (!ok) return;
     await this.track(branch.name, () => this.git.mergeBranch(branch));
   }
 
   protected async remove(branch: GitBranch): Promise<void> {
-    if (!confirm(`Delete the local branch '${branch.name}'? Nothing is deleted on the remote.`)) {
-      return;
-    }
+    const ok = await this.dialogs.confirm(
+      `Delete the local branch '${branch.name}'? Nothing is deleted on the remote.`,
+      { title: 'Delete branch?', confirmLabel: 'Delete', danger: true },
+    );
+    if (!ok) return;
     await this.track(branch.name, async () => {
       if (await this.git.deleteBranch(branch.name)) return true;
       if (this.git.error()?.code !== 'git.branch_not_merged') return false;
       // Git kept it because its commits would be lost: ask again, spelling that out.
       if (
-        !confirm(
+        !(await this.dialogs.confirm(
           `'${branch.name}' has commits that are not merged into any other branch or its ` +
             'upstream. Deleting it anyway loses those commits. Delete it anyway?',
-        )
+          { title: 'Branch not merged', confirmLabel: 'Delete anyway', danger: true },
+        ))
       ) {
         this.git.dismissError();
         return false;
@@ -140,10 +149,11 @@ export class GitBranches {
       ? ` The local branch '${branch.trackedBy}' is kept, but its upstream will be gone.`
       : '';
     if (
-      !confirm(
+      !(await this.dialogs.confirm(
         `Delete the branch '${local}' on the remote '${branch.remote}'? It is deleted for ` +
           `everyone who uses the remote, and can't be undone from Missive.${tracked}`,
-      )
+        { title: 'Delete remote branch?', confirmLabel: 'Delete', danger: true },
+      ))
     ) {
       return;
     }

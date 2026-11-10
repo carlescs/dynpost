@@ -1,35 +1,32 @@
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { RunResultDto, RunSummaryDto } from '../../../../models/messages';
+import { RunResultDto } from '../../../../models/messages';
 import { Bridge } from '../../../../services/bridge';
 import { RunPlanDraft, RunStore } from '../../../../services/run-store';
 import { RunEditor } from './run-editor';
 
 describe('RunEditor', () => {
   function create(run: RunResultDto | null = null) {
-    const store = {
-      draft: signal<RunPlanDraft | null>({
-        path: 'a.run.yaml',
-        yaml: 'name: A\n',
-        savedYaml: 'name: A\n',
-        error: null,
-      }),
-      run: signal(run),
-      history: signal<RunSummaryDto[]>([]),
-      dirty: signal(false),
-      saving: signal(false),
-      running: signal(false),
-      starting: signal(false),
-      error: signal<string | null>(null),
-      confirmation: signal<string | null>(null),
+    const draft: RunPlanDraft = {
+      key: 'run:a.run.yaml',
+      path: 'a.run.yaml',
+      yaml: 'name: A\n',
+      savedYaml: 'name: A\n',
+      error: null,
+      run,
+      history: [],
+      saving: false,
+      starting: false,
+      confirmation: null,
+      failure: null,
     };
     TestBed.configureTestingModule({
       providers: [
-        { provide: RunStore, useValue: store },
+        { provide: RunStore, useValue: {} },
         { provide: Bridge, useValue: { send: vi.fn().mockReturnValue(new Promise(() => {})) } },
       ],
     });
     const fixture = TestBed.createComponent(RunEditor);
+    fixture.componentRef.setInput('draft', draft);
     fixture.detectChanges();
     return fixture;
   }

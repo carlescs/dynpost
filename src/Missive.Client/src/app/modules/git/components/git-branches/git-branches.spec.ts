@@ -1,8 +1,10 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import type { Mock } from 'vitest';
 import { BridgeErrorShape, GitBranch, GitStatus } from '../../../../models/messages';
 import { GitStore } from '../../../../services/git-store';
 import { GitBranches } from './git-branches';
+import { Dialogs } from '../../../../services/dialogs';
 
 const branch = (patch: Partial<GitBranch>): GitBranch => ({
   name: 'main',
@@ -16,6 +18,8 @@ const branch = (patch: Partial<GitBranch>): GitBranch => ({
 });
 
 describe('GitBranches', () => {
+  let dialogs: { confirm: Mock };
+  beforeEach(() => (dialogs = { confirm: vi.fn().mockResolvedValue(true) }));
   let git: {
     branches: ReturnType<typeof signal<GitBranch[] | null>>;
     status: ReturnType<typeof signal<GitStatus | null>>;
@@ -33,7 +37,12 @@ describe('GitBranches', () => {
   };
 
   async function render() {
-    TestBed.configureTestingModule({ providers: [{ provide: GitStore, useValue: git }] });
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: GitStore, useValue: git },
+        { provide: Dialogs, useValue: dialogs },
+      ],
+    });
     const fixture = TestBed.createComponent(GitBranches);
     fixture.detectChanges();
     (fixture.nativeElement.querySelector('[aria-expanded]') as HTMLButtonElement).click();
@@ -74,8 +83,6 @@ describe('GitBranches', () => {
     };
   });
 
-  afterEach(() => vi.unstubAllGlobals());
-
   it('offers to switch to and delete other local branches, and to check out untracked remote ones', async () => {
     const root = (await render()).nativeElement as HTMLElement;
 
@@ -93,8 +100,8 @@ describe('GitBranches', () => {
   });
 
   it('asks a second time before force-deleting an unmerged branch', async () => {
-    const confirm = vi.fn().mockReturnValue(true);
-    vi.stubGlobal('confirm', confirm);
+    const confirm = vi.fn().mockResolvedValue(true);
+    dialogs.confirm = confirm;
     git.deleteBranch.mockImplementation(async (_: string, force?: boolean) => {
       if (force) return true;
       git.error.set({ code: 'git.branch_not_merged', message: 'not merged' });
@@ -112,7 +119,7 @@ describe('GitBranches', () => {
   });
 
   it('keeps an unmerged branch when the second confirmation is declined', async () => {
-    vi.stubGlobal('confirm', vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false));
+    dialogs.confirm = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     git.deleteBranch.mockImplementation(async () => {
       git.error.set({ code: 'git.branch_not_merged', message: 'not merged' });
       return false;
@@ -127,8 +134,8 @@ describe('GitBranches', () => {
   });
 
   it('deletes a branch on the remote after a confirmation, warning about a tracking branch', async () => {
-    const confirm = vi.fn().mockReturnValue(true);
-    vi.stubGlobal('confirm', confirm);
+    const confirm = vi.fn().mockResolvedValue(true);
+    dialogs.confirm = confirm;
     const fixture = await render();
 
     button(fixture.nativeElement, 'Delete origin/main on the remote')!.click();
@@ -140,7 +147,7 @@ describe('GitBranches', () => {
   });
 
   it('does not delete a remote branch when the confirmation is declined', async () => {
-    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    dialogs.confirm = vi.fn().mockResolvedValue(false);
     const fixture = await render();
 
     button(fixture.nativeElement, 'Delete origin/topic on the remote')!.click();
@@ -166,8 +173,8 @@ describe('GitBranches', () => {
   });
 
   it('merges a local or remote branch into the current one after a confirmation', async () => {
-    const confirm = vi.fn().mockReturnValue(true);
-    vi.stubGlobal('confirm', confirm);
+    const confirm = vi.fn().mockResolvedValue(true);
+    dialogs.confirm = confirm;
     const fixture = await render();
     const root = fixture.nativeElement as HTMLElement;
 
@@ -186,7 +193,7 @@ describe('GitBranches', () => {
   });
 
   it('does not merge when the confirmation is declined', async () => {
-    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    dialogs.confirm = vi.fn().mockResolvedValue(false);
     const fixture = await render();
 
     button(fixture.nativeElement, 'Merge old into the current branch')!.click();

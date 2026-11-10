@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
+import type { Mock } from 'vitest';
 import { CookieDto } from '../../../../models/messages';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { CookieJar } from './cookie-jar';
+import { Dialogs } from '../../../../services/dialogs';
 
 const session: CookieDto = {
   name: 'session',
@@ -15,10 +17,17 @@ const session: CookieDto = {
 const theme: CookieDto = { ...session, name: 'theme', value: 'dark' };
 
 describe('CookieJar', () => {
+  let dialogs: { confirm: Mock };
+  beforeEach(() => (dialogs = { confirm: vi.fn().mockResolvedValue(true) }));
   let store: { cookies: any; deleteCookie: any; clearCookies: any };
 
   async function render() {
-    TestBed.configureTestingModule({ providers: [{ provide: EnvironmentStore, useValue: store }] });
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: EnvironmentStore, useValue: store },
+        { provide: Dialogs, useValue: dialogs },
+      ],
+    });
     const fixture = TestBed.createComponent(CookieJar);
     fixture.componentRef.setInput('environmentId', 'dev.yaml');
     fixture.detectChanges();
@@ -34,8 +43,6 @@ describe('CookieJar', () => {
       clearCookies: vi.fn().mockResolvedValue(true),
     };
   });
-
-  afterEach(() => vi.unstubAllGlobals());
 
   it('lists the environment’s cookies', async () => {
     const fixture = await render();
@@ -54,8 +61,8 @@ describe('CookieJar', () => {
   });
 
   it('clears every cookie after asking', async () => {
-    const confirm = vi.fn().mockReturnValue(false);
-    vi.stubGlobal('confirm', confirm);
+    const confirm = vi.fn().mockResolvedValue(false);
+    dialogs.confirm = confirm;
     const fixture = await render();
     const clear = [...fixture.nativeElement.querySelectorAll('button')].find((b: HTMLElement) =>
       b.textContent?.includes('Clear all'),
@@ -65,7 +72,7 @@ describe('CookieJar', () => {
     await fixture.whenStable();
     expect(store.clearCookies).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
+    confirm.mockResolvedValue(true);
     clear.click();
     await fixture.whenStable();
     fixture.detectChanges();

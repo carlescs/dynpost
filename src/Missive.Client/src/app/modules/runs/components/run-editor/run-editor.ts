@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, input, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faChartColumn,
@@ -10,10 +10,14 @@ import {
   faStop,
   faTableList,
   faTrash,
-  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
-import { RunStore } from '../../../../services/run-store';
+import {
+  RunPlanDraft,
+  RunStore,
+  isRunPlanDirty,
+  isRunPlanRunning,
+} from '../../../../services/run-store';
 import { RunHistory } from '../run-history/run-history';
 import { RunPlanForm } from '../run-plan-form/run-plan-form';
 import { RunResults } from '../run-results/run-results';
@@ -23,7 +27,7 @@ import { RunSamples } from '../run-samples/run-samples';
 export type RunEditorZone = 'plan' | 'results';
 
 /**
- * Edits a run plan (as a form or as YAML) next to the results of its run: a dashboard, or a table
+ * Edits a run plan open in a tab (as a form or as YAML) next to the results of its run: a dashboard, or a table
  * of every request sent with its response. Either zone can be maximized to the full width.
  */
 @Component({
@@ -33,10 +37,13 @@ export type RunEditorZone = 'plan' | 'results';
   templateUrl: './run-editor.html',
 })
 export class RunEditor {
+  readonly draft = input.required<RunPlanDraft>();
+
   protected readonly store = inject(RunStore);
+  protected readonly isDirty = isRunPlanDirty;
+  protected readonly isRunning = isRunPlanRunning;
   protected readonly faPlay = faPlay;
   protected readonly faStop = faStop;
-  protected readonly faXmark = faXmark;
   protected readonly faTrash = faTrash;
   protected readonly faSliders = faSliders;
   protected readonly faCode = faCode;

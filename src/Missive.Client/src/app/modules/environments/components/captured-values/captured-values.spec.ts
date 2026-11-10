@@ -1,20 +1,25 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import type { Mock } from 'vitest';
 import { CapturedValueDto } from '../../../../models/messages';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { CapturedValues } from './captured-values';
+import { Dialogs } from '../../../../services/dialogs';
 
 const token: CapturedValueDto = { name: 'token', value: 't0k' };
 const etag: CapturedValueDto = { name: 'etag', value: '"v1"' };
 
 describe('CapturedValues', () => {
+  let dialogs: { confirm: Mock };
+  beforeEach(() => (dialogs = { confirm: vi.fn().mockResolvedValue(true) }));
   let store: { capturedValues: any; clearCaptured: any };
   const capturesStored = signal(0);
 
   async function render() {
     TestBed.configureTestingModule({
       providers: [
+        { provide: Dialogs, useValue: dialogs },
         { provide: EnvironmentStore, useValue: store },
         { provide: WorkspaceStore, useValue: { capturesStored } },
       ],
@@ -33,8 +38,6 @@ describe('CapturedValues', () => {
       clearCaptured: vi.fn().mockResolvedValue([etag]),
     };
   });
-
-  afterEach(() => vi.unstubAllGlobals());
 
   it('lists the captured values and reloads after a send stores more', async () => {
     const fixture = await render();
@@ -58,7 +61,7 @@ describe('CapturedValues', () => {
   });
 
   it('clears every value after asking', async () => {
-    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    dialogs.confirm = vi.fn().mockResolvedValue(true);
     store.clearCaptured.mockResolvedValue([]);
     const fixture = await render();
     const clear = [...fixture.nativeElement.querySelectorAll('button')].find((b: HTMLElement) =>

@@ -14,7 +14,9 @@ import {
   PullOutcome,
 } from '../models/messages';
 import { EnvironmentStore } from './environment-store';
+import { RunStore, isRunPlanDirty } from './run-store';
 import { WorkspaceStore } from './workspace-store';
+import { Dialogs } from './dialogs';
 
 export type GitOperation =
   | 'refresh'
@@ -43,8 +45,10 @@ export interface GitNotice {
 @Injectable({ providedIn: 'root' })
 export class GitStore {
   private readonly bridge = inject(Bridge);
+  private readonly dialogs = inject(Dialogs);
   private readonly workspace = inject(WorkspaceStore);
   private readonly environments = inject(EnvironmentStore);
+  private readonly runs = inject(RunStore);
 
   /** Whether git is reachable: the browser dev server has no git backend. */
   readonly available = this.bridge.isDesktop;
@@ -88,7 +92,8 @@ export class GitStore {
   readonly unsavedCount = computed(
     () =>
       this.workspace.documents().filter((d) => d.dirty).length +
-      this.environments.drafts().filter((d) => d.dirty).length,
+      this.environments.drafts().filter((d) => d.dirty).length +
+      this.runs.drafts().filter(isRunPlanDirty).length,
   );
 
   /** Whether the last status read found that the workspace folder is not inside a git repository. */
@@ -222,6 +227,9 @@ export class GitStore {
     }
     for (const draft of this.environments.drafts().filter((d) => d.dirty)) {
       await this.environments.save(draft.key);
+    }
+    for (const plan of this.runs.drafts().filter(isRunPlanDirty)) {
+      await this.runs.save(plan.key);
     }
     await this.refresh();
   }
@@ -451,7 +459,7 @@ export class GitStore {
    * tabs with unsaved edits keep them, after the user agrees. Resolves to whether it switched.
    */
   async switchBranch(name: string): Promise<boolean> {
-    if (!this.confirmUnsavedTabs(`Switch to ${name}?`)) return false;
+    if (!(await this.confirmUnsavedTabs(`Switch to ${name}?`))) return false;
     return this.runBranch(
       () => this.bridge.send('git.branch.switch', { name }),
       `Switched to ${name}.`,
@@ -473,7 +481,7 @@ export class GitStore {
   /** Checks out a remote-tracking branch as a new local branch that tracks it. */
   async checkoutRemoteBranch(branch: GitBranch): Promise<boolean> {
     const local = branch.localName ?? branch.name;
-    if (!this.confirmUnsavedTabs(`Check out ${branch.name} as ${local}?`)) return false;
+    if (!(await this.confirmUnsavedTabs(`Check out ${branch.name} as ${local}?`))) return false;
     return this.runBranch(
       () => this.bridge.send('git.branch.checkout', { name: branch.name }),
       `Checked out ${branch.name} as ${local}, tracking it.`,
@@ -513,7 +521,7 @@ export class GitStore {
     const question = `Merge ${name} into ${into ?? 'the current branch'}?`;
     const consequence =
       "The merge won't update them, and saving them afterwards would overwrite the merged versions.";
-    if (!this.confirmUnsavedTabs(question, consequence)) return false;
+    if (!(await this.confirmUnsavedTabs(question, consequence))) return false;
     const ok = await this.run(
       'branch',
       () => this.bridge.send('git.branch.merge', { name, remote: !!branch.remote }),
@@ -561,12 +569,13 @@ export class GitStore {
   private confirmUnsavedTabs(
     question: string,
     consequence = 'They stay in their tabs, and saving them later writes them to the new branch.',
-  ): boolean {
+  ): Promise<boolean> {
     const unsaved = this.unsavedCount();
-    if (!unsaved) return true;
-    return confirm(
+    if (!unsaved) return Promise.resolve(true);
+    return this.dialogs.confirm(
       `${question} ${unsaved} open tab${unsaved === 1 ? ' has' : 's have'} unsaved changes. ` +
         consequence,
+      { title: 'Unsaved changes', confirmLabel: 'Continue' },
     );
   }
 
