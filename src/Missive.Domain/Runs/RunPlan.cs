@@ -83,6 +83,10 @@ public sealed record RunThresholds(
 /// <param name="Weights">
 /// Relative chance of each request path with <see cref="RequestOrder.Random"/>; unlisted requests weigh 1.
 /// </param>
+/// <param name="SaveResponses">
+/// Whether the whole body of each logged response is saved to a file, so it can be opened later
+/// (PDFs in the previewer).
+/// </param>
 public sealed record RunPlan(
     string Name,
     IReadOnlyList<WorkspacePath> Requests,
@@ -91,7 +95,8 @@ public sealed record RunPlan(
     IReadOnlyDictionary<string, RunAssertion> Assertions,
     RunThresholds Thresholds,
     RequestOrder Order = RequestOrder.Sequential,
-    IReadOnlyDictionary<string, double>? Weights = null)
+    IReadOnlyDictionary<string, double>? Weights = null,
+    bool SaveResponses = false)
 {
     public const string AllRequests = "*";
 

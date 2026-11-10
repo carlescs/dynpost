@@ -28,6 +28,7 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
     private readonly List<SampleDto> _slowest = [];
     private readonly List<SampleDto> _log = [];
     private int _logged;
+    private int _responses;
     private long _sent;
     private readonly TaskCompletionSource _persistence = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _activeThreads;
@@ -99,6 +100,9 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
     }
 
     public TimeSpan Now => _clock.Elapsed;
+
+    /// <summary>The number of the next saved response file: 1, 2, 3…</summary>
+    public int NextResponseNumber() => Interlocked.Increment(ref _responses);
 
     /// <summary>A copy of the request log: every sample kept so far, in the order they finished.</summary>
     public IReadOnlyList<SampleDto> Log()

@@ -28,6 +28,8 @@ export interface PlanForm {
   dataFile: string;
   dataMode: string;
   dataOnEof: string;
+  /** Whether each logged response body is saved to a file (`saveResponses: true`). */
+  saveResponses: boolean;
   assertions: PlanAssertion[];
   thresholds: Record<ThresholdKey, string>;
 }
@@ -57,7 +59,17 @@ export function picksOneRequest(order: string): boolean {
 type Path = (string | number)[];
 
 const ORDER: Record<string, string[]> = {
-  '': ['name', 'requests', 'order', 'weights', 'load', 'data', 'assert', 'thresholds'],
+  '': [
+    'name',
+    'requests',
+    'order',
+    'weights',
+    'load',
+    'data',
+    'saveResponses',
+    'assert',
+    'thresholds',
+  ],
   load: ['threads', 'iterations', 'duration', 'rampUp', 'thinkTime', 'maxRps'],
   data: ['file', 'mode', 'onEof'],
   assert: [],
@@ -112,6 +124,7 @@ export function readPlanForm(yaml: string): PlanForm | null {
     dataFile: text(['data', 'file']),
     dataMode: text(['data', 'mode']),
     dataOnEof: text(['data', 'onEof']),
+    saveResponses: doc.get('saveResponses') === true,
     assertions: isMap(assertNode)
       ? assertNode.items.map((pair) => {
           const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
@@ -159,6 +172,14 @@ export function setPlanRequests(yaml: string, requests: string[]): string {
 /** Sets how users take the requests; the default (`sequential`) is left out of the file. */
 export function setPlanOrder(yaml: string, order: string): string {
   return setPlanValue(yaml, ['order'], order === 'sequential' ? '' : order);
+}
+
+/** Turns saving responses on (`saveResponses: true`) or off (the default, left out of the file). */
+export function setPlanSaveResponses(yaml: string, save: boolean): string {
+  return edit(yaml, (doc) => {
+    if (save) doc.set('saveResponses', true);
+    else doc.delete('saveResponses');
+  });
 }
 
 /** Sets the think time: a single value, or a `min`/`max` range when both differ. */

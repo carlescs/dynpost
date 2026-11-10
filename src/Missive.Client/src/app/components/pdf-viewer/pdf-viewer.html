@@ -62,6 +62,18 @@
     >
       <fa-icon [icon]="faLeftRight" />
     </button>
+    <span class="mx-1 h-4 w-px bg-slate-300"></span>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200"
+      data-pdf-maximize
+      [title]="maximized() ? 'Restore (Esc)' : 'Maximize'"
+      [attr.aria-label]="maximized() ? 'Restore' : 'Maximize'"
+      [attr.aria-pressed]="maximized()"
+      (click)="maximized.set(!maximized())"
+    >
+      <fa-icon [icon]="maximized() ? faRestore : faMaximize" />
+    </button>
   </div>
 </div>
 

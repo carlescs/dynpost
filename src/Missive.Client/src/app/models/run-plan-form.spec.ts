@@ -5,6 +5,7 @@ import {
   setAssertionStatus,
   setPlanOrder,
   setPlanRequests,
+  setPlanSaveResponses,
   setPlanThinkTime,
   setPlanValue,
 } from './run-plan-form';
@@ -37,6 +38,14 @@ describe('run plan form', () => {
     expect(form.weights).toEqual({ 'a.yaml': '3' });
     expect(next.indexOf('weights:')).toBeLessThan(next.indexOf('load:'));
     expect(setPlanOrder(next, 'sequential')).not.toContain('order:');
+  });
+
+  it('turns saving responses on and off', () => {
+    expect(readPlanForm(PLAN)!.saveResponses).toBe(false);
+    const on = setPlanSaveResponses(PLAN, true);
+    expect(on).toBe(PLAN + 'saveResponses: true\n');
+    expect(readPlanForm(on)!.saveResponses).toBe(true);
+    expect(setPlanSaveResponses(on, false)).toBe(PLAN);
   });
 
   it('drops the weights of removed requests', () => {

@@ -12,7 +12,8 @@ namespace Missive.Infrastructure.Runs;
 /// (<c>sequential</c>, <c>shuffle</c>, <c>random</c> or <c>roundRobin</c>), <c>weights</c> (per
 /// request path), <c>load</c>
 /// (<c>threads</c>, <c>iterations</c> or <c>duration</c>, <c>rampUp</c>, <c>thinkTime</c>,
-/// <c>maxRps</c>), <c>data</c> (<c>file</c>, <c>mode</c>, <c>onEof</c>), <c>assert</c>
+/// <c>maxRps</c>), <c>data</c> (<c>file</c>, <c>mode</c>, <c>onEof</c>), <c>saveResponses</c>
+/// (<c>true</c> to keep each logged response body in a file), <c>assert</c>
 /// (per request path, or <c>"*"</c> for all: <c>status</c>, <c>maxTime</c>, <c>bodyContains</c>,
 /// <c>bodyNotContains</c>) and <c>thresholds</c> (<c>p50</c>, <c>p90</c>, <c>p95</c>, <c>p99</c>,
 /// <c>average</c>, <c>errorRate</c>, <c>throughput</c>).
@@ -52,7 +53,8 @@ public sealed class YamlRunPlanFormat : IRunPlanFormat
             ParseAssertions(YamlNodes.OptionalMapping(root, "assert")),
             ParseThresholds(YamlNodes.OptionalMapping(root, "thresholds")),
             ParseOrder(YamlNodes.OptionalString(root, "order")),
-            ParseWeights(YamlNodes.OptionalMapping(root, "weights")));
+            ParseWeights(YamlNodes.OptionalMapping(root, "weights")),
+            YamlNodes.OptionalBoolean(root, "saveResponses"));
     }
 
     private static RequestOrder ParseOrder(string? text) => text switch

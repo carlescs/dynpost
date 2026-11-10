@@ -1,4 +1,6 @@
+import { Component, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { PdfViewer } from '../../../../components/pdf-viewer/pdf-viewer';
 import { RunResultDto, RunSampleDto, RunSamplesPageDto } from '../../../../models/messages';
 import { Bridge } from '../../../../services/bridge';
 import { PAGE_SIZE, RunSamples } from './run-samples';
@@ -17,6 +19,12 @@ const sample = (patch: Partial<RunSampleDto> = {}): RunSampleDto => ({
   responsePreview: '{"id":1}',
   ...patch,
 });
+
+/** Stands in for the PDF viewer, which needs pdf.js and a real layout. */
+@Component({ selector: 'app-pdf-viewer', template: '{{ data().length }} bytes' })
+class FakePdfViewer {
+  readonly data = input.required<Uint8Array>();
+}
 
 const run = (patch: Partial<RunResultDto> = {}) => ({ runId: 'r1', ...patch }) as RunResultDto;
 
@@ -39,6 +47,10 @@ describe('RunSamples', () => {
 
   async function create(result: RunResultDto = run()) {
     TestBed.configureTestingModule({ providers: [{ provide: Bridge, useValue: { send } }] });
+    TestBed.overrideComponent(RunSamples, {
+      remove: { imports: [PdfViewer] },
+      add: { imports: [FakePdfViewer] },
+    });
     const fixture = TestBed.createComponent(RunSamples);
     fixture.componentRef.setInput('run', result);
     fixture.detectChanges();
@@ -130,5 +142,55 @@ describe('RunSamples', () => {
     expect(text(element.querySelector('[data-truncated]'))).toBe(
       'Only the first 10,000 of the 25,000 requests sent are kept.',
     );
+  });
+
+  it('opens a saved PDF response in the previewer', async () => {
+    send.mockImplementation(async (type: string) =>
+      type === 'run.response'
+        ? { body: 'JVBERg==' }
+        : page({
+            matching: 1,
+            logged: 1,
+            sent: 1,
+            samples: [
+              sample({
+                contentType: 'application/pdf',
+                responsePreview: null,
+                responseFile: '1.pdf',
+              }),
+            ],
+          }),
+    );
+    const fixture = await create();
+    const element = fixture.nativeElement as HTMLElement;
+    (element.querySelector('[data-sample]') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(text(element.querySelector('[data-saved]'))).toBe('.missive/runs/responses/r1/1.pdf');
+
+    (element.querySelector('[data-open-pdf]') as HTMLElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(send).toHaveBeenLastCalledWith('run.response', { runId: 'r1', file: '1.pdf' });
+    expect(text(element.querySelector('[data-pdf]'))).toBe('4 bytes');
+
+    (element.querySelector('[data-open-pdf]') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(element.querySelector('[data-pdf]')).toBeNull();
+  });
+
+  it('explains how to preview a PDF response that was not saved', async () => {
+    send.mockResolvedValue(
+      page({
+        samples: [sample({ contentType: 'application/pdf', responsePreview: null })],
+      }),
+    );
+    const fixture = await create();
+    const element = fixture.nativeElement as HTMLElement;
+    (element.querySelector('[data-sample]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('[data-open-pdf]')).toBeNull();
+    expect(text(element.querySelector('[data-pdf-not-saved]'))).toContain('Save whole responses');
   });
 });

@@ -22,6 +22,19 @@ import {
 } from '../models/messages';
 import { VARIABLE_PATTERN } from '../models/variables';
 
+/** A one-page PDF, the body of the simulated runs' saved PDF responses. */
+const MOCK_PDF =
+  'JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIg' +
+  'MCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBv' +
+  'YmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAzMDAgMTQ0XSAvQ29u' +
+  'dGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2Jq' +
+  'CjQgMCBvYmoKPDwgL0xlbmd0aCA0NiA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDI0IDcyIFRkIChNb2Nr' +
+  'IHVzZXIgcmVwb3J0KSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwgL1R5cGUgL0ZvbnQg' +
+  'L1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iagp4cmVmCjAgNgowMDAw' +
+  'MDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAw' +
+  'MDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyNDEgMDAwMDAgbiAKMDAwMDAwMDMzNyAwMDAwMCBuIAp0cmFp' +
+  'bGVyCjw8IC9TaXplIDYgL1Jvb3QgMSAwIFIgPj4Kc3RhcnR4cmVmCjQwNwolJUVPRgo=';
+
 const sample = (
   name: string,
   method: string,
@@ -949,6 +962,10 @@ export class MockBackend {
           samples: matching.slice(offset, offset + limit),
         } satisfies RunSamplesPageDto);
       }
+      case 'run.response':
+        return /^\d+\.pdf$/.test(payload?.['file'] as string)
+          ? ok({ body: MOCK_PDF })
+          : fail('response_not_found', 'The response was not saved.');
       case 'run.list':
         return ok(
           [...this.runs]
@@ -979,10 +996,30 @@ export class MockBackend {
     }
   }
 
-  /** The `index`th fake request of a simulated run: one in fifty fails. */
+  /**
+   * The `index`th fake request of a simulated run: one in fifty fails, and one in ten is a PDF
+   * report whose response was saved, as if the plan had `saveResponses`.
+   */
   private simulateSample(index: number): RunSampleDto {
     const create = index % 2 === 1;
     const failed = index % 50 === 49;
+    if (index % 10 === 4) {
+      return {
+        request: 'users/get-report.yaml',
+        thread: (index % 10) + 1,
+        iteration: Math.floor(index / 10) + 1,
+        atMs: index * 25,
+        latencyMs: 120 + ((index * 37) % 200),
+        status: 200,
+        error: null,
+        method: 'GET',
+        url: `https://api.example.com/users/${index}/report`,
+        dataRow: null,
+        responsePreview: null,
+        contentType: 'application/pdf',
+        responseFile: `${index + 1}.pdf`,
+      };
+    }
     return {
       request: create ? 'users/create-user.yaml' : 'users/get-user.yaml',
       thread: (index % 10) + 1,
@@ -997,6 +1034,7 @@ export class MockBackend {
       responsePreview: failed
         ? '{"error":"boom"}'
         : JSON.stringify({ id: index, name: `User ${index}` }, null, 2),
+      contentType: 'application/json',
     };
   }
 
