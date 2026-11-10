@@ -72,7 +72,12 @@ public sealed record RunPlan(
     RunThresholds Thresholds)
 {
     public const string AllRequests = "*";
-    public const int MaxThreads = 1000;
+    /// <summary>
+    /// The most threads a run may use. Threads are async tasks and each keeps one pooled
+    /// connection busy at a time, so this is also the run's connection limit; beyond a few
+    /// thousand, ephemeral ports and open-file limits of a desktop machine get in the way.
+    /// </summary>
+    public const int MaxThreads = 5000;
 
     /// <summary>Runs with more threads than this need a confirmation, since they run on a desktop machine.</summary>
     public const int WarnThreads = 200;

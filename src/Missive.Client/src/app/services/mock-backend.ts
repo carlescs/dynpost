@@ -867,8 +867,30 @@ export class MockBackend {
       }
       case 'runPlan.save': {
         const yaml = payload?.['yaml'] as string;
-        this.runPlans.set(path, yaml);
-        return ok(document(yaml));
+        const planName = (text: string | undefined) =>
+          /^name:\s*(.+)$/m.exec(text ?? '')?.[1]?.trim();
+        const previous = planName(this.runPlans.get(path));
+        const renamed = planName(yaml);
+        const slash = path.lastIndexOf('/');
+        const folder = path.slice(0, slash + 1);
+        const extension = /\.run\.ya?ml$/i.exec(path)?.[0] ?? '.run.yaml';
+        const stem = path.slice(slash + 1, path.length - extension.length);
+        let savedPath = path;
+        if (
+          previous &&
+          renamed &&
+          stem === slug(previous, 'plan') &&
+          slug(renamed, 'plan') !== stem
+        ) {
+          savedPath = `${folder}${slug(renamed, 'plan')}${extension}`;
+          for (let n = 2; this.runPlans.has(savedPath); n++) {
+            savedPath = `${folder}${slug(renamed, 'plan')}-${n}${extension}`;
+          }
+          this.runPlans.delete(path);
+          for (const run of this.runs.values()) if (run.path === path) run.path = savedPath;
+        }
+        this.runPlans.set(savedPath, yaml);
+        return ok({ ...document(yaml), path: savedPath });
       }
       case 'run.start': {
         const yaml = this.runPlans.get(path);
@@ -1039,12 +1061,12 @@ function isWithin(path: string, folder: string): boolean {
   return path === folder || path.startsWith(`${folder}/`);
 }
 
-function slug(name: string): string {
+function slug(name: string, fallback = 'request'): string {
   const value = name
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return value || 'request';
+  return value || fallback;
 }

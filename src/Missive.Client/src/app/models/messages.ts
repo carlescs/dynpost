@@ -589,7 +589,10 @@ export interface BridgeMessages {
   'runPlan.list': { payload: void; result: RunPlanFileDto[] };
   /** Opens a run plan for editing; a plan that can't be run still opens. */
   'runPlan.open': { payload: { path: string }; result: RunPlanDocumentDto };
-  /** Saves the text of a run plan, creating the file when needed. */
+  /**
+   * Saves the text of a run plan, creating the file when needed. Renaming the plan renames a file
+   * still named after the old name; the result has the path it was saved to.
+   */
   'runPlan.save': { payload: { path: string; yaml: string }; result: RunPlanDocumentDto };
   /**
    * Starts a load run in the background. Runs of more than 200 threads fail with

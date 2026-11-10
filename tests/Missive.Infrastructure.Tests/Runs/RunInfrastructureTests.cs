@@ -157,4 +157,37 @@ public sealed class RunInfrastructureTests : IDisposable
         Assert.Equal(3, (await store.GetAsync(_root, run.RunId)).Value.Total.Samples);
         Assert.False((await store.GetAsync(_root, "../x")).IsSuccess);
     }
+
+    [Fact]
+    public async Task PlanStore_MovesPlansWithoutOverwriting()
+    {
+        var store = new FileSystemRunPlanStore();
+        var from = WorkspacePath.Parse("a.run.yaml");
+        var to = WorkspacePath.Parse("b.run.yaml");
+        await store.WriteAsync(_root, from, "name: a\n");
+
+        Assert.True(store.Move(_root, from, to).IsSuccess);
+        Assert.False(store.Exists(_root, from));
+        Assert.True(store.Exists(_root, to));
+
+        await store.WriteAsync(_root, from, "name: a\n");
+        Assert.Equal(ErrorCodes.Io, store.Move(_root, from, to).Error!.Code);
+    }
+
+    [Fact]
+    public async Task RunStore_MovesTheHistoryOfAPlan()
+    {
+        var store = new JsonRunStore();
+        var stats = new StatsDto(3, 1, 33.33, 1, 2, 2, 3, 3, 3, 3, 1.5, 0, 10, new Dictionary<string, long>(), new Dictionary<string, long>());
+        RunResultDto Run(string id, string plan) =>
+            new(id, plan, "P", "completed", DateTimeOffset.UnixEpoch, 2000, 2, 0, stats, [], [], [], true, [], [], null);
+        await store.SaveAsync(_root, Run("run-1", "old.run.yaml"));
+        await store.SaveAsync(_root, Run("run-2", "other.run.yaml"));
+
+        Assert.True((await store.MovePlanAsync(_root, "old.run.yaml", "new.run.yaml")).IsSuccess);
+
+        Assert.Empty((await store.ListAsync(_root, "old.run.yaml")).Value);
+        Assert.Equal("run-1", Assert.Single((await store.ListAsync(_root, "new.run.yaml")).Value).RunId);
+        Assert.Single((await store.ListAsync(_root, "other.run.yaml")).Value);
+    }
 }

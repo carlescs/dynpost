@@ -48,6 +48,21 @@ public sealed class FileSystemRunPlanStore : IRunPlanStore
         }
     }
 
+    public bool Exists(string root, WorkspacePath path) => File.Exists(FullPath(root, path)) || Directory.Exists(FullPath(root, path));
+
+    public Result<Unit> Move(string root, WorkspacePath from, WorkspacePath to)
+    {
+        try
+        {
+            File.Move(FullPath(root, from), FullPath(root, to), overwrite: false);
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not rename '{from}' to '{to}': {ex.Message}");
+        }
+    }
+
     private static void Collect(string root, WorkspacePath folder, List<WorkspacePath> plans)
     {
         var directory = new DirectoryInfo(FullPath(root, folder));
