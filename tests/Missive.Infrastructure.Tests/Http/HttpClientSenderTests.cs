@@ -515,4 +515,75 @@ public sealed class HttpClientSenderTests
             listener.Stop();
         }
     }
+
+    [Fact]
+    public async Task SendAsync_ReusesAKeptAliveConnectionAcrossSends()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var accepted = 0;
+        using var stop = new CancellationTokenSource();
+        var serving = Task.Run(async () =>
+        {
+            // Answers every request on every connection with a kept-alive response.
+            var connections = new List<Task>();
+            try
+            {
+                while (true)
+                {
+                    var client = await listener.AcceptTcpClientAsync(stop.Token);
+                    Interlocked.Increment(ref accepted);
+                    connections.Add(Task.Run(async () =>
+                    {
+                        using (client)
+                        {
+                            var stream = client.GetStream();
+                            var buffer = new byte[4096];
+                            var received = new StringBuilder();
+                            while (true)
+                            {
+                                var read = await stream.ReadAsync(buffer, stop.Token);
+                                if (read == 0)
+                                {
+                                    return;
+                                }
+
+                                received.Append(Encoding.ASCII.GetString(buffer, 0, read));
+                                while (received.ToString().IndexOf("\r\n\r\n", StringComparison.Ordinal) is var end and >= 0)
+                                {
+                                    received.Remove(0, end + 4);
+                                    await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), stop.Token);
+                                }
+                            }
+                        }
+                    }));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        });
+
+        try
+        {
+            using var sender = new HttpClientSender();
+            var url = new Uri($"http://127.0.0.1:{port}/");
+            var first = await sender.SendAsync(new OutgoingRequest("GET", url, [], null));
+            var second = await sender.SendAsync(new OutgoingRequest("GET", url, [], null));
+
+            Assert.True(first.IsSuccess, first.Error?.Message);
+            Assert.True(second.IsSuccess, second.Error?.Message);
+            Assert.Equal(1, Volatile.Read(ref accepted));
+            Assert.NotNull(first.Value.Timings!.Connect);
+            Assert.Null(second.Value.Timings!.Dns);
+            Assert.Null(second.Value.Timings!.Connect);
+        }
+        finally
+        {
+            stop.Cancel();
+            listener.Stop();
+            await serving;
+        }
+    }
 }
