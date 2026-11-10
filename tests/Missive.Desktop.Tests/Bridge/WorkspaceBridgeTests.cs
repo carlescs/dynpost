@@ -14,7 +14,7 @@ using NSubstitute;
 
 namespace Missive.Desktop.Tests.Bridge;
 
-/// <summary>Duplicating requests and folders and listing recent workspaces, through the real router and use cases.</summary>
+/// <summary>Duplicating requests and folders and listing and showing workspaces, through the real router and use cases.</summary>
 public sealed class WorkspaceBridgeTests : IDisposable
 {
     private const string Root = "/work/my-api";
@@ -23,6 +23,7 @@ public sealed class WorkspaceBridgeTests : IDisposable
     private readonly IGitService _git = Substitute.For<IGitService>();
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
+    private readonly IFileManager _fileManager = Substitute.For<IFileManager>();
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
 
@@ -32,6 +33,7 @@ public sealed class WorkspaceBridgeTests : IDisposable
             .AddSingleton(_repository)
             .AddSingleton(_localFiles)
             .AddSingleton(_settings)
+            .AddSingleton(_fileManager)
             .AddSingleton<CurrentWorkspace>()
             .AddSingleton(_git)
             .AddTransient<DuplicateRequest>()
@@ -39,6 +41,7 @@ public sealed class WorkspaceBridgeTests : IDisposable
             .AddTransient<DuplicateFolder>()
             .AddTransient<GetRecentWorkspaces>()
             .AddTransient<RemoveRecentWorkspace>()
+            .AddTransient<ShowWorkspaceFolder>()
             .BuildServiceProvider();
         _services.GetRequiredService<CurrentWorkspace>().Open(Root);
         _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>());
@@ -107,6 +110,18 @@ public sealed class WorkspaceBridgeTests : IDisposable
             Arg.Is<Func<AppSettings, AppSettings>>(update =>
                 update(settings).RecentWorkspaces!.SequenceEqual(new[] { Root })),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Reveal_ShowsTheWorkspaceFolderInTheFileManager()
+    {
+        _repository.FolderExists(Root).Returns(true);
+        _fileManager.ShowFolder(Root).Returns(Unit.Value);
+
+        var response = await SendAsync("workspace.reveal", "null");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        _fileManager.Received(1).ShowFolder(Root);
     }
 
     [Fact]
