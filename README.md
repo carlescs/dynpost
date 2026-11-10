@@ -485,7 +485,8 @@ thresholds:
 ```
 
 Without a `status` assertion, a response with status 400 or higher counts as an
-error. A run over 1000 threads needs confirmation. Not yet supported: folder
+error. A plan can use up to 5000 threads (each keeps at most one connection busy
+at a time); a run over 200 threads needs confirmation. Not yet supported: folder
 bodies, CSV/JSON/HTML export, comparing runs, per-thread cookie jars and an
 environment override in the plan.
 

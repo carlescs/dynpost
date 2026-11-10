@@ -183,9 +183,17 @@ public class RunDomainTests
     [Fact]
     public void Validate_RejectsTooManyThreadsAndMissingLength()
     {
-        var load = new RunLoad(5000, null, null, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, null);
+        var load = new RunLoad(RunPlan.MaxThreads + 1, null, null, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, null);
 
         Assert.Equal(2, Plan(load).Validate().Count);
+    }
+
+    [Fact]
+    public void Validate_AcceptsTheMaximumThreads()
+    {
+        var load = new RunLoad(RunPlan.MaxThreads, 1, null, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, null);
+
+        Assert.Empty(Plan(load).Validate());
     }
 
     [Fact]
