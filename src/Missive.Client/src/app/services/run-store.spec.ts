@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Mock } from 'vitest';
-import { ERROR_CODES, RunResultDto } from '../models/messages';
+import { ERROR_CODES, RunResultDto, RunSummaryDto } from '../models/messages';
 import { Bridge, BridgeError } from './bridge';
 import { RunStore, isRunPlanDirty } from './run-store';
 import { WorkspaceStore } from './workspace-store';
@@ -26,6 +26,8 @@ describe('RunStore', () => {
       'run.progress': () => result(),
       'run.list': () => [],
       'runPlan.delete': () => null,
+      'run.delete': () => null,
+      'run.clear': () => null,
     };
     send = vi.fn(async (type: string, payload: unknown) => {
       const handler = handlers[type];
@@ -249,6 +251,56 @@ describe('RunStore', () => {
 
     expect(confirm).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalledWith('runPlan.delete', expect.anything());
+    expect(store.draft()?.failure).toContain('Stop the running plan');
+  });
+
+  it('deletes an earlier run after confirming and empties the dashboard that showed it', async () => {
+    await store.open('a.run.yaml');
+    const summary = { runId: 'r1', startedAt: '2026-01-02T03:04:05Z' } as RunSummaryDto;
+    store.drafts.update((drafts) =>
+      drafts.map((d) => ({ ...d, run: result(), history: [summary] })),
+    );
+
+    await store.deleteRun(key(), 'r1');
+
+    expect(dialogs.confirm).toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith('run.delete', { runId: 'r1' });
+    expect(send).toHaveBeenLastCalledWith('run.list', { path: 'a.run.yaml' });
+    expect(store.draft()?.run).toBeNull();
+    expect(store.draft()?.history).toEqual([]);
+  });
+
+  it('keeps the run when its deletion is not confirmed', async () => {
+    dialogs.confirm = vi.fn().mockResolvedValue(false);
+    await store.open('a.run.yaml');
+
+    await store.deleteRun(key(), 'r1');
+
+    expect(send).not.toHaveBeenCalledWith('run.delete', expect.anything());
+  });
+
+  it('clears the history of a plan after confirming', async () => {
+    await store.open('a.run.yaml');
+    store.drafts.update((drafts) => drafts.map((d) => ({ ...d, run: result() })));
+
+    await store.clearHistory(key());
+
+    expect(send).toHaveBeenCalledWith('run.clear', { path: 'a.run.yaml' });
+    expect(store.draft()?.run).toBeNull();
+  });
+
+  it('does not delete runs while the plan is running', async () => {
+    await store.open('a.run.yaml');
+    store.drafts.update((drafts) =>
+      drafts.map((d) => ({ ...d, run: result({ state: 'running' }) })),
+    );
+
+    await store.deleteRun(key(), 'r1');
+    await store.clearHistory(key());
+
+    expect(dialogs.confirm).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalledWith('run.delete', expect.anything());
+    expect(send).not.toHaveBeenCalledWith('run.clear', expect.anything());
     expect(store.draft()?.failure).toContain('Stop the running plan');
   });
 });

@@ -1,11 +1,20 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, computed, input, output } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faBan, faCircleCheck, faCircleXmark, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import {
+  faBan,
+  faCircleCheck,
+  faCircleXmark,
+  faSpinner,
+  faTrash,
+} from '@fortawesome/free-solid-svg-icons';
 import { RunSummaryDto } from '../../../../models/messages';
 import { RUN_STATE_LABELS, formatElapsed, formatMs } from '../../models/run-format';
 
-/** The earlier runs of a plan, newest first; their p95 bars share one scale so runs compare. */
+/**
+ * The earlier runs of a plan, newest first; their p95 bars share one scale so runs compare. Each
+ * run can be deleted, or the whole history cleared.
+ */
 @Component({
   selector: 'app-run-history',
   imports: [DatePipe, DecimalPipe, FaIconComponent],
@@ -17,6 +26,12 @@ export class RunHistory {
   /** The run shown in the dashboard. */
   readonly selected = input<string | null>(null);
   readonly select = output<string>();
+  /** Asks to delete a run, by id. */
+  readonly remove = output<string>();
+  /** Asks to delete every run of the plan. */
+  readonly clear = output<void>();
+
+  protected readonly faTrash = faTrash;
 
   protected readonly formatMs = formatMs;
   protected readonly formatElapsed = formatElapsed;

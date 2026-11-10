@@ -251,6 +251,56 @@ export class RunStore {
     }
   }
 
+  /** Deletes an earlier run of a plan after asking; the dashboard empties if it showed that run. */
+  async deleteRun(key: string, runId: string): Promise<void> {
+    const draft = this.find(key);
+    if (!draft) return;
+    if (draft.run?.runId === runId && isRunPlanRunning(draft)) {
+      this.report('Stop the run before deleting it.', key);
+      return;
+    }
+    const run = draft.history.find((summary) => summary.runId === runId);
+    const when = run ? ` from ${new Date(run.startedAt).toLocaleString()}` : '';
+    const ok = await this.dialogs.confirm(
+      `Delete the run${when} of '${this.nameOf(draft.path)}' and its request log?`,
+      { title: 'Delete run?', confirmLabel: 'Delete', danger: true },
+    );
+    if (!ok) return;
+    try {
+      await this.bridge.send('run.delete', { runId });
+      this.patch(key, (d) => ({
+        ...d,
+        run: d.run?.runId === runId ? null : d.run,
+        history: d.history.filter((summary) => summary.runId !== runId),
+      }));
+    } catch (error) {
+      this.report(error, key);
+    }
+    await this.loadHistory(key);
+  }
+
+  /** Deletes all the earlier runs of a plan after asking; the plan itself stays. */
+  async clearHistory(key: string): Promise<void> {
+    const draft = this.find(key);
+    if (!draft) return;
+    if (isRunPlanRunning(draft)) {
+      this.report('Stop the running plan before clearing its history.', key);
+      return;
+    }
+    const ok = await this.dialogs.confirm(
+      `Delete all ${draft.history.length} saved runs of '${this.nameOf(draft.path)}'? The plan itself is kept.`,
+      { title: 'Clear run history?', confirmLabel: 'Delete all', danger: true },
+    );
+    if (!ok) return;
+    try {
+      await this.bridge.send('run.clear', { path: draft.path });
+      this.patch(key, (d) => ({ ...d, run: null, history: [] }));
+    } catch (error) {
+      this.report(error, key);
+    }
+    await this.loadHistory(key);
+  }
+
   /** Closes a plan's tab, after asking if it has unsaved changes; a running plan stays open. */
   async close(key: string): Promise<void> {
     const draft = this.find(key);

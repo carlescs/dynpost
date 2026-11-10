@@ -76,6 +76,9 @@ public interface IRunStore
     /// <summary>Points the saved runs of the plan at <paramref name="from"/> to its new path, so its history follows a rename.</summary>
     Task<Result<Unit>> MovePlanAsync(string root, string from, string to, CancellationToken cancellationToken = default);
 
+    /// <summary>Deletes a saved run and its request log; a run that isn't saved is reported as <see cref="RunErrorCodes.RunNotFound"/>.</summary>
+    Task<Result<Unit>> DeleteAsync(string root, string runId, CancellationToken cancellationToken = default);
+
     /// <summary>Deletes the saved runs (and their request logs) of the plan at <paramref name="planPath"/>.</summary>
     Task<Result<Unit>> DeletePlanAsync(string root, string planPath, CancellationToken cancellationToken = default);
 }

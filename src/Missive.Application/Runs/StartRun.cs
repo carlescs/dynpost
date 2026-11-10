@@ -40,6 +40,18 @@ public sealed class RunRegistry
 
     public ActiveRun? Find(string runId) => _runs.GetValueOrDefault(runId);
 
+    /// <summary>Forgets a finished run, so it is read from the run store (or reported missing) from now on.</summary>
+    public void Forget(string runId) => _runs.TryRemove(runId, out _);
+
+    /// <summary>Forgets the finished runs of a plan.</summary>
+    public void ForgetPlan(string root, string planPath)
+    {
+        foreach (var run in _runs.Values.Where(r => r.Root == root && r.PlanPath == planPath))
+        {
+            _runs.TryRemove(run.RunId, out _);
+        }
+    }
+
     /// <summary>Whether a run of the plan is starting, going on or still being saved.</summary>
     public bool IsBusy(string root, string planPath) =>
         _reservations.ContainsKey((root, planPath))
