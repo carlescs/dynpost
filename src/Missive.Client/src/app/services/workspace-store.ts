@@ -211,6 +211,7 @@ export class WorkspaceStore {
       bodyType: 'none',
       body: '',
       bodyVariables: '',
+      bodyFields: null,
       description: '',
       captures: [],
       dirty: true,

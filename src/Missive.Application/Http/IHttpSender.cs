@@ -84,4 +84,14 @@ public sealed record ResponseTimings(
 
 /// <summary>A request as it went on the wire.</summary>
 /// <param name="Headers">The headers sent, including the ones added by the sender (User-Agent, Content-Type, Cookie…).</param>
-public sealed record SentRequest(string Method, Uri Url, IReadOnlyList<KeyValuePair<string, string>> Headers);
+public sealed record SentRequest(string Method, Uri Url, IReadOnlyList<KeyValuePair<string, string>> Headers)
+{
+    /// <summary>The parts of a multipart body, in the order sent; <c>null</c> for other bodies.</summary>
+    public IReadOnlyList<SentPart>? Parts { get; init; }
+}
+
+/// <summary>A part of a multipart body as sent.</summary>
+/// <param name="FileName">The file name sent for a file part; <c>null</c> for text parts.</param>
+/// <param name="ContentType">The part's <c>Content-Type</c>.</param>
+/// <param name="Size">The size of the part's content in bytes.</param>
+public sealed record SentPart(string Name, string? FileName, string? ContentType, long Size);

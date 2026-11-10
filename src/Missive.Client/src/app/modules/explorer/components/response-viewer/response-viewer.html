@@ -366,10 +366,48 @@
                 </tbody>
               </table>
             }
+            @if (r.sent.parts?.length) {
+              <h3 class="mt-3 mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                Multipart body
+              </h3>
+              <table class="w-full text-left font-mono text-xs" data-sent-parts>
+                <thead>
+                  <tr class="border-b border-slate-200 font-sans text-slate-500">
+                    <th class="py-1 pr-4 font-medium">Name</th>
+                    <th class="py-1 pr-4 font-medium">File name</th>
+                    <th class="py-1 pr-4 font-medium">Content type</th>
+                    <th class="py-1 text-right font-medium">Size</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (part of r.sent.parts; track $index) {
+                    <tr class="border-b border-slate-200 align-top">
+                      <td class="py-1 pr-4 font-semibold break-all text-slate-600 select-text">
+                        {{ part.name }}
+                      </td>
+                      <td class="py-1 pr-4 break-all text-slate-800 select-text">
+                        {{ part.fileName ?? '—' }}
+                      </td>
+                      <td class="py-1 pr-4 break-all text-slate-800 select-text">
+                        {{ part.contentType ?? '—' }}
+                      </td>
+                      <td class="py-1 text-right whitespace-nowrap text-slate-800">
+                        {{ formatSize(part.size) }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
             <p class="mt-2 text-xs text-slate-400">
               The final headers, with variables resolved and the ones Missive and the connection add
               (Host, User-Agent, Accept-Encoding, Content-Length, Cookie, auth). Credentials and
-              secret values are hidden. The body is sent as written in the editor.
+              secret values are hidden.
+              @if (r.sent.parts?.length) {
+                Multipart parts are summarised, not shown.
+              } @else {
+                The body is sent as written in the editor.
+              }
             </p>
           } @else {
             <p class="py-6 text-center text-sm text-slate-400">

@@ -150,52 +150,90 @@ public static class RequestPreparation
             case BodyType.Binary:
                 var binaryPath = ResolveFilePath(resolve(body.Content).Trim(), workspaceRoot, errors);
                 return binaryPath is null ? null : new BinaryBody(binaryPath);
-            // One name=value pair per line (or already joined with '&'), sent as written.
             case BodyType.UrlEncoded:
-                return new TextBody(
-                    string.Join('&', Lines(resolve(body.Content))),
-                    "application/x-www-form-urlencoded");
-            // One name=value field per line; @path (optionally followed by ;type=...) is a file.
+                return body.Fields is null
+                    // Older files: one name=value pair per line (or already joined with '&'), sent as written.
+                    ? new TextBody(string.Join('&', Lines(resolve(body.Content))), "application/x-www-form-urlencoded")
+                    : new TextBody(UrlEncoded(body.Fields, resolve), "application/x-www-form-urlencoded");
             case BodyType.Form:
-                var fields = new List<MultipartField>();
-                foreach (var line in Lines(resolve(body.Content)))
-                {
-                    var index = line.IndexOf('=');
-                    var name = index >= 0 ? line[..index].Trim() : line;
-                    var value = index >= 0 ? line[(index + 1)..].Trim() : string.Empty;
-                    if (value.StartsWith('@'))
-                    {
-                        var file = value[1..];
-                        string? contentType = null;
-                        var typeIndex = file.LastIndexOf(";type=", StringComparison.OrdinalIgnoreCase);
-                        if (typeIndex >= 0)
-                        {
-                            contentType = file[(typeIndex + 6)..].Trim();
-                            file = file[..typeIndex].Trim();
-                            if (!System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(contentType, out _))
-                            {
-                                errors.Add($"'{contentType}' is not a valid multipart content type.");
-                                continue;
-                            }
-                        }
-
-                        var filePath = ResolveFilePath(file, workspaceRoot, errors);
-                        if (filePath is not null)
-                        {
-                            fields.Add(new MultipartField(name, FilePath: filePath, ContentType: contentType));
-                        }
-                    }
-                    else
-                    {
-                        fields.Add(new MultipartField(name, value));
-                    }
-                }
-
-                return new MultipartBody(fields);
+                return BuildMultipartBody(FormFields.Of(body), resolve, errors, workspaceRoot);
             default:
                 return null;
         }
     }
+
+    private static string UrlEncoded(IReadOnlyList<FormField> fields, Func<string, string> resolve) =>
+        string.Join('&', fields
+            .Where(field => field.Enabled && (field.Name.Length > 0 || field.Value.Length > 0))
+            .Select(field =>
+            {
+                var name = resolve(field.Name);
+                var value = resolve(field.Value);
+                return field.Encode
+                    ? $"{Uri.EscapeDataString(name)}={Uri.EscapeDataString(value)}"
+                    : $"{name}={value}";
+            }));
+
+    private static MultipartBody? BuildMultipartBody(
+        IReadOnlyList<FormField> fields,
+        Func<string, string> resolve,
+        List<string> errors,
+        string? workspaceRoot)
+    {
+        var parts = new List<MultipartField>();
+        var errorCount = errors.Count;
+        foreach (var field in fields.Where(field => field.Enabled))
+        {
+            var name = resolve(field.Name).Trim();
+            if (name.Length == 0)
+            {
+                if (field.Value.Length > 0)
+                {
+                    errors.Add("Enter a name for every form field.");
+                }
+
+                continue;
+            }
+
+            var contentType = resolve(field.ContentType).Trim();
+            if (contentType.Length > 0 && !System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(contentType, out _))
+            {
+                errors.Add($"'{contentType}' is not a valid multipart content type.");
+                continue;
+            }
+
+            if (!field.IsFile)
+            {
+                parts.Add(new MultipartField(name, resolve(field.Value), ContentType: NullIfEmpty(contentType)));
+                continue;
+            }
+
+            var path = resolve(field.Value).Trim();
+            if (path.Length == 0)
+            {
+                errors.Add($"Choose a file for the form field '{name}'.");
+                continue;
+            }
+
+            var resolved = RequestFilePaths.Resolve(path, workspaceRoot);
+            if (resolved.Error is { } error)
+            {
+                errors.Add(error);
+                continue;
+            }
+
+            var fileName = resolve(field.FileName).Trim();
+            parts.Add(new MultipartField(
+                name,
+                FilePath: resolved.FullPath,
+                ContentType: NullIfEmpty(contentType),
+                FileName: NullIfEmpty(fileName)));
+        }
+
+        return errors.Count == errorCount ? new MultipartBody(parts) : null;
+    }
+
+    private static string? NullIfEmpty(string value) => value.Length == 0 ? null : value;
 
     private static string? ResolveFilePath(string path, string? workspaceRoot, List<string> errors)
     {
@@ -205,38 +243,13 @@ public static class RequestPreparation
             return null;
         }
 
-        try
+        var resolved = RequestFilePaths.Resolve(path, workspaceRoot);
+        if (resolved.Error is not null)
         {
-            if (Path.IsPathRooted(path))
-            {
-                return Path.GetFullPath(path);
-            }
-
-            if (string.IsNullOrWhiteSpace(workspaceRoot))
-            {
-                errors.Add($"The file '{path}' is relative to the workspace, but no workspace is open.");
-                return null;
-            }
-
-            var root = Path.GetFullPath(workspaceRoot);
-            var fullPath = Path.GetFullPath(Path.Combine(root, path));
-            var relative = Path.GetRelativePath(root, fullPath);
-            if (Path.IsPathRooted(relative)
-                || relative == ".."
-                || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                || relative.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
-            {
-                errors.Add($"The file path '{path}' must stay inside the workspace, or be an absolute path.");
-                return null;
-            }
-
-            return fullPath;
+            errors.Add(resolved.Error);
         }
-        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException)
-        {
-            errors.Add($"'{path}' is not a valid file path.");
-            return null;
-        }
+
+        return resolved.FullPath;
     }
 
     private static OutgoingBody? BuildGraphqlBody(RequestBody body, Func<string, string> resolve, List<string> errors)

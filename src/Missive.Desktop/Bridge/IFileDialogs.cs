@@ -10,5 +10,8 @@ internal interface IFileDialogs
 
     Task<string?> PickFileAsync(string title, IReadOnlyList<FileFilter> filters);
 
+    /// <summary>Asks for one or more files; returns an empty list when cancelled.</summary>
+    Task<IReadOnlyList<string>> PickFilesAsync(string title, IReadOnlyList<FileFilter> filters);
+
     Task<string?> PickSaveFileAsync(string title, IReadOnlyList<FileFilter> filters);
 }

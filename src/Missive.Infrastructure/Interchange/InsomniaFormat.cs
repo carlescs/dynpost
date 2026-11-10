@@ -265,11 +265,10 @@ internal static partial class InsomniaFormat
             return new RequestBody(BodyType.Binary, fileName);
         }
 
-        var fields = body.Arr("params").Where(p => !p.Bool("disabled") && p.Str("name") is not null).ToList();
-
-        var pairs = new List<KeyValuePair<string, string>>();
-        foreach (var field in fields)
+        var fields = new List<FormField>();
+        foreach (var field in body.Arr("params").Where(p => p.Str("name") is not null))
         {
+            var enabled = !field.Bool("disabled");
             if (field.Str("type") == "file")
             {
                 var path = field.Str("value") ?? field.Str("fileName");
@@ -279,23 +278,20 @@ internal static partial class InsomniaFormat
                     continue;
                 }
 
-                var contentType = field.Str("contentType");
-                pairs.Add(KeyValuePair.Create(
-                    field.Str("name")!,
-                    $"@{path}{(string.IsNullOrWhiteSpace(contentType) ? string.Empty : $";type={contentType}")}"));
+                fields.Add(FormField.File(field.Str("name")!, path, field.Str("contentType") ?? string.Empty, enabled: enabled));
             }
             else
             {
-                pairs.Add(KeyValuePair.Create(field.Str("name")!, field.Str("value") ?? string.Empty));
+                fields.Add(new FormField(field.Str("name")!, field.Str("value") ?? string.Empty, Enabled: enabled));
             }
         }
 
         switch (InterchangeText.BodyTypeFor(mimeType))
         {
             case BodyType.UrlEncoded:
-                return new RequestBody(BodyType.UrlEncoded, InterchangeText.UrlEncodedBody(pairs));
+                return InterchangeText.UrlEncodedBody(fields);
             case BodyType.Form:
-                return new RequestBody(BodyType.Form, InterchangeText.FormBody(pairs));
+                return InterchangeText.FormBody(fields);
             case var type:
                 var text = body.Str("text") ?? string.Empty;
                 if (text.Length == 0)
@@ -495,8 +491,24 @@ internal static partial class InsomniaFormat
 
     private static JsonObject ExportBody(RequestBody body)
     {
-        JsonArray Fields(bool encoded) => new(InterchangeText.BodyFields(body.Content, encoded)
-            .Select(f => (JsonNode)new JsonObject { ["name"] = f.Key, ["value"] = f.Value })
+        JsonArray Fields() => new(InterchangeText.PlainFields(body)
+            .Select(f =>
+            {
+                var field = f.IsFile
+                    ? new JsonObject { ["name"] = f.Name, ["type"] = "file", ["fileName"] = f.Value }
+                    : new JsonObject { ["name"] = f.Name, ["value"] = f.Value };
+                if (f.ContentType.Length > 0)
+                {
+                    field["contentType"] = f.ContentType;
+                }
+
+                if (!f.Enabled)
+                {
+                    field["disabled"] = true;
+                }
+
+                return (JsonNode)field;
+            })
             .ToArray());
 
         return body.Type switch
@@ -507,8 +519,8 @@ internal static partial class InsomniaFormat
                 ["text"] = body.Content,
             },
             BodyType.Graphql => ExportGraphqlBody(body),
-            BodyType.UrlEncoded => new JsonObject { ["mimeType"] = "application/x-www-form-urlencoded", ["params"] = Fields(encoded: true) },
-            BodyType.Form => new JsonObject { ["mimeType"] = "multipart/form-data", ["params"] = Fields(encoded: false) },
+            BodyType.UrlEncoded => new JsonObject { ["mimeType"] = "application/x-www-form-urlencoded", ["params"] = Fields() },
+            BodyType.Form => new JsonObject { ["mimeType"] = "multipart/form-data", ["params"] = Fields() },
             _ => new JsonObject(),
         };
     }

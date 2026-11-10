@@ -175,8 +175,8 @@ internal static partial class OpenApiFormat
         return type switch
         {
             BodyType.Json => (new RequestBody(BodyType.Json, InterchangeText.Write(example?.DeepClone() ?? Generate(context, schema, 0, []) ?? new JsonObject())), mediaType),
-            BodyType.UrlEncoded => (new RequestBody(type, InterchangeText.UrlEncodedBody(Fields(context, example, schema))), mediaType),
-            BodyType.Form => (new RequestBody(type, InterchangeText.FormBody(Fields(context, example, schema))), mediaType),
+            BodyType.UrlEncoded => (InterchangeText.UrlEncodedBody(Fields(context, example, schema)), mediaType),
+            BodyType.Form => (InterchangeText.FormBody(Fields(context, example, schema)), mediaType),
             _ => (new RequestBody(BodyType.Text, example.AnyText()), mediaType),
         };
     }
@@ -211,8 +211,8 @@ internal static partial class OpenApiFormat
             .Select(f => KeyValuePair.Create(f.Key.Name, ExampleText(context, f.Value)))
             .ToList();
         return multipart
-            ? (new RequestBody(BodyType.Form, InterchangeText.FormBody(fields)), "multipart/form-data")
-            : (new RequestBody(BodyType.UrlEncoded, InterchangeText.UrlEncodedBody(fields)), "application/x-www-form-urlencoded");
+            ? (InterchangeText.FormBody(fields), "multipart/form-data")
+            : (InterchangeText.UrlEncodedBody(fields), "application/x-www-form-urlencoded");
     }
 
     private static List<KeyValuePair<string, string>> Fields(Context context, JsonNode? example, JsonNode? schema)

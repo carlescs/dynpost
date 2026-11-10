@@ -84,27 +84,17 @@ internal static class BridgeHandlers
             .Register(BridgeMessageTypes.RequestPickFile, async _ =>
             {
                 var path = await dialogs.PickFileAsync("Select request body file", [new FileFilter("All files", ["*.*"])]);
-                if (path is null)
-                {
-                    return Result<PickedRequestFileDto?>.Success(null);
-                }
-
-                var root = Use<CurrentWorkspace>().Root;
-                var absolutePath = Path.GetFullPath(path);
-                if (root is null)
-                {
-                    return Result<PickedRequestFileDto?>.Success(new PickedRequestFileDto(absolutePath, true));
-                }
-
-                var relativePath = Path.GetRelativePath(Path.GetFullPath(root), absolutePath);
-                var isAbsolute = Path.IsPathRooted(relativePath)
-                    || relativePath == ".."
-                    || relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                    || relativePath.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
-                return Result<PickedRequestFileDto?>.Success(isAbsolute
-                    ? new PickedRequestFileDto(absolutePath, true)
-                    : new PickedRequestFileDto(relativePath.Replace('\\', '/'), false));
+                return Result<PickedRequestFileDto?>.Success(path is null ? null : Use<InspectRequestFiles>().Picked([path])[0]);
             })
+            .Register<PickRequestFilesPayload, IReadOnlyList<PickedRequestFileDto>>(BridgeMessageTypes.RequestPickFiles, async (p, _) =>
+            {
+                IReadOnlyList<string> paths = p.Multiple
+                    ? await dialogs.PickFilesAsync("Select files", [new FileFilter("All files", ["*.*"])])
+                    : await dialogs.PickFileAsync("Select file", [new FileFilter("All files", ["*.*"])]) is { } path ? [path] : [];
+                return Result<IReadOnlyList<PickedRequestFileDto>>.Success(Use<InspectRequestFiles>().Picked(paths));
+            })
+            .Register<InspectRequestFilesPayload, IReadOnlyList<RequestFileInfoDto>>(BridgeMessageTypes.RequestInspectFiles,
+                (p, _) => Task.FromResult(Result<IReadOnlyList<RequestFileInfoDto>>.Success(Use<InspectRequestFiles>().Execute(p.Paths ?? []))))
             .Register<CreateRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestCreate,
                 (p, ct) => Use<CreateRequest>().ExecuteAsync(p.Folder, p.Request, ct))
             .Register<SaveRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestSave,

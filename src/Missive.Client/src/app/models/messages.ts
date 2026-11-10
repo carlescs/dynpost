@@ -46,6 +46,43 @@ export interface BodyDto {
   type: 'none' | 'json' | 'text' | 'form' | 'urlencoded' | 'graphql' | 'binary';
   content: string;
   variables?: string | null;
+  /**
+   * The fields of a `form` or `urlencoded` body. Missing or `null` when the body is still the text
+   * of an older file (`name=value` lines in `content`), which is kept until the body is edited.
+   */
+  fields?: FormFieldDto[] | null;
+}
+
+/** A field of a `form` (multipart) or `urlencoded` body. */
+export interface FormFieldDto {
+  name: string;
+  /** The text of a text field, or the path of a file field (workspace-relative or absolute). */
+  value: string;
+  kind: 'text' | 'file';
+  enabled: boolean;
+  /** The part's content type; empty for the default (for files, from the extension). */
+  contentType?: string | null;
+  /** For file fields: the file name sent; empty for the file's own name. */
+  fileName?: string | null;
+  /** For `urlencoded` bodies: percent-encode the name and value instead of sending them as written. */
+  encode?: boolean;
+}
+
+/** A file picked for a request body: workspace-relative when it is inside the workspace. */
+export interface PickedFileDto {
+  path: string;
+  isAbsolute: boolean;
+}
+
+/** What a request body's file path points at. */
+export interface RequestFileInfoDto {
+  path: string;
+  isAbsolute: boolean;
+  exists: boolean;
+  /** Size in bytes; `null` when the file doesn't exist. */
+  size?: number | null;
+  /** Why the path can't be sent (outside the workspace, no workspace open…). */
+  error?: string | null;
 }
 
 /** Stores a value from a successful response in a variable of the selected environment. */
@@ -153,6 +190,18 @@ export interface SentRequestDto {
   url: string;
   /** In the order sent, including the ones the host adds (User-Agent, Content-Length, Cookie…). */
   headers: { key: string; value: string }[];
+  /** The parts of a multipart body, in order (not their content); missing for other bodies. */
+  parts?: SentPartDto[] | null;
+}
+
+/** A part of a multipart body as sent. */
+export interface SentPartDto {
+  name: string;
+  /** The file name sent; `null` for text parts. */
+  fileName?: string | null;
+  contentType?: string | null;
+  /** Size of the part's content in bytes. */
+  size: number;
 }
 
 /** A cookie a response set, as written in its `Set-Cookie` header. */
@@ -679,7 +728,11 @@ export interface BridgeMessages {
   'workspace.import': { payload: { folder: string }; result: ImportResultDto | null };
   'request.load': { payload: { path: string }; result: RequestDto };
   /** Shows the native file picker for a request body; `null` when cancelled. */
-  'request.pickFile': { payload: void; result: { path: string; isAbsolute: boolean } | null };
+  'request.pickFile': { payload: void; result: PickedFileDto | null };
+  /** Picks files for the file fields of a form body; empty when cancelled. */
+  'request.pickFiles': { payload: { multiple: boolean }; result: PickedFileDto[] };
+  /** Describes the files a request body sends: size, missing, outside the workspace. */
+  'request.inspectFiles': { payload: { paths: string[] }; result: RequestFileInfoDto[] };
   /** Saves a new request in a folder (`''` is the workspace root). */
   'request.create': { payload: { folder: string; request: RequestDto }; result: SavedRequestDto };
   /** Saves an existing request file; the result path differs if the file was renamed. */

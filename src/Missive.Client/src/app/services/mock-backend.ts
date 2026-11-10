@@ -71,6 +71,33 @@ export class MockBackend {
         description: 'Creates a user.\n\n- Needs a **bearer token** (`apiToken`).\n',
       }),
     ],
+    [
+      'users/upload-avatar.yaml',
+      sample('Upload avatar', 'POST', '{{baseUrl}}/users/1/avatar', {
+        body: {
+          type: 'form',
+          content: '',
+          fields: [
+            {
+              name: 'metadata',
+              value: '{"title": "Profile picture"}',
+              kind: 'text',
+              enabled: true,
+              contentType: 'application/json',
+            },
+            { name: 'avatar', value: 'fixtures/avatar.png', kind: 'file', enabled: true },
+            {
+              name: 'avatar',
+              value: 'fixtures/missing.png',
+              kind: 'file',
+              enabled: true,
+              fileName: 'backup.png',
+            },
+            { name: 'debug', value: 'true', kind: 'text', enabled: false },
+          ],
+        },
+      }),
+    ],
     ['orders/list-orders.yaml', sample('List orders', 'GET', '{{baseUrl}}/orders')],
     ['health.yaml', sample('Health check', 'GET', '{{baseUrl}}/health')],
   ]);
@@ -165,6 +192,29 @@ export class MockBackend {
       return this.send(request.id, payload?.['id'] as string, payload?.['request'] as RequestDto);
     }
     if (request.type === 'request.pickFile') return ok(null);
+    // No file dialog in a browser: pretend the user picked files from the workspace.
+    if (request.type === 'request.pickFiles') {
+      const picked = [{ path: 'fixtures/avatar.png', isAbsolute: false }];
+      if (payload?.['multiple']) picked.push({ path: 'fixtures/report.pdf', isAbsolute: false });
+      return ok(picked);
+    }
+    if (request.type === 'request.inspectFiles') {
+      return ok(
+        ((payload?.['paths'] as string[]) ?? []).map((path) => {
+          const isAbsolute = /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path);
+          const outside = !isAbsolute && path.split(/[\\/]/).includes('..');
+          return {
+            path,
+            isAbsolute,
+            exists: !outside && !path.includes('missing'),
+            size: outside || path.includes('missing') ? null : 2048 + path.length * 97,
+            error: outside
+              ? `The file path '${path}' must stay inside the workspace, or be an absolute path.`
+              : null,
+          };
+        }),
+      );
+    }
     if (request.type === 'response.saveBody') {
       // No save dialog in a browser: pretend the user picked a file in their downloads folder.
       const name = this.bodies.get(payload?.['id'] as string);
@@ -538,6 +588,13 @@ export class MockBackend {
         ...dto.body,
         content: resolve(dto.body.content),
         variables: resolve(dto.body.variables),
+        fields: dto.body.fields?.map((f) => ({
+          ...f,
+          name: resolve(f.name),
+          value: resolve(f.value),
+          contentType: resolve(f.contentType ?? ''),
+          fileName: resolve(f.fileName ?? ''),
+        })),
       },
     };
 
@@ -565,6 +622,9 @@ export class MockBackend {
       dto.auth.clientSecret ?? '',
       dto.body.content,
       dto.body.variables ?? '',
+      ...(dto.body.fields ?? []).flatMap((f) =>
+        f.enabled ? [f.name, f.value, f.contentType ?? '', f.fileName ?? ''] : [],
+      ),
     ].join('\n');
     const missing = [...new Set([...text.matchAll(VARIABLE_PATTERN)].map((m) => m[1]))];
     if (missing.length) {
@@ -657,8 +717,20 @@ export class MockBackend {
       url: url.toString(),
       headers: Object.fromEntries(headers.map((h) => [h.key, h.value])),
       auth: dto.auth.type,
-      body: dto.body.type === 'none' ? null : dto.body.content,
+      body: dto.body.type === 'none' ? null : (dto.body.fields ?? dto.body.content),
     });
+    const parts =
+      dto.body.type === 'form' && dto.body.fields
+        ? dto.body.fields
+            .filter((f) => f.enabled && f.name)
+            .map((f) => ({
+              name: f.name,
+              fileName:
+                f.kind === 'file' ? f.fileName || (f.value.split(/[\\/]/).pop() ?? '') : null,
+              contentType: f.contentType || (f.kind === 'file' ? 'application/octet-stream' : null),
+              size: f.kind === 'file' ? 2048 : new TextEncoder().encode(f.value).length,
+            }))
+        : null;
     const setCookie = { key: 'Set-Cookie', value: 'preview-session=abc123; Path=/; HttpOnly' };
     if (jarId && !jar.some((c) => c.name === 'preview-session')) {
       this.jars.set(jarId, [
@@ -707,7 +779,7 @@ export class MockBackend {
           download: 3.2,
         },
         redirects: [],
-        sent: { method: dto.method, url: sentUrl.toString(), headers: sentHeaders },
+        sent: { method: dto.method, url: sentUrl.toString(), headers: sentHeaders, parts },
         cookies: [
           {
             name: 'preview-session',

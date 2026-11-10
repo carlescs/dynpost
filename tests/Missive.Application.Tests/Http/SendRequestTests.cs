@@ -398,7 +398,10 @@ public class SendRequestTests
                 KeyValuePair.Create("X-Trace", "token=s3cret"),
                 KeyValuePair.Create("X-Api-Key", "literal-key"),
                 KeyValuePair.Create("Authorization", "Bearer s3cret"),
-            ]),
+            ])
+            {
+                Parts = [new SentPart("file", "a.png", "image/png", 3)],
+            },
         });
 
         var response = (await CreateSendRequest().ExecuteAsync("1", request)).Value;
@@ -419,6 +422,7 @@ public class SendRequestTests
                 new KeyValueDto("Authorization", "Bearer " + SecretMasking.Mask),
             ],
             response.Sent.Headers);
+        Assert.Equal([new SentPartDto("file", "a.png", "image/png", 3)], response.Sent.Parts);
         Assert.Equal("users.json", response.FileName);
     }
 

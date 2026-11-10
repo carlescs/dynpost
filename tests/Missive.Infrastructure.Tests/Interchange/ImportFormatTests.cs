@@ -183,10 +183,14 @@ public class ImportFormatTests
         Assert.Equal(4, requests.Count);
 
         Assert.Equal(new BasicAuth("u", "p"), requests[0].Auth);
-        Assert.Equal(new RequestBody(BodyType.UrlEncoded, "user%20name=Ada%20%26%20co"), requests[0].Body);
+        Assert.Equal(
+            RequestBody.WithFields(BodyType.UrlEncoded, [new FormField("user name", "Ada & co", Encode: true), new FormField("skip", "1", Enabled: false)]),
+            requests[0].Body);
         Assert.Empty(requests[0].Headers); // Missive sets this Content-Type itself.
 
-        Assert.Equal(new RequestBody(BodyType.Form, "title=Report\nfile=@/tmp/a.pdf"), requests[1].Body);
+        Assert.Equal(
+            RequestBody.WithFields(BodyType.Form, [new FormField("title", "Report"), FormField.File("file", "/tmp/a.pdf")]),
+            requests[1].Body);
         Assert.DoesNotContain(parsed.Warnings, w => w.Contains("file field 'file'"));
 
         Assert.Equal(new RequestBody(BodyType.Json, "{\"a\":1}"), requests[2].Body);
@@ -253,7 +257,7 @@ public class ImportFormatTests
             """);
 
         Assert.Equal(
-            new RequestBody(BodyType.Form, "avatar=@/tmp/ada.png;type=image/png"),
+            RequestBody.WithFields(BodyType.Form, [FormField.File("avatar", "/tmp/ada.png", "image/png")]),
             Assert.Single(parsed.Collection.Root.Requests).Body);
         Assert.Empty(parsed.Warnings);
     }
@@ -382,7 +386,9 @@ public class ImportFormatTests
         Assert.Equal([new KeyValueEntry("Content-Type", "application/xml")], api[1].Headers);
 
         var upload = Assert.Single(root.Folders[1].Requests);
-        Assert.Equal(new RequestBody(BodyType.Form, "title=Hi\nfile=@a.png"), upload.Body);
+        Assert.Equal(
+            RequestBody.WithFields(BodyType.Form, [new FormField("title", "Hi"), FormField.File("file", "a.png")]),
+            upload.Body);
         Assert.Empty(upload.Headers);
     }
 
@@ -551,7 +557,9 @@ public class ImportFormatTests
         Assert.Contains("\"age\": 0", create.Body.Content);
 
         var login = requests[1];
-        Assert.Equal(new RequestBody(BodyType.UrlEncoded, "user=\nremember=true"), login.Body);
+        Assert.Equal(
+            RequestBody.WithFields(BodyType.UrlEncoded, [new FormField("user"), new FormField("remember", "true")]),
+            login.Body);
 
         var environment = Assert.Single(parsed.Collection.Environments);
         Assert.Equal("https://legacy.test/api", environment.Variables[0].Value);

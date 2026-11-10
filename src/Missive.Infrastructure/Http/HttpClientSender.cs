@@ -184,7 +184,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                     {
                         Redirects = redirects,
                         Timings = new ResponseTimings(timings.Dns, timings.Connect, timings.Tls, wait, stopwatch.Elapsed - downloadStart),
-                        Sent = new SentRequest(method, url, SentHeaders(message)),
+                        Sent = new SentRequest(method, url, SentHeaders(message)) { Parts = SentParts(message.Content) },
                         Cookies = jar is null ? null : FromContainer(jar),
                         BytesSent = bytesSent,
                     };
@@ -485,12 +485,18 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
             {
                 if (field.FilePath is null)
                 {
-                    content.Add(new StringContent(field.Value ?? string.Empty, new UTF8Encoding(false)), field.Name);
+                    var text = new StringContent(field.Value ?? string.Empty, new UTF8Encoding(false));
+                    if (field.ContentType is not null)
+                    {
+                        text.Headers.ContentType = MediaTypeHeaderValue.Parse(field.ContentType);
+                    }
+
+                    content.Add(text, field.Name);
                     continue;
                 }
 
-                var file = CreateFileContent(field.FilePath, field.ContentType ?? "application/octet-stream");
-                content.Add(file, field.Name, Path.GetFileName(field.FilePath));
+                var file = CreateFileContent(field.FilePath, field.ContentType ?? FileMediaTypes.ForPath(field.FilePath));
+                content.Add(file, field.Name, field.FileName ?? Path.GetFileName(field.FilePath));
             }
         }
         catch
@@ -501,6 +507,18 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
 
         return content;
     }
+
+    /// <summary>A summary of each part of a multipart body (not its content), for the request shown as sent.</summary>
+    private static List<SentPart>? SentParts(HttpContent? content) =>
+        content is MultipartFormDataContent multipart
+            ? multipart
+                .Select(part => new SentPart(
+                    part.Headers.ContentDisposition?.Name?.Trim('"') ?? string.Empty,
+                    part.Headers.ContentDisposition?.FileNameStar ?? part.Headers.ContentDisposition?.FileName?.Trim('"'),
+                    part.Headers.ContentType?.ToString(),
+                    part.Headers.ContentLength ?? 0))
+                .ToList()
+            : null;
 
     private static StreamContent CreateFileContent(string path, string mediaType)
     {

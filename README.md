@@ -156,14 +156,17 @@ Auth types are `basic` (`username`, `password`), `bearer` (`token`),
 `apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
 instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form`, `urlencoded`, `graphql` and `binary`.
 `graphql` bodies store a GraphQL `query` and JSON `variables` separately and are sent as JSON POSTs.
-`form` (multipart) and `urlencoded` bodies hold one `name=value` pair per line;
-`urlencoded` values are sent as written, so percent-encode them yourself.
-In `form` bodies, use `name=@path/to/file` for a file field and optionally add
-`;type=image/png` to set its content type. A `binary` body stores a file path in
-`content` and sends that file as the whole body. Relative paths are resolved
-from the workspace root; absolute paths are accepted but make requests
-non-portable. Use the request editor's file picker to insert workspace-relative
-paths where possible.
+`form` (multipart) and `urlencoded` bodies hold a list of `fields`, sent in
+order. Each field has a `name` and either a `value` (text) or a `file` (a path);
+then, when set, `fileName` (the file name sent for a file part, instead of the
+file's own), `contentType` (a part's content type; for files it otherwise comes
+from the extension), `encode: true` (`urlencoded` only: percent-encode the name
+and value; without it they are sent as written) and `disabled: true` (kept but
+not sent). A name may repeat, for example to send several files under one field.
+A `binary` body stores a file path in `content` and sends that file as the whole
+body. Relative paths are resolved from the workspace root and must stay inside
+it; absolute paths are accepted but make requests non-portable. Use the request
+editor's file pickers to insert workspace-relative paths where possible.
 
 ```yaml
 body:
@@ -179,10 +182,44 @@ body:
 ```yaml
 body:
   type: form
-  content: |
-    name=Ada
-    avatar=@./fixtures/ada.png;type=image/png
+  fields:
+    - name: metadata
+      value: '{"title": "Report"}'
+      contentType: application/json
+    - name: file
+      file: uploads/report.pdf
+      fileName: q3-report.pdf
+    - name: debug
+      value: "true"
+      disabled: true
 ```
+
+```yaml
+body:
+  type: urlencoded
+  fields:
+    - name: email
+      value: ada@example.com
+      encode: true          # sent as email=ada%40example.com
+    - name: remember
+      value: "1"
+```
+
+Older files kept these bodies as text in `content`, one `name=value` per line
+(`name=@path;type=image/png` for a file). They still load and send the same
+way, and are only rewritten as `fields` when you edit the body.
+
+In the editor, `form` and `urlencoded` bodies are a table: one row per field
+with a checkbox to send it or not, its name, its kind (text or file) and value,
+and for multipart parts a content type and file name. Drag rows to reorder them;
+**Choose…** and **Add files…** pick one or several files (several files become
+rows under the same name) and each file row shows the file's name and size, or a
+warning when it is missing, outside the workspace or an absolute path. **Bulk
+edit** switches to the text form (`name=value` per line, `~` before a disabled
+field, `name=@path;type=…;filename=…` for files) and back. The editor also shows
+the `Content-Type` the body is sent with: Missive generates
+`multipart/form-data; boundary=…` for `form` bodies and replaces a
+`Content-Type` header you set, which it points out.
 
 `capture` stores values from a successful response in variables, so a login
 request can hand its token to the requests after it — declaratively, without
@@ -337,7 +374,10 @@ rules such as CORS don't apply. When sending:
 - Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
   query parameter; a header you set yourself takes precedence. OAuth 2.0 first
   gets a token if it needs one (see [OAuth 2.0](#oauth-20)). JSON, text and
-  `urlencoded` bodies get a matching `Content-Type` unless you set one.
+  `urlencoded` bodies get a matching `Content-Type` unless you set one;
+  multipart `form` bodies always get `multipart/form-data` with the boundary. A
+  `form` body whose file field has no file, or whose file is outside the
+  workspace, is not sent.
 - A `User-Agent: Missive` header is added unless you set one. Compressed
   responses are decompressed. No cookies are kept between requests unless the
   environment's cookie jar is on. A request times out after 60 seconds.
@@ -368,7 +408,8 @@ body size and these tabs:
   request was redirected, every request is listed in order: `Authorization`
   is not sent on to a redirected location, so only the first one carries it.
   Credentials (`Authorization`, the API key) and the values of secret variables
-  are masked.
+  are masked. A multipart body is summarised part by part (name, file name,
+  content type and size) rather than shown.
 
 Request and response bodies are shown in the Monaco
 editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,
@@ -611,6 +652,12 @@ client may need to allow; this is listed after the import.
 
 Request descriptions are imported from Postman and Insomnia, and from an
 OpenAPI operation's `description` (its `summary` names the request).
+
+Form-data and urlencoded bodies are imported as fields, keeping disabled fields
+(disabled), file fields with their path and content type, and several files
+under one Postman field as one row each. Urlencoded values are stored decoded
+with `encode: true` when they need percent-encoding. Exports write the same
+fields back, file fields as files.
 
 Imported requests are saved as ordinary request files in a new folder named
 after the collection (`Shop`, or `Shop 2` if that name is taken), and

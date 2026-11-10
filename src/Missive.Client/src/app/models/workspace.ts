@@ -23,6 +23,23 @@ export interface KeyValue {
   enabled: boolean;
 }
 
+export type FormFieldKind = 'text' | 'file';
+
+/** A field of a `form` (multipart) or `urlencoded` body, as edited in the fields table. */
+export interface FormField {
+  name: string;
+  /** The text of a text field, or the path of a file field. */
+  value: string;
+  kind: FormFieldKind;
+  enabled: boolean;
+  /** The part's content type; empty for the default. Multipart only. */
+  contentType: string;
+  /** The file name sent for a file part; empty for the file's own name. */
+  fileName: string;
+  /** Percent-encode the name and value. `urlencoded` only; off sends them as written. */
+  encode: boolean;
+}
+
 export type ApiKeyLocation = 'header' | 'query';
 
 export const OAUTH2_GRANTS = ['clientCredentials', 'authorizationCode'] as const;
@@ -60,6 +77,11 @@ export interface RequestContent {
   bodyType: BodyType;
   body: string;
   bodyVariables: string;
+  /**
+   * The fields of a `form` or `urlencoded` body; `null` while the body is still the text of an
+   * older file (in `body`), which is kept as written until the fields are edited.
+   */
+  bodyFields: FormField[] | null;
   /** Notes about the request, in Markdown. */
   description: string;
   /** Values to capture from a successful response into variables. */

@@ -33,6 +33,9 @@ public interface IExternalFiles
 {
     bool Exists(string path);
 
+    /// <summary>The size of a file in bytes; <c>null</c> when there is no such file.</summary>
+    long? FileSize(string path);
+
     Task<Result<string>> ReadTextAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>Writes (or replaces) a UTF-8 text file.</summary>

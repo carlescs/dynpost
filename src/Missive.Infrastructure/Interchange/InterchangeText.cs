@@ -97,35 +97,39 @@ internal static partial class InterchangeText
     }
 
     /// <summary>
-    /// Parses a <c>form</c> or <c>urlencoded</c> body: one <c>name=value</c> per line, as Missive
-    /// stores them. Values in <c>urlencoded</c> bodies are already encoded.
+    /// The fields of a <c>form</c> or <c>urlencoded</c> body as other tools hold them: urlencoded
+    /// names and values decoded (unless they are sent as written and aren't valid encodings).
     /// </summary>
-    public static IEnumerable<KeyValuePair<string, string>> BodyFields(string content, bool encoded)
-    {
-        var lines = content.Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0);
-        if (encoded)
+    public static IReadOnlyList<FormField> PlainFields(RequestBody body) =>
+        FormFields.Of(body)
+            .Select(field => body.Type == BodyType.UrlEncoded && !field.Encode
+                ? field with { Name = Decode(field.Name), Value = Decode(field.Value) }
+                : field)
+            .ToList();
+
+    /// <summary>A <c>form</c> body made of <paramref name="fields"/>.</summary>
+    public static RequestBody FormBody(IEnumerable<FormField> fields) => RequestBody.WithFields(BodyType.Form, fields);
+
+    /// <summary>A <c>form</c> body made of text fields.</summary>
+    public static RequestBody FormBody(IEnumerable<KeyValuePair<string, string>> fields) =>
+        FormBody(fields.Select(f => new FormField(f.Key, f.Value)));
+
+    /// <summary>A <c>urlencoded</c> body from decoded fields.</summary>
+    public static RequestBody UrlEncodedBody(IEnumerable<KeyValuePair<string, string>> fields) =>
+        UrlEncodedBody(fields.Select(f => new FormField(f.Key, f.Value)));
+
+    /// <summary>
+    /// A <c>urlencoded</c> body from fields with decoded names and values. Fields that need
+    /// percent-encoding are marked <see cref="FormField.Encode"/>, so the file keeps them readable.
+    /// </summary>
+    public static RequestBody UrlEncodedBody(IEnumerable<FormField> fields) =>
+        RequestBody.WithFields(BodyType.UrlEncoded, fields.Select(f => f with
         {
-            lines = lines.SelectMany(line => line.Split('&', StringSplitOptions.RemoveEmptyEntries));
-        }
-
-        foreach (var line in lines)
-        {
-            var index = line.IndexOf('=');
-            var name = index < 0 ? line : line[..index].Trim();
-            var value = index < 0 ? string.Empty : line[(index + 1)..].Trim();
-            yield return encoded
-                ? KeyValuePair.Create(Decode(name), Decode(value))
-                : KeyValuePair.Create(name, value);
-        }
-    }
-
-    /// <summary>A <c>form</c> body from fields: one <c>name=value</c> per line.</summary>
-    public static string FormBody(IEnumerable<KeyValuePair<string, string>> fields) =>
-        string.Join('\n', fields.Select(f => $"{OneLine(f.Key)}={OneLine(f.Value)}"));
-
-    /// <summary>A <c>urlencoded</c> body from decoded fields: one encoded <c>name=value</c> per line.</summary>
-    public static string UrlEncodedBody(IEnumerable<KeyValuePair<string, string>> fields) =>
-        string.Join('\n', fields.Select(f => $"{Encode(f.Key)}={Encode(f.Value)}"));
+            Kind = FormFieldKind.Text,
+            ContentType = string.Empty,
+            FileName = string.Empty,
+            Encode = Encode(f.Name) != f.Name || Encode(f.Value) != f.Value,
+        }));
 
     /// <summary>Whether a media type is JSON (<c>application/json</c>, <c>application/problem+json</c>, …).</summary>
     public static bool IsJson(string? mediaType)
@@ -202,6 +206,15 @@ internal static partial class InterchangeText
             {
                 Content = map(request.Body.Content),
                 Variables = map(request.Body.Variables),
+                Fields = request.Body.Fields?
+                    .Select(f => f with
+                    {
+                        Name = map(f.Name),
+                        Value = map(f.Value),
+                        ContentType = map(f.ContentType),
+                        FileName = map(f.FileName),
+                    })
+                    .ToList(),
             },
         };
 

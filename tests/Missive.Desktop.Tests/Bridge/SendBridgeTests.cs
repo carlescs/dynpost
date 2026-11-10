@@ -7,6 +7,7 @@ using Missive.Application.Environments;
 using Missive.Application.Http;
 using Missive.Application.Interchange;
 using Missive.Application.OAuth2;
+using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Http;
@@ -52,6 +53,7 @@ public sealed class SendBridgeTests : IDisposable
             .AddSingleton<OAuth2Tokens>()
             .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
+            .AddTransient<InspectRequestFiles>()
             .AddTransient<CancelRequest>()
             .AddTransient<SaveResponseBody>()
             .AddTransient<ListCookies>()
@@ -87,6 +89,38 @@ public sealed class SendBridgeTests : IDisposable
 
         Assert.Equal(Path.GetFullPath(externalFile), absolute.GetProperty("payload").GetProperty("path").GetString());
         Assert.True(absolute.GetProperty("payload").GetProperty("isAbsolute").GetBoolean());
+    }
+
+    [Fact]
+    public async Task PickRequestFiles_ReturnsEveryPickedFile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        _current.Open(root);
+        _dialogs.PickFilesAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<FileFilter>>())
+            .Returns([Path.Combine(root, "a.png"), Path.Combine(root, "docs", "b.pdf")]);
+
+        var picked = await SendAsync("request.pickFiles", """{ "multiple": true }""");
+
+        Assert.Equal(
+            ["a.png", "docs/b.pdf"],
+            picked.GetProperty("payload").EnumerateArray().Select(file => file.GetProperty("path").GetString()));
+    }
+
+    [Fact]
+    public async Task InspectRequestFiles_ReportsSizesMissingFilesAndPathsOutsideTheWorkspace()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        _current.Open(root);
+        _files.FileSize(Path.Combine(Path.GetFullPath(root), "a.png")).Returns(1234L);
+
+        var result = await SendAsync("request.inspectFiles", """{ "paths": ["a.png", "missing.png", "../out.png"] }""");
+
+        var files = result.GetProperty("payload").EnumerateArray().ToList();
+        Assert.Equal(1234, files[0].GetProperty("size").GetInt64());
+        Assert.True(files[0].GetProperty("exists").GetBoolean());
+        Assert.False(files[1].GetProperty("exists").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, files[1].GetProperty("error").ValueKind);
+        Assert.Contains("inside the workspace", files[2].GetProperty("error").GetString());
     }
 
     [Fact]

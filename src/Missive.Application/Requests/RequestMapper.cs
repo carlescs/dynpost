@@ -16,7 +16,8 @@ public static class RequestMapper
         new BodyDto(
             BodyTypeName(request.Body.Type),
             request.Body.Content,
-            request.Body.Type == BodyType.Graphql ? request.Body.Variables : null),
+            request.Body.Type == BodyType.Graphql ? request.Body.Variables : null,
+            request.Body.Fields?.Select(ToDto).ToList()),
         request.Description,
         request.Captures.Select(c => new CaptureDto(c.Variable, c.Expression)).ToList());
 
@@ -49,9 +50,7 @@ public static class RequestMapper
             ToEntries(dto.Params),
             ToEntries(dto.Headers),
             auth.Value,
-            bodyType == BodyType.None
-                ? RequestBody.None
-                : new RequestBody(bodyType, dto.Body!.Content ?? string.Empty, dto.Body.Variables ?? string.Empty))
+            ToDomain(bodyType, dto.Body!))
         {
             Description = NormalizeDescription(dto.Description),
             Captures = (dto.Captures ?? [])
@@ -63,6 +62,47 @@ public static class RequestMapper
         var errors = request.Validate();
         return errors.Count == 0 ? request : Invalid(string.Join(" ", errors));
     }
+
+    private static RequestBody ToDomain(BodyType type, BodyDto dto)
+    {
+        if (type == BodyType.None)
+        {
+            return RequestBody.None;
+        }
+
+        // Only form and urlencoded bodies have fields; a body switched to another type keeps its text.
+        if (dto.Fields is { } fields && type is BodyType.Form or BodyType.UrlEncoded)
+        {
+            return RequestBody.WithFields(type, fields
+                .Where(f => !string.IsNullOrEmpty(f.Name) || !string.IsNullOrEmpty(f.Value)
+                    || !string.IsNullOrEmpty(f.ContentType) || !string.IsNullOrEmpty(f.FileName))
+                .Select(f => ToDomain(f, type)));
+        }
+
+        return new RequestBody(type, dto.Content ?? string.Empty, dto.Variables ?? string.Empty);
+    }
+
+    private static FormField ToDomain(FormFieldDto dto, BodyType type)
+    {
+        var file = type == BodyType.Form && string.Equals(dto.Kind, "file", StringComparison.OrdinalIgnoreCase);
+        return new FormField(
+            dto.Name ?? string.Empty,
+            dto.Value ?? string.Empty,
+            file ? FormFieldKind.File : FormFieldKind.Text,
+            dto.Enabled,
+            type == BodyType.Form ? (dto.ContentType ?? string.Empty).Trim() : string.Empty,
+            file ? (dto.FileName ?? string.Empty).Trim() : string.Empty,
+            type == BodyType.UrlEncoded && dto.Encode);
+    }
+
+    private static FormFieldDto ToDto(FormField field) => new(
+        field.Name,
+        field.Value,
+        field.IsFile ? "file" : "text",
+        field.Enabled,
+        field.ContentType.Length > 0 ? field.ContentType : null,
+        field.FileName.Length > 0 ? field.FileName : null,
+        field.Encode);
 
     public static string BodyTypeName(BodyType type) => type switch
     {

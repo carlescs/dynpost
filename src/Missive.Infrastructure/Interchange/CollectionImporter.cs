@@ -87,6 +87,19 @@ public sealed class LocalExternalFiles : IExternalFiles
 
     public bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 
+    public long? FileSize(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? info.Length : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
     public async Task<Result<string>> ReadTextAsync(string path, CancellationToken cancellationToken = default)
     {
         try

@@ -124,6 +124,7 @@ internal static class Program
             .AddTransient<ExportWorkspace>()
             .AddTransient<ImportCollection>()
             .AddTransient<LoadRequest>()
+            .AddTransient<InspectRequestFiles>()
             .AddTransient<CreateRequest>()
             .AddTransient<SaveRequest>()
             .AddTransient<MoveRequest>()

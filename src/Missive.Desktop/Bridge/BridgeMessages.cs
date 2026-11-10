@@ -53,6 +53,18 @@ internal static class BridgeMessageTypes
     /// <summary>Shows a native file picker for a request body. Payload: none. Result: file path or null if cancelled.</summary>
     public const string RequestPickFile = "request.pickFile";
 
+    /// <summary>
+    /// Shows a native file picker for the file fields of a form body. Payload:
+    /// <see cref="PickRequestFilesPayload"/>. Result: the picked files (empty if cancelled).
+    /// </summary>
+    public const string RequestPickFiles = "request.pickFiles";
+
+    /// <summary>
+    /// Describes the files a request body sends (size, missing, outside the workspace). Payload:
+    /// <see cref="InspectRequestFilesPayload"/>. Result: one entry per distinct path.
+    /// </summary>
+    public const string RequestInspectFiles = "request.inspectFiles";
+
     /// <summary>Saves a new request in a folder. Payload: <see cref="CreateRequestPayload"/>. Result: saved request.</summary>
     public const string RequestCreate = "request.create";
 
@@ -347,7 +359,9 @@ internal sealed record ExportWorkspacePayload(string Format, bool IncludeEnviron
 internal sealed record ImportCollectionPayload(string Folder = "");
 
 internal sealed record LoadRequestPayload(string Path);
-internal sealed record PickedRequestFileDto(string Path, bool IsAbsolute);
+internal sealed record PickRequestFilesPayload(bool Multiple = false);
+
+internal sealed record InspectRequestFilesPayload(IReadOnlyList<string> Paths);
 
 internal sealed record CreateRequestPayload(string Folder, RequestDto Request);
 

@@ -41,6 +41,12 @@ internal sealed class PhotinoBridge(PhotinoWindow window) : IFileDialogs
         return files is { Length: > 0 } && !string.IsNullOrEmpty(files[0]) ? files[0] : null;
     }
 
+    public async Task<IReadOnlyList<string>> PickFilesAsync(string title, IReadOnlyList<FileFilter> filters)
+    {
+        var files = await window.ShowOpenFileAsync(title, null!, true, ToPhotino(filters));
+        return files?.Where(file => !string.IsNullOrEmpty(file)).ToList() ?? [];
+    }
+
     public async Task<string?> PickSaveFileAsync(string title, IReadOnlyList<FileFilter> filters)
     {
         var file = await window.ShowSaveFileAsync(title, null!, ToPhotino(filters));

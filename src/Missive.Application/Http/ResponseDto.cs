@@ -50,7 +50,11 @@ public sealed record RedirectDto(
     IReadOnlyList<KeyValueDto>? SentHeaders = null);
 
 /// <summary>A request as it went on the wire, with secrets hidden.</summary>
-public sealed record SentRequestDto(string Method, string Url, IReadOnlyList<KeyValueDto> Headers);
+/// <param name="Parts">The parts of a multipart body, summarised (not their content); <c>null</c> for other bodies.</param>
+public sealed record SentRequestDto(string Method, string Url, IReadOnlyList<KeyValueDto> Headers, IReadOnlyList<SentPartDto>? Parts = null);
+
+/// <summary>A part of a multipart body as sent: its name, file name, content type and size in bytes.</summary>
+public sealed record SentPartDto(string Name, string? FileName, string? ContentType, long Size);
 
 /// <summary>A cookie a response set.</summary>
 /// <param name="Expires">The expiry it gave (from <c>Expires</c> or <c>Max-Age</c>); <c>null</c> for a session cookie.</param>

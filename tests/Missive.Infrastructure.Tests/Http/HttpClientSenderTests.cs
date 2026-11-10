@@ -125,6 +125,49 @@ public sealed class HttpClientSenderTests
     }
 
     [Fact]
+    public async Task SendAsync_SendsMultipartPartsInOrderWithTheirTypesAndFileNames()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var png = Path.Combine(folder, "a.png");
+        var pdf = Path.Combine(folder, "b.pdf");
+        await File.WriteAllBytesAsync(png, [1, 2, 3]);
+        await File.WriteAllTextAsync(pdf, "PDF");
+        try
+        {
+            var handler = Respond();
+            using var sender = new HttpClientSender(new HttpClient(handler));
+
+            var result = await sender.SendAsync(Request("POST", body: new MultipartBody([
+                new MultipartField("meta", "{}", ContentType: "application/json"),
+                new MultipartField("files", FilePath: png),
+                new MultipartField("files", FilePath: pdf, FileName: "report.pdf"),
+            ])));
+
+            Assert.True(result.IsSuccess, result.Error?.Message);
+            var body = handler.Body!;
+            var meta = body.IndexOf("name=meta", StringComparison.Ordinal);
+            var first = body.IndexOf("filename=a.png", StringComparison.Ordinal);
+            var second = body.IndexOf("filename=report.pdf", StringComparison.Ordinal);
+            Assert.True(meta >= 0 && meta < first && first < second, body);
+            Assert.Contains("Content-Type: application/json", body);
+            Assert.Contains("Content-Type: image/png", body);
+            Assert.Contains("Content-Type: application/pdf", body);
+            Assert.Equal(
+                [
+                    new SentPart("meta", null, "application/json", 2),
+                    new SentPart("files", "a.png", "image/png", 3),
+                    new SentPart("files", "report.pdf", "application/pdf", 3),
+                ],
+                result.Value.Sent!.Parts);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task SendAsync_ReportsMissingBodyFiles()
     {
         using var sender = new HttpClientSender(new HttpClient(Respond()));

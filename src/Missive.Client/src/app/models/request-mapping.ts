@@ -1,7 +1,8 @@
-import { AuthDto, RequestDto, WorkspaceNodeDto } from './messages';
+import { AuthDto, FormFieldDto, RequestDto, WorkspaceNodeDto } from './messages';
 import {
   AUTH_TYPES,
   BODY_TYPES,
+  FormField,
   HTTP_METHODS,
   HttpMethod,
   RequestAuth,
@@ -61,6 +62,7 @@ export function fromRequestDto(dto: RequestDto): RequestContent {
     bodyType: BODY_TYPES.includes(dto.body.type) ? dto.body.type : 'none',
     body: dto.body.content,
     bodyVariables: dto.body.type === 'graphql' ? (dto.body.variables ?? '{}') : '',
+    bodyFields: dto.body.fields ? dto.body.fields.map(fromFieldDto) : null,
     description: dto.description ?? '',
     captures: (dto.captures ?? []).map((c) => ({ ...c })),
   };
@@ -76,13 +78,47 @@ export function toRequestDto(content: RequestContent): RequestDto {
     params: content.params.map((r) => ({ ...r })),
     headers: content.headers.map((r) => ({ ...r })),
     auth: toAuthDto(auth),
-    body: {
-      type: content.bodyType,
-      content: content.bodyType === 'none' ? '' : content.body,
-      ...(content.bodyType === 'graphql' ? { variables: content.bodyVariables } : {}),
-    },
+    body: toBodyDto(content),
     description: content.description,
     captures: content.captures.map((c) => ({ ...c })),
+  };
+}
+
+function toBodyDto(content: RequestContent): RequestDto['body'] {
+  const fields =
+    (content.bodyType === 'form' || content.bodyType === 'urlencoded') && content.bodyFields;
+  if (fields) {
+    return { type: content.bodyType, content: '', fields: fields.map(toFieldDto) };
+  }
+  return {
+    type: content.bodyType,
+    content: content.bodyType === 'none' ? '' : content.body,
+    ...(content.bodyType === 'graphql' ? { variables: content.bodyVariables } : {}),
+  };
+}
+
+function fromFieldDto(dto: FormFieldDto): FormField {
+  return {
+    name: dto.name ?? '',
+    value: dto.value ?? '',
+    kind: dto.kind === 'file' ? 'file' : 'text',
+    enabled: dto.enabled ?? true,
+    contentType: dto.contentType ?? '',
+    fileName: dto.fileName ?? '',
+    encode: dto.encode ?? false,
+  };
+}
+
+/** Only what the field uses is sent, so the file stays small. */
+function toFieldDto(field: FormField): FormFieldDto {
+  return {
+    name: field.name,
+    value: field.value,
+    kind: field.kind,
+    enabled: field.enabled,
+    ...(field.contentType ? { contentType: field.contentType } : {}),
+    ...(field.kind === 'file' && field.fileName ? { fileName: field.fileName } : {}),
+    ...(field.encode ? { encode: true } : {}),
   };
 }
 

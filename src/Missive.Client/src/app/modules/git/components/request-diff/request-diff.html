@@ -175,8 +175,8 @@
         <app-code-diff-editor
           class="mt-2 min-h-48 flex-1 overflow-hidden rounded border border-slate-300"
           ariaLabel="Request body"
-          [original]="a.bodyType === 'none' ? '' : a.body"
-          [modified]="b.bodyType === 'none' ? '' : b.body"
+          [original]="a.bodyType === 'none' ? '' : bodyText(a)"
+          [modified]="b.bodyType === 'none' ? '' : bodyText(b)"
           [language]="a.bodyType === 'json' || b.bodyType === 'json' ? 'json' : 'plaintext'"
           [sideBySide]="sideBySide()"
         />

@@ -145,6 +145,24 @@ describe('request diff model', () => {
       expect(requestChanges(before, { ...before, bodyVariables: '{"id":2}' }).body).toBe(true);
     });
 
+    it('compares form fields, also against the text of an older file', () => {
+      const field = {
+        name: 'a',
+        value: '1',
+        kind: 'text' as const,
+        enabled: true,
+        contentType: '',
+        fileName: '',
+        encode: false,
+      };
+      const form = { ...request, bodyType: 'form' as const, body: '', bodyFields: [field] };
+      expect(requestChanges(form, { ...form }).body).toBe(false);
+      expect(
+        requestChanges(form, { ...form, bodyFields: [{ ...field, enabled: false }] }).body,
+      ).toBe(true);
+      expect(requestChanges({ ...form, bodyFields: null, body: 'a=1' }, form).body).toBe(false);
+    });
+
     it('ignores edits to fields the request does not use', () => {
       const noBody = { ...request, body: 'leftover' };
       const unusedAuth = { ...request, auth: { ...EMPTY_AUTH, token: 'unused' } };

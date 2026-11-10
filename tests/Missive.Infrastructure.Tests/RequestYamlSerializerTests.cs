@@ -83,6 +83,91 @@ public class RequestYamlSerializerTests
     }
 
     [Fact]
+    public void FormBodies_WriteFieldsAsAListAndReadThemBack()
+    {
+        var request = new HttpRequestDefinition(
+            "Upload",
+            RequestMethod.Post,
+            "https://api.example.com/upload",
+            body: RequestBody.WithFields(BodyType.Form,
+            [
+                new FormField("metadata", "{\"title\": \"Report\"}", ContentType: "application/json"),
+                FormField.File("file", "uploads/report.pdf", fileName: "q3-report.pdf"),
+                FormField.File("file", ""),
+                new FormField("note", "line 1\nline 2"),
+                new FormField("debug", "true", Enabled: false),
+                new FormField("empty"),
+            ]));
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Equal(
+            """
+            name: Upload
+            method: POST
+            url: https://api.example.com/upload
+            body:
+              type: form
+              fields:
+                - name: metadata
+                  value: "{\"title\": \"Report\"}"
+                  contentType: application/json
+                - name: file
+                  file: uploads/report.pdf
+                  fileName: q3-report.pdf
+                - name: file
+                  file: ""
+                - name: note
+                  value: |-
+                    line 1
+                    line 2
+                - name: debug
+                  value: "true"
+                  disabled: true
+                - name: empty
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal(request.Body, RequestYamlSerializer.Deserialize(yaml, "fallback").Body);
+    }
+
+    [Fact]
+    public void UrlEncodedBodies_WriteTheEncodeFlag()
+    {
+        var request = new HttpRequestDefinition(
+            "Log in",
+            RequestMethod.Post,
+            "https://api.example.com/login",
+            body: RequestBody.WithFields(BodyType.UrlEncoded, [new FormField("user", "ada@example.com", Encode: true), new FormField("remember", "1")]));
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Contains("  fields:\n    - name: user\n      value: ada@example.com\n      encode: true\n    - name: remember\n      value: \"1\"\n", yaml);
+        Assert.Equal(request.Body, RequestYamlSerializer.Deserialize(yaml, "fallback").Body);
+    }
+
+    [Fact]
+    public void FormBodies_OfOlderFilesKeepTheirText()
+    {
+        const string yaml = "name: Upload\nmethod: POST\nurl: https://x\nbody:\n  type: form\n  content: |-\n    title=Hi\n    file=@a.png\n";
+
+        var request = RequestYamlSerializer.Deserialize(yaml, "fallback");
+
+        Assert.Equal(new RequestBody(BodyType.Form, "title=Hi\nfile=@a.png"), request.Body);
+        Assert.Equal(yaml, RequestYamlSerializer.Serialize(request));
+        Assert.Equal([new FormField("title", "Hi"), FormField.File("file", "a.png")], FormFields.Of(request.Body));
+    }
+
+    [Theory]
+    [InlineData("body:\n  type: form\n  fields: nope\n")]
+    [InlineData("body:\n  type: form\n  fields:\n    - just text\n")]
+    [InlineData("body:\n  type: form\n  fields:\n    - name: a\n      disabled: maybe\n")]
+    public void FormBodies_RejectInvalidFields(string yaml)
+    {
+        Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.Deserialize(yaml, "fallback"));
+    }
+
+    [Fact]
     public void BinaryBodies_RoundTripFilePaths()
     {
         var request = new HttpRequestDefinition(

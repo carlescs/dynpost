@@ -1,5 +1,6 @@
 import { KeyValue, RequestAuth, RequestContent } from '../../../models/workspace';
 import { EMPTY_AUTH } from '../../../models/request-mapping';
+import { bodyText } from '../../../models/form-fields';
 
 /** A request with nothing in it: the missing side of an added or deleted request file. */
 export const EMPTY_REQUEST: RequestContent = {
@@ -12,6 +13,7 @@ export const EMPTY_REQUEST: RequestContent = {
   bodyType: 'none',
   body: '',
   bodyVariables: '',
+  bodyFields: null,
   description: '',
   captures: [],
 };
@@ -179,7 +181,7 @@ export function requestChanges(before: RequestContent, after: RequestContent): R
     body:
       before.bodyType !== after.bodyType ||
       (after.bodyType !== 'none' &&
-        (before.body !== after.body ||
+        (bodyText(before) !== bodyText(after) ||
           (before.bodyType === 'graphql' && before.bodyVariables !== after.bodyVariables))),
     capture: changedRows(diffRows(captureRows(before), captureRows(after))),
     docs: before.description !== after.description,
