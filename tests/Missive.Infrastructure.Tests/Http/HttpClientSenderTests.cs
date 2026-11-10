@@ -586,4 +586,69 @@ public sealed class HttpClientSenderTests
             await serving;
         }
     }
+
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("POST")]
+    public async Task SendAsync_SendsAgainWhenAReusedConnectionWasClosedByTheServer(string method)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var accepted = 0;
+        var answered = 0;
+        using var stop = new CancellationTokenSource();
+        var serving = Task.Run(async () =>
+        {
+            // Each connection answers one request, keeping the connection alive, then resets it
+            // when the next request arrives, like a server or firewall that dropped it while idle.
+            var connections = new List<Task>();
+            try
+            {
+                while (true)
+                {
+                    var client = await listener.AcceptTcpClientAsync(stop.Token);
+                    Interlocked.Increment(ref accepted);
+                    connections.Add(Task.Run(async () =>
+                    {
+                        using (client)
+                        {
+                            var stream = client.GetStream();
+                            var buffer = new byte[4096];
+                            await stream.ReadAsync(buffer, stop.Token);
+                            await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), stop.Token);
+                            Interlocked.Increment(ref answered);
+                            await stream.ReadAsync(buffer, stop.Token);
+                            client.Client.LingerState = new LingerOption(true, 0);
+                        }
+                    }));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        });
+
+        try
+        {
+            using var sender = new HttpClientSender();
+            var url = new Uri($"http://127.0.0.1:{port}/");
+            var body = method == "POST" ? new TextBody("{}", "application/json") : null;
+            var first = await sender.SendAsync(new OutgoingRequest(method, url, [], body));
+            var second = await sender.SendAsync(new OutgoingRequest(method, url, [], body));
+
+            Assert.True(first.IsSuccess, first.Error?.Message);
+            Assert.True(second.IsSuccess, second.Error?.Message);
+            Assert.Equal(200, second.Value.StatusCode);
+            Assert.Equal(2, Volatile.Read(ref accepted));
+            Assert.Equal(2, Volatile.Read(ref answered));
+            Assert.Equal(first.Value.BytesSent, second.Value.BytesSent);
+        }
+        finally
+        {
+            stop.Cancel();
+            listener.Stop();
+            await serving;
+        }
+    }
 }
