@@ -502,6 +502,9 @@ name: Checkout smoke
 requests:
   - shop/list-products.yaml
   - shop/create-order.yaml
+  - shop/cancel-order.yaml
+disabled:            # listed requests that are not sent (kept for later)
+  - shop/cancel-order.yaml
 order: random        # sequential (default), shuffle, random or roundRobin
 weights:             # with random: relative chance of each request (default 1)
   shop/list-products.yaml: 4
@@ -538,6 +541,11 @@ higher its `weight`; a weight of 0 never picks it), and `roundRobin` sends the
 next request in the list, with each user starting at a different one so the
 requests are spread evenly. With `random` and `roundRobin` an iteration is one
 request, so `iterations` counts requests per user.
+
+`disabled` turns requests off without taking them out of the plan: they keep
+their place, assertions and weight, but runs skip them (their files don't even
+need to exist), and at least one request must stay enabled. In the visual form,
+each step has a switch to turn it on or off.
 
 `data` and `bodies` share their selection modes: `sequential` hands out the
 entries in order from one cursor shared by every user, `random` picks one each

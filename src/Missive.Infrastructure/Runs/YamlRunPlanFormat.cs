@@ -8,7 +8,8 @@ using YamlDotNet.RepresentationModel;
 namespace Missive.Infrastructure.Runs;
 
 /// <summary>
-/// Reads run plan files. Keys, in order: <c>name</c>, <c>requests</c>, <c>order</c>
+/// Reads run plan files. Keys, in order: <c>name</c>, <c>requests</c>, <c>disabled</c> (request
+/// paths kept in the list but not sent), <c>order</c>
 /// (<c>sequential</c>, <c>shuffle</c>, <c>random</c> or <c>roundRobin</c>), <c>weights</c> (per
 /// request path), <c>load</c>
 /// (<c>threads</c>, <c>iterations</c> or <c>duration</c>, <c>rampUp</c>, <c>thinkTime</c>,
@@ -54,8 +55,15 @@ public sealed class YamlRunPlanFormat : IRunPlanFormat
             ParseThresholds(YamlNodes.OptionalMapping(root, "thresholds")),
             ParseOrder(YamlNodes.OptionalString(root, "order")),
             ParseWeights(YamlNodes.OptionalMapping(root, "weights")),
+            ParseDisabled(root),
             ParseBodies(YamlNodes.OptionalMapping(root, "bodies")));
     }
+
+    private static List<string> ParseDisabled(YamlMappingNode root) =>
+        YamlNodes.StringList(root, "disabled")
+            .Select(item => WorkspacePath.TryParse(item, out var path) ? path.Value : item)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
     private static Dictionary<string, RunBodySource> ParseBodies(YamlMappingNode? bodies)
     {

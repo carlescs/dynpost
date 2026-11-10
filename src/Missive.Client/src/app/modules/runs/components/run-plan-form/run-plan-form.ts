@@ -30,6 +30,7 @@ import {
   removeBody,
   setAssertionStatus,
   setPlanOrder,
+  setPlanRequestEnabled,
   setPlanRequests,
   setPlanThinkTime,
   setPlanValue,
@@ -139,10 +140,25 @@ export class RunPlanForm {
   /** The plan's requests in sending order, with what the workspace knows about each. */
   protected readonly steps = computed(() => {
     const known = this.workspaceRequests();
+    const disabled = new Set(this.form()?.disabled ?? []);
     return (this.form()?.requests ?? []).map((path) => {
       const node = known.get(path);
-      return { path, name: node?.name ?? path, method: node?.method, missing: !node };
+      return {
+        path,
+        name: node?.name ?? path,
+        method: node?.method,
+        missing: !node,
+        enabled: !disabled.has(path),
+      };
     });
+  });
+
+  /** How many of the plan's requests are sent. */
+  protected readonly enabledCount = computed(() => {
+    const form = this.form();
+    if (!form) return 0;
+    const disabled = new Set(form.disabled);
+    return form.requests.filter((path) => !disabled.has(path)).length;
   });
 
   /** Requests that can still be added to the plan. */
@@ -159,8 +175,8 @@ export class RunPlanForm {
     const iterations = Number(form.iterations) || 1;
     const timed = this.loadMode(form) === 'duration';
     const requests = picksOneRequest(form.order)
-      ? Math.min(1, form.requests.length)
-      : form.requests.length;
+      ? Math.min(1, this.enabledCount())
+      : this.enabledCount();
     return {
       threads,
       iterations,
@@ -196,11 +212,15 @@ export class RunPlanForm {
       : 'sequential';
   }
 
-  /** Each request's share of the picks with the `random` order, as a whole percentage. */
+  /**
+   * Each request's share of the picks with the `random` order, as a whole percentage; disabled
+   * requests are never picked.
+   */
   protected readonly shares = computed(() => {
     const form = this.form();
     if (!form) return [];
     const weights = form.requests.map((path) => {
+      if (form.disabled.includes(path)) return 0;
       const weight = form.weights[path];
       const value = weight === undefined || weight === '' ? 1 : Number(weight);
       return Number.isFinite(value) && value > 0 ? value : 0;
@@ -262,6 +282,10 @@ export class RunPlanForm {
         form.requests.filter((_, i) => i !== index),
       ),
     );
+  }
+
+  protected setEnabled(path: string, event: Event): void {
+    this.emit(setPlanRequestEnabled(this.yaml(), path, (event.target as HTMLInputElement).checked));
   }
 
   protected moveRequest(form: PlanForm, index: number, by: -1 | 1): void {

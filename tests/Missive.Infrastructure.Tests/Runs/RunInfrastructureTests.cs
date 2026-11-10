@@ -75,6 +75,17 @@ public sealed class RunInfrastructureTests : IDisposable
     }
 
     [Fact]
+    public void Parse_ReadsTheDisabledRequests()
+    {
+        var result = new YamlRunPlanFormat().Parse(
+            "name: x\nrequests: [a.yaml, b.yaml]\ndisabled: [b.yaml, b.yaml]\nload: {threads: 1, iterations: 1}\n");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["b.yaml"], result.Value.DisabledRequests);
+        Assert.Equal(["a.yaml"], result.Value.EnabledRequests.Select(r => r.Value));
+    }
+
+    [Fact]
     public void Parse_ReadsTheOrderAndWeights()
     {
         var result = new YamlRunPlanFormat().Parse(

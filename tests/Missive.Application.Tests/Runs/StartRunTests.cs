@@ -199,6 +199,33 @@ public class StartRunTests
     }
 
     [Fact]
+    public async Task Execute_SkipsDisabledRequestsEvenWhenTheirFilesAreMissing()
+    {
+        UsePlan(Plan(1, 2, requests: ["users/get.yaml", "users/gone.yaml"]) with { Disabled = ["users/gone.yaml"] });
+        _repository.FileExists(Root, WorkspacePath.Parse("users/gone.yaml")).Returns(false);
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        Assert.Equal("completed", run.State);
+        Assert.Equal(2, run.Total.Samples);
+        Assert.Equal("users/get.yaml", Assert.Single(run.Requests).Request);
+    }
+
+    [Fact]
+    public async Task Execute_RefusesAPlanWithEveryRequestDisabled()
+    {
+        UsePlan(Plan() with { Disabled = ["users/get.yaml"] });
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+
+        Assert.False(started.IsSuccess);
+        Assert.Equal(ErrorCodes.InvalidFile, started.Error!.Code);
+        await _sender.DidNotReceive().SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Execute_LaysCsvRowsOverTheVariables()
     {
         UsePlan(Plan(1, 2, new RunDataSource(WorkspacePath.Parse("perf/users.csv"), SelectionMode.Sequential, EndBehavior.Recycle)));

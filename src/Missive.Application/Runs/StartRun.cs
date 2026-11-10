@@ -129,6 +129,9 @@ public sealed class StartRun(
             return new Error(ErrorCodes.InvalidFile, string.Join(" ", problems));
         }
 
+        // Disabled requests are not sent, so their files don't even need to exist.
+        plan = plan.WithoutDisabledRequests();
+
         if (plan.Load.Threads > RunPlan.WarnThreads && !confirmLarge)
         {
             return new Error(
