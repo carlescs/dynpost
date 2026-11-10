@@ -9,6 +9,7 @@ import {
 } from '../models/messages';
 import { VariableInfo, VariableLookup } from '../models/variables';
 import { WorkspaceStore } from './workspace-store';
+import { DISCARD, Dialogs } from './dialogs';
 
 /** An environment open in an editor tab. */
 export interface EnvironmentDraft {
@@ -34,6 +35,7 @@ export interface EnvironmentDraft {
 @Injectable({ providedIn: 'root' })
 export class EnvironmentStore {
   private readonly bridge = inject(Bridge);
+  private readonly dialogs = inject(Dialogs);
   private readonly workspace = inject(WorkspaceStore);
 
   readonly environments = signal<EnvironmentSummaryDto[]>([]);
@@ -208,9 +210,10 @@ export class EnvironmentStore {
       return;
     }
     if (
-      !confirm(
+      !(await this.dialogs.confirm(
         `Delete the environment "${draft.name}" and the secret values and cookies stored for it?`,
-      )
+        { title: 'Delete environment?', confirmLabel: 'Delete', danger: true },
+      ))
     ) {
       return;
     }
@@ -285,12 +288,15 @@ export class EnvironmentStore {
   }
 
   /** Closes a draft's tab, after asking if it has unsaved changes. */
-  close(key: string): void {
+  async close(key: string): Promise<void> {
     const draft = this.drafts().find((d) => d.key === key);
     if (!draft) return;
     if (
       draft.dirty &&
-      !confirm(`Discard unsaved changes to the environment "${draft.name || 'Untitled'}"?`)
+      !(await this.dialogs.confirm(
+        `Discard unsaved changes to the environment "${draft.name || 'Untitled'}"?`,
+        DISCARD,
+      ))
     ) {
       return;
     }

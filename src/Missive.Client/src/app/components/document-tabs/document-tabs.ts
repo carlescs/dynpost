@@ -44,7 +44,7 @@ export class DocumentTabs {
   }
 
   protected close(tab: Tab): void {
-    if (tab.kind === 'request') this.store.close(tab.doc.id);
-    else this.environments.close(tab.key);
+    if (tab.kind === 'request') void this.store.close(tab.doc.id);
+    else void this.environments.close(tab.key);
   }
 }

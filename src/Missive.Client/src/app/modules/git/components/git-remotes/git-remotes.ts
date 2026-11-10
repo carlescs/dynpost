@@ -13,6 +13,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { GitRemote } from '../../../../models/messages';
 import { GitStore } from '../../../../services/git-store';
+import { Dialogs } from '../../../../services/dialogs';
 
 /** The remote being edited (`null` name: a new one) and the form's values. */
 interface RemoteForm {
@@ -33,6 +34,7 @@ interface RemoteForm {
 })
 export class GitRemotes {
   protected readonly git = inject(GitStore);
+  private readonly dialogs = inject(Dialogs);
   protected readonly expanded = signal(false);
   protected readonly form = signal<RemoteForm | null>(null);
   /** The remote being removed, to show its spinner. */
@@ -78,10 +80,11 @@ export class GitRemotes {
 
   protected async remove(remote: GitRemote): Promise<void> {
     if (
-      !confirm(
+      !(await this.dialogs.confirm(
         `Remove the remote '${remote.name}'? Its remote-tracking branches are deleted and branches ` +
           'that track it lose their upstream. Nothing is deleted on the remote itself.',
-      )
+        { title: 'Remove remote?', confirmLabel: 'Remove', danger: true },
+      ))
     ) {
       return;
     }

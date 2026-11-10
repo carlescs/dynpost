@@ -3,6 +3,7 @@ import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { faCookieBite, faRotate, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { CookieDto } from '../../../../models/messages';
 import { EnvironmentStore } from '../../../../services/environment-store';
+import { Dialogs } from '../../../../services/dialogs';
 
 /** Lists the cookies kept for an environment and lets the user delete them. */
 @Component({
@@ -12,6 +13,7 @@ import { EnvironmentStore } from '../../../../services/environment-store';
 })
 export class CookieJar {
   private readonly store = inject(EnvironmentStore);
+  private readonly dialogs = inject(Dialogs);
 
   /** The environment's id (its file name). */
   readonly environmentId = input.required<string>();
@@ -45,7 +47,12 @@ export class CookieJar {
 
   protected async clear(): Promise<void> {
     const id = this.environmentId();
-    if (!confirm('Delete every cookie kept for this environment?')) return;
+    const ok = await this.dialogs.confirm('Delete every cookie kept for this environment?', {
+      title: 'Clear cookies?',
+      confirmLabel: 'Clear',
+      danger: true,
+    });
+    if (!ok) return;
     if ((await this.store.clearCookies(id)) && id === this.environmentId()) this.cookies.set([]);
   }
 

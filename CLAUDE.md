@@ -27,7 +27,11 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   through PostCSS (`.postcssrc.json`) from its own entry, `src/tailwind.css`. Icons with Font Awesome
   (`@fortawesome/angular-fontawesome`, free solid icons). Drag and drop uses
   Angular CDK (`@angular/cdk/drag-drop`); the explorer tree's nested drop
-  lists are explained in `modules/explorer/services/explorer-state.ts`. Request and response bodies
+  lists are explained in `modules/explorer/services/explorer-state.ts`. Dialogs use Angular CDK
+  Dialog (`@angular/cdk/dialog`) through the root `Dialogs` service (`services/dialogs.ts`):
+  `dialogs.confirm(...)` replaces `window.confirm` (never use the browser's `confirm`/`alert`/
+  `prompt`), and `dialogs.open(Component)` opens any other dialog over the shared blurred
+  backdrop; style dialog content with Tailwind classes. Request and response bodies
   use the Monaco editor (`monaco-editor`, ESM build) through
   `components/code-editor/code-editor.ts`. Monaco is lazy-loaded by
   `components/code-editor/monaco-loader.ts`: its code is a lazy chunk, its workers are

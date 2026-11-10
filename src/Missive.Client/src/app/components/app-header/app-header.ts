@@ -12,6 +12,7 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { AboutDialog } from '../about-dialog/about-dialog';
+import { Dialogs } from '../../services/dialogs';
 import { EnvironmentStore } from '../../services/environment-store';
 import { ThemeStore } from '../../services/theme-store';
 import { UpdateStore } from '../../services/update-store';
@@ -20,7 +21,7 @@ import { WorkspaceStore } from '../../services/workspace-store';
 /** Main application header: app name, open workspace and global options. */
 @Component({
   selector: 'app-header',
-  imports: [FaIconComponent, AboutDialog],
+  imports: [FaIconComponent],
   host: {
     class:
       'always-dark flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
@@ -35,10 +36,10 @@ export class AppHeader {
   protected readonly environments = inject(EnvironmentStore);
   protected readonly updates = inject(UpdateStore);
   protected readonly theme = inject(ThemeStore);
+  private readonly dialogs = inject(Dialogs);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly menuOpen = signal(false);
   protected readonly recentOpen = signal(false);
-  protected readonly aboutOpen = signal(false);
   /** Always rendered, unlike the panel, so it contains the click that opens the panel. */
   private readonly recentMenu = viewChild.required<ElementRef<HTMLElement>>('recentMenu');
   /** Recent workspaces other than the open one. */
@@ -89,7 +90,7 @@ export class AppHeader {
 
   protected showAbout(): void {
     this.menuOpen.set(false);
-    this.aboutOpen.set(true);
+    this.dialogs.open(AboutDialog, { ariaLabelledBy: 'about-title' });
   }
 
   protected onEscape(): void {

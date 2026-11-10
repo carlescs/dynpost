@@ -2,6 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { Bridge, BridgeError } from './bridge';
 import { ERROR_CODES, RunPlanFileDto, RunResultDto, RunSummaryDto } from '../models/messages';
 import { WorkspaceStore } from './workspace-store';
+import { DISCARD, Dialogs } from './dialogs';
 
 /** A run plan open in the editor. */
 export interface RunPlanDraft {
@@ -32,6 +33,7 @@ const NEW_PLAN = (name: string) =>
 @Injectable({ providedIn: 'root' })
 export class RunStore {
   private readonly bridge = inject(Bridge);
+  private readonly dialogs = inject(Dialogs);
   private readonly workspace = inject(WorkspaceStore);
   private readonly root = computed(() => this.workspace.workspace()?.root ?? null);
 
@@ -99,7 +101,7 @@ export class RunStore {
       this.error.set('Stop the running plan before opening another plan.');
       return;
     }
-    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
+    if (this.dirty() && !(await this.dialogs.confirm('Discard unsaved changes?', DISCARD))) return;
     try {
       const document = await this.bridge.send('runPlan.open', { path });
       this.stopPolling();
@@ -136,7 +138,11 @@ export class RunStore {
       return;
     }
     const name = this.plans().find((plan) => plan.path === path)?.name ?? path;
-    if (!confirm(`Delete the run plan '${name}' (${path}) and its saved runs?`)) return;
+    const ok = await this.dialogs.confirm(
+      `Delete the run plan '${name}' (${path}) and its saved runs?`,
+      { title: 'Delete run plan?', confirmLabel: 'Delete', danger: true },
+    );
+    if (!ok) return;
     try {
       await this.bridge.send('runPlan.delete', { path });
       if (this.draft()?.path === path) {
@@ -238,12 +244,12 @@ export class RunStore {
     }
   }
 
-  close(): void {
+  async close(): Promise<void> {
     if (this.running()) {
       this.error.set('Stop the running plan before closing it.');
       return;
     }
-    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
+    if (this.dirty() && !(await this.dialogs.confirm('Discard unsaved changes?', DISCARD))) return;
     this.showing.set(false);
     this.draft.set(null);
   }

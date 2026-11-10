@@ -4,11 +4,14 @@ import { RunResultDto } from '../models/messages';
 import { Bridge } from './bridge';
 import { RunStore } from './run-store';
 import { WorkspaceStore } from './workspace-store';
+import { Dialogs } from './dialogs';
 
 const result = (patch: Partial<RunResultDto> = {}): RunResultDto =>
   ({ runId: 'r1', state: 'completed', ...patch }) as RunResultDto;
 
 describe('RunStore', () => {
+  let dialogs: { confirm: Mock };
+  beforeEach(() => (dialogs = { confirm: vi.fn().mockResolvedValue(true) }));
   let send: Mock;
   let handlers: Record<string, (payload: any) => unknown>;
   let store: RunStore;
@@ -29,7 +32,10 @@ describe('RunStore', () => {
       return handler(payload);
     });
     TestBed.configureTestingModule({
-      providers: [{ provide: Bridge, useValue: { isDesktop: true, send } }],
+      providers: [
+        { provide: Bridge, useValue: { isDesktop: true, send } },
+        { provide: Dialogs, useValue: dialogs },
+      ],
     });
     store = TestBed.inject(RunStore);
     TestBed.inject(WorkspaceStore).workspace.set({ name: 'api', root: '/r' } as never);
@@ -145,7 +151,7 @@ describe('RunStore', () => {
   });
 
   it('deletes a plan after confirming and closes it when open', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(true));
     await store.open('a.run.yaml');
     handlers['runPlan.list'] = () => [];
 
@@ -156,20 +162,18 @@ describe('RunStore', () => {
     expect(store.draft()).toBeNull();
     expect(store.showing()).toBe(false);
     expect(store.plans()).toEqual([]);
-    confirm.mockRestore();
   });
 
   it('keeps the plan when the deletion is not confirmed', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(false));
 
     await store.delete('a.run.yaml');
 
     expect(send).not.toHaveBeenCalledWith('runPlan.delete', expect.anything());
-    confirm.mockRestore();
   });
 
   it('does not delete the open plan while it is running', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = (dialogs.confirm = vi.fn().mockResolvedValue(true));
     await store.open('a.run.yaml');
     store.run.set(result({ state: 'running' }));
 
@@ -178,6 +182,5 @@ describe('RunStore', () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalledWith('runPlan.delete', expect.anything());
     expect(store.error()).toContain('Stop the running plan');
-    confirm.mockRestore();
   });
 });
