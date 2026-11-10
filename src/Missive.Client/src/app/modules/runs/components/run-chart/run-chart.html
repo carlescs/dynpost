@@ -1,27 +1,126 @@
-<svg
-  class="h-32 w-full rounded border border-slate-200 bg-slate-50"
-  [attr.viewBox]="'0 0 ' + width + ' ' + height"
-  preserveAspectRatio="none"
-  role="img"
-  aria-label="Throughput and average latency per second"
->
-  @for (bar of bars(); track $index) {
-    <rect
-      [attr.x]="bar.x"
-      [attr.y]="height - bar.height"
-      [attr.width]="bar.width"
-      [attr.height]="bar.height"
-      [attr.fill]="bar.errors ? '#fca5a5' : '#bae6fd'"
-    />
-  }
-  <polyline
-    [attr.points]="line()"
-    fill="none"
-    stroke="#0369a1"
-    stroke-width="2"
-    vector-effect="non-scaling-stroke"
-  />
-</svg>
-<p class="mt-1 text-xs text-slate-500">
-  Bars: requests per second (red when some failed). Line: average latency.
-</p>
+<div class="flex flex-col gap-3" role="img" [attr.aria-label]="summary()">
+  <!-- Requests per second -->
+  <div>
+    <div class="mb-1 flex items-center gap-3 text-xs">
+      <span class="flex-1 font-medium text-slate-700">Requests per second</span>
+      <span class="flex items-center gap-1 text-slate-500">
+        <span class="size-2 rounded-sm bg-sky-600"></span> Succeeded
+      </span>
+      <span class="flex items-center gap-1 text-slate-500">
+        <span class="size-2 rounded-sm bg-rose-600"></span> Failed
+      </span>
+    </div>
+    <div class="flex h-24 gap-2">
+      <div class="flex w-9 shrink-0 flex-col justify-between text-right text-[10px] text-slate-500">
+        <span class="-mt-1.5">{{ maxSamples() }}</span>
+        <span>{{ maxSamples() / 2 }}</span>
+        <span class="-mb-1.5">0</span>
+      </div>
+      <div
+        class="relative min-w-0 flex-1 border-b border-slate-300"
+        data-plot
+        (mousemove)="hover($event)"
+        (mouseleave)="hovered.set(null)"
+      >
+        <div class="absolute inset-x-0 top-0 border-t border-slate-200"></div>
+        <div class="absolute inset-x-0 top-1/2 border-t border-slate-200"></div>
+        <svg class="absolute inset-0 size-full" [attr.viewBox]="viewBox" preserveAspectRatio="none">
+          @for (bar of bars(); track $index) {
+            <rect
+              class="fill-sky-600"
+              data-bar="succeeded"
+              [attr.x]="bar.x"
+              [attr.y]="100 - bar.succeeded"
+              [attr.width]="bar.width"
+              [attr.height]="bar.succeeded"
+            />
+            @if (bar.failed > 0) {
+              <rect
+                class="fill-rose-600"
+                data-bar="failed"
+                [attr.x]="bar.x"
+                [attr.y]="bar.failedY"
+                [attr.width]="bar.width"
+                [attr.height]="bar.failed"
+              />
+            }
+          }
+        </svg>
+        @if (tip(); as tip) {
+          <div
+            class="pointer-events-none absolute inset-y-0 border-l border-slate-400"
+            [style.left.%]="tip.left"
+          ></div>
+          <div
+            class="pointer-events-none absolute top-0 z-10 rounded border border-slate-200 bg-white px-2 py-1 text-xs whitespace-nowrap shadow-md"
+            role="tooltip"
+            [style.left.%]="tip.left"
+            [style.transform]="tip.flip ? 'translateX(calc(-100% - 8px))' : 'translateX(8px)'"
+          >
+            <div class="mb-0.5 font-semibold">Second {{ tip.point.second + 1 }}</div>
+            <div class="flex items-center gap-1.5">
+              <span class="size-2 rounded-sm bg-sky-600"></span>
+              <span class="flex-1 text-slate-500">Succeeded</span>
+              <span class="pl-3 font-medium">{{ tip.point.samples - tip.point.errors }}</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="size-2 rounded-sm bg-rose-600"></span>
+              <span class="flex-1 text-slate-500">Failed</span>
+              <span class="pl-3 font-medium">{{ tip.point.errors }}</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="h-0.5 w-2 bg-sky-600"></span>
+              <span class="flex-1 text-slate-500">Average</span>
+              <span class="pl-3 font-medium">{{ formatMs(tip.point.averageMs) }}</span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Average latency -->
+  <div>
+    <div class="mb-1 text-xs font-medium text-slate-700">Average latency</div>
+    <div class="flex h-24 gap-2">
+      <div class="flex w-9 shrink-0 flex-col justify-between text-right text-[10px] text-slate-500">
+        <span class="-mt-1.5">{{ formatMs(maxLatency()) }}</span>
+        <span>{{ formatMs(maxLatency() / 2) }}</span>
+        <span class="-mb-1.5">0</span>
+      </div>
+      <div
+        class="relative min-w-0 flex-1 border-b border-slate-300"
+        (mousemove)="hover($event)"
+        (mouseleave)="hovered.set(null)"
+      >
+        <div class="absolute inset-x-0 top-0 border-t border-slate-200"></div>
+        <div class="absolute inset-x-0 top-1/2 border-t border-slate-200"></div>
+        <svg class="absolute inset-0 size-full" [attr.viewBox]="viewBox" preserveAspectRatio="none">
+          <polygon class="fill-sky-600/10" [attr.points]="area()" />
+          <polyline
+            class="fill-none stroke-sky-600"
+            stroke-width="2"
+            stroke-linejoin="round"
+            vector-effect="non-scaling-stroke"
+            [attr.points]="line()"
+          />
+        </svg>
+        @if (tip(); as tip) {
+          <div
+            class="pointer-events-none absolute inset-y-0 border-l border-slate-400"
+            [style.left.%]="tip.left"
+          ></div>
+          <div
+            class="pointer-events-none absolute size-2.5 -translate-1/2 rounded-full border-2 border-white bg-sky-600"
+            [style.left.%]="tip.left"
+            [style.top.%]="tip.latencyTop"
+          ></div>
+        }
+      </div>
+    </div>
+    <div class="mt-1 flex justify-between pl-11 text-[10px] text-slate-500">
+      <span>0 s</span>
+      <span>{{ seconds() }} s</span>
+    </div>
+  </div>
+</div>

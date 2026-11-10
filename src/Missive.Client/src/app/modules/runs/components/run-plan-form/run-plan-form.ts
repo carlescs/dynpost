@@ -1,6 +1,20 @@
+import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import { Component, computed, inject, input, output } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faArrowDown, faArrowUp, faPlus, faTrash } from '@fortawesome/free-solid-svg-icons';
+import {
+  faArrowDown,
+  faArrowUp,
+  faClock,
+  faFlagCheckered,
+  faGaugeHigh,
+  faGripVertical,
+  faListCheck,
+  faListOl,
+  faRepeat,
+  faTable,
+  faTrash,
+  faTriangleExclamation,
+} from '@fortawesome/free-solid-svg-icons';
 import {
   ASSERT_ALL,
   PlanForm,
@@ -13,25 +27,34 @@ import {
   setPlanThinkTime,
   setPlanValue,
 } from '../../../../models/run-plan-form';
-import { WorkspaceNode } from '../../../../models/workspace';
+import { METHOD_COLORS, WorkspaceNode } from '../../../../models/workspace';
 import { WorkspaceStore } from '../../../../services/workspace-store';
+import { parseDuration } from '../../models/run-format';
+import { LoadProfile } from '../load-profile/load-profile';
 
 type LoadMode = 'iterations' | 'duration';
 
-const THRESHOLD_LABELS: Record<(typeof THRESHOLD_KEYS)[number], string> = {
-  p50: 'p50 (max)',
-  p90: 'p90 (max)',
-  p95: 'p95 (max)',
-  p99: 'p99 (max)',
-  average: 'Average (max)',
-  errorRate: 'Error rate (max)',
-  throughput: 'Throughput (min, req/s)',
+/** Each threshold's name, which side of the limit passes and an example value. */
+const THRESHOLDS: Record<
+  (typeof THRESHOLD_KEYS)[number],
+  { label: string; bound: string; example: string }
+> = {
+  p50: { label: 'p50', bound: 'at most', example: '500ms' },
+  p90: { label: 'p90', bound: 'at most', example: '500ms' },
+  p95: { label: 'p95', bound: 'at most', example: '500ms' },
+  p99: { label: 'p99', bound: 'at most', example: '500ms' },
+  average: { label: 'Average', bound: 'at most', example: '500ms' },
+  errorRate: { label: 'Error rate', bound: 'at most', example: '1%' },
+  throughput: { label: 'Req/s', bound: 'at least', example: '50' },
 };
+
+/** The most users the slider goes up to; the number field next to it takes more. */
+const SLIDER_MAX = 200;
 
 /** Edits a run plan with form fields; every change is written back into the plan's YAML text. */
 @Component({
   selector: 'app-run-plan-form',
-  imports: [FaIconComponent],
+  imports: [CdkDrag, CdkDragHandle, CdkDropList, FaIconComponent, LoadProfile],
   host: { class: 'block' },
   templateUrl: './run-plan-form.html',
 })
@@ -43,36 +66,77 @@ export class RunPlanForm {
 
   protected readonly form = computed<PlanForm | null>(() => readPlanForm(this.yaml()));
   protected readonly thresholdKeys = THRESHOLD_KEYS;
-  protected readonly thresholdLabels = THRESHOLD_LABELS;
+  protected readonly thresholds = THRESHOLDS;
   protected readonly allRequests = ASSERT_ALL;
-  protected readonly faPlus = faPlus;
+  protected readonly sliderMax = SLIDER_MAX;
+  protected readonly methodColors = METHOD_COLORS;
   protected readonly faTrash = faTrash;
   protected readonly faArrowUp = faArrowUp;
   protected readonly faArrowDown = faArrowDown;
+  protected readonly faGripVertical = faGripVertical;
+  protected readonly faTriangleExclamation = faTriangleExclamation;
+  protected readonly faListOl = faListOl;
+  protected readonly faGaugeHigh = faGaugeHigh;
+  protected readonly faTable = faTable;
+  protected readonly faListCheck = faListCheck;
+  protected readonly faFlagCheckered = faFlagCheckered;
+  protected readonly faRepeat = faRepeat;
+  protected readonly faClock = faClock;
 
   protected readonly field =
     'w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none';
   protected readonly label = 'flex flex-col gap-1 text-xs text-slate-600';
   protected readonly iconButton =
     'flex size-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 disabled:opacity-30';
+  protected readonly card = 'flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3';
+  protected readonly cardIcon =
+    'flex size-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-xs text-sky-700';
+  protected readonly chip = 'rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-800';
 
-  /** Every request in the workspace, as paths. */
+  /** Every request in the workspace, by path. */
   private readonly workspaceRequests = computed(() => {
-    const paths: string[] = [];
+    const requests = new Map<string, WorkspaceNode>();
     const walk = (nodes: WorkspaceNode[]) => {
       for (const node of nodes) {
-        if (node.kind === 'request') paths.push(node.path);
+        if (node.kind === 'request') requests.set(node.path, node);
         else if (node.children) walk(node.children);
       }
     };
     walk(this.workspace.tree());
-    return paths;
+    return requests;
+  });
+
+  /** The plan's requests in sending order, with what the workspace knows about each. */
+  protected readonly steps = computed(() => {
+    const known = this.workspaceRequests();
+    return (this.form()?.requests ?? []).map((path) => {
+      const node = known.get(path);
+      return { path, name: node?.name ?? path, method: node?.method, missing: !node };
+    });
   });
 
   /** Requests that can still be added to the plan. */
   protected readonly availableRequests = computed(() => {
     const used = new Set(this.form()?.requests ?? []);
-    return this.workspaceRequests().filter((path) => !used.has(path));
+    return [...this.workspaceRequests().keys()].filter((path) => !used.has(path));
+  });
+
+  /** The numbers behind the load summary and its sketch. */
+  protected readonly load = computed(() => {
+    const form = this.form();
+    if (!form) return null;
+    const threads = Number(form.threads) || 1;
+    const iterations = Number(form.iterations) || 1;
+    const timed = this.loadMode(form) === 'duration';
+    return {
+      threads,
+      iterations,
+      timed,
+      requests: form.requests.length,
+      total: threads * iterations * form.requests.length,
+      rampUpMs: parseDuration(form.rampUp) ?? 0,
+      durationMs: timed ? parseDuration(form.duration) : null,
+    };
   });
 
   /** Assertion targets that don't have a block yet. */
@@ -132,6 +196,12 @@ export class RunPlanForm {
   protected moveRequest(form: PlanForm, index: number, by: -1 | 1): void {
     const requests = [...form.requests];
     [requests[index], requests[index + by]] = [requests[index + by], requests[index]];
+    this.emit(setPlanRequests(this.yaml(), requests));
+  }
+
+  protected dropRequest(form: PlanForm, event: CdkDragDrop<unknown>): void {
+    const requests = [...form.requests];
+    requests.splice(event.currentIndex, 0, ...requests.splice(event.previousIndex, 1));
     this.emit(setPlanRequests(this.yaml(), requests));
   }
 

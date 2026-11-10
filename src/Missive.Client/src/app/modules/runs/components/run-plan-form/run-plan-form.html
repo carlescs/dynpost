@@ -1,22 +1,72 @@
 @if (form(); as form) {
-  <div class="flex flex-col gap-5 p-3 text-sm">
-    <section class="flex flex-col gap-2">
-      <label [class]="label">
-        Name
-        <input [class]="field" [value]="form.name" (change)="set(['name'], $event)" />
-      </label>
-    </section>
+  <div class="flex flex-col gap-3 bg-slate-50 p-3 text-sm">
+    <label [class]="label">
+      Name
+      <input
+        [class]="field + ' text-base font-semibold'"
+        [value]="form.name"
+        (change)="set(['name'], $event)"
+      />
+    </label>
 
-    <section class="flex flex-col gap-2">
-      <h3 class="font-semibold">Requests</h3>
-      @if (form.requests.length === 0) {
-        <p class="text-xs text-slate-500">Add at least one request to send.</p>
+    <!-- Requests -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faListOl" /></span>
+        <h3 class="flex-1 font-semibold">Requests</h3>
+        <span class="text-xs text-slate-500">Each user sends them in this order</span>
+      </div>
+      @if (steps().length === 0) {
+        <p
+          class="rounded-md border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500"
+        >
+          Add at least one request to send.
+        </p>
       }
-      <ul class="flex flex-col gap-1">
-        @for (request of form.requests; track $index) {
-          <li class="flex items-center gap-1">
-            <span class="min-w-0 flex-1 truncate rounded bg-slate-100 px-2 py-1" [title]="request">
-              {{ request }}
+      <ol
+        class="flex flex-col gap-1.5"
+        cdkDropList
+        (cdkDropListDropped)="dropRequest(form, $event)"
+      >
+        @for (step of steps(); track $index) {
+          <li
+            class="flex items-center gap-2 rounded-md border bg-white py-1.5 pr-1.5 pl-1"
+            [class]="step.missing ? 'border-amber-200' : 'border-slate-200'"
+            cdkDrag
+            data-step
+          >
+            <span
+              class="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-xs text-slate-400 hover:text-slate-600"
+              cdkDragHandle
+              title="Drag to reorder"
+            >
+              <fa-icon [icon]="faGripVertical" />
+            </span>
+            <span
+              class="flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700"
+            >
+              {{ $index + 1 }}
+            </span>
+            @if (step.method; as method) {
+              <span class="w-11 shrink-0 text-[11px] font-bold" [class]="methodColors[method]">
+                {{ method }}
+              </span>
+            } @else if (step.missing) {
+              <fa-icon
+                class="w-11 shrink-0 text-amber-600"
+                [icon]="faTriangleExclamation"
+                title="This request isn't in the workspace"
+              />
+            }
+            <span class="min-w-0 flex-1" [title]="step.path">
+              <span class="block truncate font-medium">{{ step.name }}</span>
+              @if (step.missing) {
+                <span class="block truncate text-xs text-amber-700"
+                  >Not found in the workspace</span
+                >
+              } @else if (step.name !== step.path) {
+                <span class="block truncate text-xs text-slate-500">{{ step.path }}</span>
+              }
             </span>
             <button
               type="button"
@@ -49,7 +99,7 @@
             </button>
           </li>
         }
-      </ul>
+      </ol>
       <select
         #requestSelect
         [class]="field"
@@ -64,31 +114,105 @@
       </select>
     </section>
 
-    <section class="flex flex-col gap-2">
-      <h3 class="font-semibold">Load</h3>
-      <div class="grid grid-cols-2 gap-2">
-        <label [class]="label">
-          Threads (virtual users)
-          <input
-            type="number"
-            min="1"
-            max="1000"
-            [class]="field"
-            [value]="form.threads"
-            (change)="set(['load', 'threads'], $event)"
+    <!-- Load -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faGaugeHigh" /></span>
+        <h3 class="font-semibold">Load</h3>
+      </div>
+
+      @if (load(); as load) {
+        <div class="rounded-md border border-slate-200 p-3">
+          <p class="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-500" data-summary>
+            <span [class]="chip"
+              >{{ load.threads }} {{ load.threads === 1 ? 'user' : 'users' }}</span
+            >
+            @if (load.timed) {
+              loop over
+              <span [class]="chip">
+                {{ load.requests }} {{ load.requests === 1 ? 'request' : 'requests' }}
+              </span>
+              for
+              <span [class]="chip">{{ form.duration || '…' }}</span>
+            } @else {
+              ×
+              <span [class]="chip">
+                {{ load.iterations }} {{ load.iterations === 1 ? 'iteration' : 'iterations' }}
+              </span>
+              ×
+              <span [class]="chip">
+                {{ load.requests }} {{ load.requests === 1 ? 'request' : 'requests' }}
+              </span>
+              =
+              <span class="rounded-md bg-sky-600 px-2 py-0.5 font-semibold text-white">
+                {{ load.total.toLocaleString('en-US') }} requests
+              </span>
+            }
+            @if (form.maxRps) {
+              <span>· at most {{ form.maxRps }} per second</span>
+            }
+          </p>
+          <app-load-profile
+            [threads]="load.threads"
+            [rampUpMs]="load.rampUpMs"
+            [durationMs]="load.durationMs"
+            [rampUpLabel]="form.rampUp"
+            [endLabel]="load.timed ? form.duration : 'until every iteration is done'"
           />
-        </label>
-        <label [class]="label">
+        </div>
+      }
+
+      <div class="grid grid-cols-2 gap-x-2 gap-y-3">
+        <div [class]="label + ' col-span-2'">
+          <label for="plan-threads">Virtual users (threads)</label>
+          <div class="flex items-center gap-3">
+            <input
+              id="plan-threads"
+              type="number"
+              min="1"
+              max="1000"
+              [class]="field + ' w-24!'"
+              [value]="form.threads"
+              (change)="set(['load', 'threads'], $event)"
+            />
+            <input
+              type="range"
+              min="1"
+              class="min-w-0 flex-1 accent-sky-600"
+              aria-label="Virtual users"
+              [max]="sliderMax"
+              [value]="form.threads || 1"
+              (change)="set(['load', 'threads'], $event)"
+            />
+          </div>
+        </div>
+
+        <div [class]="label">
           Stop after
-          <select
-            [class]="field"
-            [value]="loadMode(form)"
-            (change)="setLoadMode(form, $any($event.target).value)"
-          >
-            <option value="iterations">A number of iterations</option>
-            <option value="duration">A duration</option>
-          </select>
-        </label>
+          <div class="flex rounded border border-slate-300 bg-slate-100 p-0.5" role="group">
+            @for (
+              option of [
+                { mode: 'iterations', label: 'Iterations', icon: faRepeat },
+                { mode: 'duration', label: 'Duration', icon: faClock },
+              ];
+              track option.mode
+            ) {
+              <button
+                type="button"
+                class="flex flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-0.5 text-sm"
+                [class]="
+                  loadMode(form) === option.mode
+                    ? 'bg-white font-semibold text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                "
+                [attr.aria-pressed]="loadMode(form) === option.mode"
+                (click)="setLoadMode(form, $any(option.mode))"
+              >
+                <fa-icon class="text-xs" [icon]="option.icon" /> {{ option.label }}
+              </button>
+            }
+          </div>
+        </div>
         @if (loadMode(form) === 'duration') {
           <label [class]="label">
             Duration (e.g. 2m)
@@ -100,7 +224,7 @@
           </label>
         } @else {
           <label [class]="label">
-            Iterations per thread
+            Iterations per user
             <input
               type="number"
               min="1"
@@ -112,34 +236,55 @@
         }
         <label [class]="label">
           Ramp-up (e.g. 10s)
-          <input [class]="field" [value]="form.rampUp" (change)="set(['load', 'rampUp'], $event)" />
-        </label>
-        <label [class]="label">
-          Think time (e.g. 100ms)
-          <input [class]="field" [value]="form.thinkMin" (change)="setThink(form, 'min', $event)" />
-        </label>
-        <label [class]="label">
-          Think time up to (optional)
-          <input [class]="field" [value]="form.thinkMax" (change)="setThink(form, 'max', $event)" />
+          <input
+            [class]="field"
+            placeholder="All at once"
+            [value]="form.rampUp"
+            (change)="set(['load', 'rampUp'], $event)"
+          />
         </label>
         <label [class]="label">
           Max requests/s
           <input
             type="number"
             min="0"
+            placeholder="Unlimited"
             [class]="field"
             [value]="form.maxRps"
             (change)="set(['load', 'maxRps'], $event)"
           />
         </label>
+        <label [class]="label">
+          Think time (e.g. 100ms)
+          <input
+            [class]="field"
+            placeholder="None"
+            [value]="form.thinkMin"
+            (change)="setThink(form, 'min', $event)"
+          />
+        </label>
+        <label [class]="label">
+          Think time up to (optional)
+          <input
+            [class]="field"
+            placeholder="Same"
+            [value]="form.thinkMax"
+            (change)="setThink(form, 'max', $event)"
+          />
+        </label>
       </div>
     </section>
 
-    <section class="flex flex-col gap-2">
-      <h3 class="font-semibold">Data</h3>
-      <div class="grid grid-cols-3 gap-2">
-        <label [class]="label + ' col-span-3'">
-          CSV file (each row's columns become variables)
+    <!-- Data -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faTable" /></span>
+        <h3 class="flex-1 font-semibold">Data</h3>
+        <span class="text-xs text-slate-500">Each row's columns become variables</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <label [class]="label + ' col-span-2'">
+          CSV file
           <input
             [class]="field"
             placeholder="users.csv"
@@ -175,10 +320,15 @@
       </div>
     </section>
 
-    <section class="flex flex-col gap-2">
-      <h3 class="font-semibold">Assertions</h3>
+    <!-- Assertions -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faListCheck" /></span>
+        <h3 class="flex-1 font-semibold">Assertions</h3>
+        <span class="text-xs text-slate-500">A response that breaks one counts as failed</span>
+      </div>
       @for (assertion of form.assertions; track assertion.key) {
-        <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
+        <div class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-2">
           <div class="flex items-center gap-2">
             <span class="min-w-0 flex-1 truncate font-medium" [title]="assertion.key">
               {{ assertion.key === allRequests ? 'All requests' : assertion.key }}
@@ -243,15 +393,27 @@
       </select>
     </section>
 
-    <section class="flex flex-col gap-2">
-      <h3 class="font-semibold">Thresholds</h3>
-      <div class="grid grid-cols-2 gap-2">
+    <!-- Thresholds -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faFlagCheckered" /></span>
+        <h3 class="flex-1 font-semibold">Thresholds</h3>
+        <span class="text-xs text-slate-500">The run passes when all of them hold</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 xl:grid-cols-4">
         @for (key of thresholdKeys; track key) {
-          <label [class]="label">
-            {{ thresholdLabels[key] }}
+          <label
+            class="flex flex-col gap-1 rounded-md border p-2 text-xs"
+            [class]="form.thresholds[key] ? 'border-sky-600 bg-sky-50' : 'border-slate-200'"
+            [attr.data-threshold]="key"
+          >
+            <span class="flex items-baseline justify-between gap-2">
+              <span class="font-semibold text-slate-800">{{ thresholds[key].label }}</span>
+              <span class="truncate text-slate-500">{{ thresholds[key].bound }}</span>
+            </span>
             <input
               [class]="field"
-              [placeholder]="key === 'errorRate' ? '1%' : key === 'throughput' ? '50' : '500ms'"
+              [placeholder]="thresholds[key].example"
               [value]="form.thresholds[key]"
               (change)="set(['thresholds', key], $event)"
             />
