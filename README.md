@@ -449,7 +449,10 @@ virtual users and reports latency percentiles, throughput and errors. The plan
 is a git-tracked `*.run.yaml` file (edit it in the **Load runs** view, with a
 visual form or as YAML text; the form keeps comments and unknown keys); results
 are saved locally under `.missive/runs/` and never committed. Runs use the
-selected environment and send no cookies.
+selected environment and send no cookies. Like requests, a plan whose file is
+named after it (`checkout-smoke.run.yaml` for "Checkout smoke") is renamed
+along with it, and its earlier runs follow; files with hand-picked names keep
+them.
 
 The visual form lists the requests as steps you can drag into order, sums up the
 load (users × iterations × requests) and sketches the users over time with the

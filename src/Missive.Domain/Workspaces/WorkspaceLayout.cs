@@ -59,6 +59,36 @@ public static class WorkspaceLayout
         && (fileName.EndsWith(".run.yaml", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".run.yml", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The run plan extension of <paramref name="fileName"/> (<c>.run.yaml</c> or <c>.run.yml</c>), or <c>null</c>.</summary>
+    public static string? RunPlanExtension(string fileName)
+    {
+        if (!IsRunPlanFileName(fileName))
+        {
+            return null;
+        }
+
+        return fileName[(fileName.Length - (fileName.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) ? 8 : 9))..];
+    }
+
+    /// <summary>The file name of a run plan without its run plan extension, e.g. <c>checkout-smoke</c>.</summary>
+    public static string RunPlanStem(string fileName)
+    {
+        var extension = RunPlanExtension(fileName);
+        return extension is null ? FileStem(fileName) : fileName[..^extension.Length];
+    }
+
+    /// <summary>
+    /// The file name to try for a run plan named <paramref name="planName"/>, like
+    /// <see cref="RequestFileName"/>: <c>checkout-smoke.run.yaml</c>, then <c>checkout-smoke-2.run.yaml</c>, …
+    /// </summary>
+    public static string RunPlanFileName(string planName, int attempt = 1, string extension = RunPlanExtensionDefault)
+    {
+        var slug = Slug.From(planName, "plan");
+        return attempt <= 1 ? slug + extension : $"{slug}-{attempt}{extension}";
+    }
+
+    public const string RunPlanExtensionDefault = ".run.yaml";
+
     public static bool HasRequestExtension(string fileName) =>
         fileName.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)
         || fileName.EndsWith(".yml", StringComparison.OrdinalIgnoreCase);

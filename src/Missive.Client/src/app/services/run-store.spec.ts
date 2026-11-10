@@ -68,6 +68,17 @@ describe('RunStore', () => {
     expect(store.dirty()).toBe(false);
   });
 
+  it('follows the file when saving renames it', async () => {
+    handlers['runPlan.save'] = (p) => ({ path: 'renamed.run.yaml', yaml: p.yaml, error: null });
+    await store.open('a.run.yaml');
+    store.edit('name: Renamed\n');
+
+    await store.save();
+
+    expect(store.draft()?.path).toBe('renamed.run.yaml');
+    expect(store.dirty()).toBe(false);
+  });
+
   it('preserves edits made while a save is in flight', async () => {
     let finishSave!: (value: { path: string; yaml: string; error: null }) => void;
     handlers['runPlan.save'] = (p) =>
