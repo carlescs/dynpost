@@ -11,6 +11,7 @@ using Missive.Domain.Git;
 using Missive.Application.Requests;
 using Missive.Application.Runs;
 using Missive.Application.Settings;
+using Missive.Application.Sharing;
 using Missive.Application.About;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
@@ -178,6 +179,8 @@ internal static class BridgeHandlers
                 (p, _) => Task.FromResult(Use<DuplicateFolder>().Execute(p.Path)))
             .Register<DeleteRequestPayload, Unit?>(BridgeMessageTypes.RequestDelete,
                 (p, _) => Task.FromResult(NoValue(Use<DeleteRequest>().Execute(p.Path))))
+            .Register<SetSharingPayload, SharingDto>(BridgeMessageTypes.SharingSet,
+                (p, ct) => Use<SetLocalOnly>().ExecuteAsync(p.Path, p.LocalOnly, ct))
             .Register<DeleteFolderPayload, Unit?>(BridgeMessageTypes.FolderDelete,
                 (p, _) => Task.FromResult(NoValue(Use<DeleteFolder>().Execute(p.Path))))
             .Register(BridgeMessageTypes.EnvironmentList,

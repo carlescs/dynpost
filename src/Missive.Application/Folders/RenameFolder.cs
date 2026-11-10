@@ -1,10 +1,11 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 
 namespace Missive.Application.Folders;
 
 /// <summary>Renames a collection folder; everything inside it moves along.</summary>
-public sealed class RenameFolder(IWorkspaceRepository repository, CurrentWorkspace current)
+public sealed class RenameFolder(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
 {
     public Result<FolderDto> Execute(string path, string newName)
     {
@@ -39,6 +40,12 @@ public sealed class RenameFolder(IWorkspaceRepository repository, CurrentWorkspa
         }
 
         var moved = repository.MoveFolder(root.Value, folder, target.Value);
-        return moved.IsSuccess ? new FolderDto(target.Value.Value) : moved.Error!;
+        if (!moved.IsSuccess)
+        {
+            return moved.Error!;
+        }
+
+        var followed = localFiles.Move(root.Value, folder, target.Value);
+        return followed.IsSuccess ? new FolderDto(target.Value.Value) : followed.Error!;
     }
 }

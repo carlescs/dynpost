@@ -1,5 +1,6 @@
 using Missive.Application.Common;
 using Missive.Application.Runs;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
 using NSubstitute;
@@ -13,6 +14,7 @@ public class DeleteRunPlanTests
     private readonly IRunPlanStore _store = Substitute.For<IRunPlanStore>();
     private readonly IRunStore _runs = Substitute.For<IRunStore>();
     private readonly RunRegistry _registry = new();
+    private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
     private readonly CurrentWorkspace _current = new();
 
     public DeleteRunPlanTests()
@@ -22,7 +24,7 @@ public class DeleteRunPlanTests
         _runs.DeletePlanAsync(Root, Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
     }
 
-    private DeleteRunPlan Create() => new(_store, _runs, _registry, _current);
+    private DeleteRunPlan Create() => new(_store, _runs, _registry, _localFiles, _current);
 
     [Fact]
     public async Task DeletesThePlanAndItsRuns()
@@ -35,6 +37,7 @@ public class DeleteRunPlanTests
         Assert.True(deleted.IsSuccess);
         _store.Received().Delete(Root, path);
         await _runs.Received().DeletePlanAsync(Root, "perf/smoke.run.yaml", Arg.Any<CancellationToken>());
+        _localFiles.Received().Remove(Root, path);
     }
 
     [Fact]
@@ -79,6 +82,7 @@ public class DeleteRunPlanTests
         var deleted = await Create().ExecuteAsync("smoke.run.yaml");
 
         Assert.Equal(ErrorCodes.Io, deleted.Error!.Code);
+        _localFiles.DidNotReceive().Remove(Arg.Any<string>(), Arg.Any<WorkspacePath>());
         await _runs.DidNotReceive().DeletePlanAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }

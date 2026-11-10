@@ -5,6 +5,7 @@ import {
   CookieDto,
   EnvironmentSummaryDto,
   EnvironmentVariableDto,
+  environmentPath,
 } from '../models/messages';
 import { VariableInfo, VariableLookup } from '../models/variables';
 import { WorkspaceStore } from './workspace-store';
@@ -86,6 +87,12 @@ export class EnvironmentStore {
     } catch (error) {
       this.report(error);
     }
+  }
+
+  /** Keeps an environment on this computer only, or shares it through git again. */
+  async toggleLocalOnly(env: EnvironmentSummaryDto): Promise<void> {
+    if (await this.workspace.setLocalOnly(environmentPath(env.id), env.name, !env.localOnly))
+      await this.refresh();
   }
 
   /** Selects the environment requests are sent with, or none. */

@@ -12,7 +12,8 @@ public sealed record SavedEnvironmentDto(string Id, EnvironmentDto Environment);
 
 /// <param name="Name">The environment's name, or its file name when the file can't be read.</param>
 /// <param name="Error">Why the file can't be read, if it can't.</param>
-public sealed record EnvironmentSummaryDto(string Id, string Name, string? Error = null);
+/// <param name="LocalOnly">Whether the file is kept on this computer only, never committed.</param>
+public sealed record EnvironmentSummaryDto(string Id, string Name, string? Error = null, bool LocalOnly = false);
 
 /// <param name="Active">The id of the selected environment, or <c>null</c> when none is.</param>
 /// <param name="Environments">Every environment of the workspace, sorted by name.</param>

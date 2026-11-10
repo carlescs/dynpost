@@ -8,6 +8,7 @@ import {
   faFolder,
   faFolderOpen,
   faFolderPlus,
+  faLaptop,
   faPen,
   faPlus,
   faTrash,
@@ -54,6 +55,7 @@ export class TreeLevel {
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faFolderPlus = faFolderPlus;
   protected readonly faPen = faPen;
+  protected readonly faLaptop = faLaptop;
   protected readonly faTrash = faTrash;
   protected readonly faWarning = faTriangleExclamation;
 

@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
@@ -12,13 +13,15 @@ public class LastWorkspaceTests
 
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
+    private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
     private readonly CurrentWorkspace _current = new();
     private readonly OpenWorkspace _open;
     private AppSettings _storedSettings = AppSettings.Default;
 
     public LastWorkspaceTests()
     {
-        _open = new OpenWorkspace(_repository, _current, _settings);
+        _localFiles.List(Arg.Any<string>()).Returns(new HashSet<WorkspacePath>());
+        _open = new OpenWorkspace(_repository, _localFiles, _current, _settings);
         _repository.ListAsync(default!, default)
             .ReturnsForAnyArgs(Result<IReadOnlyList<WorkspaceEntry>>.Success(Array.Empty<WorkspaceEntry>()));
         _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => _storedSettings);

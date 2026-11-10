@@ -1,11 +1,12 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
 
 namespace Missive.Application.Requests;
 
 /// <summary>Deletes a request file from the open workspace.</summary>
-public sealed class DeleteRequest(IWorkspaceRepository repository, CurrentWorkspace current)
+public sealed class DeleteRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
 {
     public Result<Unit> Execute(string path)
     {
@@ -26,6 +27,13 @@ public sealed class DeleteRequest(IWorkspaceRepository repository, CurrentWorksp
             return new Error(ErrorCodes.NotFound, $"The request file '{path}' does not exist.");
         }
 
-        return repository.DeleteFile(root.Value, requestPath);
+        var deleted = repository.DeleteFile(root.Value, requestPath);
+        if (deleted.IsSuccess)
+        {
+            // Best effort: a leftover .gitignore line for a deleted file does no harm.
+            localFiles.Remove(root.Value, requestPath);
+        }
+
+        return deleted;
     }
 }

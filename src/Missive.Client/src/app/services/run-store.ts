@@ -83,6 +83,12 @@ export class RunStore {
     }
   }
 
+  /** Keeps a plan on this computer only, or shares it through git again. */
+  async toggleLocalOnly(plan: RunPlanFileDto): Promise<void> {
+    if (await this.workspace.setLocalOnly(plan.path, plan.name ?? plan.path, !plan.localOnly))
+      await this.refresh();
+  }
+
   async open(path: string): Promise<void> {
     const current = this.draft();
     if (current?.path === path) {

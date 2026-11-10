@@ -2,6 +2,7 @@ using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.OAuth2;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
 using Missive.Domain.Workspaces;
@@ -9,7 +10,11 @@ using Missive.Domain.Workspaces;
 namespace Missive.Application.Environments;
 
 /// <summary>Lists the open workspace's environments and which one is selected.</summary>
-public sealed class ListEnvironments(IEnvironmentStore store, IWorkspaceStateStore state, CurrentWorkspace current)
+public sealed class ListEnvironments(
+    IEnvironmentStore store,
+    IWorkspaceStateStore state,
+    ILocalOnlyFiles localFiles,
+    CurrentWorkspace current)
 {
     public async Task<Result<EnvironmentListDto>> ExecuteAsync(CancellationToken cancellationToken = default)
     {
@@ -25,10 +30,12 @@ public sealed class ListEnvironments(IEnvironmentStore store, IWorkspaceStateSto
             return files.Error!;
         }
 
+        var localOnly = LocalOnlyPaths.ListOrEmpty(localFiles, root.Value);
         var summaries = files.Value
             .Select(file => file.Environment.IsSuccess
                 ? new EnvironmentSummaryDto(file.Id, file.Environment.Value.Name)
                 : new EnvironmentSummaryDto(file.Id, file.Id, file.Environment.Error!.Message))
+            .Select(summary => summary with { LocalOnly = localOnly.Contains(LocalOnlyPaths.Environment(summary.Id)) })
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(e => e.Id, StringComparer.Ordinal)
             .ToList();
@@ -126,6 +133,7 @@ public sealed class SaveEnvironment(
     ICookieJarStore cookieJars,
     ICapturedValueStore captures,
     IOAuth2TokenStore tokens,
+    ILocalOnlyFiles localFiles,
     CurrentWorkspace current)
 {
     public async Task<Result<SavedEnvironmentDto>> ExecuteAsync(string id, EnvironmentDto dto, CancellationToken cancellationToken = default)
@@ -171,6 +179,14 @@ public sealed class SaveEnvironment(
             }
 
             savedId = target;
+
+            // A local-only environment must stay out of git under its new file name.
+            var followed = localFiles.Move(root.Value, LocalOnlyPaths.Environment(id), LocalOnlyPaths.Environment(savedId));
+            if (!followed.IsSuccess)
+            {
+                return followed.Error!;
+            }
+
             var selected = await state.LoadAsync(root.Value, cancellationToken);
             if (selected.ActiveEnvironment == id)
             {
@@ -224,6 +240,7 @@ public sealed class DeleteEnvironment(
     ICookieJarStore cookieJars,
     ICapturedValueStore captures,
     IOAuth2TokenStore tokens,
+    ILocalOnlyFiles localFiles,
     CurrentWorkspace current)
 {
     public async Task<Result<Unit>> ExecuteAsync(string id, CancellationToken cancellationToken = default)
@@ -266,6 +283,7 @@ public sealed class DeleteEnvironment(
         await CookieJars.RemoveAsync(cookieJars, root.Value, id, cancellationToken);
         await CapturedValues.RemoveAsync(captures, root.Value, id, cancellationToken);
         await OAuth2TokenCache.RemoveAsync(tokens, root.Value, id, cancellationToken);
+        localFiles.Remove(root.Value, LocalOnlyPaths.Environment(id));
         return Unit.Value;
     }
 }

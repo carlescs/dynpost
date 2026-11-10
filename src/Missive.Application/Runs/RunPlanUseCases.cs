@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
 
@@ -18,7 +19,7 @@ internal static class RunPlanPaths
 }
 
 /// <summary>Lists the run plans of the workspace with their names, or why a file can't be used.</summary>
-public sealed class ListRunPlans(IRunPlanStore store, IRunPlanFormat format, CurrentWorkspace current)
+public sealed class ListRunPlans(IRunPlanStore store, IRunPlanFormat format, ILocalOnlyFiles localFiles, CurrentWorkspace current)
 {
     public async Task<Result<IReadOnlyList<RunPlanFileDto>>> ExecuteAsync(CancellationToken cancellationToken = default)
     {
@@ -34,14 +35,15 @@ public sealed class ListRunPlans(IRunPlanStore store, IRunPlanFormat format, Cur
             return paths.Error!;
         }
 
+        var localOnly = LocalOnlyPaths.ListOrEmpty(localFiles, root.Value);
         var plans = new List<RunPlanFileDto>();
         foreach (var path in paths.Value)
         {
             var text = await store.ReadAsync(root.Value, path, cancellationToken);
             var plan = text.IsSuccess ? format.Parse(text.Value) : text.Error!;
             plans.Add(plan.IsSuccess
-                ? new RunPlanFileDto(path.Value, plan.Value.Name, null)
-                : new RunPlanFileDto(path.Value, null, plan.Error!.Message));
+                ? new RunPlanFileDto(path.Value, plan.Value.Name, null, localOnly.Contains(path))
+                : new RunPlanFileDto(path.Value, null, plan.Error!.Message, localOnly.Contains(path)));
         }
 
         return plans;
@@ -78,7 +80,13 @@ public sealed class OpenRunPlan(IRunPlanStore store, IRunPlanFormat format, Curr
 /// new name (and its saved runs follow it); files with hand-picked names keep them, and so does a
 /// plan that is being run.
 /// </summary>
-public sealed class SaveRunPlan(IRunPlanStore store, IRunPlanFormat format, IRunStore runs, RunRegistry registry, CurrentWorkspace current)
+public sealed class SaveRunPlan(
+    IRunPlanStore store,
+    IRunPlanFormat format,
+    IRunStore runs,
+    RunRegistry registry,
+    ILocalOnlyFiles localFiles,
+    CurrentWorkspace current)
 {
     private const int MaxAttempts = 1000;
 
@@ -116,6 +124,14 @@ public sealed class SaveRunPlan(IRunPlanStore store, IRunPlanFormat format, IRun
             }
 
             savedPath = target;
+
+            // A local-only plan must stay out of git under its new file name.
+            var followed = localFiles.Move(root.Value, parsed.Value, target);
+            if (!followed.IsSuccess)
+            {
+                return followed.Error!;
+            }
+
             // Run history is local and only a convenience: a failure here doesn't undo the rename.
             await runs.MovePlanAsync(root.Value, parsed.Value.Value, target.Value, cancellationToken);
         }
@@ -167,7 +183,12 @@ public sealed class SaveRunPlan(IRunPlanStore store, IRunPlanFormat format, IRun
 /// Deletes a run plan file and its saved runs (local history that would otherwise be orphaned).
 /// A plan that is being run can't be deleted.
 /// </summary>
-public sealed class DeleteRunPlan(IRunPlanStore store, IRunStore runs, RunRegistry registry, CurrentWorkspace current)
+public sealed class DeleteRunPlan(
+    IRunPlanStore store,
+    IRunStore runs,
+    RunRegistry registry,
+    ILocalOnlyFiles localFiles,
+    CurrentWorkspace current)
 {
     public async Task<Result<Unit>> ExecuteAsync(string path, CancellationToken cancellationToken = default)
     {
@@ -194,7 +215,9 @@ public sealed class DeleteRunPlan(IRunPlanStore store, IRunStore runs, RunRegist
             return deleted.Error!;
         }
 
-        // Run history is local and only a convenience: a failure here doesn't undo the delete.
+        // Best effort: a leftover .gitignore line for a deleted file does no harm, and run history
+        // is local and only a convenience, so neither failure undoes the delete.
+        localFiles.Remove(root.Value, parsed.Value);
         await runs.DeletePlanAsync(root.Value, parsed.Value.Value, cancellationToken);
         return Unit.Value;
     }

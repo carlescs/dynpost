@@ -139,6 +139,14 @@ export class GitStore {
       });
     });
 
+    // Making a file local-only or shared again changes what git tracks and .gitignore.
+    effect(() => {
+      if (this.workspace.sharingChanged() === 0) return;
+      untracked(() => {
+        if (this.root() && this.available) void this.refresh();
+      });
+    });
+
     // Opening or selecting a request or environment tab (even the one shown) shows it instead.
     effect(() => {
       this.workspace.shown();

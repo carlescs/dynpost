@@ -150,6 +150,13 @@
           }}</span>
           <span class="truncate">{{ node.name }}</span>
         }
+        @if (node.localOnly) {
+          <fa-icon
+            class="ml-auto shrink-0 text-[10px] text-amber-600"
+            title="Kept on this computer only (git-ignored)"
+            [icon]="faLaptop"
+          />
+        }
       </button>
     }
   </li>

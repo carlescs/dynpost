@@ -335,4 +335,34 @@ describe('WorkspaceStore', () => {
     store.toggleSidebar(true);
     expect(store.sidebarOpen()).toBe(true);
   });
+
+  it('asks before keeping a request local-only, then re-reads the tree', async () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    respond({
+      'sharing.set': (payload) => payload,
+      'workspace.tree': () => workspace,
+    });
+    const node = { path: 'users/get.yaml', name: 'Get user', kind: 'request' as const };
+
+    await store.setRequestLocalOnly(node, true);
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    await store.setRequestLocalOnly(node, true);
+    expect(send).toHaveBeenCalledWith('sharing.set', { path: 'users/get.yaml', localOnly: true });
+    expect(store.sharingChanged()).toBe(1);
+  });
+
+  it('shares a file again without asking, and reports failures', async () => {
+    const confirm = vi.fn();
+    vi.stubGlobal('confirm', confirm);
+    respond({ 'sharing.set': () => Promise.reject(new BridgeError('io_error', 'Read-only')) });
+
+    expect(await store.setLocalOnly('environments/dev.yaml', 'Dev', false)).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(store.error()).toContain('Read-only');
+    expect(store.sharingChanged()).toBe(0);
+  });
 });

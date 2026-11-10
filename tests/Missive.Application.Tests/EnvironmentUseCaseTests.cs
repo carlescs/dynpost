@@ -1,10 +1,12 @@
 using Missive.Application.Common;
+using Missive.Application.Sharing;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.OAuth2;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
 using Missive.Domain.Http;
+using Missive.Domain.Workspaces;
 using NSubstitute;
 
 namespace Missive.Application.Tests;
@@ -23,11 +25,13 @@ public class EnvironmentUseCaseTests
     private readonly ICookieJarStore _cookies = Substitute.For<ICookieJarStore>();
     private readonly ICapturedValueStore _captures = Substitute.For<ICapturedValueStore>();
     private readonly IOAuth2TokenStore _tokens = Substitute.For<IOAuth2TokenStore>();
+    private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
     private readonly CurrentWorkspace _current = new();
 
     public EnvironmentUseCaseTests()
     {
         _current.Open(Root);
+        _localFiles.List(Arg.Any<string>()).Returns(new HashSet<WorkspacePath>());
         _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(WorkspaceState.Default);
         _state.SaveAsync(Root, Arg.Any<WorkspaceState>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
         StoredSecrets(new Dictionary<string, IReadOnlyDictionary<string, string>>());
@@ -78,7 +82,7 @@ public class EnvironmentUseCaseTests
         ]));
         _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("prod.yaml"));
 
-        var result = await new ListEnvironments(_store, _state, _current).ExecuteAsync();
+        var result = await new ListEnvironments(_store, _state, _localFiles, _current).ExecuteAsync();
 
         Assert.Equal("prod.yaml", result.Value.Active);
         Assert.Equal(
@@ -96,7 +100,7 @@ public class EnvironmentUseCaseTests
         _store.ListAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<EnvironmentFile>>.Success([]));
         _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("gone.yaml"));
 
-        var result = await new ListEnvironments(_store, _state, _current).ExecuteAsync();
+        var result = await new ListEnvironments(_store, _state, _localFiles, _current).ExecuteAsync();
 
         Assert.Null(result.Value.Active);
     }
@@ -104,7 +108,7 @@ public class EnvironmentUseCaseTests
     [Fact]
     public async Task List_RequiresAWorkspace()
     {
-        var result = await new ListEnvironments(_store, _state, new CurrentWorkspace()).ExecuteAsync();
+        var result = await new ListEnvironments(_store, _state, _localFiles, new CurrentWorkspace()).ExecuteAsync();
 
         Assert.Equal(ErrorCodes.NoWorkspace, result.Error?.Code);
     }
@@ -201,7 +205,7 @@ public class EnvironmentUseCaseTests
             ["prod.yaml"] = new Dictionary<string, string> { ["token"] = "p" },
         });
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync(
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync(
             "dev.yaml",
             Dto("Local", new EnvironmentVariableDto("token", "new", true)));
 
@@ -219,7 +223,7 @@ public class EnvironmentUseCaseTests
     {
         Existing("my-env.yaml", new EnvironmentDefinition("Dev"));
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("my-env.yaml", Dto("Local"));
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("my-env.yaml", Dto("Local"));
 
         Assert.Equal("my-env.yaml", result.Value.Id);
         _store.DidNotReceiveWithAnyArgs().Move(default!, default!, default!);
@@ -231,7 +235,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev"));
         StoredSecrets(new() { ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "abc" } });
 
-        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync(
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync(
             "dev.yaml",
             Dto("Dev", new EnvironmentVariableDto("token", "abc", true)));
 
@@ -244,7 +248,7 @@ public class EnvironmentUseCaseTests
         _secrets.LoadAsync(Root, Arg.Any<CancellationToken>())
             .Returns(Result<Secrets>.Failure(ErrorCodes.InvalidFile, "bad secrets"));
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
 
         Assert.Equal(ErrorCodes.InvalidFile, result.Error?.Code);
         await _store.DidNotReceiveWithAnyArgs().WriteAsync(default!, default!, default!, default);
@@ -258,7 +262,7 @@ public class EnvironmentUseCaseTests
         _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("dev.yaml"));
         StoredSecrets(new() { ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "abc" } });
 
-        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
+        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml");
 
         Assert.True(result.IsSuccess);
         _store.Received(1).Delete(Root, "dev.yaml");
@@ -272,7 +276,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev") { CookieJar = true });
         StoredCookies(new() { ["dev.yaml"] = [Session] });
 
-        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync(
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync(
             "dev.yaml",
             Dto("Local") with { CookieJar = true });
 
@@ -290,7 +294,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev") { CookieJar = true });
         StoredCookies(new() { ["dev.yaml"] = [Session], ["prod.yaml"] = [Session] });
 
-        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml", Dto("Dev"));
 
         await _cookies.Received(1).SaveAsync(
             Root,
@@ -304,7 +308,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev"));
         StoredCookies(new() { ["dev.yaml"] = [Session] });
 
-        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
+        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml");
 
         await _cookies.Received(1).SaveAsync(Root, Arg.Is<Jars>(j => j.Count == 0), Arg.Any<CancellationToken>());
     }
@@ -315,7 +319,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev"));
         StoredCaptures(new() { ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "t" } });
 
-        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml", Dto("Local"));
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml", Dto("Local"));
 
         await _captures.Received(1).SaveAsync(
             Root,
@@ -333,7 +337,7 @@ public class EnvironmentUseCaseTests
             ["prod.yaml"] = new Dictionary<string, string> { ["token"] = "p" },
         });
 
-        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
+        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml");
 
         await _captures.Received(1).SaveAsync(Root, Arg.Is<Secrets>(v => v.Count == 1 && v.ContainsKey("prod.yaml")), Arg.Any<CancellationToken>());
     }
@@ -344,7 +348,7 @@ public class EnvironmentUseCaseTests
         Existing("dev.yaml", new EnvironmentDefinition("Dev"));
         StoredTokens(new() { ["dev.yaml"] = new Dictionary<string, OAuth2Token> { ["k"] = Token } });
 
-        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml", Dto("Local"));
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml", Dto("Local"));
 
         await _tokens.Received(1).SaveAsync(
             Root,
@@ -362,7 +366,7 @@ public class EnvironmentUseCaseTests
             [""] = new Dictionary<string, OAuth2Token> { ["k"] = Token },
         });
 
-        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
+        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml");
 
         await _tokens.Received(1).SaveAsync(Root, Arg.Is<Tokens>(t => t.Count == 1 && t.ContainsKey("")), Arg.Any<CancellationToken>());
     }
@@ -370,7 +374,7 @@ public class EnvironmentUseCaseTests
     [Fact]
     public async Task Delete_MissingFile_IsNotFound()
     {
-        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _current).ExecuteAsync("dev.yaml");
+        var result = await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml");
 
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
     }
@@ -402,5 +406,44 @@ public class EnvironmentUseCaseTests
 
         Assert.True(result.IsSuccess);
         await _state.DidNotReceiveWithAnyArgs().SaveAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task List_ReportsLocalOnlyEnvironments()
+    {
+        _store.ListAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<EnvironmentFile>>.Success([
+            new EnvironmentFile("dev.yaml", new EnvironmentDefinition("Dev")),
+            new EnvironmentFile("local.yaml", new EnvironmentDefinition("Local")),
+        ]));
+        _localFiles.List(Root).Returns(new HashSet<WorkspacePath> { WorkspacePath.Parse("environments/local.yaml") });
+
+        var result = await new ListEnvironments(_store, _state, _localFiles, _current).ExecuteAsync();
+
+        Assert.Equal(
+            [new EnvironmentSummaryDto("dev.yaml", "Dev"), new EnvironmentSummaryDto("local.yaml", "Local", LocalOnly: true)],
+            result.Value.Environments);
+    }
+
+    [Fact]
+    public async Task Save_KeepsARenamedLocalOnlyEnvironmentLocal()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev"));
+        _localFiles.Move(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
+
+        await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current)
+            .ExecuteAsync("dev.yaml", Dto("Local"));
+
+        _localFiles.Received(1).Move(Root, WorkspacePath.Parse("environments/dev.yaml"), WorkspacePath.Parse("environments/local.yaml"));
+    }
+
+    [Fact]
+    public async Task Delete_ForgetsALocalOnlyEnvironment()
+    {
+        _store.Exists(Root, "dev.yaml").Returns(true);
+        _store.Delete(Root, "dev.yaml").Returns(Unit.Value);
+
+        await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml");
+
+        _localFiles.Received(1).Remove(Root, WorkspacePath.Parse("environments/dev.yaml"));
     }
 }

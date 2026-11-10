@@ -1,6 +1,7 @@
 namespace Missive.Application.Runs;
 
-public sealed record RunPlanFileDto(string Path, string? Name, string? Error);
+/// <param name="LocalOnly">Whether the file is kept on this computer only, never committed.</param>
+public sealed record RunPlanFileDto(string Path, string? Name, string? Error, bool LocalOnly = false);
 
 /// <summary>A plan file open for editing: its text, and why it can't be run yet (if so).</summary>
 public sealed record RunPlanDocumentDto(string Path, string Yaml, string? Error);

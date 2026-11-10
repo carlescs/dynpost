@@ -7,13 +7,14 @@ import {
   faPen,
   faPlus,
 } from '@fortawesome/free-solid-svg-icons';
+import { SharingToggle } from '../../../../components/sharing-toggle/sharing-toggle';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 
 /** Lists the workspace's environments: click one to send requests with it, or its pen icon to edit it. */
 @Component({
   selector: 'app-environments-view',
-  imports: [FaIconComponent],
+  imports: [FaIconComponent, SharingToggle],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './environments-view.html',
 })

@@ -34,7 +34,7 @@
   <ul class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm" aria-label="Run plans">
     @for (plan of store.plans(); track plan.path) {
       <li
-        class="group flex items-center hover:bg-slate-100"
+        class="group flex items-center gap-1 pr-3 hover:bg-slate-100"
         [class.bg-slate-100]="store.draft()?.path === plan.path && store.showing()"
       >
         <button
@@ -51,9 +51,14 @@
           </span>
           <span class="truncate text-xs text-slate-400">{{ plan.path }}</span>
         </button>
+        <app-sharing-toggle
+          [localOnly]="!!plan.localOnly"
+          [name]="plan.name ?? plan.path"
+          (toggled)="store.toggleLocalOnly(plan)"
+        />
         <button
           type="button"
-          class="mr-2 flex size-6 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-rose-700 focus:opacity-100"
+          class="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-rose-700 focus:opacity-100"
           title="Delete run plan"
           [attr.aria-label]="'Delete run plan ' + (plan.name ?? plan.path)"
           (click)="store.delete(plan.path)"
