@@ -355,6 +355,91 @@
       </div>
     </section>
 
+    <!-- Bodies -->
+    <section [class]="card" data-bodies>
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faFileLines" /></span>
+        <h3 class="flex-1 font-semibold">Bodies</h3>
+        <span class="text-xs text-slate-500">Send a file of a folder as the request body</span>
+      </div>
+      @for (body of form.bodies; track body.key) {
+        <div
+          class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-2"
+          data-body
+        >
+          <div class="flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate font-medium" [title]="body.key">{{
+              body.key
+            }}</span>
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Remove"
+              aria-label="Remove body folder"
+              (click)="removeBody(body.key)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <label [class]="label">
+              Folder
+              <input
+                [class]="field"
+                placeholder="bodies/create-user"
+                [value]="body.folder"
+                (change)="set(['bodies', body.key, 'folder'], $event)"
+              />
+            </label>
+            <label [class]="label">
+              File names (e.g. *.json)
+              <input
+                [class]="field"
+                placeholder="All files"
+                [value]="body.pattern"
+                (change)="set(['bodies', body.key, 'pattern'], $event)"
+              />
+            </label>
+            <label [class]="label">
+              File selection
+              <select
+                [class]="field"
+                [value]="body.mode"
+                (change)="set(['bodies', body.key, 'mode'], $event)"
+              >
+                <option value="">Sequential</option>
+                <option value="random">Random</option>
+                <option value="perThread">Per thread</option>
+              </select>
+            </label>
+            <label [class]="label">
+              When files run out
+              <select
+                [class]="field"
+                [value]="body.onEof"
+                (change)="set(['bodies', body.key, 'onEof'], $event)"
+              >
+                <option value="">Recycle</option>
+                <option value="stop">Stop</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      }
+      <select
+        #bodySelect
+        [class]="field"
+        aria-label="Add body folder"
+        [disabled]="availableBodyTargets().length === 0"
+        (change)="addBody(bodySelect)"
+      >
+        <option value="">+ Take a request's body from a folder…</option>
+        @for (key of availableBodyTargets(); track key) {
+          <option [value]="key">{{ key }}</option>
+        }
+      </select>
+    </section>
+
     <!-- Assertions -->
     <section [class]="card">
       <div class="flex items-center gap-2">

@@ -139,6 +139,10 @@
                   <dt class="text-slate-500">Failure</dt>
                   <dd class="text-rose-700">{{ s.error }}</dd>
                 }
+                @if (s.bodyFile) {
+                  <dt class="text-slate-500">Body file</dt>
+                  <dd class="truncate font-mono" data-body-file>{{ s.bodyFile }}</dd>
+                }
                 @if (dataRow(s).length) {
                   <dt class="text-slate-500">Data row</dt>
                   <dd class="flex flex-wrap gap-1">

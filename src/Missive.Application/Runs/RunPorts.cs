@@ -40,6 +40,23 @@ public interface IRunDataReader
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Reads the files of a body folder of a run plan, once, before the run starts.</summary>
+public interface IRunBodyReader
+{
+    /// <summary>
+    /// The files directly in <paramref name="folder"/> whose names match <paramref name="pattern"/>
+    /// (all files when <c>null</c>), in ordinal order of their names. With <paramref name="readText"/>
+    /// each file's UTF-8 text is read too. An empty selection, a missing folder or an unreadable or
+    /// too large file is returned as an error.
+    /// </summary>
+    Task<Result<IReadOnlyList<RunBodyFile>>> ReadFolderAsync(
+        string root,
+        WorkspacePath folder,
+        string? pattern,
+        bool readText,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>Keeps finished runs in the workspace's local (git-ignored) folder.</summary>
 public interface IRunStore
 {

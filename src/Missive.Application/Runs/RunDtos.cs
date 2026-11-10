@@ -33,6 +33,7 @@ public sealed record ThresholdDto(string Name, string Limit, string Actual, bool
 /// One request sent during a run. The run result keeps only failed and slow samples; the request
 /// log keeps the first <see cref="ActiveRun.MaxLoggedSamples"/> of them all.
 /// </summary>
+/// <param name="BodyFile">The workspace path of the body folder file the request sent, if any.</param>
 public sealed record SampleDto(
     string Request,
     int Thread,
@@ -44,7 +45,8 @@ public sealed record SampleDto(
     string Method,
     string? Url,
     IReadOnlyDictionary<string, string>? DataRow,
-    string? ResponsePreview);
+    string? ResponsePreview,
+    string? BodyFile = null);
 
 /// <summary>The state of a run, live or finished. <see cref="State"/> is running, completed, cancelled or failed.</summary>
 public sealed record RunResultDto(
