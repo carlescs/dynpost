@@ -133,11 +133,13 @@ export class RunStore {
     this.saving.set(true);
     try {
       const saved = await this.bridge.send('runPlan.save', { path: draft.path, yaml: draft.yaml });
-      // Edits typed while saving stay as they are, and stay unsaved.
+      // Edits typed while saving stay as they are, and stay unsaved. Renaming the plan may have
+      // renamed its file, so the draft follows the saved path.
       this.draft.update((current) =>
         current?.path === draft.path
           ? {
               ...current,
+              path: saved.path,
               yaml: current.yaml === draft.yaml ? saved.yaml : current.yaml,
               savedYaml: saved.yaml,
               error: saved.error,

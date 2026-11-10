@@ -118,4 +118,22 @@ public class WorkspaceLayoutTests
 
         Assert.Equal(100, folder.Length);
     }
+
+    [Theory]
+    [InlineData("checkout-smoke.run.yaml", ".run.yaml", "checkout-smoke")]
+    [InlineData("smoke.RUN.yml", ".RUN.yml", "smoke")]
+    [InlineData("smoke.yaml", null, "smoke")]
+    public void RunPlanExtensionAndStem(string fileName, string? extension, string stem)
+    {
+        Assert.Equal(extension, WorkspaceLayout.RunPlanExtension(fileName));
+        Assert.Equal(stem, WorkspaceLayout.RunPlanStem(fileName));
+    }
+
+    [Fact]
+    public void RunPlanFileName_SlugsTheNameAndCountsAttempts()
+    {
+        Assert.Equal("checkout-smoke.run.yaml", WorkspaceLayout.RunPlanFileName("Checkout smoke"));
+        Assert.Equal("checkout-smoke-2.run.yml", WorkspaceLayout.RunPlanFileName("Checkout smoke", 2, ".run.yml"));
+        Assert.Equal("plan.run.yaml", WorkspaceLayout.RunPlanFileName("!!"));
+    }
 }

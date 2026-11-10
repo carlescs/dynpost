@@ -40,6 +40,11 @@ public sealed class RunRegistry
 
     public ActiveRun? Find(string runId) => _runs.GetValueOrDefault(runId);
 
+    /// <summary>Whether a run of the plan is starting, going on or still being saved.</summary>
+    public bool IsBusy(string root, string planPath) =>
+        _reservations.ContainsKey((root, planPath))
+        || _runs.Values.Any(r => r.Root == root && r.PlanPath == planPath && (r.State == "running" || !r.PersistenceComplete));
+
     public IDisposable? TryReserve(string root, string planPath)
     {
         var key = (root, planPath);

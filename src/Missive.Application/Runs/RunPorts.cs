@@ -14,6 +14,11 @@ public interface IRunPlanStore
 
     /// <summary>Writes the file unless it already has this text; returns whether it changed.</summary>
     Task<Result<bool>> WriteAsync(string root, WorkspacePath path, string text, CancellationToken cancellationToken = default);
+
+    bool Exists(string root, WorkspacePath path);
+
+    /// <summary>Renames a plan file; fails rather than overwrite an existing file.</summary>
+    Result<Unit> Move(string root, WorkspacePath from, WorkspacePath to);
 }
 
 /// <summary>The file format of a run plan.</summary>
@@ -41,4 +46,7 @@ public interface IRunStore
     Task<Result<IReadOnlyList<RunSummaryDto>>> ListAsync(string root, string planPath, CancellationToken cancellationToken = default);
 
     Task<Result<RunResultDto>> GetAsync(string root, string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>Points the saved runs of the plan at <paramref name="from"/> to its new path, so its history follows a rename.</summary>
+    Task<Result<Unit>> MovePlanAsync(string root, string from, string to, CancellationToken cancellationToken = default);
 }
