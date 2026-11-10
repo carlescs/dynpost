@@ -11,6 +11,9 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
 {
     public const int MaxFailedSamples = 100;
     public const int MaxSlowestSamples = 50;
+
+    /// <summary>How many samples the request log of a run keeps, in the order they finish.</summary>
+    public const int MaxLoggedSamples = 10_000;
     private const int MaxPreviewChars = 2000;
 
     private readonly object _gate = new();
@@ -23,6 +26,9 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
     private readonly Timeline _timeline = new();
     private readonly List<SampleDto> _failed = [];
     private readonly List<SampleDto> _slowest = [];
+    private readonly List<SampleDto> _log = [];
+    private int _logged;
+    private long _sent;
     private readonly TaskCompletionSource _persistence = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _activeThreads;
     private TimeSpan? _finishedAt;
@@ -50,6 +56,9 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
 
     public TimeSpan Elapsed => _finishedAt ?? _clock.Elapsed;
 
+    /// <summary>Whether the request log still has room, so the next sample's response is worth previewing.</summary>
+    public bool LogHasRoom => Volatile.Read(ref _logged) < MaxLoggedSamples;
+
     public void ThreadStarted() => Interlocked.Increment(ref _activeThreads);
 
     public void ThreadEnded() => Interlocked.Decrement(ref _activeThreads);
@@ -57,12 +66,19 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
     public void Add(WorkspacePath request, SampleDto sample, long bytesSent, long bytesReceived)
     {
         var failed = sample.Error is not null;
+        Interlocked.Increment(ref _sent);
         _total.Add(sample.LatencyMs, sample.Status, sample.Error, bytesSent, bytesReceived);
         _requests[request.Value].Add(sample.LatencyMs, sample.Status, sample.Error, bytesSent, bytesReceived);
         _timeline.Add(TimeSpan.FromMilliseconds(sample.AtMs), sample.LatencyMs, failed);
 
         lock (_gate)
         {
+            if (_log.Count < MaxLoggedSamples)
+            {
+                _log.Add(sample);
+                Volatile.Write(ref _logged, _log.Count);
+            }
+
             if (failed)
             {
                 if (_failed.Count < MaxFailedSamples)
@@ -83,6 +99,18 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
     }
 
     public TimeSpan Now => _clock.Elapsed;
+
+    /// <summary>A copy of the request log: every sample kept so far, in the order they finished.</summary>
+    public IReadOnlyList<SampleDto> Log()
+    {
+        lock (_gate)
+        {
+            return [.. _log];
+        }
+    }
+
+    /// <summary>The number of samples sent so far, logged or not.</summary>
+    public long Sent => Interlocked.Read(ref _sent);
 
     public void Finish(string state, string? message = null)
     {

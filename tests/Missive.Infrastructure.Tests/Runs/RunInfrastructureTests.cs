@@ -175,6 +175,23 @@ public sealed class RunInfrastructureTests : IDisposable
     }
 
     [Fact]
+    public async Task RunStore_SavesAndReadsTheRequestLogOfARun()
+    {
+        var store = new JsonRunStore();
+        var sample = new SampleDto("a.yaml", 1, 2, 30, 4.5, 200, null, "GET", "https://api.test/a", new Dictionary<string, string> { ["user"] = "ada" }, "{}");
+
+        Assert.Empty((await store.GetSamplesAsync(_root, "run-1")).Value);
+        Assert.True((await store.SaveSamplesAsync(_root, "run-1", [sample])).IsSuccess);
+
+        var read = Assert.Single((await store.GetSamplesAsync(_root, "run-1")).Value);
+        Assert.Equal(sample.Url, read.Url);
+        Assert.Equal("ada", read.DataRow!["user"]);
+        Assert.Equal("{}", read.ResponsePreview);
+        Assert.True(File.Exists(Path.Combine(_root, ".missive", "runs", "samples", "run-1.json")));
+        Assert.False((await store.GetSamplesAsync(_root, "../x")).IsSuccess);
+    }
+
+    [Fact]
     public async Task PlanStore_MovesPlansWithoutOverwriting()
     {
         var store = new FileSystemRunPlanStore();
@@ -227,9 +244,12 @@ public sealed class RunInfrastructureTests : IDisposable
             new(id, plan, "P", "completed", DateTimeOffset.UnixEpoch, 2000, 2, 0, stats, [], [], [], true, [], [], null);
         Assert.True((await store.DeletePlanAsync(_root, "gone.run.yaml")).IsSuccess);
         await store.SaveAsync(_root, Run("run-1", "gone.run.yaml"));
+        await store.SaveSamplesAsync(_root, "run-1", [new SampleDto("a.yaml", 1, 1, 0, 1, 200, null, "GET", null, null, null)]);
         await store.SaveAsync(_root, Run("run-2", "other.run.yaml"));
 
         Assert.True((await store.DeletePlanAsync(_root, "gone.run.yaml")).IsSuccess);
+
+        Assert.Empty((await store.GetSamplesAsync(_root, "run-1")).Value);
 
         Assert.Empty((await store.ListAsync(_root, "gone.run.yaml")).Value);
         Assert.False((await store.GetAsync(_root, "run-1")).IsSuccess);

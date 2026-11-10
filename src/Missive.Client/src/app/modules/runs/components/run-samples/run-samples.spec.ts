@@ -1,0 +1,134 @@
+import { TestBed } from '@angular/core/testing';
+import { RunResultDto, RunSampleDto, RunSamplesPageDto } from '../../../../models/messages';
+import { Bridge } from '../../../../services/bridge';
+import { PAGE_SIZE, RunSamples } from './run-samples';
+
+const sample = (patch: Partial<RunSampleDto> = {}): RunSampleDto => ({
+  request: 'users/get.yaml',
+  thread: 2,
+  iteration: 3,
+  atMs: 1500,
+  latencyMs: 42,
+  status: 200,
+  error: null,
+  method: 'GET',
+  url: 'https://api.example.com/users/1',
+  dataRow: { user: 'ada' },
+  responsePreview: '{"id":1}',
+  ...patch,
+});
+
+const run = (patch: Partial<RunResultDto> = {}) => ({ runId: 'r1', ...patch }) as RunResultDto;
+
+describe('RunSamples', () => {
+  let send: ReturnType<typeof vi.fn>;
+
+  function page(patch: Partial<RunSamplesPageDto> = {}): RunSamplesPageDto {
+    return {
+      offset: 0,
+      matching: 2,
+      logged: 2,
+      sent: 2,
+      samples: [
+        sample(),
+        sample({ status: 500, error: 'HTTP 500', method: 'POST', responsePreview: 'boom' }),
+      ],
+      ...patch,
+    };
+  }
+
+  async function create(result: RunResultDto = run()) {
+    TestBed.configureTestingModule({ providers: [{ provide: Bridge, useValue: { send } }] });
+    const fixture = TestBed.createComponent(RunSamples);
+    fixture.componentRef.setInput('run', result);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture;
+  }
+  const text = (element: Element | null) => element?.textContent?.replace(/\s+/g, ' ').trim();
+
+  beforeEach(() => {
+    send = vi.fn().mockResolvedValue(page());
+  });
+
+  it('lists every request with its response status, latency and result', async () => {
+    const element = (await create()).nativeElement as HTMLElement;
+    expect(send).toHaveBeenCalledWith('run.samples', {
+      runId: 'r1',
+      offset: 0,
+      limit: PAGE_SIZE,
+      failedOnly: false,
+    });
+    const rows = [...element.querySelectorAll('[data-sample]')].map((row) =>
+      [...row.querySelectorAll('td')].map(text),
+    );
+    expect(rows).toEqual([
+      ['1', '1.5 s', '2', '3', 'GET https://api.example.com/users/1', '200', '42 ms', 'OK'],
+      ['2', '1.5 s', '2', '3', 'POST https://api.example.com/users/1', '500', '42 ms', 'HTTP 500'],
+    ]);
+    expect(text(element.querySelector('[data-range]'))).toBe('1–2 of 2 requests');
+  });
+
+  it('shows the response of a row when it is clicked', async () => {
+    const fixture = await create();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('[data-detail]')).toBeNull();
+
+    (element.querySelectorAll('[data-sample]')[1] as HTMLElement).click();
+    fixture.detectChanges();
+
+    const detail = element.querySelector('[data-detail]')!;
+    expect(text(detail)).toContain('FailureHTTP 500');
+    expect(text(detail)).toContain('user=ada');
+    expect(text(detail.querySelector('[data-response]'))).toBe('boom');
+  });
+
+  it('pages through the log and filters the failed requests', async () => {
+    send.mockResolvedValue(page({ matching: 250, logged: 250, sent: 250 }));
+    const fixture = await create();
+    const element = fixture.nativeElement as HTMLElement;
+
+    (element.querySelector('[aria-label="Next page"]') as HTMLElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(send).toHaveBeenLastCalledWith('run.samples', {
+      runId: 'r1',
+      offset: PAGE_SIZE,
+      limit: PAGE_SIZE,
+      failedOnly: false,
+    });
+
+    const failed = [...element.querySelectorAll('[role="radio"]')].find(
+      (b) => text(b) === 'Failed',
+    ) as HTMLElement;
+    failed.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(send).toHaveBeenLastCalledWith('run.samples', {
+      runId: 'r1',
+      offset: 0,
+      limit: PAGE_SIZE,
+      failedOnly: true,
+    });
+  });
+
+  it('reads the page again when the run is updated', async () => {
+    const fixture = await create(run({ state: 'running' }));
+    expect(send).toHaveBeenCalledTimes(1);
+
+    fixture.componentRef.setInput('run', run({ state: 'completed' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('says when the log could not keep every request', async () => {
+    send.mockResolvedValue(page({ logged: 10_000, sent: 25_000, matching: 10_000 }));
+    const element = (await create()).nativeElement as HTMLElement;
+    expect(text(element.querySelector('[data-truncated]'))).toBe(
+      'Only the first 10,000 of the 25,000 requests sent are kept.',
+    );
+  });
+});

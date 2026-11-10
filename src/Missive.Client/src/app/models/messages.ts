@@ -529,7 +529,10 @@ export interface RunThresholdDto {
   passed: boolean;
 }
 
-/** A request sent during a run. Only failed and slow ones are kept. */
+/**
+ * A request sent during a run. The run result keeps only failed and slow ones; the request log
+ * (`run.samples`) keeps the first 10,000 of them all, with a preview of each response.
+ */
 export interface RunSampleDto {
   request: string;
   thread: number;
@@ -565,6 +568,19 @@ export interface RunResultDto {
   failedSamples: RunSampleDto[];
   slowestSamples: RunSampleDto[];
   message: string | null;
+}
+
+/** A page of the request log of a run, in the order the requests finished. */
+export interface RunSamplesPageDto {
+  /** The position of the first sample of the page among the matching ones. */
+  offset: number;
+  /** How many logged samples match the filter. */
+  matching: number;
+  /** How many samples the log keeps (the first 10,000 of a run). */
+  logged: number;
+  /** How many requests the run sent, logged or not. */
+  sent: number;
+  samples: RunSampleDto[];
 }
 
 /** An earlier run of a plan. */
@@ -605,6 +621,11 @@ export interface BridgeMessages {
   'run.cancel': { payload: { runId: string }; result: null };
   /** The current numbers of a run (polled), or the saved ones of a finished run. */
   'run.progress': { payload: { runId: string }; result: RunResultDto };
+  /** A page of the request log of a run (at most 500 samples), optionally only the failed ones. */
+  'run.samples': {
+    payload: { runId: string; offset: number; limit: number; failedOnly?: boolean };
+    result: RunSamplesPageDto;
+  };
   /** The earlier runs of a plan, newest first. */
   'run.list': { payload: { path: string }; result: RunSummaryDto[] };
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */

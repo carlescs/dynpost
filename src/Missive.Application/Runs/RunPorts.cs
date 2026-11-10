@@ -45,6 +45,12 @@ public interface IRunStore
 {
     Task<Result<Unit>> SaveAsync(string root, RunResultDto run, CancellationToken cancellationToken = default);
 
+    /// <summary>Keeps the request log of a run next to its result.</summary>
+    Task<Result<Unit>> SaveSamplesAsync(string root, string runId, IReadOnlyList<SampleDto> samples, CancellationToken cancellationToken = default);
+
+    /// <summary>The request log of a run; empty when it has none (runs saved before logs were kept).</summary>
+    Task<Result<IReadOnlyList<SampleDto>>> GetSamplesAsync(string root, string runId, CancellationToken cancellationToken = default);
+
     /// <summary>The runs of a plan, newest first.</summary>
     Task<Result<IReadOnlyList<RunSummaryDto>>> ListAsync(string root, string planPath, CancellationToken cancellationToken = default);
 
@@ -53,6 +59,6 @@ public interface IRunStore
     /// <summary>Points the saved runs of the plan at <paramref name="from"/> to its new path, so its history follows a rename.</summary>
     Task<Result<Unit>> MovePlanAsync(string root, string from, string to, CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the saved runs of the plan at <paramref name="planPath"/>.</summary>
+    /// <summary>Deletes the saved runs (and their request logs) of the plan at <paramref name="planPath"/>.</summary>
     Task<Result<Unit>> DeletePlanAsync(string root, string planPath, CancellationToken cancellationToken = default);
 }

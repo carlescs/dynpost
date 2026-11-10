@@ -68,71 +68,152 @@
     </div>
   }
 
-  <div class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-2">
-    <div class="flex min-h-48 min-w-0 flex-col border-b border-slate-200 lg:border-r lg:border-b-0">
-      <div class="flex shrink-0 gap-1 border-b border-slate-200 px-3 py-1" role="tablist">
-        @for (
-          option of [
-            { mode: 'visual', label: 'Visual', icon: faSliders },
-            { mode: 'yaml', label: 'YAML', icon: faCode },
-          ];
-          track option.mode
-        ) {
+  <div
+    class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden"
+    [class.lg:grid-cols-2]="!maximized()"
+  >
+    @if (maximized() !== 'results') {
+      <div
+        class="flex min-h-48 min-w-0 flex-col border-b border-slate-200"
+        [class.lg:border-r]="!maximized()"
+        [class.lg:border-b-0]="!maximized()"
+        data-zone="plan"
+      >
+        <div class="flex shrink-0 items-center gap-1 border-b border-slate-200 px-3 py-1">
+          <div class="flex flex-1 gap-1" role="tablist">
+            @for (
+              option of [
+                { mode: 'visual', label: 'Visual', icon: faSliders },
+                { mode: 'yaml', label: 'YAML', icon: faCode },
+              ];
+              track option.mode
+            ) {
+              <button
+                type="button"
+                role="tab"
+                class="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs hover:bg-slate-100"
+                [class.bg-slate-200]="mode() === option.mode"
+                [class.font-semibold]="mode() === option.mode"
+                [attr.aria-selected]="mode() === option.mode"
+                (click)="mode.set($any(option.mode))"
+              >
+                <fa-icon [icon]="option.icon" /> {{ option.label }}
+              </button>
+            }
+          </div>
           <button
             type="button"
-            role="tab"
-            class="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs hover:bg-slate-100"
-            [class.bg-slate-200]="mode() === option.mode"
-            [class.font-semibold]="mode() === option.mode"
-            [attr.aria-selected]="mode() === option.mode"
-            (click)="mode.set($any(option.mode))"
+            [class]="iconButton"
+            [title]="maximized() === 'plan' ? 'Restore' : 'Maximize'"
+            [attr.aria-label]="maximized() === 'plan' ? 'Restore the plan' : 'Maximize the plan'"
+            [attr.aria-pressed]="maximized() === 'plan'"
+            data-maximize="plan"
+            (click)="toggleMaximized('plan')"
           >
-            <fa-icon [icon]="option.icon" /> {{ option.label }}
+            <fa-icon [icon]="maximized() === 'plan' ? faCompress : faExpand" />
           </button>
+        </div>
+        @if (mode() === 'visual') {
+          @defer {
+            <app-run-plan-form
+              class="min-h-0 flex-1 overflow-y-auto"
+              [yaml]="draft.yaml"
+              (yamlChange)="store.edit($event)"
+            />
+          }
+        } @else {
+          <app-code-editor
+            class="block min-h-48 flex-1"
+            language="yaml"
+            [value]="draft.yaml"
+            (valueChange)="store.edit($event)"
+          />
         }
       </div>
-      @if (mode() === 'visual') {
-        @defer {
-          <app-run-plan-form
-            class="min-h-0 flex-1 overflow-y-auto"
-            [yaml]="draft.yaml"
-            (yamlChange)="store.edit($event)"
-          />
-        }
-      } @else {
-        <app-code-editor
-          class="block min-h-48 flex-1"
-          language="yaml"
-          [value]="draft.yaml"
-          (valueChange)="store.edit($event)"
-        />
-      }
-    </div>
+    }
 
-    <div class="flex min-h-0 flex-col gap-4 overflow-y-auto bg-slate-50 p-3 text-sm">
-      @if (store.run(); as run) {
-        @defer {
-          <app-run-results [run]="run" />
-        }
-      } @else {
-        <div
-          class="flex flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-10 text-center text-slate-500"
-        >
-          <fa-icon class="text-2xl text-slate-400" [icon]="faChartColumn" />
-          <p class="font-medium text-slate-700">No results yet</p>
-          <p class="text-xs">Run the plan to follow its requests, latency and errors here.</p>
+    @if (maximized() !== 'plan') {
+      <div class="flex min-h-0 min-w-0 flex-col bg-slate-50" data-zone="results">
+        <div class="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-3 py-1">
+          <div class="flex flex-1 gap-1" role="tablist">
+            @for (
+              option of [
+                { view: 'dashboard', label: 'Dashboard', icon: faChartColumn },
+                { view: 'requests', label: 'Requests', icon: faTableList },
+              ];
+              track option.view
+            ) {
+              <button
+                type="button"
+                role="tab"
+                class="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs hover:bg-slate-100"
+                [class.bg-slate-200]="view() === option.view"
+                [class.font-semibold]="view() === option.view"
+                [attr.aria-selected]="view() === option.view"
+                [attr.data-view]="option.view"
+                (click)="view.set($any(option.view))"
+              >
+                <fa-icon [icon]="option.icon" /> {{ option.label }}
+              </button>
+            }
+          </div>
+          <button
+            type="button"
+            [class]="iconButton"
+            [title]="maximized() === 'results' ? 'Restore' : 'Maximize'"
+            [attr.aria-label]="
+              maximized() === 'results' ? 'Restore the results' : 'Maximize the results'
+            "
+            [attr.aria-pressed]="maximized() === 'results'"
+            data-maximize="results"
+            (click)="toggleMaximized('results')"
+          >
+            <fa-icon [icon]="maximized() === 'results' ? faCompress : faExpand" />
+          </button>
         </div>
-      }
 
-      @if (store.history().length) {
-        @defer {
-          <app-run-history
-            [runs]="store.history()"
-            [selected]="store.run()?.runId ?? null"
-            (select)="store.show($event)"
-          />
+        @if (store.run(); as run) {
+          @if (view() === 'requests') {
+            @defer {
+              <app-run-samples class="min-h-0 flex-1 p-3 text-sm" [run]="run" />
+            }
+          } @else {
+            <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3 text-sm">
+              @defer {
+                <app-run-results [run]="run" (showRequests)="showRequests()" />
+              }
+              @if (store.history().length) {
+                @defer {
+                  <app-run-history
+                    [runs]="store.history()"
+                    [selected]="store.run()?.runId ?? null"
+                    (select)="store.show($event)"
+                  />
+                }
+              }
+            </div>
+          }
+        } @else {
+          <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3 text-sm">
+            <div
+              class="flex flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-10 text-center text-slate-500"
+            >
+              <fa-icon class="text-2xl text-slate-400" [icon]="faChartColumn" />
+              <p class="font-medium text-slate-700">No results yet</p>
+              <p class="text-xs">Run the plan to follow its requests, latency and errors here.</p>
+            </div>
+            @if (store.history().length) {
+              @defer {
+                <app-run-history
+                  [runs]="store.history()"
+                  [selected]="null"
+                  (select)="store.show($event)"
+                />
+              }
+            }
+          </div>
         }
-      }
-    </div>
+      </div>
+    }
   </div>
 }

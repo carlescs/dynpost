@@ -218,6 +218,11 @@ public sealed class StartRun(
         try
         {
             var saved = await runStore.SaveAsync(run.Root, run.ToDto(), CancellationToken.None);
+            if (saved.IsSuccess)
+            {
+                saved = await runStore.SaveSamplesAsync(run.Root, run.RunId, run.Log(), CancellationToken.None);
+            }
+
             run.CompletePersistence(saved.IsSuccess ? null : $"Run results could not be saved: {saved.Error!.Message}");
         }
         catch (Exception ex)
@@ -440,7 +445,7 @@ public sealed class StartRun(
             method,
             url,
             row,
-            reason is null ? null : ActiveRun.Preview(data.Body));
+            reason is null && !run.LogHasRoom ? null : ActiveRun.Preview(data.Body));
         run.Add(path, sample, data.BytesSent > 0 ? data.BytesSent : sent, data.Body.LongLength);
     }
 

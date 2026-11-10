@@ -128,6 +128,19 @@ describe('RunResults', () => {
     expect(text(sample)).toContain('{"error":"boom"}');
   });
 
+  it('asks to show every request and response', () => {
+    const fixture = TestBed.createComponent(RunResults);
+    fixture.componentRef.setInput('run', run());
+    let asked = 0;
+    fixture.componentInstance.showRequests.subscribe(() => asked++);
+    fixture.detectChanges();
+    const links = (fixture.nativeElement as HTMLElement).querySelectorAll('[data-show-requests]');
+    expect(links.length).toBe(2);
+    (links[0] as HTMLElement).click();
+    (links[1] as HTMLElement).click();
+    expect(asked).toBe(2);
+  });
+
   it('reports why a run failed', () => {
     const element = create(run({ state: 'failed', passed: null, message: 'No requests to send.' }));
     expect(text(element.querySelector('[role="alert"]'))).toBe('No requests to send.');

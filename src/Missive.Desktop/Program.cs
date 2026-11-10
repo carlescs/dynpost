@@ -160,6 +160,7 @@ internal static class Program
             .AddTransient<StartRun>()
             .AddTransient<CancelRun>()
             .AddTransient<GetRunProgress>()
+            .AddTransient<GetRunSamples>()
             .AddTransient<ListRuns>()
             .AddTransient<GetGitStatus>()
             .AddTransient<InitRepository>()
