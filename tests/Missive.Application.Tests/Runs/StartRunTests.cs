@@ -22,6 +22,7 @@ public class StartRunTests
     private readonly IRunPlanStore _plans = Substitute.For<IRunPlanStore>();
     private readonly IRunPlanFormat _format = Substitute.For<IRunPlanFormat>();
     private readonly IRunDataReader _data = Substitute.For<IRunDataReader>();
+    private readonly IRunBodyReader _bodies = Substitute.For<IRunBodyReader>();
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly IHttpSender _sender = Substitute.For<IHttpSender>();
     private readonly IRunStore _runs = Substitute.For<IRunStore>();
@@ -48,6 +49,7 @@ public class StartRunTests
             _plans,
             _format,
             _data,
+            _bodies,
             _repository,
             _sender,
             new ActiveEnvironment(
@@ -259,6 +261,33 @@ public class StartRunTests
     }
 
     [Fact]
+    public async Task Execute_SkipsDisabledRequestsEvenWhenTheirFilesAreMissing()
+    {
+        UsePlan(Plan(1, 2, requests: ["users/get.yaml", "users/gone.yaml"]) with { Disabled = ["users/gone.yaml"] });
+        _repository.FileExists(Root, WorkspacePath.Parse("users/gone.yaml")).Returns(false);
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        Assert.Equal("completed", run.State);
+        Assert.Equal(2, run.Total.Samples);
+        Assert.Equal("users/get.yaml", Assert.Single(run.Requests).Request);
+    }
+
+    [Fact]
+    public async Task Execute_RefusesAPlanWithEveryRequestDisabled()
+    {
+        UsePlan(Plan() with { Disabled = ["users/get.yaml"] });
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+
+        Assert.False(started.IsSuccess);
+        Assert.Equal(ErrorCodes.InvalidFile, started.Error!.Code);
+        await _sender.DidNotReceive().SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Execute_LaysCsvRowsOverTheVariables()
     {
         UsePlan(Plan(1, 2, new RunDataSource(WorkspacePath.Parse("perf/users.csv"), SelectionMode.Sequential, EndBehavior.Recycle)));
@@ -275,6 +304,109 @@ public class StartRunTests
 
         await _sender.Received(1).SendAsync(Arg.Is<OutgoingRequest>(r => r.Url.AbsolutePath == "/users/7"), Arg.Any<CancellationToken>());
         await _sender.Received(1).SendAsync(Arg.Is<OutgoingRequest>(r => r.Url.AbsolutePath == "/users/8"), Arg.Any<CancellationToken>());
+    }
+
+    private void UseBodyFiles(params RunBodyFile[] files) =>
+        _bodies.ReadFolderAsync(Root, WorkspacePath.Parse("perf/bodies"), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<RunBodyFile>>.Success(files));
+
+    private static Dictionary<string, RunBodySource> Bodies(SelectionMode mode = SelectionMode.Sequential, EndBehavior onEof = EndBehavior.Recycle) =>
+        new() { ["users/get.yaml"] = new RunBodySource(WorkspacePath.Parse("perf/bodies"), "*.json", mode, onEof) };
+
+    [Fact]
+    public async Task Execute_SendsTheFilesOfABodyFolderInTurnWithVariablesResolved()
+    {
+        UsePlan(Plan(1, 3) with { Bodies = Bodies() });
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Create", RequestMethod.Post, "https://api.test/users", body: new RequestBody(BodyType.Json, "{}")));
+        UseBodyFiles(
+            new RunBodyFile(WorkspacePath.Parse("perf/bodies/a.json"), "{\"n\":\"a\"}"),
+            new RunBodyFile(WorkspacePath.Parse("perf/bodies/b.json"), "{\"n\":\"{{who}}\"}"));
+        var sent = new List<string>();
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                lock (sent)
+                {
+                    sent.Add(((TextBody)call.Arg<OutgoingRequest>().Body!).Content);
+                }
+
+                return Result<HttpResponseData>.Success(Response());
+            });
+
+        var run = await RunToEndAsync((await Create().ExecuteAsync(PlanFile, false)).Value.RunId);
+
+        // The second file uses a variable no one defines, so that sample fails without being sent.
+        Assert.Equal(["{\"n\":\"a\"}", "{\"n\":\"a\"}"], sent);
+        var failed = Assert.Single(run.FailedSamples);
+        Assert.Equal("perf/bodies/b.json", failed.BodyFile);
+        Assert.Contains("who", failed.Error);
+        await _bodies.Received(1).ReadFolderAsync(Root, WorkspacePath.Parse("perf/bodies"), "*.json", true, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_SendsBinaryBodyFilesAsIs()
+    {
+        UsePlan(Plan(1, 1) with { Bodies = Bodies() });
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Upload", RequestMethod.Put, "https://api.test/files", body: new RequestBody(BodyType.Binary, "old.bin")));
+        UseBodyFiles(new RunBodyFile(WorkspacePath.Parse("perf/bodies/a.bin"), null));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var run = await RunToEndAsync((await Create().ExecuteAsync(PlanFile, false)).Value.RunId);
+
+        Assert.Equal(0, run.Total.Errors);
+        await _bodies.Received(1).ReadFolderAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<string?>(), false, Arg.Any<CancellationToken>());
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r => ((BinaryBody)r.Body!).FilePath == Path.GetFullPath(Path.Combine(Root, "perf/bodies/a.bin"))),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_EndsAThreadWhenItsBodyFilesRunOutWithStop()
+    {
+        UsePlan(Plan(1, 10) with { Bodies = Bodies(onEof: EndBehavior.Stop) });
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Create", RequestMethod.Post, "https://api.test/users", body: new RequestBody(BodyType.Text, "x")));
+        UseBodyFiles(
+            new RunBodyFile(WorkspacePath.Parse("perf/bodies/a.json"), "a"),
+            new RunBodyFile(WorkspacePath.Parse("perf/bodies/b.json"), "b"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var run = await RunToEndAsync((await Create().ExecuteAsync(PlanFile, false)).Value.RunId);
+
+        Assert.Equal("completed", run.State);
+        Assert.Equal(2, run.Total.Samples);
+    }
+
+    [Theory]
+    [InlineData(BodyType.None)]
+    [InlineData(BodyType.Form)]
+    public async Task Execute_RejectsBodyFoldersForRequestsWithoutATextOrBinaryBody(BodyType type)
+    {
+        UsePlan(Plan(1, 1) with { Bodies = Bodies() });
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Create", RequestMethod.Post, "https://api.test/users", body: new RequestBody(type, "")));
+
+        var result = await Create().ExecuteAsync(PlanFile, false);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error!.Code);
+        Assert.Contains("users/get.yaml", result.Error.Message);
+        await _bodies.DidNotReceiveWithAnyArgs().ReadFolderAsync(default!, default!, default, default, default);
+    }
+
+    [Fact]
+    public async Task Execute_ReportsBodyFoldersThatCantBeRead()
+    {
+        UsePlan(Plan(1, 1) with { Bodies = Bodies() });
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Create", RequestMethod.Post, "https://api.test/users", body: new RequestBody(BodyType.Json, "{}")));
+        _bodies.ReadFolderAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(new Error(ErrorCodes.InvalidFile, "The body folder 'perf/bodies' has no files."));
+
+        var result = await Create().ExecuteAsync(PlanFile, false);
+
+        Assert.Equal("The body folder 'perf/bodies' has no files.", result.Error!.Message);
     }
 
     [Fact]

@@ -139,6 +139,10 @@
                   <dt class="text-slate-500">Failure</dt>
                   <dd class="text-rose-700">{{ s.error }}</dd>
                 }
+                @if (s.bodyFile) {
+                  <dt class="text-slate-500">Body file</dt>
+                  <dd class="truncate font-mono" data-body-file>{{ s.bodyFile }}</dd>
+                }
                 @if (s.responseFile) {
                   <dt class="text-slate-500">Saved to</dt>
                   <dd class="font-mono break-all" data-saved>{{ savedPath(s.responseFile) }}</dd>

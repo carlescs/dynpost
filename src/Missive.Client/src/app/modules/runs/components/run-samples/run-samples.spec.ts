@@ -39,7 +39,13 @@ describe('RunSamples', () => {
       sent: 2,
       samples: [
         sample(),
-        sample({ status: 500, error: 'HTTP 500', method: 'POST', responsePreview: 'boom' }),
+        sample({
+          status: 500,
+          error: 'HTTP 500',
+          method: 'POST',
+          responsePreview: 'boom',
+          bodyFile: 'bodies/create/002.json',
+        }),
       ],
       ...patch,
     };
@@ -93,6 +99,7 @@ describe('RunSamples', () => {
     const detail = element.querySelector('[data-detail]')!;
     expect(text(detail)).toContain('FailureHTTP 500');
     expect(text(detail)).toContain('user=ada');
+    expect(text(detail.querySelector('[data-body-file]'))).toBe('bodies/create/002.json');
     expect(text(detail.querySelector('[data-response]'))).toBe('boom');
   });
 

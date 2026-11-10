@@ -126,6 +126,10 @@ export class MockBackend {
         '  iterations: 20',
         '  rampUp: 2s',
         '  thinkTime: 100ms',
+        'bodies:',
+        '  users/create-user.yaml:',
+        '    folder: perf/bodies/create-user',
+        "    pattern: '*.json'",
         'assert:',
         '  users/create-user.yaml:',
         '    status: 201',
@@ -1031,6 +1035,9 @@ export class MockBackend {
       method: create ? 'POST' : 'GET',
       url: create ? 'https://api.example.com/users' : `https://api.example.com/users/${index}`,
       dataRow: null,
+      bodyFile: create
+        ? `perf/bodies/create-user/${String((index >> 1) % 5).padStart(3, '0')}.json`
+        : null,
       responsePreview: failed
         ? '{"error":"boom"}'
         : JSON.stringify({ id: index, name: `User ${index}` }, null, 2),
@@ -1107,6 +1114,7 @@ export class MockBackend {
               url: 'https://api.example.com/users',
               dataRow: null,
               responsePreview: '{"error":"boom"}',
+              bodyFile: 'perf/bodies/create-user/002.json',
             },
           ]
         : [],

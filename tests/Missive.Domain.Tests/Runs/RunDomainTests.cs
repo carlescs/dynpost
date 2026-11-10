@@ -1,3 +1,4 @@
+using Missive.Domain.Requests;
 using Missive.Domain.Runs;
 using Missive.Domain.Workspaces;
 
@@ -204,6 +205,67 @@ public class RunDomainTests
         Assert.Contains("b.yaml", Assert.Single(plan.Validate()));
     }
 
+    [Fact]
+    public void Validate_RejectsBodyFoldersForUnlistedRequests()
+    {
+        var plan = Plan() with
+        {
+            Bodies = new Dictionary<string, RunBodySource>
+            {
+                ["a.yaml"] = new(WorkspacePath.Parse("bodies"), null, SelectionMode.Sequential, EndBehavior.Recycle),
+                ["b.yaml"] = new(WorkspacePath.Parse("bodies"), null, SelectionMode.Sequential, EndBehavior.Recycle),
+            },
+        };
+
+        Assert.Contains("'bodies' refers to 'b.yaml'", Assert.Single(plan.Validate()));
+    }
+
+    [Fact]
+    public void WithoutDisabledRequests_DropsTheBodyFoldersOfDisabledRequests()
+    {
+        var source = new RunBodySource(WorkspacePath.Parse("bodies"), null, SelectionMode.Sequential, EndBehavior.Recycle);
+        var plan = Plan() with
+        {
+            Requests = new[] { "a.yaml", "b.yaml" }.Select(WorkspacePath.Parse).ToList(),
+            Disabled = ["b.yaml"],
+            Bodies = new Dictionary<string, RunBodySource> { ["a.yaml"] = source, ["b.yaml"] = source },
+        };
+
+        Assert.Equal(["a.yaml"], plan.WithoutDisabledRequests().BodySources.Keys);
+    }
+
+    [Fact]
+    public void Bodies_ReplaceTextContentAndKeepTheBodyType()
+    {
+        var file = new RunBodyFile(WorkspacePath.Parse("bodies/1.json"), "{\"id\":1}");
+
+        Assert.Equal(new RequestBody(BodyType.Json, "{\"id\":1}"), RunBodies.Replace(new RequestBody(BodyType.Json, "{}"), file));
+        Assert.Equal(
+            new RequestBody(BodyType.Graphql, "{\"id\":1}", "{\"v\":1}"),
+            RunBodies.Replace(new RequestBody(BodyType.Graphql, "query", "{\"v\":1}"), file));
+    }
+
+    [Fact]
+    public void Bodies_SendBinaryFilesByPath()
+    {
+        var file = new RunBodyFile(WorkspacePath.Parse("bodies/1.bin"), null);
+
+        Assert.Equal("bodies/1.bin", RunBodies.Replace(new RequestBody(BodyType.Binary, "old.bin"), file).Content);
+        Assert.False(RunBodies.UsesText(BodyType.Binary));
+        Assert.True(RunBodies.UsesText(BodyType.UrlEncoded));
+    }
+
+    [Theory]
+    [InlineData(BodyType.None, true)]
+    [InlineData(BodyType.Form, true)]
+    [InlineData(BodyType.Json, false)]
+    [InlineData(BodyType.Text, false)]
+    [InlineData(BodyType.Graphql, false)]
+    [InlineData(BodyType.UrlEncoded, false)]
+    [InlineData(BodyType.Binary, false)]
+    public void Bodies_SupportTextAndBinaryBodyTypes(BodyType type, bool unsupported) =>
+        Assert.Equal(unsupported, RunBodies.Unsupported(type) is not null);
+
     private static RunPlan OrderPlan(RequestOrder order, Dictionary<string, double>? weights = null) => Plan() with
     {
         Requests = new[] { "a.yaml", "b.yaml", "c.yaml" }.Select(WorkspacePath.Parse).ToList(),
@@ -278,5 +340,41 @@ public class RunDomainTests
         Assert.Contains("zero or more", Assert.Single(OrderPlan(RequestOrder.Random, new() { ["a.yaml"] = -1 }).Validate()));
         var allZero = OrderPlan(RequestOrder.Random, new() { ["a.yaml"] = 0, ["b.yaml"] = 0, ["c.yaml"] = 0 });
         Assert.Contains("greater than zero", Assert.Single(allZero.Validate()));
+    }
+
+    [Fact]
+    public void DisabledRequests_AreLeftOutOfTheRun()
+    {
+        var plan = OrderPlan(RequestOrder.Random, new() { ["a.yaml"] = 2, ["b.yaml"] = 3 }) with
+        {
+            Assertions = new Dictionary<string, RunAssertion>
+            {
+                ["*"] = new(["2xx"], null, null, null),
+                ["b.yaml"] = new(["201"], null, null, null),
+            },
+            Disabled = ["b.yaml"],
+        };
+
+        Assert.Empty(plan.Validate());
+        Assert.True(plan.IsDisabled(WorkspacePath.Parse("b.yaml")));
+        var running = plan.WithoutDisabledRequests();
+        Assert.Equal(["a.yaml", "c.yaml"], Names(running.Requests));
+        Assert.Equal(["*"], running.Assertions.Keys);
+        Assert.Equal(["a.yaml"], running.RequestWeights.Keys);
+        Assert.Empty(running.DisabledRequests);
+        Assert.Equal(2, (OrderPlan(RequestOrder.Sequential) with { Disabled = ["b.yaml"] }).RequestsPerIteration);
+    }
+
+    [Fact]
+    public void Validate_RejectsDisablingEveryRequestOrUnlistedOnes()
+    {
+        var all = OrderPlan(RequestOrder.Sequential) with { Disabled = ["a.yaml", "b.yaml", "c.yaml"] };
+        Assert.Contains("Enable at least one", Assert.Single(all.Validate()));
+
+        var unlisted = OrderPlan(RequestOrder.Sequential) with { Disabled = ["d.yaml"] };
+        Assert.Contains("d.yaml", Assert.Single(unlisted.Validate()));
+
+        var onlyWeightedDisabled = OrderPlan(RequestOrder.Random, new() { ["b.yaml"] = 0, ["c.yaml"] = 0 }) with { Disabled = ["a.yaml"] };
+        Assert.Contains("greater than zero", Assert.Single(onlyWeightedDisabled.Validate()));
     }
 }

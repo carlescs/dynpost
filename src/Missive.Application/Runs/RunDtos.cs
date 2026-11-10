@@ -33,6 +33,7 @@ public sealed record ThresholdDto(string Name, string Limit, string Actual, bool
 /// One request sent during a run. The run result keeps only failed and slow samples; the request
 /// log keeps the first <see cref="ActiveRun.MaxLoggedSamples"/> of them all.
 /// </summary>
+/// <param name="BodyFile">The workspace path of the body folder file the request sent, if any.</param>
 /// <param name="ResponsePreview">The start of the response body as text; <c>null</c> for PDFs.</param>
 /// <param name="ContentType">The media type of the response, when it has one.</param>
 /// <param name="ResponseFile">
@@ -51,6 +52,7 @@ public sealed record SampleDto(
     string? Url,
     IReadOnlyDictionary<string, string>? DataRow,
     string? ResponsePreview,
+    string? BodyFile = null,
     string? ContentType = null,
     string? ResponseFile = null);
 

@@ -59,6 +59,35 @@ describe('RunPlanForm', () => {
     expect(shares).toEqual(['75%', '25%']);
   });
 
+  it('leaves disabled requests out of the load and the shares', () => {
+    const plan = PLAN.replace(
+      '  - a.yaml\n',
+      '  - a.yaml\n  - b.yaml\n  - c.yaml\ndisabled:\n  - c.yaml\norder: random\n',
+    );
+    const { element } = create(plan);
+    const steps = [...element.querySelectorAll('[data-step]')];
+    expect(steps.map((step) => step.hasAttribute('data-disabled'))).toEqual([false, false, true]);
+    expect(steps[2].textContent).toContain('Disabled: not sent');
+    const shares = [...element.querySelectorAll('[data-share]')].map((s) => s.textContent!.trim());
+    expect(shares).toEqual(['50%', '50%', '0%']);
+  });
+
+  it('writes a request switched off or on back as yaml', () => {
+    const { element, emitted } = create(PLAN);
+    const toggle = element.querySelector<HTMLInputElement>('[data-step] input[type="checkbox"]')!;
+    expect(toggle.checked).toBe(true);
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([PLAN.replace('load:', 'disabled:\n  - a.yaml\nload:')]);
+  });
+
+  it('asks to enable a request when every one is disabled', () => {
+    const { element } = create(PLAN.replace('load:', 'disabled:\n  - a.yaml\nload:'));
+    expect(element.querySelector('[data-none-enabled]')).not.toBeNull();
+    const summary = element.querySelector('[data-summary]')!.textContent!.replace(/\s+/g, ' ');
+    expect(summary).toContain('× 0 requests');
+  });
+
   it('writes a chosen order and weight back as yaml', () => {
     const { element, emitted } = create(PLAN);
     const select = element.querySelector<HTMLSelectElement>('select[aria-label="Request order"]')!;
@@ -93,6 +122,23 @@ describe('RunPlanForm', () => {
     expect(element.querySelector('[data-threshold="p99"]')!.className).not.toContain(
       'border-sky-600',
     );
+  });
+
+  it('adds a body folder for a request and edits it', () => {
+    const { element, emitted, fixture } = create(PLAN);
+    const select = element.querySelector<HTMLSelectElement>('[aria-label="Add body folder"]')!;
+    select.value = 'a.yaml';
+    select.dispatchEvent(new Event('change'));
+    expect(emitted.at(-1)).toContain('bodies:\n  a.yaml:\n    folder: bodies/a\n');
+
+    fixture.componentRef.setInput('yaml', emitted.at(-1)!);
+    fixture.detectChanges();
+    const body = element.querySelector('[data-body]')!;
+    expect(body.textContent).toContain('a.yaml');
+    const pattern = body.querySelectorAll('input')[1];
+    pattern.value = '*.json';
+    pattern.dispatchEvent(new Event('change'));
+    expect(emitted.at(-1)).toContain('pattern: "*.json"');
   });
 
   it('explains when the yaml is invalid', () => {

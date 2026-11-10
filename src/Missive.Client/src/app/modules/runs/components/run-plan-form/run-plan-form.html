@@ -34,6 +34,8 @@
         >
           Add at least one request to send.
         </p>
+      } @else if (enabledCount() === 0) {
+        <p class="text-xs text-amber-700" data-none-enabled>Enable at least one request to send.</p>
       }
       <ol
         class="flex flex-col gap-1.5"
@@ -42,10 +44,14 @@
       >
         @for (step of steps(); track $index) {
           <li
-            class="flex items-center gap-2 rounded-md border bg-white py-1.5 pr-1.5 pl-1"
-            [class]="step.missing ? 'border-amber-200' : 'border-slate-200'"
+            class="flex items-center gap-2 rounded-md border py-1.5 pr-1.5 pl-1"
+            [class]="
+              (step.missing && step.enabled ? 'border-amber-200' : 'border-slate-200') +
+              (step.enabled ? ' bg-white' : ' bg-slate-50')
+            "
             cdkDrag
             data-step
+            [attr.data-disabled]="step.enabled ? null : ''"
           >
             <span
               class="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-xs text-slate-400 hover:text-slate-600"
@@ -54,13 +60,29 @@
             >
               <fa-icon [icon]="faGripVertical" />
             </span>
+            <input
+              type="checkbox"
+              class="size-3.5 shrink-0 accent-sky-600"
+              [checked]="step.enabled"
+              [title]="
+                step.enabled
+                  ? 'Sent in runs: uncheck to skip it'
+                  : 'Skipped in runs: check to send it'
+              "
+              [attr.aria-label]="(step.enabled ? 'Disable ' : 'Enable ') + step.name"
+              (change)="setEnabled(step.path, $event)"
+            />
             <span
               class="flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700"
             >
               {{ $index + 1 }}
             </span>
             @if (step.method; as method) {
-              <span class="w-11 shrink-0 text-[11px] font-bold" [class]="methodColors[method]">
+              <span
+                class="w-11 shrink-0 text-[11px] font-bold"
+                [class]="methodColors[method]"
+                [class.opacity-50]="!step.enabled"
+              >
                 {{ method }}
               </span>
             } @else if (step.missing) {
@@ -70,9 +92,13 @@
                 title="This request isn't in the workspace"
               />
             }
-            <span class="min-w-0 flex-1" [title]="step.path">
-              <span class="block truncate font-medium">{{ step.name }}</span>
-              @if (step.missing) {
+            <span class="min-w-0 flex-1" [class.opacity-50]="!step.enabled" [title]="step.path">
+              <span class="block truncate font-medium" [class.line-through]="!step.enabled">{{
+                step.name
+              }}</span>
+              @if (!step.enabled) {
+                <span class="block truncate text-xs text-slate-500">Disabled: not sent</span>
+              } @else if (step.missing) {
                 <span class="block truncate text-xs text-amber-700"
                   >Not found in the workspace</span
                 >
@@ -353,6 +379,91 @@
           </label>
         }
       </div>
+    </section>
+
+    <!-- Bodies -->
+    <section [class]="card" data-bodies>
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faFileLines" /></span>
+        <h3 class="flex-1 font-semibold">Bodies</h3>
+        <span class="text-xs text-slate-500">Send a file of a folder as the request body</span>
+      </div>
+      @for (body of form.bodies; track body.key) {
+        <div
+          class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-2"
+          data-body
+        >
+          <div class="flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate font-medium" [title]="body.key">{{
+              body.key
+            }}</span>
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Remove"
+              aria-label="Remove body folder"
+              (click)="removeBody(body.key)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <label [class]="label">
+              Folder
+              <input
+                [class]="field"
+                placeholder="bodies/create-user"
+                [value]="body.folder"
+                (change)="set(['bodies', body.key, 'folder'], $event)"
+              />
+            </label>
+            <label [class]="label">
+              File names (e.g. *.json)
+              <input
+                [class]="field"
+                placeholder="All files"
+                [value]="body.pattern"
+                (change)="set(['bodies', body.key, 'pattern'], $event)"
+              />
+            </label>
+            <label [class]="label">
+              File selection
+              <select
+                [class]="field"
+                [value]="body.mode"
+                (change)="set(['bodies', body.key, 'mode'], $event)"
+              >
+                <option value="">Sequential</option>
+                <option value="random">Random</option>
+                <option value="perThread">Per thread</option>
+              </select>
+            </label>
+            <label [class]="label">
+              When files run out
+              <select
+                [class]="field"
+                [value]="body.onEof"
+                (change)="set(['bodies', body.key, 'onEof'], $event)"
+              >
+                <option value="">Recycle</option>
+                <option value="stop">Stop</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      }
+      <select
+        #bodySelect
+        [class]="field"
+        aria-label="Add body folder"
+        [disabled]="availableBodyTargets().length === 0"
+        (change)="addBody(bodySelect)"
+      >
+        <option value="">+ Take a request's body from a folder…</option>
+        @for (key of availableBodyTargets(); track key) {
+          <option [value]="key">{{ key }}</option>
+        }
+      </select>
     </section>
 
     <!-- Responses -->

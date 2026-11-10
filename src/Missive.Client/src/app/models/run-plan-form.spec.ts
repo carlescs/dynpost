@@ -1,9 +1,12 @@
 import {
   addAssertion,
+  addBody,
   readPlanForm,
   removeAssertion,
+  removeBody,
   setAssertionStatus,
   setPlanOrder,
+  setPlanRequestEnabled,
   setPlanRequests,
   setPlanSaveResponses,
   setPlanThinkTime,
@@ -55,6 +58,51 @@ describe('run plan form', () => {
       '2',
     );
     expect(setPlanRequests(plan, ['a.yaml'])).not.toContain('weights');
+  });
+
+  it('adds, reads, edits and removes body folders', () => {
+    let next = addBody(setPlanRequests(PLAN, ['a.yaml', 'users/create.yml']), 'users/create.yml');
+    expect(next).toContain('bodies:\n  users/create.yml:\n    folder: bodies/create\n');
+    next = setPlanValue(next, ['bodies', 'users/create.yml', 'mode'], 'random');
+    next = setPlanValue(next, ['bodies', 'users/create.yml', 'pattern'], '*.json');
+    expect(next).toContain('folder: bodies/create\n    pattern: "*.json"\n    mode: random\n');
+    expect(next.indexOf('bodies:')).toBeGreaterThan(next.indexOf('load:'));
+    expect(readPlanForm(next)!.bodies).toEqual([
+      {
+        key: 'users/create.yml',
+        folder: 'bodies/create',
+        pattern: '*.json',
+        mode: 'random',
+        onEof: '',
+      },
+    ]);
+    expect(addBody(next, 'users/create.yml')).toBe(next);
+    expect(removeBody(next, 'users/create.yml')).not.toContain('bodies');
+  });
+
+  it('drops the body folders of removed requests', () => {
+    const plan = addBody(setPlanRequests(PLAN, ['a.yaml', 'b.yaml']), 'b.yaml');
+    expect(setPlanRequests(plan, ['a.yaml'])).not.toContain('bodies');
+  });
+
+  it('turns requests off and on with the disabled list', () => {
+    const two = setPlanRequests(PLAN, ['a.yaml', 'b.yaml']);
+    const off = setPlanRequestEnabled(two, 'b.yaml', false);
+    expect(off).toContain('  - b.yaml\ndisabled:\n  - b.yaml\nload:');
+    expect(readPlanForm(off)!.disabled).toEqual(['b.yaml']);
+    expect(setPlanRequestEnabled(off, 'b.yaml', false)).toBe(off);
+    expect(setPlanRequestEnabled(off, 'b.yaml', true)).toBe(two);
+    expect(readPlanForm(PLAN)!.disabled).toEqual([]);
+  });
+
+  it('drops the disabled mark of removed requests', () => {
+    const plan = setPlanRequestEnabled(
+      setPlanRequests(PLAN, ['a.yaml', 'b.yaml']),
+      'b.yaml',
+      false,
+    );
+    expect(setPlanRequests(plan, ['a.yaml'])).not.toContain('disabled');
+    expect(setPlanRequests(plan, ['b.yaml', 'a.yaml'])).toContain('disabled:\n  - b.yaml');
   });
 
   it('returns null for invalid yaml', () => {

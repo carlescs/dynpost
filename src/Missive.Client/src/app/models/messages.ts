@@ -546,6 +546,8 @@ export interface RunSampleDto {
   dataRow: Record<string, string> | null;
   /** The start of the response body as text; `null` for PDFs. */
   responsePreview: string | null;
+  /** The body folder file the request sent, if its body came from one (absent in older runs). */
+  bodyFile?: string | null;
   /** The media type of the response, when it has one. */
   contentType?: string | null;
   /**
