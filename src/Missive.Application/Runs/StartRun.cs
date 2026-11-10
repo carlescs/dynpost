@@ -201,7 +201,7 @@ public sealed class StartRun(
         var token = run.Cancellation.Token;
         var cursor = plan.Data is { } data ? new DataCursor(rows.Count, data.Mode, data.OnEof, plan.Load.Threads) : null;
         var limiter = plan.Load.MaxRps is { } rps ? new RateLimiter(rps) : null;
-        var context = new ThreadContext(run, definitions, rows, variables, cursor, limiter);
+        var context = new ThreadContext(run, definitions, rows, variables, cursor, limiter, new RequestPicker(plan));
 
         try
         {
@@ -232,7 +232,8 @@ public sealed class StartRun(
         IReadOnlyList<IReadOnlyDictionary<string, string>> Rows,
         ActiveVariables Variables,
         DataCursor? Cursor,
-        RateLimiter? Limiter);
+        RateLimiter? Limiter,
+        RequestPicker Picker);
 
     private async Task RunThreadAsync(ThreadContext context, int thread)
     {
@@ -272,7 +273,7 @@ public sealed class StartRun(
                     ? context.Variables.Values
                     : context.Variables.Values.Concat(row).GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.Last().Value, StringComparer.Ordinal);
 
-                foreach (var request in run.Plan.Requests)
+                foreach (var request in context.Picker.ForIteration(thread, iteration, random))
                 {
                     if (!first)
                     {

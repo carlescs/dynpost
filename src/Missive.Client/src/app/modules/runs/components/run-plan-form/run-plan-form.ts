@@ -18,11 +18,15 @@ import {
 import {
   ASSERT_ALL,
   PlanForm,
+  REQUEST_ORDERS,
+  RequestOrder,
   THRESHOLD_KEYS,
   addAssertion,
+  picksOneRequest,
   readPlanForm,
   removeAssertion,
   setAssertionStatus,
+  setPlanOrder,
   setPlanRequests,
   setPlanThinkTime,
   setPlanValue,
@@ -48,6 +52,26 @@ const THRESHOLDS: Record<
   throughput: { label: 'Req/s', bound: 'at least', example: '50' },
 };
 
+/** How each request order is offered in the form. */
+const ORDERS: Record<RequestOrder, { label: string; hint: string }> = {
+  sequential: {
+    label: 'In order',
+    hint: 'Each iteration, every user sends them all in this order',
+  },
+  shuffle: {
+    label: 'Shuffled',
+    hint: 'Each iteration, every user sends them all in a new random order',
+  },
+  random: {
+    label: 'Random',
+    hint: 'Each iteration, every user sends one request, picked at random by weight',
+  },
+  roundRobin: {
+    label: 'Round robin',
+    hint: 'Each iteration, every user sends the next request; users start at different ones',
+  },
+};
+
 /** The most users the slider goes up to; the number field next to it takes more. */
 const SLIDER_MAX = 200;
 
@@ -67,6 +91,8 @@ export class RunPlanForm {
   protected readonly form = computed<PlanForm | null>(() => readPlanForm(this.yaml()));
   protected readonly thresholdKeys = THRESHOLD_KEYS;
   protected readonly thresholds = THRESHOLDS;
+  protected readonly orders = REQUEST_ORDERS;
+  protected readonly orderInfo = ORDERS;
   protected readonly allRequests = ASSERT_ALL;
   protected readonly sliderMax = SLIDER_MAX;
   protected readonly methodColors = METHOD_COLORS;
@@ -128,12 +154,16 @@ export class RunPlanForm {
     const threads = Number(form.threads) || 1;
     const iterations = Number(form.iterations) || 1;
     const timed = this.loadMode(form) === 'duration';
+    const requests = picksOneRequest(form.order)
+      ? Math.min(1, form.requests.length)
+      : form.requests.length;
     return {
       threads,
       iterations,
       timed,
-      requests: form.requests.length,
-      total: threads * iterations * form.requests.length,
+      oneEach: picksOneRequest(form.order),
+      requests,
+      total: threads * iterations * requests,
       rampUpMs: parseDuration(form.rampUp) ?? 0,
       durationMs: timed ? parseDuration(form.duration) : null,
     };
@@ -146,6 +176,35 @@ export class RunPlanForm {
     const used = new Set(form.assertions.map((a) => a.key));
     return [ASSERT_ALL, ...form.requests].filter((key) => !used.has(key));
   });
+
+  /** The plan's order, `sequential` when it isn't set or isn't one the form knows. */
+  protected order(form: PlanForm): RequestOrder {
+    return (REQUEST_ORDERS as readonly string[]).includes(form.order)
+      ? (form.order as RequestOrder)
+      : 'sequential';
+  }
+
+  /** Each request's share of the picks with the `random` order, as a whole percentage. */
+  protected readonly shares = computed(() => {
+    const form = this.form();
+    if (!form) return [];
+    const weights = form.requests.map((path) => {
+      const weight = form.weights[path];
+      const value = weight === undefined || weight === '' ? 1 : Number(weight);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    });
+    const total = weights.reduce((sum, weight) => sum + weight, 0);
+    return weights.map((weight) => (total > 0 ? Math.round((weight / total) * 100) : 0));
+  });
+
+  protected setOrder(event: Event): void {
+    this.emit(setPlanOrder(this.yaml(), (event.target as HTMLSelectElement).value));
+  }
+
+  protected setWeight(path: string, event: Event): void {
+    const value = (event.target as HTMLInputElement).value.trim();
+    this.emit(setPlanValue(this.yaml(), ['weights', path], value === '1' ? '' : value));
+  }
 
   protected loadMode(form: PlanForm): LoadMode {
     return form.duration !== '' && form.iterations === '' ? 'duration' : 'iterations';

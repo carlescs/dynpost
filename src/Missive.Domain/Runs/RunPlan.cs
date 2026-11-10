@@ -10,6 +10,22 @@ public enum SelectionMode
     PerThread,
 }
 
+/// <summary>How a virtual user takes the plan's requests in each iteration.</summary>
+public enum RequestOrder
+{
+    /// <summary>Every request, in the listed order.</summary>
+    Sequential,
+
+    /// <summary>Every request, in a new random order each iteration.</summary>
+    Shuffle,
+
+    /// <summary>One request per iteration, picked at random (by its weight).</summary>
+    Random,
+
+    /// <summary>One request per iteration, the next one in the list; users start at different requests.</summary>
+    RoundRobin,
+}
+
 /// <summary>What a thread does when a sequential or per-thread data source runs out.</summary>
 public enum EndBehavior
 {
@@ -63,15 +79,29 @@ public sealed record RunThresholds(
 
 /// <summary>A load run plan, as stored in a <c>*.run.yaml</c> file.</summary>
 /// <param name="Assertions">Per request path; the key <see cref="RunPlan.AllRequests"/> applies to every request.</param>
+/// <param name="Order">How each virtual user takes the requests in an iteration.</param>
+/// <param name="Weights">
+/// Relative chance of each request path with <see cref="RequestOrder.Random"/>; unlisted requests weigh 1.
+/// </param>
 public sealed record RunPlan(
     string Name,
     IReadOnlyList<WorkspacePath> Requests,
     RunLoad Load,
     RunDataSource? Data,
     IReadOnlyDictionary<string, RunAssertion> Assertions,
-    RunThresholds Thresholds)
+    RunThresholds Thresholds,
+    RequestOrder Order = RequestOrder.Sequential,
+    IReadOnlyDictionary<string, double>? Weights = null)
 {
     public const string AllRequests = "*";
+
+    /// <summary>The weight of each request path; empty when none is set.</summary>
+    public IReadOnlyDictionary<string, double> RequestWeights => Weights ?? NoWeights;
+
+    private static readonly IReadOnlyDictionary<string, double> NoWeights = new Dictionary<string, double>(StringComparer.Ordinal);
+
+    /// <summary>How many requests a virtual user sends in one iteration.</summary>
+    public int RequestsPerIteration => Order is RequestOrder.Sequential or RequestOrder.Shuffle ? Requests.Count : Math.Min(1, Requests.Count);
     /// <summary>
     /// The most threads a run may use. Threads are async tasks and each keeps one pooled
     /// connection busy at a time, so this is also the run's connection limit; beyond a few
@@ -139,8 +169,28 @@ public sealed record RunPlan(
             }
         }
 
+        foreach (var (key, weight) in RequestWeights)
+        {
+            if (!Requests.Any(request => request.Value == key))
+            {
+                errors.Add($"'weights' refers to '{key}', which is not in the request list.");
+            }
+            else if (!double.IsFinite(weight) || weight < 0)
+            {
+                errors.Add($"The weight of '{key}' must be zero or more.");
+            }
+        }
+
+        if (Order == RequestOrder.Random && Requests.Count > 0 && Requests.All(request => WeightOf(request) <= 0))
+        {
+            errors.Add("At least one request needs a weight greater than zero.");
+        }
+
         return errors;
     }
+
+    /// <summary>The relative chance of a request with <see cref="RequestOrder.Random"/>.</summary>
+    public double WeightOf(WorkspacePath request) => RequestWeights.TryGetValue(request.Value, out var weight) ? weight : 1;
 
     /// <summary>The assertions that apply to a request: the plan-wide ones, then its own.</summary>
     public IReadOnlyList<RunAssertion> AssertionsFor(WorkspacePath request)

@@ -203,4 +203,80 @@ public class RunDomainTests
 
         Assert.Contains("b.yaml", Assert.Single(plan.Validate()));
     }
+
+    private static RunPlan OrderPlan(RequestOrder order, Dictionary<string, double>? weights = null) => Plan() with
+    {
+        Requests = new[] { "a.yaml", "b.yaml", "c.yaml" }.Select(WorkspacePath.Parse).ToList(),
+        Order = order,
+        Weights = weights,
+    };
+
+    private static string[] Names(IReadOnlyList<WorkspacePath> requests) => requests.Select(r => r.Value).ToArray();
+
+    [Fact]
+    public void Picker_Sequential_SendsEveryRequestInOrder()
+    {
+        var picker = new RequestPicker(OrderPlan(RequestOrder.Sequential));
+
+        Assert.Equal(["a.yaml", "b.yaml", "c.yaml"], Names(picker.ForIteration(1, 4, new Random(1))));
+    }
+
+    [Fact]
+    public void Picker_Shuffle_SendsEveryRequestOnceInVaryingOrders()
+    {
+        var picker = new RequestPicker(OrderPlan(RequestOrder.Shuffle));
+        var random = new Random(3);
+        var orders = new HashSet<string>();
+        for (var i = 0; i < 50; i++)
+        {
+            var names = Names(picker.ForIteration(0, i, random));
+            Assert.Equal(["a.yaml", "b.yaml", "c.yaml"], names.Order());
+            orders.Add(string.Join(",", names));
+        }
+
+        Assert.True(orders.Count > 1);
+    }
+
+    [Fact]
+    public void Picker_RoundRobin_TakesTheNextRequestAndStaggersThreads()
+    {
+        var picker = new RequestPicker(OrderPlan(RequestOrder.RoundRobin));
+        var random = new Random(1);
+
+        Assert.Equal(["a.yaml", "b.yaml", "c.yaml", "a.yaml"], Enumerable.Range(0, 4).Select(i => Assert.Single(picker.ForIteration(0, i, random)).Value));
+        Assert.Equal("b.yaml", Assert.Single(picker.ForIteration(1, 0, random)).Value);
+    }
+
+    [Fact]
+    public void Picker_Random_FollowsTheWeights()
+    {
+        var picker = new RequestPicker(OrderPlan(RequestOrder.Random, new() { ["a.yaml"] = 3, ["c.yaml"] = 0 }));
+        var random = new Random(7);
+        var counts = new Dictionary<string, int>();
+        for (var i = 0; i < 4000; i++)
+        {
+            var name = Assert.Single(picker.ForIteration(0, i, random)).Value;
+            counts[name] = counts.GetValueOrDefault(name) + 1;
+        }
+
+        Assert.False(counts.ContainsKey("c.yaml"));
+        Assert.InRange(counts["a.yaml"] / (double)counts["b.yaml"], 2.5, 3.5);
+    }
+
+    [Fact]
+    public void RequestsPerIteration_IsOneWhenPickingASingleRequest()
+    {
+        Assert.Equal(3, OrderPlan(RequestOrder.Shuffle).RequestsPerIteration);
+        Assert.Equal(1, OrderPlan(RequestOrder.Random).RequestsPerIteration);
+        Assert.Equal(1, OrderPlan(RequestOrder.RoundRobin).RequestsPerIteration);
+    }
+
+    [Fact]
+    public void Validate_RejectsBadWeights()
+    {
+        Assert.Contains("d.yaml", Assert.Single(OrderPlan(RequestOrder.Random, new() { ["d.yaml"] = 1 }).Validate()));
+        Assert.Contains("zero or more", Assert.Single(OrderPlan(RequestOrder.Random, new() { ["a.yaml"] = -1 }).Validate()));
+        var allZero = OrderPlan(RequestOrder.Random, new() { ["a.yaml"] = 0, ["b.yaml"] = 0, ["c.yaml"] = 0 });
+        Assert.Contains("greater than zero", Assert.Single(allZero.Validate()));
+    }
 }

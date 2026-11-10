@@ -47,6 +47,26 @@ describe('RunPlanForm', () => {
     expect(summary).toContain('5 users × 10 iterations × 1 request = 50 requests');
   });
 
+  it('sends one request per iteration with the random order, showing each share', () => {
+    const plan = PLAN.replace(
+      '  - a.yaml\n',
+      '  - a.yaml\n  - b.yaml\norder: random\nweights:\n  a.yaml: 3\n',
+    );
+    const { element } = create(plan);
+    const summary = element.querySelector('[data-summary]')!.textContent!.replace(/\s+/g, ' ');
+    expect(summary).toContain('5 users × 10 iterations × 1 request = 50 requests');
+    const shares = [...element.querySelectorAll('[data-share]')].map((s) => s.textContent!.trim());
+    expect(shares).toEqual(['75%', '25%']);
+  });
+
+  it('writes a chosen order and weight back as yaml', () => {
+    const { element, emitted } = create(PLAN);
+    const select = element.querySelector<HTMLSelectElement>('select[aria-label="Request order"]')!;
+    select.value = 'shuffle';
+    select.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([PLAN.replace('load:', 'order: shuffle\nload:')]);
+  });
+
   it('describes a timed run and sketches its ramp-up', () => {
     const plan =
       'name: Soak\nrequests:\n  - a.yaml\nload:\n  threads: 4\n  duration: 2m\n  rampUp: 30s\n';

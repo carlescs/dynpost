@@ -118,6 +118,24 @@ public class StartRunTests
     }
 
     [Fact]
+    public async Task Execute_SendsOneRandomRequestPerIterationFollowingTheWeights()
+    {
+        UsePlan(Plan(requests: ["users/get.yaml", "users/list.yaml"]) with
+        {
+            Order = RequestOrder.Random,
+            Weights = new Dictionary<string, double> { ["users/list.yaml"] = 0 },
+        });
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        Assert.Equal("completed", run.State);
+        Assert.Equal(2 * 3, run.Total.Samples);
+        Assert.Equal(6, run.Requests.Single(r => r.Request == "users/get.yaml").Stats.Samples);
+    }
+
+    [Fact]
     public async Task Execute_LaysCsvRowsOverTheVariables()
     {
         UsePlan(Plan(1, 2, new RunDataSource(WorkspacePath.Parse("perf/users.csv"), SelectionMode.Sequential, EndBehavior.Recycle)));

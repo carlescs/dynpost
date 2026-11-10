@@ -1,3 +1,5 @@
+using Missive.Domain.Workspaces;
+
 namespace Missive.Domain.Runs;
 
 /// <summary>Load-schedule maths: when threads start and how requests are paced.</summary>
@@ -102,5 +104,73 @@ public sealed class DataCursor(int count, SelectionMode mode, EndBehavior onEof,
 
         next = current + step;
         return current;
+    }
+}
+
+/// <summary>
+/// Picks the requests a virtual user sends in one iteration, following the plan's
+/// <see cref="RunPlan.Order"/>. Holds no mutable state, so threads can share it as long as each
+/// passes its own <see cref="Random"/>.
+/// </summary>
+public sealed class RequestPicker
+{
+    private readonly RunPlan _plan;
+    private readonly double[] _cumulative;
+
+    public RequestPicker(RunPlan plan)
+    {
+        _plan = plan;
+        _cumulative = new double[plan.Requests.Count];
+        var total = 0d;
+        for (var i = 0; i < plan.Requests.Count; i++)
+        {
+            total += Math.Max(0, plan.WeightOf(plan.Requests[i]));
+            _cumulative[i] = total;
+        }
+    }
+
+    /// <summary>The requests to send, in order, in iteration <paramref name="iteration"/> of a thread.</summary>
+    public IReadOnlyList<WorkspacePath> ForIteration(int thread, int iteration, Random random)
+    {
+        var requests = _plan.Requests;
+        if (requests.Count == 0)
+        {
+            return [];
+        }
+
+        switch (_plan.Order)
+        {
+            case RequestOrder.Shuffle:
+                var shuffled = requests.ToArray();
+                random.Shuffle(shuffled);
+                return shuffled;
+            case RequestOrder.Random:
+                return [requests[PickWeighted(random)]];
+            case RequestOrder.RoundRobin:
+                return [requests[(int)(((long)thread + iteration) % requests.Count)]];
+            default:
+                return requests;
+        }
+    }
+
+    private int PickWeighted(Random random)
+    {
+        var total = _cumulative[^1];
+        if (total <= 0)
+        {
+            return random.Next(_cumulative.Length);
+        }
+
+        var target = random.NextDouble() * total;
+        for (var i = 0; i < _cumulative.Length; i++)
+        {
+            if (target < _cumulative[i])
+            {
+                return i;
+            }
+        }
+
+        // Rounding can leave the target at the very end: take the last request that has a weight.
+        return Array.FindIndex(_cumulative, value => value >= total);
     }
 }
