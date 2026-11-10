@@ -113,6 +113,15 @@ export class WorkspaceStore {
     }
   }
 
+  /** Shows the open workspace folder in the system file manager (File Explorer on Windows). */
+  async revealFolder(): Promise<void> {
+    try {
+      await this.bridge.send('workspace.reveal');
+    } catch (error) {
+      this.report(error);
+    }
+  }
+
   /**
    * Replaces the open workspace with the one `open` returns (`null` when the user cancelled),
    * closing the open documents.

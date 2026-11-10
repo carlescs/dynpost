@@ -658,6 +658,8 @@ export interface BridgeMessages {
   'workspace.recent.remove': { payload: { path: string }; result: null };
   /** Re-reads the open workspace from disk. */
   'workspace.tree': { payload: void; result: WorkspaceDto };
+  /** Shows the open workspace folder in the system file manager (File Explorer, Finder...). */
+  'workspace.reveal': { payload: void; result: null };
   /** The formats `workspace.export` can write. */
   'workspace.exportFormats': { payload: void; result: ExportFormatDto[] };
   /**

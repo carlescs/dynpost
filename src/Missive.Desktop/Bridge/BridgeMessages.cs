@@ -32,6 +32,9 @@ internal static class BridgeMessageTypes
     /// <summary>Re-reads the open workspace. Payload: none. Result: workspace.</summary>
     public const string WorkspaceTree = "workspace.tree";
 
+    /// <summary>Shows the open workspace folder in the system file manager. Payload: none. Result: none.</summary>
+    public const string WorkspaceReveal = "workspace.reveal";
+
     /// <summary>Lists the formats the workspace can be exported to. Payload: none. Result: formats.</summary>
     public const string WorkspaceExportFormats = "workspace.exportFormats";
 

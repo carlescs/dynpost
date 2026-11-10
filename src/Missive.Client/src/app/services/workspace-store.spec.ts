@@ -102,6 +102,19 @@ describe('WorkspaceStore', () => {
     expect(store.recent()).toEqual([{ name: 'api', path: '/home/me/api' }]);
   });
 
+  it('asks the host to show the workspace folder and reports failures', async () => {
+    respond({ 'workspace.reveal': () => null });
+    await store.revealFolder();
+    expect(send).toHaveBeenCalledWith('workspace.reveal');
+    expect(store.error()).toBeNull();
+
+    respond({
+      'workspace.reveal': () => Promise.reject(new BridgeError('io_error', 'No file manager')),
+    });
+    await store.revealFolder();
+    expect(store.error()).toBe('No file manager');
+  });
+
   it('keeps the recent list and reports a removal error', async () => {
     store.recent.set([{ name: 'other', path: '/home/me/other' }]);
     respond({

@@ -48,6 +48,8 @@ internal static class BridgeHandlers
                 async (p, ct) => NoValue(await Use<RemoveRecentWorkspace>().ExecuteAsync(p.Path, ct)))
             .Register(BridgeMessageTypes.WorkspaceTree,
                 ct => Use<GetWorkspaceTree>().ExecuteAsync(ct))
+            .Register(BridgeMessageTypes.WorkspaceReveal,
+                _ => Task.FromResult(NoValue(Use<ShowWorkspaceFolder>().Execute())))
             .Register(BridgeMessageTypes.WorkspaceExportFormats,
                 _ => Task.FromResult(Result<IReadOnlyList<ExportFormatDto>>.Success(Use<ExportWorkspace>().Formats())))
             .Register<ExportWorkspacePayload, ExportResultDto?>(BridgeMessageTypes.WorkspaceExport, async (p, ct) =>

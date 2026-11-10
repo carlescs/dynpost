@@ -214,6 +214,9 @@ export class MockBackend {
     if (!this.open) return fail(ERROR_CODES.noWorkspace, 'Open a workspace folder first.');
 
     switch (request.type) {
+      // A browser has no file manager to open; pretend it was shown.
+      case 'workspace.reveal':
+        return ok(null);
       case 'workspace.tree':
         return ok(this.workspace());
       case 'workspace.exportFormats':
