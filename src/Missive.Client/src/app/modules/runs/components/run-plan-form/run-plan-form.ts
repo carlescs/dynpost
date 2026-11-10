@@ -5,6 +5,7 @@ import {
   faArrowDown,
   faArrowUp,
   faClock,
+  faFileLines,
   faFlagCheckered,
   faGaugeHigh,
   faGripVertical,
@@ -22,9 +23,11 @@ import {
   RequestOrder,
   THRESHOLD_KEYS,
   addAssertion,
+  addBody,
   picksOneRequest,
   readPlanForm,
   removeAssertion,
+  removeBody,
   setAssertionStatus,
   setPlanOrder,
   setPlanRequestEnabled,
@@ -109,6 +112,7 @@ export class RunPlanForm {
   protected readonly faFlagCheckered = faFlagCheckered;
   protected readonly faRepeat = faRepeat;
   protected readonly faClock = faClock;
+  protected readonly faFileLines = faFileLines;
 
   protected readonly field =
     'w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none';
@@ -191,6 +195,14 @@ export class RunPlanForm {
     if (!form) return [];
     const used = new Set(form.assertions.map((a) => a.key));
     return [ASSERT_ALL, ...form.requests].filter((key) => !used.has(key));
+  });
+
+  /** Requests that don't take their body from a folder yet. */
+  protected readonly availableBodyTargets = computed(() => {
+    const form = this.form();
+    if (!form) return [];
+    const used = new Set(form.bodies.map((body) => body.key));
+    return [...new Set(form.requests)].filter((key) => !used.has(key));
   });
 
   /** The plan's order, `sequential` when it isn't set or isn't one the form knows. */
@@ -296,6 +308,16 @@ export class RunPlanForm {
 
   protected removeAssertion(key: string): void {
     this.emit(removeAssertion(this.yaml(), key));
+  }
+
+  protected addBody(select: HTMLSelectElement): void {
+    if (!select.value) return;
+    this.emit(addBody(this.yaml(), select.value));
+    select.value = '';
+  }
+
+  protected removeBody(key: string): void {
+    this.emit(removeBody(this.yaml(), key));
   }
 
   private emit(yaml: string): void {

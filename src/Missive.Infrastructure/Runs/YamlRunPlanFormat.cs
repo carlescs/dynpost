@@ -13,7 +13,8 @@ namespace Missive.Infrastructure.Runs;
 /// (<c>sequential</c>, <c>shuffle</c>, <c>random</c> or <c>roundRobin</c>), <c>weights</c> (per
 /// request path), <c>load</c>
 /// (<c>threads</c>, <c>iterations</c> or <c>duration</c>, <c>rampUp</c>, <c>thinkTime</c>,
-/// <c>maxRps</c>), <c>data</c> (<c>file</c>, <c>mode</c>, <c>onEof</c>), <c>assert</c>
+/// <c>maxRps</c>), <c>data</c> (<c>file</c>, <c>mode</c>, <c>onEof</c>), <c>bodies</c> (per
+/// request path: <c>folder</c>, <c>pattern</c>, <c>mode</c>, <c>onEof</c>), <c>assert</c>
 /// (per request path, or <c>"*"</c> for all: <c>status</c>, <c>maxTime</c>, <c>bodyContains</c>,
 /// <c>bodyNotContains</c>) and <c>thresholds</c> (<c>p50</c>, <c>p90</c>, <c>p95</c>, <c>p99</c>,
 /// <c>average</c>, <c>errorRate</c>, <c>throughput</c>).
@@ -54,7 +55,8 @@ public sealed class YamlRunPlanFormat : IRunPlanFormat
             ParseThresholds(YamlNodes.OptionalMapping(root, "thresholds")),
             ParseOrder(YamlNodes.OptionalString(root, "order")),
             ParseWeights(YamlNodes.OptionalMapping(root, "weights")),
-            ParseDisabled(root));
+            ParseDisabled(root),
+            ParseBodies(YamlNodes.OptionalMapping(root, "bodies")));
     }
 
     private static List<string> ParseDisabled(YamlMappingNode root) =>
@@ -62,6 +64,61 @@ public sealed class YamlRunPlanFormat : IRunPlanFormat
             .Select(item => WorkspacePath.TryParse(item, out var path) ? path.Value : item)
             .Distinct(StringComparer.Ordinal)
             .ToList();
+
+    private static Dictionary<string, RunBodySource> ParseBodies(YamlMappingNode? bodies)
+    {
+        var result = new Dictionary<string, RunBodySource>(StringComparer.Ordinal);
+        if (bodies is null)
+        {
+            return result;
+        }
+
+        foreach (var (keyNode, valueNode) in bodies.Children)
+        {
+            var key = YamlNodes.ScalarText(keyNode, "bodies");
+            var path = WorkspacePath.TryParse(key, out var parsed) ? parsed.Value : key;
+            var where = $"bodies.{key}";
+            if (valueNode is not YamlMappingNode map)
+            {
+                throw new WorkspaceFileFormatException($"'{where}' must be a mapping with a 'folder'.");
+            }
+
+            var folderText = YamlNodes.OptionalString(map, "folder");
+            if (string.IsNullOrWhiteSpace(folderText) || !WorkspacePath.TryParse(folderText, out var folder))
+            {
+                throw new WorkspaceFileFormatException($"'{where}.folder' must be a workspace path to a folder.");
+            }
+
+            var pattern = YamlNodes.OptionalString(map, "pattern");
+            if (pattern is not null && (pattern.Trim().Length == 0 || pattern.IndexOfAny(['/', '\\']) >= 0))
+            {
+                throw new WorkspaceFileFormatException($"'{where}.pattern' must be a file name pattern such as *.json.");
+            }
+
+            result[path] = new RunBodySource(
+                folder,
+                pattern?.Trim(),
+                ParseMode(YamlNodes.OptionalString(map, "mode"), $"{where}.mode"),
+                ParseOnEof(YamlNodes.OptionalString(map, "onEof"), $"{where}.onEof"));
+        }
+
+        return result;
+    }
+
+    private static SelectionMode ParseMode(string? text, string where) => text switch
+    {
+        null or "sequential" => SelectionMode.Sequential,
+        "random" => SelectionMode.Random,
+        "perThread" => SelectionMode.PerThread,
+        var other => throw new WorkspaceFileFormatException($"'{where}' must be sequential, random or perThread, not '{other}'."),
+    };
+
+    private static EndBehavior ParseOnEof(string? text, string where) => text switch
+    {
+        null or "recycle" => EndBehavior.Recycle,
+        "stop" => EndBehavior.Stop,
+        var other => throw new WorkspaceFileFormatException($"'{where}' must be recycle or stop, not '{other}'."),
+    };
 
     private static RequestOrder ParseOrder(string? text) => text switch
     {
@@ -132,20 +189,10 @@ public sealed class YamlRunPlanFormat : IRunPlanFormat
             throw new WorkspaceFileFormatException("'data.file' must be a workspace path to a CSV file.");
         }
 
-        var mode = YamlNodes.OptionalString(data, "mode") switch
-        {
-            null or "sequential" => SelectionMode.Sequential,
-            "random" => SelectionMode.Random,
-            "perThread" => SelectionMode.PerThread,
-            var other => throw new WorkspaceFileFormatException($"'data.mode' must be sequential, random or perThread, not '{other}'."),
-        };
-        var onEof = YamlNodes.OptionalString(data, "onEof") switch
-        {
-            null or "recycle" => EndBehavior.Recycle,
-            "stop" => EndBehavior.Stop,
-            var other => throw new WorkspaceFileFormatException($"'data.onEof' must be recycle or stop, not '{other}'."),
-        };
-        return new RunDataSource(path, mode, onEof);
+        return new RunDataSource(
+            path,
+            ParseMode(YamlNodes.OptionalString(data, "mode"), "data.mode"),
+            ParseOnEof(YamlNodes.OptionalString(data, "onEof"), "data.onEof"));
     }
 
     private static Dictionary<string, RunAssertion> ParseAssertions(YamlMappingNode? assert)

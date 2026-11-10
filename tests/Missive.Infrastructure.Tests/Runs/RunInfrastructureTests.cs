@@ -99,6 +99,93 @@ public sealed class RunInfrastructureTests : IDisposable
         Assert.Equal(RequestOrder.Sequential, new YamlRunPlanFormat().Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.Order);
     }
 
+    [Fact]
+    public void Parse_ReadsBodyFolders()
+    {
+        var result = new YamlRunPlanFormat().Parse("""
+            name: x
+            requests: [users/create.yaml, users/update.yaml]
+            load: {threads: 1, iterations: 1}
+            bodies:
+              users/create.yaml:
+                folder: perf/bodies/create
+                pattern: "*.json"
+                mode: perThread
+                onEof: stop
+              users/update.yaml:
+                folder: perf/bodies/update
+            """);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(
+            new RunBodySource(WorkspacePath.Parse("perf/bodies/create"), "*.json", SelectionMode.PerThread, EndBehavior.Stop),
+            result.Value.BodySources["users/create.yaml"]);
+        Assert.Equal(
+            new RunBodySource(WorkspacePath.Parse("perf/bodies/update"), null, SelectionMode.Sequential, EndBehavior.Recycle),
+            result.Value.BodySources["users/update.yaml"]);
+        Assert.Empty(result.Value.Validate());
+    }
+
+    [Theory]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nbodies:\n  a.yaml: perf\n", "bodies.a.yaml")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nbodies:\n  a.yaml: {folder: ../x}\n", "bodies.a.yaml.folder")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nbodies:\n  a.yaml: {folder: x, pattern: a/*.json}\n", "bodies.a.yaml.pattern")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nbodies:\n  a.yaml: {folder: x, mode: shuffle}\n", "bodies.a.yaml.mode")]
+    [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nbodies:\n  a.yaml: {folder: x, onEof: never}\n", "bodies.a.yaml.onEof")]
+    public void Parse_ReportsBodyFolderProblems(string yaml, string expected)
+    {
+        var result = new YamlRunPlanFormat().Parse(yaml);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(expected, result.Error!.Message);
+    }
+
+    [Fact]
+    public async Task BodyReader_ReadsMatchingFilesInOrdinalOrder()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_root, "perf", "bodies")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(folder, "b1.json"), "{\"n\":\"b\"}");
+        await File.WriteAllTextAsync(Path.Combine(folder, "B2.json"), "{\"n\":\"B\"}");
+        await File.WriteAllTextAsync(Path.Combine(folder, "a.JSON"), "\uFEFF{\"n\":\"a\"}");
+        await File.WriteAllTextAsync(Path.Combine(folder, "notes.txt"), "skip me");
+        await File.WriteAllTextAsync(Path.Combine(folder, ".hidden.json"), "skip me");
+        Directory.CreateDirectory(Path.Combine(folder, "nested.json"));
+
+        var files = await new FolderRunBodyReader().ReadFolderAsync(_root, WorkspacePath.Parse("perf/bodies"), "*.json", readText: true);
+
+        Assert.True(files.IsSuccess, files.Error?.Message);
+        Assert.Equal(["perf/bodies/B2.json", "perf/bodies/a.JSON", "perf/bodies/b1.json"], files.Value.Select(f => f.Path.Value));
+        Assert.Equal(["{\"n\":\"B\"}", "{\"n\":\"a\"}", "{\"n\":\"b\"}"], files.Value.Select(f => f.Text));
+    }
+
+    [Fact]
+    public async Task BodyReader_ListsBinaryFilesWithoutReadingThem()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_root, "blobs")).FullName;
+        await File.WriteAllBytesAsync(Path.Combine(folder, "1.bin"), [0xff, 0xfe, 0x00]);
+
+        var files = await new FolderRunBodyReader().ReadFolderAsync(_root, WorkspacePath.Parse("blobs"), null, readText: false);
+
+        Assert.True(files.IsSuccess, files.Error?.Message);
+        Assert.Null(Assert.Single(files.Value).Text);
+    }
+
+    [Fact]
+    public async Task BodyReader_ReportsMissingEmptyAndNonTextFolders()
+    {
+        var reader = new FolderRunBodyReader();
+        var folder = Directory.CreateDirectory(Path.Combine(_root, "bodies")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(folder, "a.txt"), "a");
+
+        Assert.Contains("does not exist", (await reader.ReadFolderAsync(_root, WorkspacePath.Parse("missing"), null, true)).Error!.Message);
+        Assert.Contains("no files that match '*.json'", (await reader.ReadFolderAsync(_root, WorkspacePath.Parse("bodies"), "*.json", true)).Error!.Message);
+
+        await File.WriteAllBytesAsync(Path.Combine(folder, "b.txt"), [0xc3, 0x28]);
+        var invalid = await reader.ReadFolderAsync(_root, WorkspacePath.Parse("bodies"), null, true);
+        Assert.Equal(ErrorCodes.InvalidFile, invalid.Error!.Code);
+        Assert.Contains("'bodies/b.txt' is not UTF-8 text", invalid.Error.Message);
+    }
+
     [Theory]
     [InlineData("name: x\nrequests: [a.yaml]\norder: backwards\nload: {threads: 1, iterations: 1}\n", "'order'")]
     [InlineData("name: x\nrequests: [a.yaml]\nweights: {a.yaml: lots}\nload: {threads: 1, iterations: 1}\n", "weights.a.yaml")]

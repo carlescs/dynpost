@@ -101,6 +101,7 @@ internal static class Program
             .AddSingleton<IRunPlanStore, FileSystemRunPlanStore>()
             .AddSingleton<IRunPlanFormat, YamlRunPlanFormat>()
             .AddSingleton<IRunDataReader, CsvRunDataReader>()
+            .AddSingleton<IRunBodyReader, FolderRunBodyReader>()
             .AddSingleton<IRunStore, JsonRunStore>()
             .AddSingleton<RunRegistry>()
             .AddSingleton<IExternalFiles, LocalExternalFiles>()

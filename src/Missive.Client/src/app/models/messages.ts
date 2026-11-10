@@ -545,6 +545,8 @@ export interface RunSampleDto {
   url: string | null;
   dataRow: Record<string, string> | null;
   responsePreview: string | null;
+  /** The body folder file the request sent, if its body came from one (absent in older runs). */
+  bodyFile?: string | null;
 }
 
 export type RunState = 'running' | 'completed' | 'cancelled' | 'failed';

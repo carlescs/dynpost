@@ -1,3 +1,4 @@
+using Missive.Domain.Requests;
 using Missive.Domain.Runs;
 using Missive.Domain.Workspaces;
 
@@ -203,6 +204,67 @@ public class RunDomainTests
 
         Assert.Contains("b.yaml", Assert.Single(plan.Validate()));
     }
+
+    [Fact]
+    public void Validate_RejectsBodyFoldersForUnlistedRequests()
+    {
+        var plan = Plan() with
+        {
+            Bodies = new Dictionary<string, RunBodySource>
+            {
+                ["a.yaml"] = new(WorkspacePath.Parse("bodies"), null, SelectionMode.Sequential, EndBehavior.Recycle),
+                ["b.yaml"] = new(WorkspacePath.Parse("bodies"), null, SelectionMode.Sequential, EndBehavior.Recycle),
+            },
+        };
+
+        Assert.Contains("'bodies' refers to 'b.yaml'", Assert.Single(plan.Validate()));
+    }
+
+    [Fact]
+    public void WithoutDisabledRequests_DropsTheBodyFoldersOfDisabledRequests()
+    {
+        var source = new RunBodySource(WorkspacePath.Parse("bodies"), null, SelectionMode.Sequential, EndBehavior.Recycle);
+        var plan = Plan() with
+        {
+            Requests = new[] { "a.yaml", "b.yaml" }.Select(WorkspacePath.Parse).ToList(),
+            Disabled = ["b.yaml"],
+            Bodies = new Dictionary<string, RunBodySource> { ["a.yaml"] = source, ["b.yaml"] = source },
+        };
+
+        Assert.Equal(["a.yaml"], plan.WithoutDisabledRequests().BodySources.Keys);
+    }
+
+    [Fact]
+    public void Bodies_ReplaceTextContentAndKeepTheBodyType()
+    {
+        var file = new RunBodyFile(WorkspacePath.Parse("bodies/1.json"), "{\"id\":1}");
+
+        Assert.Equal(new RequestBody(BodyType.Json, "{\"id\":1}"), RunBodies.Replace(new RequestBody(BodyType.Json, "{}"), file));
+        Assert.Equal(
+            new RequestBody(BodyType.Graphql, "{\"id\":1}", "{\"v\":1}"),
+            RunBodies.Replace(new RequestBody(BodyType.Graphql, "query", "{\"v\":1}"), file));
+    }
+
+    [Fact]
+    public void Bodies_SendBinaryFilesByPath()
+    {
+        var file = new RunBodyFile(WorkspacePath.Parse("bodies/1.bin"), null);
+
+        Assert.Equal("bodies/1.bin", RunBodies.Replace(new RequestBody(BodyType.Binary, "old.bin"), file).Content);
+        Assert.False(RunBodies.UsesText(BodyType.Binary));
+        Assert.True(RunBodies.UsesText(BodyType.UrlEncoded));
+    }
+
+    [Theory]
+    [InlineData(BodyType.None, true)]
+    [InlineData(BodyType.Form, true)]
+    [InlineData(BodyType.Json, false)]
+    [InlineData(BodyType.Text, false)]
+    [InlineData(BodyType.Graphql, false)]
+    [InlineData(BodyType.UrlEncoded, false)]
+    [InlineData(BodyType.Binary, false)]
+    public void Bodies_SupportTextAndBinaryBodyTypes(BodyType type, bool unsupported) =>
+        Assert.Equal(unsupported, RunBodies.Unsupported(type) is not null);
 
     private static RunPlan OrderPlan(RequestOrder order, Dictionary<string, double>? weights = null) => Plan() with
     {

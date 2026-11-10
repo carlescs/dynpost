@@ -485,12 +485,12 @@ ramp-up. Next to it, the results dashboard follows the run live: headline
 numbers, requests per second and average latency over time (hover a second for
 its numbers), each threshold with its verdict, the latency spread of every
 request, status codes, error reasons, the failed and slowest requests (expand
-one for its data row and response) and the earlier runs of the plan.
+one for its data row, body file and response) and the earlier runs of the plan.
 
 The **Requests** tab next to **Dashboard** (or the **All requests** link on the
 dashboard) shows a table of every request the run sent, in the order they
 finished: time into the run, virtual user, iteration, method and URL, status,
-latency and result. Click a row for its data row, failure and a preview of the
+latency and result. Click a row for its data row, body file, failure and a preview of the
 response; filter to the failed requests and page through the table. It follows
 a live run too. The first 10,000 requests of a run are kept, in
 `.missive/runs/samples/<run id>.json`. Each zone of the editor, the plan and
@@ -516,8 +516,14 @@ load:
   maxRps: 200
 data:
   file: users.csv    # each row's columns become {{variables}}
-  mode: perThread    # or shared
-  onEof: wrap        # or stop
+  mode: perThread    # sequential (default), random or perThread
+  onEof: stop        # recycle (default) or stop
+bodies:              # per request: send a file of a folder as its body
+  shop/create-order.yaml:
+    folder: perf/orders
+    pattern: "*.json"  # optional: only files whose names match
+    mode: random       # sequential (default), random or perThread
+    onEof: recycle     # recycle (default) or stop
 assert:
   "*":
     status: 200-299
@@ -541,11 +547,30 @@ their place, assertions and weight, but runs skip them (their files don't even
 need to exist), and at least one request must stay enabled. In the visual form,
 each step has a switch to turn it on or off.
 
+`data` and `bodies` share their selection modes: `sequential` hands out the
+entries in order from one cursor shared by every user, `random` picks one each
+time, and `perThread` deals them out in turns so each user gets its own. When a
+`sequential` or `perThread` source runs out, `recycle` starts again from the top
+and `stop` ends that user. A CSV row is picked once per iteration and its columns
+override the environment's variables.
+
+With `bodies`, each time a request is sent its body is replaced by one file of
+the folder (files directly in it, hidden ones skipped, in ordinal order of their
+names, so `sequential` picks the same order on every machine; `pattern` filters
+them with `*` and `?`). The request keeps its body type and so its
+`Content-Type`: `json`, `text`, `graphql` (the file is the query) and
+`urlencoded` requests use the file's UTF-8 text, with `{{variables}}` resolved
+(CSV columns included), and `binary` requests send the file as is. Requests
+with no body or a multipart `form` body can't take one from a folder. The files
+are read once when the run starts (at most 10 MB each); an empty or missing
+folder stops the run from starting. Each request of the run records the body
+file it sent.
+
 Without a `status` assertion, a response with status 400 or higher counts as an
 error. A plan can use up to 5000 threads (each keeps at most one connection busy
-at a time); a run over 200 threads needs confirmation. Not yet supported: folder
-bodies, CSV/JSON/HTML export, comparing runs, per-thread cookie jars and an
-environment override in the plan.
+at a time); a run over 200 threads needs confirmation. Not yet supported:
+CSV/JSON/HTML export, comparing runs, per-thread cookie jars, an environment
+override in the plan and folder bodies for multipart `form` requests.
 
 ## Import and export
 

@@ -124,6 +124,23 @@ describe('RunPlanForm', () => {
     );
   });
 
+  it('adds a body folder for a request and edits it', () => {
+    const { element, emitted, fixture } = create(PLAN);
+    const select = element.querySelector<HTMLSelectElement>('[aria-label="Add body folder"]')!;
+    select.value = 'a.yaml';
+    select.dispatchEvent(new Event('change'));
+    expect(emitted.at(-1)).toContain('bodies:\n  a.yaml:\n    folder: bodies/a\n');
+
+    fixture.componentRef.setInput('yaml', emitted.at(-1)!);
+    fixture.detectChanges();
+    const body = element.querySelector('[data-body]')!;
+    expect(body.textContent).toContain('a.yaml');
+    const pattern = body.querySelectorAll('input')[1];
+    pattern.value = '*.json';
+    pattern.dispatchEvent(new Event('change'));
+    expect(emitted.at(-1)).toContain('pattern: "*.json"');
+  });
+
   it('explains when the yaml is invalid', () => {
     const { element } = create('a: [');
     expect(element.textContent).toContain('isn\u2019t valid YAML'.replace('\u2019', "'"));

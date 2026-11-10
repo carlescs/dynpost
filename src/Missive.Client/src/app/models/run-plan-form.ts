@@ -10,6 +10,16 @@ export interface PlanAssertion {
   bodyNotContains: string;
 }
 
+/** One `bodies` entry of a plan: a folder whose files replace a request's body. */
+export interface PlanBody {
+  /** The request path. */
+  key: string;
+  folder: string;
+  pattern: string;
+  mode: string;
+  onEof: string;
+}
+
 /** The fields of a run plan, as the strings shown in the visual editor. Empty means "not set". */
 export interface PlanForm {
   name: string;
@@ -30,6 +40,7 @@ export interface PlanForm {
   dataFile: string;
   dataMode: string;
   dataOnEof: string;
+  bodies: PlanBody[];
   assertions: PlanAssertion[];
   thresholds: Record<ThresholdKey, string>;
 }
@@ -59,12 +70,24 @@ export function picksOneRequest(order: string): boolean {
 type Path = (string | number)[];
 
 const ORDER: Record<string, string[]> = {
-  '': ['name', 'requests', 'disabled', 'order', 'weights', 'load', 'data', 'assert', 'thresholds'],
+  '': [
+    'name',
+    'requests',
+    'disabled',
+    'order',
+    'weights',
+    'load',
+    'data',
+    'bodies',
+    'assert',
+    'thresholds',
+  ],
   load: ['threads', 'iterations', 'duration', 'rampUp', 'thinkTime', 'maxRps'],
   data: ['file', 'mode', 'onEof'],
   assert: [],
   thresholds: [...THRESHOLD_KEYS],
 };
+const BODY_ORDER = ['folder', 'pattern', 'mode', 'onEof'];
 const ASSERT_ORDER = ['status', 'maxTime', 'bodyContains', 'bodyNotContains'];
 
 const NUMBER = /^\d+(\.\d+)?$/;
@@ -82,6 +105,7 @@ export function readPlanForm(yaml: string): PlanForm | null {
   const requests = doc.getIn(['requests'], true);
   const assertNode = doc.getIn(['assert'], true);
   const weightsNode = doc.getIn(['weights'], true);
+  const bodiesNode = doc.getIn(['bodies'], true);
   const disabledNode = doc.getIn(['disabled'], true);
 
   const status = (path: Path): string => {
@@ -118,6 +142,18 @@ export function readPlanForm(yaml: string): PlanForm | null {
     dataFile: text(['data', 'file']),
     dataMode: text(['data', 'mode']),
     dataOnEof: text(['data', 'onEof']),
+    bodies: isMap(bodiesNode)
+      ? bodiesNode.items.map((pair) => {
+          const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
+          return {
+            key,
+            folder: text(['bodies', key, 'folder']),
+            pattern: text(['bodies', key, 'pattern']),
+            mode: text(['bodies', key, 'mode']),
+            onEof: text(['bodies', key, 'onEof']),
+          };
+        })
+      : [],
     assertions: isMap(assertNode)
       ? assertNode.items.map((pair) => {
           const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
@@ -145,8 +181,8 @@ export function setPlanValue(yaml: string, path: Path, value: string): string {
 }
 
 /**
- * Replaces the request list, dropping the weights and disabled marks of requests that are no
- * longer in it.
+ * Replaces the request list, dropping the weights, disabled marks and body folders of requests
+ * that are no longer in it.
  */
 export function setPlanRequests(yaml: string, requests: string[]): string {
   return edit(yaml, (doc) => {
@@ -162,14 +198,28 @@ export function setPlanRequests(yaml: string, requests: string[]): string {
         disabled.filter((path) => requests.includes(path)),
       );
     }
-    const weights = doc.getIn(['weights'], true);
-    if (isMap(weights)) {
-      for (const pair of [...weights.items]) {
+    for (const section of ['weights', 'bodies']) {
+      const map = doc.getIn([section], true);
+      if (!isMap(map)) continue;
+      for (const pair of [...map.items]) {
         const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
-        if (!requests.includes(key)) prune(doc, ['weights', key]);
+        if (!requests.includes(key)) prune(doc, [section, key]);
       }
     }
   });
+}
+
+/** Gives a request a body folder, `bodies/<request file name>` until the user changes it. */
+export function addBody(yaml: string, request: string): string {
+  return edit(yaml, (doc) => {
+    if (doc.hasIn(['bodies', request])) return;
+    const name = request.slice(request.lastIndexOf('/') + 1).replace(/\.ya?ml$/i, '');
+    doc.setIn(['bodies', request], doc.createNode({ folder: `bodies/${name}` }));
+  });
+}
+
+export function removeBody(yaml: string, request: string): string {
+  return edit(yaml, (doc) => prune(doc, ['bodies', request]));
 }
 
 /** Turns a request of the plan on or off; disabled requests stay listed but are not sent. */
@@ -288,6 +338,10 @@ function sortKeys(doc: Document): void {
   sort(doc.contents, ORDER['']);
   for (const section of ['load', 'data', 'thresholds'])
     sort(doc.getIn([section], true), ORDER[section]);
+  const bodiesNode = doc.getIn(['bodies'], true);
+  if (isMap(bodiesNode)) {
+    for (const pair of bodiesNode.items) sort(pair.value, BODY_ORDER);
+  }
   const assertNode = doc.getIn(['assert'], true);
   if (isMap(assertNode)) {
     for (const pair of assertNode.items) sort(pair.value, ASSERT_ORDER);

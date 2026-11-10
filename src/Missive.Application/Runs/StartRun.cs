@@ -76,7 +76,8 @@ public sealed class RunRegistry
 /// Starts a load run of a plan and returns at once; the run goes on in the background and is
 /// followed with <see cref="GetRunProgress"/>. Each request is prepared and sent exactly like
 /// <see cref="SendRequest"/> does (environment variables, auth, OAuth 2.0 tokens), with the CSV
-/// row of the iteration laid over the environment's variables. Runs don't use cookies: every
+/// row of the iteration laid over the environment's variables and, for requests with a body folder,
+/// the body taken from the next file of that folder. Runs don't use cookies: every
 /// virtual user starts clean and nothing is written to the environment's cookie jar or captures.
 /// Runs of more than <see cref="RunPlan.WarnThreads"/> threads need <paramref name="confirmLarge"/>.
 /// </summary>
@@ -84,6 +85,7 @@ public sealed class StartRun(
     IRunPlanStore store,
     IRunPlanFormat format,
     IRunDataReader dataReader,
+    IRunBodyReader bodyReader,
     IWorkspaceRepository repository,
     IHttpSender sender,
     ActiveEnvironment environment,
@@ -180,6 +182,24 @@ public sealed class StartRun(
             rows = read.Value;
         }
 
+        var bodies = new Dictionary<string, BodyFeed>(StringComparer.Ordinal);
+        foreach (var (request, source) in plan.BodySources)
+        {
+            var type = definitions[request].Body.Type;
+            if (RunBodies.Unsupported(type) is { } why)
+            {
+                return new Error(ErrorCodes.InvalidRequest, $"'{request}' {why}.");
+            }
+
+            var files = await bodyReader.ReadFolderAsync(root.Value, source.Folder, source.Pattern, RunBodies.UsesText(type), cancellationToken);
+            if (!files.IsSuccess)
+            {
+                return files.Error!;
+            }
+
+            bodies[request] = new BodyFeed(files.Value, new DataCursor(files.Value.Count, source.Mode, source.OnEof, plan.Load.Threads));
+        }
+
         var variables = await environment.LoadAsync(cancellationToken);
         if (!variables.IsSuccess)
         {
@@ -190,13 +210,14 @@ public sealed class StartRun(
         var runId = $"{startedAt:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
         var run = new ActiveRun(runId, root.Value, planPath.Value.Value, plan, startedAt);
         registry.Add(run);
-        _ = Task.Run(() => ExecuteRunAsync(run, definitions, rows, variables.Value), CancellationToken.None);
+        _ = Task.Run(() => ExecuteRunAsync(run, definitions, bodies, rows, variables.Value), CancellationToken.None);
         return new StartedRunDto(runId);
     }
 
     private async Task ExecuteRunAsync(
         ActiveRun run,
         Dictionary<string, HttpRequestDefinition> definitions,
+        Dictionary<string, BodyFeed> bodies,
         IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
         ActiveVariables variables)
     {
@@ -204,7 +225,7 @@ public sealed class StartRun(
         var token = run.Cancellation.Token;
         var cursor = plan.Data is { } data ? new DataCursor(rows.Count, data.Mode, data.OnEof, plan.Load.Threads) : null;
         var limiter = plan.Load.MaxRps is { } rps ? new RateLimiter(rps) : null;
-        var context = new ThreadContext(run, definitions, rows, variables, cursor, limiter, new RequestPicker(plan));
+        var context = new ThreadContext(run, definitions, bodies, rows, variables, cursor, limiter, new RequestPicker(plan));
 
         try
         {
@@ -234,9 +255,13 @@ public sealed class StartRun(
         }
     }
 
+    /// <summary>The files of a request's body folder and the cursor that hands them out.</summary>
+    private sealed record BodyFeed(IReadOnlyList<RunBodyFile> Files, DataCursor Cursor);
+
     private sealed record ThreadContext(
         ActiveRun Run,
         Dictionary<string, HttpRequestDefinition> Definitions,
+        Dictionary<string, BodyFeed> Bodies,
         IReadOnlyList<IReadOnlyDictionary<string, string>> Rows,
         ActiveVariables Variables,
         DataCursor? Cursor,
@@ -312,7 +337,19 @@ public sealed class StartRun(
                         return;
                     }
 
-                    await SampleAsync(context, request, thread, iteration, values, row);
+                    RunBodyFile? bodyFile = null;
+                    if (context.Bodies.TryGetValue(request.Value, out var feed))
+                    {
+                        // A body folder that runs out with 'onEof: stop' ends the thread, like CSV data.
+                        if (feed.Cursor.Next(thread) is not { } index)
+                        {
+                            return;
+                        }
+
+                        bodyFile = feed.Files[index];
+                    }
+
+                    await SampleAsync(context, request, thread, iteration, values, row, bodyFile);
                 }
             }
         }
@@ -355,16 +392,23 @@ public sealed class StartRun(
         int thread,
         int iteration,
         IReadOnlyDictionary<string, string> values,
-        IReadOnlyDictionary<string, string>? row)
+        IReadOnlyDictionary<string, string>? row,
+        RunBodyFile? bodyFile)
     {
         var run = context.Run;
         var token = run.Cancellation.Token;
         var definition = context.Definitions[path.Value];
+        if (bodyFile is not null)
+        {
+            definition = definition with { Body = RunBodies.Replace(definition.Body, bodyFile) };
+        }
+
+        var bodyPath = bodyFile?.Path.Value;
         var method = definition.Body.Type == BodyType.Graphql ? "POST" : definition.Method.ToName();
         var at = run.Now;
 
         SampleDto Failure(string reason, double latency = 0, int? status = null, string? url = null, string? preview = null) =>
-            new(path.Value, thread, iteration, (long)at.TotalMilliseconds, Math.Round(latency, 1), status, reason, method, url, row, preview);
+            new(path.Value, thread, iteration, (long)at.TotalMilliseconds, Math.Round(latency, 1), status, reason, method, url, row, preview, bodyPath);
 
         var oauth = definition.Auth as OAuth2Auth;
         var prepared = RequestPreparation.Prepare(definition, values, oauth is null ? null : "token", run.Root);
@@ -448,7 +492,8 @@ public sealed class StartRun(
             method,
             url,
             row,
-            reason is null && !run.LogHasRoom ? null : ActiveRun.Preview(data.Body));
+            reason is null && !run.LogHasRoom ? null : ActiveRun.Preview(data.Body),
+            bodyPath);
         run.Add(path, sample, data.BytesSent > 0 ? data.BytesSent : sent, data.Body.LongLength);
     }
 
