@@ -201,8 +201,20 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string RunSamples = "run.samples";
 
+    /// <summary>
+    /// The whole body of a response a run saved to a file (plans with <c>saveResponses</c>).
+    /// Payload: <see cref="RunResponsePayload"/>. Result: the body as base64.
+    /// </summary>
+    public const string RunResponse = "run.response";
+
     /// <summary>The earlier runs of a plan, newest first. Payload: <see cref="RunPlanPathPayload"/>. Result: run summaries.</summary>
     public const string RunList = "run.list";
+
+    /// <summary>Deletes an earlier run and its request log. Payload: <see cref="RunIdPayload"/>. Result: none.</summary>
+    public const string RunDelete = "run.delete";
+
+    /// <summary>Deletes all the earlier runs of a plan. Payload: <see cref="RunPlanPathPayload"/>. Result: none.</summary>
+    public const string RunClear = "run.clear";
 
     /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
     public const string GitStatus = "git.status";
@@ -468,5 +480,7 @@ internal sealed record SaveRunPlanPayload(string Path, string Yaml);
 internal sealed record StartRunPayload(string Path, bool ConfirmLarge = false);
 
 internal sealed record RunIdPayload(string RunId);
+
+internal sealed record RunResponsePayload(string RunId, string File);
 
 internal sealed record RunSamplesPayload(string RunId, int Offset = 0, int Limit = 100, bool FailedOnly = false);

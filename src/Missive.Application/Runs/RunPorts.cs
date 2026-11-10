@@ -68,6 +68,15 @@ public interface IRunStore
     /// <summary>The request log of a run; empty when it has none (runs saved before logs were kept).</summary>
     Task<Result<IReadOnlyList<SampleDto>>> GetSamplesAsync(string root, string runId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Saves the whole body of one response of a run as <paramref name="name"/> (see
+    /// <see cref="RunResponseFiles"/>) in the run's responses folder.
+    /// </summary>
+    Task<Result<Unit>> SaveResponseAsync(string root, string runId, string name, byte[] body, CancellationToken cancellationToken = default);
+
+    /// <summary>A response body saved by <see cref="SaveResponseAsync"/>.</summary>
+    Task<Result<byte[]>> GetResponseAsync(string root, string runId, string name, CancellationToken cancellationToken = default);
+
     /// <summary>The runs of a plan, newest first.</summary>
     Task<Result<IReadOnlyList<RunSummaryDto>>> ListAsync(string root, string planPath, CancellationToken cancellationToken = default);
 
@@ -76,6 +85,9 @@ public interface IRunStore
     /// <summary>Points the saved runs of the plan at <paramref name="from"/> to its new path, so its history follows a rename.</summary>
     Task<Result<Unit>> MovePlanAsync(string root, string from, string to, CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the saved runs (and their request logs) of the plan at <paramref name="planPath"/>.</summary>
+    /// <summary>Deletes a saved run with its request log and responses; a run that isn't saved is reported as <see cref="RunErrorCodes.RunNotFound"/>.</summary>
+    Task<Result<Unit>> DeleteAsync(string root, string runId, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the saved runs (with their request logs and responses) of the plan at <paramref name="planPath"/>.</summary>
     Task<Result<Unit>> DeletePlanAsync(string root, string planPath, CancellationToken cancellationToken = default);
 }

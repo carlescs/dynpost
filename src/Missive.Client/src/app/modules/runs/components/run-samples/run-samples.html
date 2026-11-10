@@ -143,6 +143,10 @@
                   <dt class="text-slate-500">Body file</dt>
                   <dd class="truncate font-mono" data-body-file>{{ s.bodyFile }}</dd>
                 }
+                @if (s.responseFile) {
+                  <dt class="text-slate-500">Saved to</dt>
+                  <dd class="font-mono break-all" data-saved>{{ savedPath(s.responseFile) }}</dd>
+                }
                 @if (dataRow(s).length) {
                   <dt class="text-slate-500">Data row</dt>
                   <dd class="flex flex-wrap gap-1">
@@ -154,7 +158,43 @@
                   </dd>
                 }
               </dl>
-              @if (s.responsePreview) {
+              @if (isPdf(s) && s.responseFile) {
+                @let open = pdf()?.index === index ? pdf() : null;
+                <button
+                  type="button"
+                  class="mt-2 flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
+                  data-open-pdf
+                  [attr.aria-expanded]="!!open"
+                  (click)="openPdf(index, s)"
+                >
+                  <fa-icon class="text-rose-700" [icon]="faFilePdf" />
+                  {{ open ? 'Close preview' : 'Open in previewer' }}
+                </button>
+                @if (open) {
+                  @if (open.error) {
+                    <p class="mt-2 rounded bg-red-50 px-3 py-1 text-red-700" role="alert">
+                      {{ open.error }}
+                    </p>
+                  } @else if (open.data; as data) {
+                    <!-- w-0 min-w-full: the pages' width must not widen the table. -->
+                    <div
+                      class="mt-2 flex h-[32rem] w-0 min-w-full flex-col overflow-hidden rounded border border-slate-200 bg-white"
+                      data-pdf
+                    >
+                      <app-pdf-viewer [data]="data" />
+                    </div>
+                  } @else {
+                    <p class="mt-2 flex items-center gap-2 text-slate-500">
+                      <fa-icon [icon]="faSpinner" animation="spin" /> Loading the response…
+                    </p>
+                  }
+                }
+              } @else if (isPdf(s)) {
+                <p class="mt-2 text-slate-500" data-pdf-not-saved>
+                  A PDF response. Turn on <em>Save whole responses</em> in the plan to open the PDFs
+                  of its next runs in the previewer.
+                </p>
+              } @else if (s.responsePreview) {
                 <pre
                   class="mt-2 max-h-72 overflow-auto rounded border border-slate-200 bg-white p-2 font-mono whitespace-pre-wrap"
                   data-response

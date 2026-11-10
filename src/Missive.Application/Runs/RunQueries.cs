@@ -94,3 +94,78 @@ public sealed class ListRuns(IRunStore store, CurrentWorkspace current)
         return root.IsSuccess ? await store.ListAsync(root.Value, planPath, cancellationToken) : root.Error!;
     }
 }
+
+/// <summary>The whole body of a response a run saved (its plan has <c>saveResponses</c>).</summary>
+public sealed class GetRunResponse(IRunStore store, CurrentWorkspace current)
+{
+    public async Task<Result<RunResponseDto>> ExecuteAsync(string runId, string file, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        if (!RunResponseFiles.IsValidName(file))
+        {
+            return new Error(RunErrorCodes.ResponseNotFound, $"'{file}' is not a saved response.");
+        }
+
+        var body = await store.GetResponseAsync(root.Value, runId, file, cancellationToken);
+        return body.IsSuccess ? new RunResponseDto(Convert.ToBase64String(body.Value)) : body.Error!;
+    }
+}
+
+/// <summary>Deletes an earlier run of a plan with its request log and saved responses; a run in progress can't be deleted.</summary>
+public sealed class DeleteRun(RunRegistry registry, IRunStore store, CurrentWorkspace current)
+{
+    public async Task<Result<Unit>> ExecuteAsync(string runId, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        if (registry.Find(runId) is { } run && (run.State == "running" || !run.PersistenceComplete))
+        {
+            return new Error(ErrorCodes.InvalidRequest, "Stop the run before deleting it.");
+        }
+
+        var deleted = await store.DeleteAsync(root.Value, runId, cancellationToken);
+        if (deleted.IsSuccess)
+        {
+            registry.Forget(runId);
+        }
+
+        return deleted;
+    }
+}
+
+/// <summary>Deletes all the earlier runs of a plan, keeping the plan; refused while the plan is being run.</summary>
+public sealed class ClearRuns(RunRegistry registry, IRunStore store, CurrentWorkspace current)
+{
+    public async Task<Result<Unit>> ExecuteAsync(string planPath, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        var parsed = RunPlanPaths.Parse(planPath);
+        if (!root.IsSuccess || !parsed.IsSuccess)
+        {
+            return root.IsSuccess ? parsed.Error! : root.Error!;
+        }
+
+        planPath = parsed.Value.Value;
+        if (registry.IsBusy(root.Value, planPath))
+        {
+            return new Error(ErrorCodes.InvalidRequest, "Stop the run of this plan before clearing its history.");
+        }
+
+        var cleared = await store.DeletePlanAsync(root.Value, planPath, cancellationToken);
+        if (cleared.IsSuccess)
+        {
+            registry.ForgetPlan(root.Value, planPath);
+        }
+
+        return cleared;
+    }
+}

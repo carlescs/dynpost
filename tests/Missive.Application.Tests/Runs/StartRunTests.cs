@@ -146,6 +146,68 @@ public class StartRunTests
     }
 
     [Fact]
+    public async Task Execute_SavesEachLoggedResponseWhenThePlanAsksFor()
+    {
+        UsePlan(Plan(threads: 1, iterations: 2) with { SaveResponses = true });
+        _runs.SaveResponseAsync(Root, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<byte[]>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(
+            new HttpResponseData(200, "OK", [new("Content-Type", "application/pdf")], Encoding.ASCII.GetBytes("%PDF-1.7"), false, TimeSpan.FromMilliseconds(5)));
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/report"));
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        var samples = (await new GetRunSamples(_registry, _runs, _current).ExecuteAsync(run.RunId, 0, 10, false)).Value.Samples;
+        Assert.Equal(["1.pdf", "2.pdf"], samples.Select(s => s.ResponseFile!).Order());
+        Assert.All(samples, s => Assert.Null(s.Error));
+        Assert.All(samples, s => Assert.Equal("application/pdf", s.ContentType));
+        // A PDF's bytes are no use as text, so it gets no preview.
+        Assert.All(samples, s => Assert.Null(s.ResponsePreview));
+        await _runs.Received(1).SaveResponseAsync(Root, run.RunId, "1.pdf", Arg.Any<byte[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_SavesNoResponsesByDefault()
+    {
+        UsePlan(Plan(threads: 1, iterations: 2));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/report"));
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        var samples = (await new GetRunSamples(_registry, _runs, _current).ExecuteAsync(run.RunId, 0, 10, false)).Value.Samples;
+        Assert.Equal(2, samples.Count);
+        Assert.All(samples, s => Assert.Null(s.ResponseFile));
+        await _runs.DidNotReceiveWithAnyArgs().SaveResponseAsync(default!, default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task GetRunResponse_ReadsASavedResponseAsBase64()
+    {
+        _runs.GetResponseAsync(Root, "run-1", "3.pdf", Arg.Any<CancellationToken>()).Returns(new byte[] { 1, 2, 3 });
+        var query = new GetRunResponse(_runs, _current);
+
+        Assert.Equal("AQID", (await query.ExecuteAsync("run-1", "3.pdf")).Value.Body);
+        Assert.Equal(RunErrorCodes.ResponseNotFound, (await query.ExecuteAsync("run-1", "../x.pdf")).Error!.Code);
+    }
+
+    [Theory]
+    [InlineData("application/pdf", "pdf")]
+    [InlineData("application/problem+json", "json")]
+    [InlineData("text/plain", "txt")]
+    [InlineData(null, "bin")]
+    public void RunResponseFiles_NamesFilesAfterTheirMediaType(string? mediaType, string extension)
+    {
+        var name = RunResponseFiles.Name(7, mediaType);
+
+        Assert.Equal($"7.{extension}", name);
+        Assert.True(RunResponseFiles.IsValidName(name));
+    }
+
+    [Fact]
     public async Task GetRunSamples_ReadsTheLogOfAFinishedRunFromTheStore()
     {
         var stats = new StatsDto(3, 1, 33.33, 1, 2, 2, 3, 3, 3, 3, 1.5, 0, 10, new Dictionary<string, long>(), new Dictionary<string, long>());

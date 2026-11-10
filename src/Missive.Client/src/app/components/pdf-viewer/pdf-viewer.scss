@@ -1,3 +1,10 @@
+// Maximized, the viewer covers the whole window (above the shell, below dialogs).
+app-pdf-viewer.pdf-viewer-maximized {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
 app-pdf-viewer {
   .pdf-page {
     position: relative;
