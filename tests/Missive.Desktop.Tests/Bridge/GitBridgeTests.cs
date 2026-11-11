@@ -67,7 +67,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<UpdateRemote>()
             .AddTransient<RemoveRemote>()
             .BuildServiceProvider();
-        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>());
+        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
     }
 
     public void Dispose() => _services.Dispose();

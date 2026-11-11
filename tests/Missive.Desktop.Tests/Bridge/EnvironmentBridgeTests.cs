@@ -60,7 +60,7 @@ public sealed class EnvironmentBridgeTests : IDisposable
             .AddTransient<LoadEnvironment>()
             .AddTransient<SelectEnvironment>()
             .BuildServiceProvider();
-        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>());
+        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
     }
 
     public void Dispose() => _services.Dispose();

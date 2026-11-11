@@ -22,7 +22,7 @@ namespace Missive.Desktop.Bridge;
 /// <summary>Maps each bridge message type to the use case that handles it.</summary>
 internal static class BridgeHandlers
 {
-    public static BridgeRouter Create(IServiceProvider services, IFileDialogs dialogs)
+    public static BridgeRouter Create(IServiceProvider services, IFileDialogs dialogs, IAppWindow window)
     {
         T Use<T>() where T : notnull => services.GetRequiredService<T>();
 
@@ -272,7 +272,13 @@ internal static class BridgeHandlers
             .Register(BridgeMessageTypes.UpdateCheck,
                 ct => Use<CheckForUpdate>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.UpdateRestart,
-                _ => Task.FromResult(NoValue(Use<RestartToUpdate>().Execute())));
+                _ => Task.FromResult(NoValue(Use<RestartToUpdate>().Execute())))
+            .Register(BridgeMessageTypes.AppQuit,
+                _ =>
+                {
+                    window.Close();
+                    return Task.FromResult(Result<Unit?>.Success(null));
+                });
     }
 
     /// <summary>The files the import dialog offers: Postman, Insomnia and HAR files are JSON; OpenAPI can be YAML.</summary>

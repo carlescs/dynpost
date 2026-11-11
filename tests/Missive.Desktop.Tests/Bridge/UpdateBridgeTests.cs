@@ -21,7 +21,7 @@ public sealed class UpdateBridgeTests : IDisposable
             .AddTransient<CheckForUpdate>()
             .AddTransient<RestartToUpdate>()
             .BuildServiceProvider();
-        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>());
+        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
         _updater.IsSupported.Returns(true);
         _updater.CurrentVersion.Returns("1.0.0");
     }

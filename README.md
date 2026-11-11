@@ -361,6 +361,27 @@ In the request editor, `{{variable}}` references are highlighted in the URL and
 body: in violet when the selected environment defines them, in red when it
 doesn't. Hover over one to see its value (secret values are not shown).
 
+## Keyboard shortcuts
+
+On macOS, use Cmd wherever Ctrl is listed. **F1**, or *Keyboard shortcuts* in
+the settings menu, lists them in the app.
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl+Enter | Send the request |
+| Ctrl+S | Save the active request, environment or run plan |
+| Ctrl+N | New request |
+| Ctrl+O | Open a workspace folder |
+| Ctrl+W, Ctrl+F4 | Close the open conflict, commit or diff, or else the active tab (asking first if it has unsaved changes) |
+| Ctrl+Tab, Ctrl+PageDown | Next tab |
+| Ctrl+Shift+Tab, Ctrl+PageUp | Previous tab |
+| Ctrl+B | Show or hide the sidebar |
+| Ctrl+1 … Ctrl+4 | Explorer, Environments, Load runs, Source control |
+| F1 | Keyboard shortcuts |
+| Ctrl+Q | Quit Missive (asking first if tabs have unsaved changes or load runs are running; desktop app only) |
+
+Shortcuts don't apply while a dialog is open.
+
 ## Sending requests
 
 **Send** (or Ctrl+Enter) sends the request as it is in the editor, saved or
