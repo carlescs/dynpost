@@ -1,0 +1,164 @@
+@if (state.isCreatingIn(parent())) {
+  <li class="flex items-center gap-1.5 py-0.5 pr-2" [style.padding-left.px]="indent()">
+    <span class="w-3"></span>
+    <fa-icon class="text-amber-500" [icon]="faFolder" />
+    <app-name-input
+      label="New folder name"
+      [busy]="state.busy()"
+      (committed)="state.commitCreate(parent(), $event.name, $event.viaBlur)"
+      (cancelled)="state.editing.set(null)"
+    />
+  </li>
+}
+@for (node of nodes(); track node.path) {
+  <li
+    role="treeitem"
+    [attr.aria-expanded]="node.kind === 'folder' ? state.isExpanded(node) : null"
+    cdkDrag
+    [cdkDragData]="node"
+    [cdkDragDisabled]="state.editing() !== null"
+    (cdkDragStarted)="dragStarted(node, $event)"
+    (cdkDragEnded)="state.endDrag()"
+  >
+    <!-- While dragging, the entry's row collapses; the preview follows the pointer. -->
+    <div *cdkDragPlaceholder class="h-0"></div>
+    <!-- The CDK resets the preview root's box styles, so the chip is an inner element. -->
+    <div *cdkDragPreview>
+      <div
+        class="flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 shadow-md"
+      >
+        <fa-icon
+          [class]="node.kind === 'folder' ? 'text-amber-500' : 'text-sky-600'"
+          [icon]="node.kind === 'folder' ? faFolder : faGaugeHigh"
+        />
+        {{ node.name }}
+      </div>
+    </div>
+
+    @if (node.kind === 'folder') {
+      <div [appFolderDrop]="node.path" (contextmenu)="state.openMenu(node, $event)">
+        @if (state.isRenaming(node)) {
+          <div class="flex items-center gap-1.5 py-0.5 pr-2" [style.padding-left.px]="indent()">
+            <fa-icon class="w-3 text-[10px] text-slate-400" [icon]="chevron(node)" />
+            <fa-icon class="text-amber-500" [icon]="faFolder" />
+            <app-name-input
+              label="Folder name"
+              [initial]="node.name"
+              [busy]="state.busy()"
+              (committed)="state.commitRename(node.path, $event.name, $event.viaBlur)"
+              (cancelled)="state.editing.set(null)"
+            />
+          </div>
+        } @else {
+          <div class="group flex items-center hover:bg-slate-200">
+            <button
+              type="button"
+              class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 pr-2 text-left"
+              [style.padding-left.px]="indent()"
+              [title]="node.path"
+              (click)="state.toggle(node)"
+              (keydown)="onFolderKeydown($event, node)"
+            >
+              <fa-icon class="w-3 text-[10px] text-slate-400" [icon]="chevron(node)" />
+              <fa-icon
+                class="text-amber-500"
+                [icon]="state.isExpanded(node) ? faFolderOpen : faFolder"
+              />
+              <span class="truncate">{{ node.name }}</span>
+            </button>
+            <div class="mr-1 hidden shrink-0 gap-0.5 group-focus-within:flex group-hover:flex">
+              <button
+                type="button"
+                [class]="rowButton"
+                [title]="'New run plan in ' + node.name"
+                [attr.aria-label]="'New run plan in ' + node.name"
+                (click)="state.newPlan(node.path)"
+              >
+                <fa-icon [icon]="faPlus" />
+              </button>
+              <button
+                type="button"
+                [class]="rowButton"
+                [title]="'New folder in ' + node.name"
+                [attr.aria-label]="'New folder in ' + node.name"
+                (click)="state.startCreate(node.path)"
+              >
+                <fa-icon [icon]="faFolderPlus" />
+              </button>
+              <button
+                type="button"
+                [class]="rowButton"
+                [title]="'Rename ' + node.name + ' (F2)'"
+                [attr.aria-label]="'Rename ' + node.name"
+                (click)="state.startRename(node)"
+              >
+                <fa-icon [icon]="faPen" />
+              </button>
+              <button
+                type="button"
+                [class]="rowButton + ' hover:text-rose-700'"
+                [title]="'Delete ' + node.name + ' (Delete)'"
+                [attr.aria-label]="'Delete ' + node.name"
+                (click)="state.store.deleteFolder(node.path)"
+              >
+                <fa-icon [icon]="faTrash" />
+              </button>
+            </div>
+          </div>
+        }
+        @if (state.isExpanded(node)) {
+          <ul
+            app-run-tree-level
+            role="group"
+            [nodes]="node.children ?? []"
+            [depth]="depth() + 1"
+            [parent]="node.path"
+          ></ul>
+        }
+      </div>
+    } @else {
+      <div
+        class="group flex items-center gap-1 pr-2 hover:bg-slate-200"
+        [class.bg-sky-100]="state.store.draft()?.path === node.path"
+        (contextmenu)="state.openMenu(node, $event)"
+      >
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left"
+          [style.padding-left.px]="indent()"
+          [title]="node.plan?.error ?? node.path"
+          (click)="state.store.open(node.path)"
+          (keydown)="onPlanKeydown($event, node)"
+        >
+          <span class="w-3 shrink-0"></span>
+          @if (node.plan?.error) {
+            <fa-icon class="shrink-0 text-rose-500" [icon]="faCircleExclamation" />
+            <span class="truncate text-rose-700">{{ node.name }}</span>
+          } @else {
+            <fa-icon class="shrink-0 text-sky-600" [icon]="faGaugeHigh" />
+            <span class="truncate">{{ node.name }}</span>
+          }
+        </button>
+        <app-sharing-toggle
+          [localOnly]="!!node.plan?.localOnly"
+          [name]="node.name"
+          (toggled)="state.toggleLocalOnly(node)"
+        />
+        <button
+          type="button"
+          class="flex size-5 shrink-0 items-center justify-center rounded text-xs text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-300 hover:text-rose-700 focus:opacity-100"
+          title="Delete run plan"
+          [attr.aria-label]="'Delete run plan ' + node.name"
+          (click)="state.store.delete(node.path)"
+        >
+          <fa-icon [icon]="faTrash" />
+        </button>
+      </div>
+    }
+  </li>
+}
+@if (parent() && !nodes().length && !state.isCreatingIn(parent())) {
+  <li class="py-0.5 pr-2 text-xs text-slate-400 italic" [style.padding-left.px]="indent() + 18">
+    Empty folder
+  </li>
+}

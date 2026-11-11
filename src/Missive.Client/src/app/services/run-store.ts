@@ -3,6 +3,7 @@ import { Bridge, BridgeError } from './bridge';
 import { ERROR_CODES, RunPlanFileDto, RunResultDto, RunSummaryDto } from '../models/messages';
 import { WorkspaceStore } from './workspace-store';
 import { DISCARD, Dialogs } from './dialogs';
+import { joinPath } from './tree-state';
 
 /** A run plan open in an editor tab, with the run it shows. */
 export interface RunPlanDraft {
@@ -57,6 +58,8 @@ export class RunStore {
   private readonly root = computed(() => this.workspace.workspace()?.root ?? null);
 
   readonly plans = signal<RunPlanFileDto[]>([]);
+  /** The folders of the Load runs view (see `runFolder.list`), parents first. */
+  readonly folders = signal<string[]>([]);
   /** The plans open in editor tabs. */
   readonly drafts = signal<RunPlanDraft[]>([]);
   /** The plan in the active tab, if a run plan tab is active. */
@@ -79,14 +82,34 @@ export class RunStore {
         this.workspace.removeTabs(this.drafts().map((d) => d.key));
         this.drafts.set([]);
         this.plans.set([]);
+        this.folders.set([]);
         if (root) void this.refresh();
+      });
+    });
+    // Folders made, renamed or deleted in the explorer show here too.
+    let first = true;
+    effect(() => {
+      this.workspace.tree();
+      if (first) {
+        first = false;
+        return;
+      }
+      untracked(() => {
+        if (this.root()) void this.refresh();
       });
     });
   }
 
   async refresh(): Promise<void> {
+    const root = this.root();
     try {
-      this.plans.set(await this.bridge.send('runPlan.list'));
+      const [plans, folders] = await Promise.all([
+        this.bridge.send('runPlan.list'),
+        this.bridge.send('runFolder.list'),
+      ]);
+      if (this.root() !== root) return;
+      this.plans.set(plans);
+      this.folders.set(folders);
     } catch (error) {
       this.report(error);
     }
@@ -133,12 +156,12 @@ export class RunStore {
     }
   }
 
-  /** Creates a plan file with a starting template and opens it. */
-  async create(): Promise<void> {
-    const taken = new Set(this.plans().map((plan) => plan.path));
+  /** Creates a plan file with a starting template in `folder` (`''` is the root) and opens it. */
+  async create(folder = ''): Promise<void> {
+    const taken = new Set(this.plans().map((plan) => plan.path.toLowerCase()));
     let index = 1;
-    while (taken.has(`plan-${index}.run.yaml`)) index++;
-    const path = `plan-${index}.run.yaml`;
+    while (taken.has(joinPath(folder, `plan-${index}.run.yaml`).toLowerCase())) index++;
+    const path = joinPath(folder, `plan-${index}.run.yaml`);
     try {
       await this.bridge.send('runPlan.save', { path, yaml: NEW_PLAN(`Plan ${index}`) });
       await this.refresh();
@@ -168,6 +191,69 @@ export class RunStore {
       this.report(error, open?.key);
     }
     await this.refresh();
+  }
+
+  /** Moves a plan file into `folder` (`''` is the root); its open tab follows. */
+  async movePlan(path: string, folder: string): Promise<boolean> {
+    const open = this.drafts().find((d) => d.path === path);
+    if (open && isRunPlanRunning(open)) {
+      this.report('Stop the running plan before moving it.', open.key);
+      return false;
+    }
+    return this.change(async () => {
+      const moved = await this.bridge.send('runPlan.move', { path, folder });
+      this.relocate(path, moved.path);
+    });
+  }
+
+  /** Creates a folder inside `parent` (`''` is the root); resolves to whether it worked. */
+  createFolder(parent: string, name: string): Promise<boolean> {
+    return this.change(() => this.bridge.send('folder.create', { parent, name }));
+  }
+
+  /** Renames a folder of plans; open plans inside it follow. */
+  renameFolder(path: string, name: string): Promise<boolean> {
+    if (this.refuseRunningIn(path, 'renaming')) return Promise.resolve(false);
+    return this.change(async () => {
+      const renamed = await this.bridge.send('runFolder.rename', { path, name });
+      this.relocate(path, renamed.path);
+    });
+  }
+
+  /** Moves a folder of plans into `parent` (`''` is the root); open plans inside it follow. */
+  moveFolder(path: string, parent: string): Promise<boolean> {
+    if (this.refuseRunningIn(path, 'moving')) return Promise.resolve(false);
+    return this.change(async () => {
+      const moved = await this.bridge.send('runFolder.move', { path, parent });
+      this.relocate(path, moved.path);
+    });
+  }
+
+  /** Copies a folder of plans next to it as "… copy". */
+  duplicateFolder(path: string): Promise<boolean> {
+    return this.change(() => this.bridge.send('runFolder.duplicate', { path }));
+  }
+
+  /**
+   * Deletes a folder with its plans and their saved runs, after asking; the tabs of its plans
+   * close. A folder with a running plan can't be deleted.
+   */
+  async deleteFolder(path: string): Promise<boolean> {
+    if (this.refuseRunningIn(path, 'deleting')) return false;
+    const plans = this.plans().filter((plan) => isWithin(plan.path, path)).length;
+    const open = this.drafts().filter((d) => isWithin(d.path, path));
+    const dirty = open.filter(isRunPlanDirty).length;
+    const ok = await this.dialogs.confirm(
+      `Delete the folder "${path}"` +
+        (plans ? `, the ${plans} run plan(s) in it and their saved runs?` : '?') +
+        (dirty ? ` ${dirty} open plan(s) with unsaved changes will be closed.` : ''),
+      { title: 'Delete folder?', confirmLabel: 'Delete', danger: true },
+    );
+    if (!ok) return false;
+    return this.change(async () => {
+      await this.bridge.send('runFolder.delete', { path });
+      for (const draft of open) this.remove(draft.key);
+    });
   }
 
   edit(key: string, yaml: string): void {
@@ -326,6 +412,41 @@ export class RunStore {
     this.patch(key, (d) => ({ ...d, failure: null }));
   }
 
+  /**
+   * Runs a change to the files of the view, then reloads the plans and folders (and the explorer,
+   * which shows the same folders). Resolves to whether the change worked; errors go to the error bar.
+   */
+  private async change(action: () => Promise<unknown>): Promise<boolean> {
+    try {
+      await action();
+      this.workspace.error.set(null);
+      return true;
+    } catch (error) {
+      this.report(error);
+      return false;
+    } finally {
+      await this.refresh();
+      await this.workspace.refresh();
+    }
+  }
+
+  /** Points the open plans at or inside `from` to their paths under `to`. */
+  private relocate(from: string, to: string): void {
+    if (from === to) return;
+    this.drafts.update((drafts) =>
+      drafts.map((d) =>
+        isWithin(d.path, from) ? { ...d, path: to + d.path.slice(from.length) } : d,
+      ),
+    );
+  }
+
+  /** Reports and returns `true` when a plan in `folder` is running. */
+  private refuseRunningIn(folder: string, action: string): boolean {
+    const running = this.drafts().find((d) => isWithin(d.path, folder) && isRunPlanRunning(d));
+    if (running) this.report(`Stop the running plan before ${action} its folder.`, running.key);
+    return !!running;
+  }
+
   /** Shows the tab of the plan at `path` if it is open; returns whether it was. */
   private showOpen(path: string): boolean {
     const open = this.drafts().find((d) => d.path === path);
@@ -393,4 +514,9 @@ export class RunStore {
     if (key && this.find(key)) this.patch(key, (d) => ({ ...d, failure: message }));
     else this.workspace.error.set(message);
   }
+}
+
+/** Whether `path` is `folder` itself or inside it. */
+function isWithin(path: string, folder: string): boolean {
+  return path === folder || path.startsWith(`${folder}/`);
 }

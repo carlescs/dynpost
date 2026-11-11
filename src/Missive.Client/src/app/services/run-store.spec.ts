@@ -20,6 +20,8 @@ describe('RunStore', () => {
   beforeEach(async () => {
     handlers = {
       'runPlan.list': () => [{ path: 'a.run.yaml', name: 'A', error: null }],
+      'runFolder.list': () => [],
+      'workspace.tree': () => ({ name: 'api', root: '/r', nodes: [] }),
       'runPlan.open': (p) => ({ path: p.path, yaml: 'name: A\n', error: null }),
       'runPlan.save': (p) => ({ path: p.path, yaml: p.yaml, error: null }),
       'run.start': () => ({ runId: 'r1' }),
@@ -302,5 +304,114 @@ describe('RunStore', () => {
     expect(send).not.toHaveBeenCalledWith('run.delete', expect.anything());
     expect(send).not.toHaveBeenCalledWith('run.clear', expect.anything());
     expect(store.draft()?.failure).toContain('Stop the running plan');
+  });
+
+  describe('folders', () => {
+    const running = () =>
+      store.drafts.update((drafts) =>
+        drafts.map((d) => ({ ...d, run: result({ state: 'running' }) })),
+      );
+
+    it('loads the folders with the plans', async () => {
+      handlers['runFolder.list'] = () => ['perf'];
+
+      await store.refresh();
+
+      expect(store.folders()).toEqual(['perf']);
+    });
+
+    it('creates a plan in a folder', async () => {
+      handlers['runPlan.list'] = () => [{ path: 'perf/plan-1.run.yaml', name: 'P', error: null }];
+      await store.refresh();
+
+      await store.create('perf');
+
+      expect(send).toHaveBeenCalledWith('runPlan.save', {
+        path: 'perf/plan-2.run.yaml',
+        yaml: expect.stringContaining('name: Plan 2'),
+      });
+    });
+
+    it('creates a folder and reloads the plans and the explorer', async () => {
+      handlers['folder.create'] = (p) => ({ path: `${p.parent}/${p.name}` });
+      send.mockClear();
+
+      expect(await store.createFolder('perf', 'nightly')).toBe(true);
+
+      expect(send).toHaveBeenCalledWith('folder.create', { parent: 'perf', name: 'nightly' });
+      expect(send).toHaveBeenCalledWith('runFolder.list');
+      expect(send).toHaveBeenCalledWith('workspace.tree');
+    });
+
+    it('moves open plans along with a renamed or moved folder', async () => {
+      await store.open('perf/a.run.yaml');
+      handlers['runFolder.rename'] = () => ({ path: 'load' });
+      handlers['runFolder.move'] = () => ({ path: 'archive/load' });
+
+      await store.renameFolder('perf', 'load');
+      expect(store.draft()?.path).toBe('load/a.run.yaml');
+
+      await store.moveFolder('load', 'archive');
+      expect(store.draft()?.path).toBe('archive/load/a.run.yaml');
+    });
+
+    it('moves a plan into a folder and its tab follows', async () => {
+      await store.open('a.run.yaml');
+      handlers['runPlan.move'] = () => ({ path: 'perf/a.run.yaml' });
+
+      expect(await store.movePlan('a.run.yaml', 'perf')).toBe(true);
+
+      expect(send).toHaveBeenCalledWith('runPlan.move', { path: 'a.run.yaml', folder: 'perf' });
+      expect(store.draft()?.path).toBe('perf/a.run.yaml');
+    });
+
+    it('shows why a folder action was refused', async () => {
+      handlers['runFolder.duplicate'] = () => {
+        throw new BridgeError(ERROR_CODES.invalidRequest, "'shop' also holds requests");
+      };
+
+      expect(await store.duplicateFolder('shop')).toBe(false);
+
+      expect(workspace.error()).toContain('also holds requests');
+    });
+
+    it('deletes a folder after confirming and closes the tabs of its plans', async () => {
+      handlers['runPlan.list'] = () => [{ path: 'perf/a.run.yaml', name: 'A', error: null }];
+      await store.refresh();
+      await store.open('perf/a.run.yaml');
+      handlers['runFolder.delete'] = () => null;
+
+      expect(await store.deleteFolder('perf')).toBe(true);
+
+      expect(dialogs.confirm).toHaveBeenCalledWith(
+        expect.stringContaining('the 1 run plan(s) in it'),
+        expect.anything(),
+      );
+      expect(send).toHaveBeenCalledWith('runFolder.delete', { path: 'perf' });
+      expect(store.drafts()).toEqual([]);
+    });
+
+    it('keeps a folder whose deletion is not confirmed', async () => {
+      dialogs.confirm.mockResolvedValue(false);
+
+      expect(await store.deleteFolder('perf')).toBe(false);
+
+      expect(send).not.toHaveBeenCalledWith('runFolder.delete', expect.anything());
+    });
+
+    it('leaves a folder with a running plan alone', async () => {
+      await store.open('perf/a.run.yaml');
+      running();
+
+      expect(await store.renameFolder('perf', 'load')).toBe(false);
+      expect(await store.moveFolder('perf', 'archive')).toBe(false);
+      expect(await store.deleteFolder('perf')).toBe(false);
+      expect(await store.movePlan('perf/a.run.yaml', '')).toBe(false);
+
+      expect(dialogs.confirm).not.toHaveBeenCalled();
+      expect(store.draft()?.failure).toContain('Stop the running plan');
+      expect(send).not.toHaveBeenCalledWith('runFolder.rename', expect.anything());
+      expect(send).not.toHaveBeenCalledWith('runPlan.move', expect.anything());
+    });
   });
 });

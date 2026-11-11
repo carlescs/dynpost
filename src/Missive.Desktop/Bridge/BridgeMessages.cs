@@ -186,6 +186,27 @@ internal static class BridgeMessageTypes
     /// <summary>Deletes a run plan file and its saved runs. Payload: <see cref="RunPlanPathPayload"/>. Result: none.</summary>
     public const string RunPlanDelete = "runPlan.delete";
 
+    /// <summary>Moves a run plan file into another folder. Payload: <see cref="MoveRunPlanPayload"/>. Result: its new path.</summary>
+    public const string RunPlanMove = "runPlan.move";
+
+    /// <summary>
+    /// The folders shown in the Load runs view: those holding run plans, or no requests at all.
+    /// Payload: none. Result: folder paths, parents first.
+    /// </summary>
+    public const string RunFolderList = "runFolder.list";
+
+    /// <summary>Renames a folder of run plans; their runs follow. Payload: <see cref="RenameFolderPayload"/>. Result: folder (new path).</summary>
+    public const string RunFolderRename = "runFolder.rename";
+
+    /// <summary>Moves a folder of run plans into another folder. Payload: <see cref="MoveFolderPayload"/>. Result: folder (new path).</summary>
+    public const string RunFolderMove = "runFolder.move";
+
+    /// <summary>Copies a folder of run plans as "… copy" next to it. Payload: <see cref="DuplicateFolderPayload"/>. Result: the copy.</summary>
+    public const string RunFolderDuplicate = "runFolder.duplicate";
+
+    /// <summary>Deletes a folder of run plans with their saved runs. Payload: <see cref="DeleteFolderPayload"/>. Result: none.</summary>
+    public const string RunFolderDelete = "runFolder.delete";
+
     /// <summary>
     /// Starts a load run in the background. Payload: <see cref="StartRunPayload"/>. Result: run id.
     /// Fails with <c>confirmation_required</c> for very large runs until <c>confirmLarge</c> is set.
@@ -479,6 +500,9 @@ internal static class BridgeErrorCodes
 internal sealed record RunPlanPathPayload(string Path);
 
 internal sealed record SaveRunPlanPayload(string Path, string Yaml);
+
+/// <param name="Folder">The destination folder; <c>""</c> is the workspace root.</param>
+internal sealed record MoveRunPlanPayload(string Path, string Folder);
 
 internal sealed record StartRunPayload(string Path, bool ConfirmLarge = false);
 

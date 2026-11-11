@@ -14,6 +14,15 @@
       <button
         type="button"
         [class]="headerButton"
+        title="New folder"
+        aria-label="New folder"
+        (click)="state.startCreate('')"
+      >
+        <fa-icon [icon]="faFolderPlus" />
+      </button>
+      <button
+        type="button"
+        [class]="headerButton"
         title="Reload from disk"
         aria-label="Reload from disk"
         (click)="store.refresh()"
@@ -26,46 +35,71 @@
 
 @if (!workspace.workspace()) {
   <p class="px-3 py-1 text-sm text-slate-500">Open a workspace folder to use its run plans.</p>
-} @else if (!store.plans().length) {
-  <p class="px-3 py-1 text-sm text-slate-500">
-    No run plans yet. A plan is a <code>*.run.yaml</code> file.
-  </p>
 } @else {
-  <ul class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm" aria-label="Run plans">
-    @for (plan of store.plans(); track plan.path) {
-      <li
-        class="group flex items-center gap-1 pr-3 hover:bg-slate-100"
-        [class.bg-slate-100]="store.draft()?.path === plan.path"
-      >
-        <button
-          type="button"
-          class="flex min-w-0 flex-1 flex-col py-1 pl-3 text-left"
-          [title]="plan.error ?? plan.path"
-          (click)="store.open(plan.path)"
-        >
-          <span class="flex items-center gap-2 truncate">
-            @if (plan.error) {
-              <fa-icon class="text-red-500" [icon]="faCircleExclamation" />
-            }
-            {{ plan.name ?? plan.path }}
-          </span>
-          <span class="truncate text-xs text-slate-400">{{ plan.path }}</span>
-        </button>
-        <app-sharing-toggle
-          [localOnly]="!!plan.localOnly"
-          [name]="plan.name ?? plan.path"
-          (toggled)="store.toggleLocalOnly(plan)"
-        />
-        <button
-          type="button"
-          class="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-rose-700 focus:opacity-100"
-          title="Delete run plan"
-          [attr.aria-label]="'Delete run plan ' + (plan.name ?? plan.path)"
-          (click)="store.delete(plan.path)"
-        >
-          <fa-icon [icon]="faTrash" />
-        </button>
-      </li>
+  <!-- The root list is also the drop area for moving entries to the workspace root. -->
+  <div class="flex min-h-0 flex-1 flex-col" cdkDropListGroup>
+    @if (!state.tree().length && !state.isCreatingIn('')) {
+      <p class="px-3 py-1 text-sm text-slate-500">
+        No run plans yet. A plan is a <code>*.run.yaml</code> file.
+      </p>
     }
-  </ul>
+    <ul
+      app-run-tree-level
+      class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm"
+      role="tree"
+      aria-label="Run plans"
+      appFolderDrop=""
+      [nodes]="state.tree()"
+    ></ul>
+  </div>
+  @if (state.menu(); as menu) {
+    <div
+      role="menu"
+      class="fixed z-50 min-w-40 rounded border border-slate-300 bg-white py-1 text-sm shadow-lg"
+      [style.left.px]="menu.x"
+      [style.top.px]="menu.y"
+      (click)="$event.stopPropagation()"
+      (contextmenu)="$event.preventDefault()"
+    >
+      @if (menu.node.kind === 'folder') {
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="state.closeMenu(); state.newPlan(menu.node.path)"
+        >
+          <fa-icon [icon]="faPlus" />
+          New run plan
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="state.duplicateNode(menu.node)"
+        >
+          <fa-icon [icon]="faClone" />
+          Duplicate folder
+        </button>
+      } @else {
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="state.toggleLocalOnly(menu.node)"
+        >
+          <fa-icon [icon]="menu.node.plan?.localOnly ? faShareNodes : faLaptop" />
+          {{ menu.node.plan?.localOnly ? 'Share through git' : 'Keep on this computer only' }}
+        </button>
+      }
+      <button
+        type="button"
+        role="menuitem"
+        class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-700 hover:bg-slate-100"
+        (click)="state.deleteNode(menu.node)"
+      >
+        <fa-icon [icon]="faTrash" />
+        Delete {{ menu.node.kind === 'folder' ? 'folder' : 'run plan' }}
+      </button>
+    </div>
+  }
 }

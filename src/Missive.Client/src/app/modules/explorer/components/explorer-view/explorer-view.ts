@@ -15,14 +15,15 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { InterchangeStore } from '../../../../services/interchange-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
+import { TreeState } from '../../../../services/tree-state';
 import { ExplorerState } from '../../services/explorer-state';
-import { FolderDrop } from '../folder-drop/folder-drop';
+import { FolderDrop } from '../../../../components/folder-drop/folder-drop';
 import { TreeLevel } from '../tree-level/tree-level';
 
 @Component({
   selector: 'app-explorer-view',
   imports: [CdkDropListGroup, FaIconComponent, FolderDrop, TreeLevel],
-  providers: [ExplorerState],
+  providers: [ExplorerState, { provide: TreeState, useExisting: ExplorerState }],
   host: {
     class: 'relative flex min-h-0 flex-1 flex-col',
     '(keydown.escape)': 'exportOpen.set(false)',

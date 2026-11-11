@@ -521,6 +521,17 @@ them. Deleting a plan (the trash button next to it in the list or in its
 editor) removes its file and its saved runs, after asking; a plan can't be
 deleted while it is running.
 
+Plans are organized in folders, like requests. The **Load runs** view shows them as a tree:
+the folders that hold plans, plus folders without any requests (such as one just made
+for plans; folders with only requests stay in the explorer). Its header makes a new plan or
+folder at the top; hover a folder to make a plan or a sub-folder in it, rename it (F2) or delete
+it (Delete), and right-click it to duplicate it as "… copy". Drag a plan or a folder onto
+another folder, or onto empty space for the top level, to move it. A plan keeps its earlier
+runs when it or its folder is renamed or moved; deleting a folder deletes its plans and their
+runs, after asking. Folder actions here never touch requests: a folder that also holds requests
+is refused (organize it in the explorer instead), and so is a folder with a running plan.
+Plans keep their file names when moved, so the request paths inside them stay valid.
+
 The visual form lists the requests as steps you can drag into order (and picks
 their order, with each request's weight and share for a random pick), sums up the
 load (users × iterations × requests) and sketches the users over time with the

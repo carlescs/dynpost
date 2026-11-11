@@ -1,12 +1,12 @@
 import { Directive, ElementRef, computed, inject } from '@angular/core';
 import { CdkDrag, CdkDropList } from '@angular/cdk/drag-drop';
-import { WorkspaceNode } from '../../../../models/workspace';
-import { ExplorerState } from '../../services/explorer-state';
+import { TreeItem, TreeState } from '../../services/tree-state';
 
 /**
- * Makes an element the drop area of a folder (`''` for the workspace root): a CDK drop list,
- * connected to the others through the explorer's `cdkDropListGroup`, that only accepts items when
- * the pointer is over it rather than over a folder nested inside it.
+ * Makes an element the drop area of a folder (`''` for the workspace root) in a folder tree: a CDK
+ * drop list, connected to the others through the tree's `cdkDropListGroup`, that only accepts
+ * items when the pointer is over it rather than over a folder nested inside it. The tree provides
+ * its `TreeState`.
  */
 @Directive({
   selector: '[appFolderDrop]',
@@ -20,7 +20,7 @@ import { ExplorerState } from '../../services/explorer-state';
   },
 })
 export class FolderDrop {
-  private readonly state = inject(ExplorerState);
+  private readonly state = inject(TreeState);
   private readonly list = inject<CdkDropList<string>>(CdkDropList);
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
@@ -30,9 +30,9 @@ export class FolderDrop {
   });
 
   constructor() {
-    // The tree is sorted by name, so items are never reordered; only their folder changes.
+    // Trees are sorted by name, so items are never reordered; only their folder changes.
     this.list.sortingDisabled = true;
-    this.list.enterPredicate = (drag: CdkDrag<WorkspaceNode>) =>
+    this.list.enterPredicate = (drag: CdkDrag<TreeItem>) =>
       this.state.canEnter(drag.data, this.list.data, this.element);
     this.state.registerDropList(this.element, () => this.list.data);
   }
