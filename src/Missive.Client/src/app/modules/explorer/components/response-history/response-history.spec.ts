@@ -1,4 +1,7 @@
+import { Component, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { CodeDiffEditor } from '../../../../components/code-diff-editor/code-diff-editor';
+import { CodeEditor } from '../../../../components/code-editor/code-editor';
 import { HistoryEntryDto, ResponseDto } from '../../../../models/messages';
 import { Bridge } from '../../../../services/bridge';
 import { Dialogs } from '../../../../services/dialogs';
@@ -28,6 +31,25 @@ const entry = (id: string, status = 200): HistoryEntryDto => ({
   size: 7,
 });
 
+/** Stands in for the editors, which would load Monaco after the test is over. */
+@Component({ selector: 'app-code-editor', template: '' })
+class FakeCodeEditor {
+  readonly value = input('');
+  readonly language = input('');
+  readonly readOnly = input(false);
+  readonly wordWrap = input(false);
+  readonly ariaLabel = input('');
+}
+
+@Component({ selector: 'app-code-diff-editor', template: '' })
+class FakeCodeDiffEditor {
+  readonly original = input('');
+  readonly modified = input('');
+  readonly language = input('');
+  readonly wordWrap = input(false);
+  readonly ariaLabel = input('');
+}
+
 describe('ResponseHistory', () => {
   function setup(entries: HistoryEntryDto[], current: ResponseDto | null) {
     const bodies: Record<string, string> = { new: '{"v":2}', old: '{"v":1}' };
@@ -47,6 +69,10 @@ describe('ResponseHistory', () => {
         { provide: Bridge, useValue: { isDesktop: true, send } },
         { provide: Dialogs, useValue: { confirm } },
       ],
+    });
+    TestBed.overrideComponent(ResponseHistory, {
+      remove: { imports: [CodeEditor, CodeDiffEditor] },
+      add: { imports: [FakeCodeEditor, FakeCodeDiffEditor] },
     });
     const fixture = TestBed.createComponent(ResponseHistory);
     fixture.componentRef.setInput('path', 'users/get-user.yaml');
