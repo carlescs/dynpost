@@ -10,11 +10,16 @@ namespace Missive.Application.Settings;
 /// <param name="Theme">The color theme, <see cref="AppThemes.Light"/> or <see cref="AppThemes.Dark"/>; <c>null</c> is light.</param>
 /// <param name="RecentWorkspaces">Workspace folders opened recently, the most recent first.</param>
 /// <param name="History">How responses are kept in the requests' history; <c>null</c> is <see cref="HistorySettings.Default"/>.</param>
+/// <param name="ActivityOrder">
+/// The order of the activity bar's views (their ids, such as <c>explorer</c> or <c>git</c>);
+/// <c>null</c> is the UI's default order. The UI places views missing from it at the end.
+/// </param>
 public sealed record AppSettings(
     string? LastWorkspacePath = null,
     string? Theme = null,
     IReadOnlyList<string>? RecentWorkspaces = null,
-    HistorySettings? History = null)
+    HistorySettings? History = null,
+    IReadOnlyList<string>? ActivityOrder = null)
 {
     public static AppSettings Default { get; } = new();
 }

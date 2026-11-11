@@ -44,6 +44,17 @@ public sealed class JsonAppSettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task ActivityOrder_RoundTrips()
+    {
+        var file = _temp.Combine("settings.json");
+
+        await new JsonAppSettingsStore(file).SaveAsync(new AppSettings(ActivityOrder: ["git", "explorer"]));
+
+        var loaded = await new JsonAppSettingsStore(file).LoadAsync();
+        Assert.Equal(["git", "explorer"], loaded.ActivityOrder);
+    }
+
+    [Fact]
     public async Task CorruptFile_LoadsTheDefaults()
     {
         var file = _temp.Combine("settings.json");

@@ -6,7 +6,7 @@ import { HistorySettingsDialog } from './history-settings-dialog';
 describe('HistorySettingsDialog', () => {
   async function setup() {
     const history = { enabled: true, maxEntries: 20, maxBodyBytes: 1024 * 1024 };
-    const send = vi.fn().mockResolvedValue({ theme: 'light', history });
+    const send = vi.fn().mockResolvedValue({ theme: 'light', history, activityOrder: [] });
     const close = vi.fn();
     TestBed.configureTestingModule({
       imports: [HistorySettingsDialog],

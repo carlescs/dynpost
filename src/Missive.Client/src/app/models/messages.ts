@@ -533,6 +533,8 @@ export type Theme = 'light' | 'dark';
 export interface AppSettingsDto {
   theme: Theme;
   history: HistorySettingsDto;
+  /** The order of the activity bar's views (their ids); empty for the default order. */
+  activityOrder: string[];
 }
 
 /** A workspace folder opened recently. */
@@ -758,6 +760,8 @@ export interface BridgeMessages {
   'settings.setTheme': { payload: { theme: Theme }; result: AppSettingsDto };
   /** Changes whether and how much of the responses are kept in the requests' history. */
   'settings.setHistory': { payload: HistorySettingsDto; result: AppSettingsDto };
+  /** Sets the order of the activity bar's views; an empty list restores the default order. */
+  'settings.setActivityOrder': { payload: { order: string[] }; result: AppSettingsDto };
   'workspace.pick': { payload: void; result: WorkspaceDto | null };
   'workspace.open': { payload: { path: string }; result: WorkspaceDto };
   /** Reopens the workspace from the previous session; `null` when there is none. */

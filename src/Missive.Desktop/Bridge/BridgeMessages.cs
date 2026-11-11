@@ -383,6 +383,9 @@ internal static class BridgeMessageTypes
 
     /// <summary>Changes how responses are kept in the history. Payload: <see cref="HistorySettingsDto"/>. Result: settings.</summary>
     public const string SettingsSetHistory = "settings.setHistory";
+
+    /// <summary>Sets the order of the activity bar's views. Payload: <see cref="SetActivityOrderPayload"/>. Result: settings.</summary>
+    public const string SettingsSetActivityOrder = "settings.setActivityOrder";
 }
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
@@ -395,6 +398,7 @@ internal sealed record OpenWorkspacePayload(string Path);
 internal sealed record RemoveRecentWorkspacePayload(string Path);
 
 internal sealed record SetThemePayload(string Theme);
+internal sealed record SetActivityOrderPayload(IReadOnlyList<string>? Order);
 
 /// <param name="Format">The id of an export format, e.g. <c>postman</c> or <c>insomnia</c>.</param>
 /// <param name="IncludeEnvironments">Whether to export the environments (secret values never are).</param>

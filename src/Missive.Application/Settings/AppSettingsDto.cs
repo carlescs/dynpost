@@ -3,12 +3,14 @@ using Missive.Application.History;
 namespace Missive.Application.Settings;
 
 /// <summary>The user settings the UI can read and change.</summary>
-public sealed record AppSettingsDto(string Theme, HistorySettingsDto History)
+/// <param name="ActivityOrder">The order of the activity bar's views; empty for the default order.</param>
+public sealed record AppSettingsDto(string Theme, HistorySettingsDto History, IReadOnlyList<string> ActivityOrder)
 {
     public static AppSettingsDto From(AppSettings settings) =>
         new(
             AppThemes.IsValid(settings.Theme) ? settings.Theme! : AppThemes.Light,
-            HistorySettingsDto.From(settings.History ?? HistorySettings.Default));
+            HistorySettingsDto.From(settings.History ?? HistorySettings.Default),
+            settings.ActivityOrder ?? []);
 }
 
 /// <summary>How responses are kept in the requests' history.</summary>
