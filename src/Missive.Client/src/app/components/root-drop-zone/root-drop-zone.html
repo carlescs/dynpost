@@ -1,0 +1,13 @@
+<div
+  class="flex items-center justify-center gap-2 rounded-md border-2 border-dashed px-3 py-2.5 text-xs transition-colors"
+  [class.border-sky-500]="active()"
+  [class.bg-sky-100]="active()"
+  [class.text-sky-700]="active()"
+  [class.border-slate-300]="!active()"
+  [class.text-slate-500]="!active()"
+>
+  <fa-icon [icon]="faArrowTurnUp" />
+  <span
+    >Drop here to move to the <span class="font-semibold">{{ label() }}</span></span
+  >
+</div>
