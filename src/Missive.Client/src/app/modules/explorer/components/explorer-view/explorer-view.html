@@ -38,7 +38,7 @@
         aria-haspopup="dialog"
         [attr.aria-expanded]="exportOpen()"
         [disabled]="interchange.busy()"
-        (click)="toggleExport()"
+        (click)="moreOpen.set(false); toggleExport()"
       >
         <fa-icon [icon]="faFileExport" />
       </button>
@@ -51,6 +51,40 @@
       >
         <fa-icon [icon]="faArrowsRotate" />
       </button>
+      <div class="relative">
+        <button
+          type="button"
+          [class]="headerButton"
+          title="More actions"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-controls="explorer-more-menu"
+          [attr.aria-expanded]="moreOpen()"
+          (click)="$event.stopPropagation(); toggleMore()"
+        >
+          <fa-icon [icon]="faEllipsis" />
+        </button>
+        @if (moreOpen()) {
+          <div
+            id="explorer-more-menu"
+            role="menu"
+            aria-label="More actions"
+            class="absolute top-full right-0 z-30 mt-1 w-56 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
+            (click)="$event.stopPropagation()"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+              [title]="revealLabel + ' (' + store.workspace()?.root + ')'"
+              (click)="reveal()"
+            >
+              <fa-icon class="w-4 text-slate-500" [icon]="faArrowUpRightFromSquare" />
+              {{ revealLabel }}
+            </button>
+          </div>
+        }
+      </div>
     </div>
   }
 </header>

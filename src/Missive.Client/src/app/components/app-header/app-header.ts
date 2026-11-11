@@ -1,7 +1,6 @@
 import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
-  faArrowUpRightFromSquare,
   faChevronDown,
   faCircleArrowUp,
   faCircleInfo,
@@ -18,13 +17,6 @@ import { EnvironmentStore } from '../../services/environment-store';
 import { ThemeStore } from '../../services/theme-store';
 import { UpdateStore } from '../../services/update-store';
 import { WorkspaceStore } from '../../services/workspace-store';
-
-/** What the system file manager is called where the app runs, for the "show folder" link. */
-export function revealLabel(userAgent: string): string {
-  if (/Windows/i.test(userAgent)) return 'Show in File Explorer';
-  if (/Mac/i.test(userAgent)) return 'Show in Finder';
-  return 'Show in file manager';
-}
 
 /** Main application header: app name, open workspace and global options. */
 @Component({
@@ -63,8 +55,6 @@ export class AppHeader {
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faXmark = faXmark;
-  protected readonly faArrowUpRightFromSquare = faArrowUpRightFromSquare;
-  protected readonly revealLabel = revealLabel(navigator.userAgent);
 
   constructor() {
     // Removing the last other recent workspace (or a reload finding none) leaves nothing to

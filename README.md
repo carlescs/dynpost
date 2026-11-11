@@ -72,7 +72,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Duplicate requests, switch between recently used workspaces, and remove
       them from recents
 - [x] Open the workspace folder in File Explorer (Finder on macOS, the default
-      file manager on Linux) by clicking its name in the header
+      file manager on Linux) from the explorer's "More actions" menu
 - [x] Request descriptions in Markdown (a **Docs** tab), imported and exported
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`, GraphQL), saved as YAML files

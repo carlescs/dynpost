@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Bridge } from '../../services/bridge';
 import { WorkspaceStore } from '../../services/workspace-store';
-import { AppHeader, revealLabel } from './app-header';
+import { AppHeader } from './app-header';
 
 describe('AppHeader', () => {
   function setup() {
@@ -35,26 +35,14 @@ describe('AppHeader', () => {
     expect(root.querySelector('#recent-panel')).toBeNull();
   });
 
-  it('shows the open workspace in the file manager when its name is clicked', () => {
+  it('shows the open workspace name with its path', () => {
     const { fixture, store } = setup();
     store.workspace.set({ name: 'api', root: '/home/me/api' });
     fixture.detectChanges();
-    const reveal = vi.spyOn(store, 'revealFolder').mockResolvedValue();
 
-    const link = fixture.nativeElement.querySelector('button[aria-label^="Show in"]');
-    expect(link.textContent).toContain('api');
-    expect(link.title).toContain('/home/me/api');
-    link.click();
-
-    expect(reveal).toHaveBeenCalled();
-  });
-
-  it('names the file manager of the platform', () => {
-    expect(revealLabel('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/130.0')).toBe(
-      'Show in File Explorer',
-    );
-    expect(revealLabel('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).toBe('Show in Finder');
-    expect(revealLabel('Mozilla/5.0 (X11; Linux x86_64)')).toBe('Show in file manager');
+    const name = fixture.nativeElement.querySelector('span[title="/home/me/api"]');
+    expect(name.textContent).toContain('api');
+    expect(fixture.nativeElement.querySelector('button[aria-label^="Show in"]')).toBeNull();
   });
 
   it('opens the recent workspaces when the toggle is clicked', async () => {

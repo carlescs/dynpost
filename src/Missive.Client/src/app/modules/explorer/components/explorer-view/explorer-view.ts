@@ -2,8 +2,10 @@ import { Component, HostListener, inject, signal } from '@angular/core';
 import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
+  faArrowUpRightFromSquare,
   faArrowsRotate,
   faClone,
+  faEllipsis,
   faFileExport,
   faFileImport,
   faFolderOpen,
@@ -13,6 +15,7 @@ import {
   faShareNodes,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
+import { revealLabel } from '../../../../models/reveal-label';
 import { InterchangeStore } from '../../../../services/interchange-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { ExplorerState } from '../../services/explorer-state';
@@ -34,6 +37,7 @@ export class ExplorerView {
   protected readonly state = inject(ExplorerState);
   protected readonly interchange = inject(InterchangeStore);
   protected readonly exportOpen = signal(false);
+  protected readonly moreOpen = signal(false);
   protected readonly selectedFormat = signal('postman');
   protected readonly includeEnvironments = signal(true);
   protected readonly faPlus = faPlus;
@@ -46,6 +50,9 @@ export class ExplorerView {
   protected readonly faFolderPlus = faFolderPlus;
   protected readonly faTrash = faTrash;
   protected readonly faArrowsRotate = faArrowsRotate;
+  protected readonly faEllipsis = faEllipsis;
+  protected readonly faArrowUpRightFromSquare = faArrowUpRightFromSquare;
+  protected readonly revealLabel = revealLabel(navigator.userAgent);
 
   @HostListener('document:click')
   @HostListener('document:contextmenu')
@@ -53,10 +60,22 @@ export class ExplorerView {
   @HostListener('window:blur')
   protected closeMenu(): void {
     this.state.closeMenu();
+    this.moreOpen.set(false);
   }
 
   protected readonly headerButton =
     'flex size-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 disabled:opacity-50';
+
+  protected toggleMore(): void {
+    this.moreOpen.update((open) => !open);
+    this.exportOpen.set(false);
+    this.state.closeMenu();
+  }
+
+  protected reveal(): void {
+    this.moreOpen.set(false);
+    void this.store.revealFolder();
+  }
 
   protected toggleExport(): void {
     this.exportOpen.update((open) => !open);
