@@ -85,7 +85,7 @@ describe('RunSamples', () => {
       ['1', '1.5 s', '2', '3', 'GET https://api.example.com/users/1', '200', '42 ms', 'OK'],
       ['2', '1.5 s', '2', '3', 'POST https://api.example.com/users/1', '500', '42 ms', 'HTTP 500'],
     ]);
-    expect(text(element.querySelector('[data-range]'))).toBe('1–2 of 2 requests');
+    expect(text(element.querySelector('[data-range]'))).toBe('2 requests');
   });
 
   it('shows the response of a row when it is clicked', async () => {
@@ -103,20 +103,83 @@ describe('RunSamples', () => {
     expect(text(detail.querySelector('[data-response]'))).toBe('boom');
   });
 
-  it('pages through the log and filters the failed requests', async () => {
-    send.mockResolvedValue(page({ matching: 250, logged: 250, sent: 250 }));
-    const fixture = await create();
-    const element = fixture.nativeElement as HTMLElement;
+  /** Answers `run.samples` from a log of `count` samples, numbered by their `thread`. */
+  function log(count: number) {
+    send.mockImplementation(async (_: string, { offset, limit }: Record<string, number>) => ({
+      offset,
+      matching: count,
+      logged: count,
+      sent: count,
+      samples: Array.from({ length: Math.max(0, Math.min(limit, count - offset)) }, (_, i) =>
+        sample({ thread: offset + i }),
+      ),
+    }));
+  }
 
-    (element.querySelector('[aria-label="Next page"]') as HTMLElement).click();
+  async function scrollTo(fixture: Awaited<ReturnType<typeof create>>, top: number) {
+    const scroller = (fixture.nativeElement as HTMLElement).querySelector(
+      '.overflow-auto',
+    ) as HTMLElement;
+    Object.defineProperty(scroller, 'scrollTop', {
+      value: top,
+      writable: true,
+      configurable: true,
+    });
+    scroller.dispatchEvent(new Event('scroll'));
     fixture.detectChanges();
     await fixture.whenStable();
-    expect(send).toHaveBeenLastCalledWith('run.samples', {
+    fixture.detectChanges();
+  }
+
+  it('renders only the rows in view and reads the log a page at a time as they scroll in', async () => {
+    log(5000);
+    const fixture = await create();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(text(element.querySelector('[data-range]'))).toBe('5,000 requests');
+    const rendered = element.querySelectorAll('[data-sample]');
+    expect(rendered.length).toBeGreaterThan(0);
+    expect(rendered.length).toBeLessThan(PAGE_SIZE);
+
+    // Row 2,000 is on the 21st page.
+    await scrollTo(fixture, 2000 * 25);
+    expect(send).toHaveBeenCalledWith('run.samples', {
       runId: 'r1',
-      offset: PAGE_SIZE,
+      offset: 20 * PAGE_SIZE,
       limit: PAGE_SIZE,
       failedOnly: false,
     });
+    expect(send).not.toHaveBeenCalledWith(
+      'run.samples',
+      expect.objectContaining({ offset: 10 * PAGE_SIZE }),
+    );
+    const numbers = [...element.querySelectorAll('[data-sample]')].map((row) =>
+      Number(text(row.querySelector('td'))),
+    );
+    expect(numbers).toContain(2001);
+    expect(numbers.length).toBeLessThan(PAGE_SIZE);
+
+    // Pages already read are not read again.
+    const calls = send.mock.calls.length;
+    await scrollTo(fixture, 2001 * 25);
+    expect(send).toHaveBeenCalledTimes(calls);
+  });
+
+  it('shows placeholders for the rows of a page still being read', async () => {
+    log(5000);
+    const fixture = await create();
+    send.mockReturnValue(new Promise(() => {}));
+    await scrollTo(fixture, 3000 * 25);
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('[data-sample]')).toBeNull();
+    expect(element.querySelectorAll('[data-placeholder]').length).toBeGreaterThan(0);
+  });
+
+  it('starts over from the top when filtering the failed requests', async () => {
+    log(5000);
+    const fixture = await create();
+    const element = fixture.nativeElement as HTMLElement;
+    await scrollTo(fixture, 2000 * 25);
 
     const failed = [...element.querySelectorAll('[role="radio"]')].find(
       (b) => text(b) === 'Failed',
@@ -130,9 +193,10 @@ describe('RunSamples', () => {
       limit: PAGE_SIZE,
       failedOnly: true,
     });
+    expect((element.querySelector('.overflow-auto') as HTMLElement).scrollTop).toBe(0);
   });
 
-  it('reads the page again when the run is updated', async () => {
+  it('reads the pages in view again when the run is updated', async () => {
     const fixture = await create(run({ state: 'running' }));
     expect(send).toHaveBeenCalledTimes(1);
 
