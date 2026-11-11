@@ -537,8 +537,9 @@ The **Requests** tab next to **Dashboard** (or the **All requests** link on the
 dashboard) shows a table of every request the run sent, in the order they
 finished: time into the run, virtual user, iteration, method and URL, status,
 latency and result. Click a row for its data row, body file, failure and a preview of the
-response; filter to the failed requests and page through the table. It follows
-a live run too. The first 10,000 requests of a run are kept, in
+response, and filter to the failed requests. The table scrolls through the whole
+log: only the rows in view are rendered, and the log is read 100 requests at a
+time as you scroll to them. It follows a live run too. The first 10,000 requests of a run are kept, in
 `.missive/runs/samples/<run id>.json`.
 
 The response preview keeps only the start of each body. To keep whole responses,
