@@ -176,7 +176,7 @@
                   [runs]="d.history"
                   [selected]="d.run?.runId ?? null"
                   (select)="store.show(d.key, $event)"
-                  (remove)="store.deleteRun(d.key, $event)"
+                  (remove)="store.deleteRuns(d.key, $event)"
                   (clear)="store.clearHistory(d.key)"
                 />
               }
@@ -198,7 +198,7 @@
                 [runs]="d.history"
                 [selected]="null"
                 (select)="store.show(d.key, $event)"
-                (remove)="store.deleteRun(d.key, $event)"
+                (remove)="store.deleteRuns(d.key, $event)"
                 (clear)="store.clearHistory(d.key)"
               />
             }

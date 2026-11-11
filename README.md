@@ -530,8 +530,10 @@ its numbers), each threshold with its verdict, the latency spread of every
 request, status codes, error reasons, the failed and slowest requests (expand
 one for its data row, body file and response) and the earlier runs of the plan.
 Hover an earlier run and press its trash button to delete it with its request
-log and saved responses, or press **Clear** above the list to delete them all; both ask first, keep
-the plan itself, and wait until a running plan stops.
+log and saved responses, or press **Clear** above the list to delete them all. To delete several,
+tick their checkboxes (shift-click ticks a range, the box above the list ticks every run) and press
+**Delete** above the list. Deleting always asks first, keeps the plan itself, and waits until a
+running plan stops.
 
 The **Requests** tab next to **Dashboard** (or the **All requests** link on the
 dashboard) shows a table of every request the run sent, in the order they

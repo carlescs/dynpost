@@ -689,8 +689,11 @@ export interface BridgeMessages {
   'run.response': { payload: { runId: string; file: string }; result: { body: string } };
   /** The earlier runs of a plan, newest first. */
   'run.list': { payload: { path: string }; result: RunSummaryDto[] };
-  /** Deletes an earlier run and its request log; a run in progress can't be deleted. */
-  'run.delete': { payload: { runId: string }; result: null };
+  /**
+   * Deletes earlier runs and their request logs; nothing is deleted when one of them is still in
+   * progress.
+   */
+  'run.delete': { payload: { runIds: string[] }; result: null };
   /** Deletes all the earlier runs of a plan, keeping the plan; refused while it is being run. */
   'run.clear': { payload: { path: string }; result: null };
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
