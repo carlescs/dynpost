@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Sharing;
 using Missive.Application.Folders;
 using Missive.Application.Requests;
@@ -14,6 +15,7 @@ public class MoveUseCaseTests
 
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
+    private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
     private readonly CurrentWorkspace _current = new();
 
     public MoveUseCaseTests()
@@ -32,7 +34,7 @@ public class MoveUseCaseTests
     {
         _repository.FileExists(Root, P("users/get-user.yaml")).Returns(true);
 
-        var result = new MoveRequest(_repository, _localFiles, _current).Execute("users/get-user.yaml", "orders");
+        var result = new MoveRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml", "orders");
 
         Assert.Equal("orders/get-user.yaml", result.Value.Path);
         _repository.Received(1).MoveFile(Root, P("users/get-user.yaml"), P("orders/get-user.yaml"));
@@ -43,7 +45,7 @@ public class MoveUseCaseTests
     {
         _repository.FileExists(Root, P("users/get-user.yaml")).Returns(true);
 
-        var result = new MoveRequest(_repository, _localFiles, _current).Execute("users/get-user.yaml", "");
+        var result = new MoveRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml", "");
 
         Assert.Equal("get-user.yaml", result.Value.Path);
     }
@@ -53,7 +55,7 @@ public class MoveUseCaseTests
     {
         _repository.FileExists(Root, P("users/get-user.yaml")).Returns(true);
 
-        var result = new MoveRequest(_repository, _localFiles, _current).Execute("users/get-user.yaml", "users");
+        var result = new MoveRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml", "users");
 
         Assert.Equal("users/get-user.yaml", result.Value.Path);
         _repository.DidNotReceiveWithAnyArgs().MoveFile(default!, default!, default!);
@@ -65,7 +67,7 @@ public class MoveUseCaseTests
         _repository.FileExists(Root, P("users/get-user.yaml")).Returns(true);
         _repository.EntryExists(Root, P("orders/get-user.yaml")).Returns(true);
 
-        var result = new MoveRequest(_repository, _localFiles, _current).Execute("users/get-user.yaml", "orders");
+        var result = new MoveRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml", "orders");
 
         Assert.Equal(ErrorCodes.AlreadyExists, result.Error?.Code);
         _repository.DidNotReceiveWithAnyArgs().MoveFile(default!, default!, default!);
@@ -84,7 +86,7 @@ public class MoveUseCaseTests
         _repository.FileExists(Root, P("users/missive.yaml")).Returns(true);
         _repository.FileExists(Root, P("users/notes.md")).Returns(true);
 
-        var result = new MoveRequest(_repository, _localFiles, _current).Execute(path, folder);
+        var result = new MoveRequest(_repository, _localFiles, _history, _current).Execute(path, folder);
 
         Assert.Equal(code, result.Error?.Code);
     }
@@ -92,7 +94,7 @@ public class MoveUseCaseTests
     [Fact]
     public void MoveFolder_MovesItIntoAnotherFolder()
     {
-        var result = new MoveFolder(_repository, _localFiles, _current).Execute("users/admin", "orders");
+        var result = new MoveFolder(_repository, _localFiles, _history, _current).Execute("users/admin", "orders");
 
         Assert.Equal("orders/admin", result.Value.Path);
         _repository.Received(1).MoveFolder(Root, P("users/admin"), P("orders/admin"));
@@ -101,7 +103,7 @@ public class MoveUseCaseTests
     [Fact]
     public void MoveFolder_ToTheRoot()
     {
-        var result = new MoveFolder(_repository, _localFiles, _current).Execute("users/admin", "");
+        var result = new MoveFolder(_repository, _localFiles, _history, _current).Execute("users/admin", "");
 
         Assert.Equal("admin", result.Value.Path);
     }
@@ -109,7 +111,7 @@ public class MoveUseCaseTests
     [Fact]
     public void MoveFolder_ToItsCurrentParentDoesNothing()
     {
-        var result = new MoveFolder(_repository, _localFiles, _current).Execute("users/admin", "users");
+        var result = new MoveFolder(_repository, _localFiles, _history, _current).Execute("users/admin", "users");
 
         Assert.Equal("users/admin", result.Value.Path);
         _repository.DidNotReceiveWithAnyArgs().MoveFolder(default!, default!, default!);
@@ -120,7 +122,7 @@ public class MoveUseCaseTests
     [InlineData("users", "users/admin")]
     public void MoveFolder_RefusesToMoveIntoItself(string path, string parent)
     {
-        var result = new MoveFolder(_repository, _localFiles, _current).Execute(path, parent);
+        var result = new MoveFolder(_repository, _localFiles, _history, _current).Execute(path, parent);
 
         Assert.Equal(ErrorCodes.InvalidPath, result.Error?.Code);
         _repository.DidNotReceiveWithAnyArgs().MoveFolder(default!, default!, default!);
@@ -131,7 +133,7 @@ public class MoveUseCaseTests
     {
         _repository.DirectoryExists(Root, P("users-old")).Returns(true);
 
-        var result = new MoveFolder(_repository, _localFiles, _current).Execute("users", "users-old");
+        var result = new MoveFolder(_repository, _localFiles, _history, _current).Execute("users", "users-old");
 
         Assert.Equal("users-old/users", result.Value.Path);
     }
@@ -140,20 +142,20 @@ public class MoveUseCaseTests
     public void MoveFolder_RefusesToOverwriteOrUseReservedNames()
     {
         _repository.EntryExists(Root, P("orders/admin")).Returns(true);
-        var clash = new MoveFolder(_repository, _localFiles, _current).Execute("users/admin", "orders");
+        var clash = new MoveFolder(_repository, _localFiles, _history, _current).Execute("users/admin", "orders");
         Assert.Equal(ErrorCodes.AlreadyExists, clash.Error?.Code);
 
         _repository.DirectoryExists(Root, P("users/environments")).Returns(true);
-        var reserved = new MoveFolder(_repository, _localFiles, _current).Execute("users/environments", "");
+        var reserved = new MoveFolder(_repository, _localFiles, _history, _current).Execute("users/environments", "");
         Assert.Equal(ErrorCodes.InvalidPath, reserved.Error?.Code);
     }
 
     [Fact]
     public void MoveFolder_RejectsTheRootAndMissingFolders()
     {
-        Assert.Equal(ErrorCodes.InvalidPath, new MoveFolder(_repository, _localFiles, _current).Execute("", "users").Error?.Code);
-        Assert.Equal(ErrorCodes.NotFound, new MoveFolder(_repository, _localFiles, _current).Execute("missing", "users").Error?.Code);
-        Assert.Equal(ErrorCodes.NotFound, new MoveFolder(_repository, _localFiles, _current).Execute("users", "missing").Error?.Code);
+        Assert.Equal(ErrorCodes.InvalidPath, new MoveFolder(_repository, _localFiles, _history, _current).Execute("", "users").Error?.Code);
+        Assert.Equal(ErrorCodes.NotFound, new MoveFolder(_repository, _localFiles, _history, _current).Execute("missing", "users").Error?.Code);
+        Assert.Equal(ErrorCodes.NotFound, new MoveFolder(_repository, _localFiles, _history, _current).Execute("users", "missing").Error?.Code);
     }
 
     private static WorkspacePath P(string path) => WorkspacePath.Parse(path);
@@ -164,9 +166,30 @@ public class MoveUseCaseTests
         _repository.FileExists(Root, P("users/get-user.yaml")).Returns(true);
         _localFiles.Move(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
 
-        new MoveRequest(_repository, _localFiles, _current).Execute("users/get-user.yaml", "orders");
+        new MoveRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml", "orders");
 
         _localFiles.Received(1).Move(Root, P("users/get-user.yaml"), P("orders/get-user.yaml"));
+    }
+
+    [Fact]
+    public void MoveRequest_TakesItsHistoryAlong()
+    {
+        _repository.FileExists(Root, P("users/get-user.yaml")).Returns(true);
+        _localFiles.Move(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
+
+        new MoveRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml", "orders");
+
+        _history.Received(1).Move(Root, P("users/get-user.yaml"), P("orders/get-user.yaml"));
+    }
+
+    [Fact]
+    public void MoveFolder_TakesTheHistoryOfItsRequestsAlong()
+    {
+        _localFiles.Move(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
+
+        new MoveFolder(_repository, _localFiles, _history, _current).Execute("users/admin", "orders");
+
+        _history.Received(1).Move(Root, P("users/admin"), P("orders/admin"));
     }
 
     [Fact]
@@ -174,7 +197,7 @@ public class MoveUseCaseTests
     {
         _localFiles.Move(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
 
-        new MoveFolder(_repository, _localFiles, _current).Execute("users/admin", "orders");
+        new MoveFolder(_repository, _localFiles, _history, _current).Execute("users/admin", "orders");
 
         _localFiles.Received(1).Move(Root, P("users/admin"), P("orders/admin"));
     }
@@ -186,7 +209,7 @@ public class MoveUseCaseTests
         _localFiles.Move(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>())
             .Returns(new Error(ErrorCodes.Io, "read-only"));
 
-        var result = new MoveRequest(_repository, _localFiles, _current).Execute("users/get-user.yaml", "orders");
+        var result = new MoveRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml", "orders");
 
         Assert.Equal(ErrorCodes.Io, result.Error?.Code);
     }

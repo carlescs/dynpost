@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
@@ -9,7 +10,7 @@ namespace Missive.Application.Folders;
 /// Moves a collection folder, with everything in it, into another folder of the open workspace.
 /// The folder keeps its name.
 /// </summary>
-public sealed class MoveFolder(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
+public sealed class MoveFolder(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, IHistoryStore history, CurrentWorkspace current)
 {
     public Result<FolderDto> Execute(string path, string parent)
     {
@@ -53,6 +54,7 @@ public sealed class MoveFolder(IWorkspaceRepository repository, ILocalOnlyFiles 
             return moved.Error!;
         }
 
+        history.Move(root.Value, folder, destination);
         var followed = localFiles.Move(root.Value, folder, destination);
         return followed.IsSuccess ? new FolderDto(destination.Value) : followed.Error!;
     }

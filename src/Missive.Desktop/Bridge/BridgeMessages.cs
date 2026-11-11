@@ -104,6 +104,21 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string ResponseSaveBody = "response.saveBody";
 
+    /// <summary>
+    /// Lists the responses kept in a request's history, newest first. Payload:
+    /// <see cref="HistoryPathPayload"/>. Result: history entries.
+    /// </summary>
+    public const string HistoryList = "history.list";
+
+    /// <summary>Reads one response of a request's history. Payload: <see cref="HistoryEntryPayload"/>. Result: the entry with its response.</summary>
+    public const string HistoryGet = "history.get";
+
+    /// <summary>
+    /// Deletes one response from a request's history, or all of them when no id is given.
+    /// Payload: <see cref="DeleteHistoryPayload"/>. Result: the entries left.
+    /// </summary>
+    public const string HistoryDelete = "history.delete";
+
     /// <summary>Lists the cookies kept for an environment. Payload: <see cref="CookieJarPayload"/>. Result: cookies.</summary>
     public const string CookieList = "cookie.list";
 
@@ -362,6 +377,9 @@ internal static class BridgeMessageTypes
 
     /// <summary>Sets the color theme. Payload: <see cref="SetThemePayload"/>. Result: settings.</summary>
     public const string SettingsSetTheme = "settings.setTheme";
+
+    /// <summary>Changes how responses are kept in the history. Payload: <see cref="HistorySettingsDto"/>. Result: settings.</summary>
+    public const string SettingsSetHistory = "settings.setHistory";
 }
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
@@ -392,7 +410,16 @@ internal sealed record CreateRequestPayload(string Folder, RequestDto Request);
 internal sealed record SaveRequestPayload(string Path, RequestDto Request);
 
 /// <param name="Id">Chosen by the UI; pass it to <see cref="BridgeMessageTypes.RequestCancel"/> to cancel.</param>
-internal sealed record SendRequestPayload(string Id, RequestDto Request);
+/// <param name="Path">The request file the request belongs to, whose history keeps the response; <c>null</c> when unsaved.</param>
+internal sealed record SendRequestPayload(string Id, RequestDto Request, string? Path = null);
+
+/// <param name="Path">The workspace path of the request file.</param>
+internal sealed record HistoryPathPayload(string Path);
+
+internal sealed record HistoryEntryPayload(string Path, string Id);
+
+/// <param name="Id">The entry to delete; omitted deletes the request's whole history.</param>
+internal sealed record DeleteHistoryPayload(string Path, string? Id = null);
 
 internal sealed record CancelRequestPayload(string Id);
 

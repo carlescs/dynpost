@@ -188,6 +188,8 @@ describe('WorkspaceStore', () => {
       sendId: 'send-1',
     });
     expect(store.activeDocument()?.sendId).toBeNull();
+    // An unsaved request has no file to keep its responses' history for.
+    expect(send).toHaveBeenCalledWith('request.send', expect.objectContaining({ path: null }));
 
     respond({ 'request.send': () => Promise.reject(new BridgeError('network', 'Refused')) });
     await store.sendActive();

@@ -12,6 +12,7 @@ import {
   faArrowRight,
   faBan,
   faCircleExclamation,
+  faClockRotateLeft,
   faCopy,
   faDownload,
   faPaperPlane,
@@ -25,6 +26,8 @@ import { WorkspaceStore } from '../../../../services/workspace-store';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
 import { languageForMediaType } from '../../../../components/code-editor/monaco-loader';
 import { previewKind, ResponsePreview } from '../response-preview/response-preview';
+import { ResponseHistory } from '../response-history/response-history';
+import { looksLikeJson, prettyJson } from '../../models/response-text';
 
 type ResponseTab = 'body' | 'headers' | 'cookies' | 'captures' | 'timing' | 'request';
 
@@ -49,11 +52,12 @@ type BodyView = 'pretty' | 'raw' | 'preview';
 
 /**
  * Shows the last response of a request: status, time, size, the (pretty) body, headers, the
- * cookies it set, a timing breakdown with the redirects followed, and the request as sent.
+ * cookies it set, a timing breakdown with the redirects followed, and the request as sent. For a
+ * saved request, the History button shows the responses kept for it instead.
  */
 @Component({
   selector: 'app-response-viewer',
-  imports: [FaIconComponent, CodeEditor, ResponsePreview],
+  imports: [FaIconComponent, CodeEditor, ResponsePreview, ResponseHistory],
   host: {
     class: 'flex h-2/5 min-h-32 shrink-0 flex-col border-t border-slate-200 bg-slate-50',
   },
@@ -65,6 +69,10 @@ export class ResponseViewer {
   private readonly store = inject(WorkspaceStore);
 
   protected readonly activeTab = signal<ResponseTab>('body');
+  /** Whether the request's history is shown instead of its last response. */
+  protected readonly historyOpen = signal(false);
+  /** The history is kept per request file: an unsaved request has none. */
+  protected readonly showHistory = computed(() => this.historyOpen() && !!this.document().path);
   /** A short confirmation after copying or saving; cleared when another response arrives. */
   protected readonly note = linkedSignal<ResponseDto | null, string | null>({
     source: () => this.response(),
@@ -111,12 +119,7 @@ export class ResponseViewer {
   /** The body re-indented when it is JSON; `null` when it isn't (or can't be parsed). */
   protected readonly prettyBody = computed(() => {
     const r = this.response();
-    if (!r || r.bodyEncoding !== 'text' || !looksLikeJson(r)) return null;
-    try {
-      return JSON.stringify(JSON.parse(r.body), null, 2);
-    } catch {
-      return null;
-    }
+    return r ? prettyJson(r) : null;
   });
 
   /** The ways the text body can be shown; the first is the default. */
@@ -185,6 +188,7 @@ export class ResponseViewer {
   protected readonly faSpinner = faSpinner;
   protected readonly faBan = faBan;
   protected readonly faCircleExclamation = faCircleExclamation;
+  protected readonly faClockRotateLeft = faClockRotateLeft;
   protected readonly faTriangleExclamation = faTriangleExclamation;
 
   protected cancel(): void {
@@ -265,14 +269,6 @@ export function sentHops(r: ResponseDto | null): SentHop[] {
     status: hop.status,
   }));
   return [...redirects, { ...r.sent, status: null }];
-}
-
-function looksLikeJson(r: ResponseDto): boolean {
-  const type = r.contentType ?? '';
-  if (type === 'application/json' || type.endsWith('+json')) return true;
-  // Some servers send JSON as text/plain or without a content type.
-  const start = r.body.trimStart()[0];
-  return (!type || type === 'text/plain') && (start === '{' || start === '[');
 }
 
 /**

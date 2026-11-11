@@ -4,6 +4,7 @@ import {
   faChevronDown,
   faCircleArrowUp,
   faCircleInfo,
+  faClockRotateLeft,
   faGear,
   faMoon,
   faFolderOpen,
@@ -12,6 +13,7 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { AboutDialog } from '../about-dialog/about-dialog';
+import { HistorySettingsDialog } from '../history-settings-dialog/history-settings-dialog';
 import { Dialogs } from '../../services/dialogs';
 import { EnvironmentStore } from '../../services/environment-store';
 import { ThemeStore } from '../../services/theme-store';
@@ -49,6 +51,7 @@ export class AppHeader {
   protected readonly faChevronDown = faChevronDown;
   protected readonly faGear = faGear;
   protected readonly faCircleInfo = faCircleInfo;
+  protected readonly faClockRotateLeft = faClockRotateLeft;
   protected readonly faMoon = faMoon;
   protected readonly faCircleArrowUp = faCircleArrowUp;
   protected readonly faPaperPlane = faPaperPlane;
@@ -86,6 +89,11 @@ export class AppHeader {
     const target = event.target as Node;
     if (!this.host.nativeElement.contains(target)) this.menuOpen.set(false);
     if (!this.recentMenu().nativeElement.contains(target)) this.recentOpen.set(false);
+  }
+
+  protected showHistorySettings(): void {
+    this.menuOpen.set(false);
+    this.dialogs.open(HistorySettingsDialog, { ariaLabelledBy: 'history-settings-title' });
   }
 
   protected showAbout(): void {

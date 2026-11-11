@@ -317,6 +317,8 @@ export class WorkspaceStore {
       const result = await this.bridge.send('request.send', {
         id: sendId,
         request: toRequestDto(doc),
+        // A saved request's responses are kept in its history.
+        path: doc.path,
       });
       response = { kind: 'response', response: result, sendId };
       if (result.captures?.some((c) => c.value != null)) this.capturesStored.update((n) => n + 1);

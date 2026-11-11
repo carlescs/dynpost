@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Sharing;
 using Missive.Application.Folders;
 using Missive.Application.Workspaces;
@@ -13,6 +14,7 @@ public class FolderUseCaseTests
 
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
+    private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
     private readonly CurrentWorkspace _current = new();
 
     public FolderUseCaseTests()
@@ -71,10 +73,11 @@ public class FolderUseCaseTests
     {
         _repository.DirectoryExists(Root, P("api/users")).Returns(true);
 
-        var result = new RenameFolder(_repository, _localFiles, _current).Execute("api/users", "people");
+        var result = new RenameFolder(_repository, _localFiles, _history, _current).Execute("api/users", "people");
 
         Assert.Equal("api/people", result.Value.Path);
         _repository.Received(1).MoveFolder(Root, P("api/users"), P("api/people"));
+        _history.Received(1).Move(Root, P("api/users"), P("api/people"));
     }
 
     [Fact]
@@ -83,10 +86,10 @@ public class FolderUseCaseTests
         _repository.DirectoryExists(Root, P("users")).Returns(true);
         _repository.EntryExists(Root, Arg.Any<WorkspacePath>()).Returns(true);
 
-        var clash = new RenameFolder(_repository, _localFiles, _current).Execute("users", "orders");
+        var clash = new RenameFolder(_repository, _localFiles, _history, _current).Execute("users", "orders");
         Assert.Equal(ErrorCodes.AlreadyExists, clash.Error?.Code);
 
-        var caseOnly = new RenameFolder(_repository, _localFiles, _current).Execute("users", "Users");
+        var caseOnly = new RenameFolder(_repository, _localFiles, _history, _current).Execute("users", "Users");
         Assert.Equal("Users", caseOnly.Value.Path);
         _repository.Received(1).MoveFolder(Root, P("users"), P("Users"));
     }
@@ -96,7 +99,7 @@ public class FolderUseCaseTests
     {
         _repository.DirectoryExists(Root, P("users")).Returns(true);
 
-        var result = new RenameFolder(_repository, _localFiles, _current).Execute("users", "users");
+        var result = new RenameFolder(_repository, _localFiles, _history, _current).Execute("users", "users");
 
         Assert.Equal("users", result.Value.Path);
         _repository.DidNotReceiveWithAnyArgs().MoveFolder(default!, default!, default!);
@@ -105,7 +108,7 @@ public class FolderUseCaseTests
     [Fact]
     public void Rename_RejectsTheWorkspaceRoot()
     {
-        var result = new RenameFolder(_repository, _localFiles, _current).Execute("", "x");
+        var result = new RenameFolder(_repository, _localFiles, _history, _current).Execute("", "x");
 
         Assert.Equal(ErrorCodes.InvalidPath, result.Error?.Code);
     }
@@ -115,10 +118,11 @@ public class FolderUseCaseTests
     {
         GivenFolder("users", files: ["users/get-user.yaml", "users/_folder.yaml", "users/admin/.gitkeep"], folders: ["users/admin"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
 
         Assert.True(result.IsSuccess);
         _repository.Received(1).DeleteFolder(Root, P("users"));
+        _history.Received(1).Remove(Root, P("users"));
     }
 
     [Fact]
@@ -126,7 +130,7 @@ public class FolderUseCaseTests
     {
         GivenFolder("users", files: ["users/get-user.yaml", "users/notes.md", "users/admin/run.sh"], folders: ["users/admin"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
         Assert.Contains("users/admin/run.sh, users/notes.md", result.Error!.Message);
@@ -138,7 +142,7 @@ public class FolderUseCaseTests
     {
         GivenFolder("users", files: [], folders: [], links: ["users/shared"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
     }
@@ -152,7 +156,7 @@ public class FolderUseCaseTests
             folders: [],
             unsupported: ["notes:2026.txt", "admin/back\\slash.txt", "drafts:old"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
         Assert.Contains(
@@ -171,7 +175,7 @@ public class FolderUseCaseTests
             links: ["users/shared"],
             unsupported: ["a:b.txt"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
         Assert.Contains("(users/a:b.txt, users/notes.md, users/run.sh and 1 more)", result.Error!.Message);
@@ -181,7 +185,7 @@ public class FolderUseCaseTests
     [Fact]
     public void Delete_RequiresAnOpenWorkspace()
     {
-        var result = new DeleteFolder(_repository, _localFiles, new CurrentWorkspace()).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, new CurrentWorkspace()).Execute("users");
 
         Assert.Equal(ErrorCodes.NoWorkspace, result.Error?.Code);
     }

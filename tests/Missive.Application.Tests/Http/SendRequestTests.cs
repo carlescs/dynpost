@@ -2,9 +2,11 @@ using System.Text;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
+using Missive.Application.History;
 using Missive.Application.Http;
 using Missive.Application.OAuth2;
 using Missive.Application.Requests;
+using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
 using Missive.Domain.Http;
@@ -34,6 +36,9 @@ public class SendRequestTests
 
     public SendRequestTests()
     {
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(AppSettings.Default);
+        _history.AddAsync(Arg.Any<string>(), Arg.Any<Missive.Domain.Workspaces.WorkspacePath>(), Arg.Any<HistoryEntryDetailsDto>(), Arg.Any<HistoryLimits>(), Arg.Any<CancellationToken>())
+            .Returns(Unit.Value);
         _time.GetUtcNow().Returns(Now);
         _cookies.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Result<Jars>.Success(new Dictionary<string, IReadOnlyList<StoredCookie>>()));
@@ -62,7 +67,11 @@ public class SendRequestTests
             _captures,
             _current,
             _time,
-            new OAuth2Tokens(_sender, _tokens, _browser, _time));
+            new OAuth2Tokens(_sender, _tokens, _browser, _time),
+            new ResponseHistory(_history, _settings));
+
+    private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
+    private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
 
     /// <summary>Opens a workspace with <paramref name="environment"/> selected as <c>dev.yaml</c>.</summary>
     private void SelectEnvironment(EnvironmentDefinition environment, Dictionary<string, string>? secrets = null)
@@ -602,5 +611,49 @@ public class SendRequestTests
         await _sender.Received(1).SendAsync(
             Arg.Is<OutgoingRequest>(r => r.Headers.Contains(KeyValuePair.Create("Authorization", "Bearer {{token}}{{host}}"))),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_KeepsTheResponseOfASavedRequestInItsHistory()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("""{"token":"s3cret"}"""));
+        SelectEnvironment(
+            new EnvironmentDefinition("Development", [new EnvironmentVariable("token", "", Secret: true)]),
+            new Dictionary<string, string> { ["token"] = "s3cret" });
+        var request = Request() with { Auth = new AuthDto("bearer", Token: "{{token}}") };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request, "users/list-users.yaml");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.NotNull(result.Value.HistoryId);
+        Assert.Equal("""{"token":"s3cret"}""", result.Value.Body);
+        await _history.Received(1).AddAsync(
+            Root,
+            Missive.Domain.Workspaces.WorkspacePath.Parse("users/list-users.yaml"),
+            Arg.Is<HistoryEntryDetailsDto>(e =>
+                e.Entry.Id == result.Value.HistoryId
+                && e.Entry.SentAt == Now
+                && e.Entry.Method == "GET"
+                && e.Entry.Url == "https://api.example.com/users?page=2"
+                && e.Entry.Status == 200
+                && e.Response.Body == """{"token":"••••••"}"""
+                && e.Response.HistoryId == null),
+            new HistoryLimits(HistorySettings.DefaultMaxEntries, HistorySettings.MaxTotalBytes),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_KeepsNoHistoryForUnsavedRequestsOrWhenItIsTurnedOff()
+    {
+        _current.Open(Root);
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}"));
+
+        var unsaved = await CreateSendRequest().ExecuteAsync("1", Request());
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new AppSettings(History: new HistorySettings(Enabled: false)));
+        var off = await CreateSendRequest().ExecuteAsync("2", Request(), "users/list-users.yaml");
+
+        Assert.Null(unsaved.Value.HistoryId);
+        Assert.Null(off.Value.HistoryId);
+        await _history.DidNotReceiveWithAnyArgs().AddAsync(default!, default!, default!, default!, default);
     }
 }

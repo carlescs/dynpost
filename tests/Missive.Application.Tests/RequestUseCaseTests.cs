@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Sharing;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
@@ -14,6 +15,7 @@ public class RequestUseCaseTests
 
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
+    private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
     private readonly CurrentWorkspace _current = new();
 
     public RequestUseCaseTests()
@@ -98,7 +100,7 @@ public class RequestUseCaseTests
         var path = WorkspacePath.Parse("users/create-user.yaml");
         GivenExisting(path, "Create user");
 
-        var result = await new SaveRequest(_repository, _localFiles, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create());
+        var result = await new SaveRequest(_repository, _localFiles, _history, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create());
 
         Assert.Equal(path.Value, result.Value.Path);
         await _repository.Received(1).WriteRequestAsync(Root, path, Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
@@ -111,10 +113,11 @@ public class RequestUseCaseTests
         var path = WorkspacePath.Parse("users/create-user.yaml");
         GivenExisting(path, "Create user");
 
-        var result = await new SaveRequest(_repository, _localFiles, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create(name: "Add user"));
+        var result = await new SaveRequest(_repository, _localFiles, _history, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create(name: "Add user"));
 
         Assert.Equal("users/add-user.yaml", result.Value.Path);
         _repository.Received(1).MoveFile(Root, path, WorkspacePath.Parse("users/add-user.yaml"));
+        _history.Received(1).Move(Root, path, WorkspacePath.Parse("users/add-user.yaml"));
     }
 
     [Fact]
@@ -123,7 +126,7 @@ public class RequestUseCaseTests
         var path = WorkspacePath.Parse("users/my-special-name.yaml");
         GivenExisting(path, "Create user");
 
-        var result = await new SaveRequest(_repository, _localFiles, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create(name: "Add user"));
+        var result = await new SaveRequest(_repository, _localFiles, _history, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create(name: "Add user"));
 
         Assert.Equal(path.Value, result.Value.Path);
         _repository.DidNotReceiveWithAnyArgs().MoveFile(default!, default!, default!);
@@ -132,7 +135,7 @@ public class RequestUseCaseTests
     [Fact]
     public async Task SaveRequest_RejectsNonRequestFiles()
     {
-        var result = await new SaveRequest(_repository, _localFiles, _current).ExecuteAsync("missive.yaml", RequestDtoFactory.Create());
+        var result = await new SaveRequest(_repository, _localFiles, _history, _current).ExecuteAsync("missive.yaml", RequestDtoFactory.Create());
 
         Assert.Equal(ErrorCodes.InvalidPath, result.Error?.Code);
     }

@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Sharing;
 using Missive.Application.Folders;
 using Missive.Application.Workspaces;
@@ -12,7 +13,7 @@ public sealed record MovedRequestDto(string Path);
 /// Moves a request file to another folder of the open workspace. The file keeps its name; if the
 /// destination already has a file with that name, nothing is moved.
 /// </summary>
-public sealed class MoveRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
+public sealed class MoveRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, IHistoryStore history, CurrentWorkspace current)
 {
     public Result<MovedRequestDto> Execute(string path, string folder)
     {
@@ -61,6 +62,8 @@ public sealed class MoveRequest(IWorkspaceRepository repository, ILocalOnlyFiles
             return moved.Error!;
         }
 
+        // Best effort: the history is only a convenience.
+        history.Move(root.Value, requestPath, destination);
         var followed = localFiles.Move(root.Value, requestPath, destination);
         return followed.IsSuccess ? new MovedRequestDto(destination.Value) : followed.Error!;
     }

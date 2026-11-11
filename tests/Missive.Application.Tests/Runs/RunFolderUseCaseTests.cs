@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Folders;
 using Missive.Application.Runs;
 using Missive.Application.Sharing;
@@ -18,6 +19,7 @@ public class RunFolderUseCaseTests
     private readonly IRunPlanStore _store = Substitute.For<IRunPlanStore>();
     private readonly IRunStore _runs = Substitute.For<IRunStore>();
     private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
+    private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
     private readonly RunRegistry _registry = new();
     private readonly CurrentWorkspace _current = new();
 
@@ -84,7 +86,7 @@ public class RunFolderUseCaseTests
     {
         Folder("perf", "perf/smoke.run.yaml", "perf/deep/soak.run.yaml", "perf/_folder.yaml");
 
-        var renamed = await new RenameRunFolder(new RenameFolder(_repository, _localFiles, _current), _repository, _runs, _registry, _current)
+        var renamed = await new RenameRunFolder(new RenameFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
             .ExecuteAsync("perf", "load");
 
         Assert.Equal("load", renamed.Value.Path);
@@ -98,7 +100,7 @@ public class RunFolderUseCaseTests
     {
         Folder("shop", "shop/smoke.run.yaml", "shop/list.yaml");
 
-        var renamed = await new RenameRunFolder(new RenameFolder(_repository, _localFiles, _current), _repository, _runs, _registry, _current)
+        var renamed = await new RenameRunFolder(new RenameFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
             .ExecuteAsync("shop", "store");
 
         Assert.Equal(ErrorCodes.InvalidRequest, renamed.Error?.Code);
@@ -112,7 +114,7 @@ public class RunFolderUseCaseTests
         Folder("perf", "perf/smoke.run.yaml");
         Running("perf/smoke.run.yaml");
 
-        var moved = await new MoveRunFolder(new MoveFolder(_repository, _localFiles, _current), _repository, _runs, _registry, _current)
+        var moved = await new MoveRunFolder(new MoveFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
             .ExecuteAsync("perf", "");
 
         Assert.Equal(ErrorCodes.InvalidRequest, moved.Error?.Code);
@@ -125,7 +127,7 @@ public class RunFolderUseCaseTests
         Folder("perf", "perf/smoke.run.yaml");
         Folder("archive");
 
-        var moved = await new MoveRunFolder(new MoveFolder(_repository, _localFiles, _current), _repository, _runs, _registry, _current)
+        var moved = await new MoveRunFolder(new MoveFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
             .ExecuteAsync("perf", "archive");
 
         Assert.Equal("archive/perf", moved.Value.Path);
@@ -161,7 +163,7 @@ public class RunFolderUseCaseTests
     {
         Folder("perf", "perf/smoke.run.yaml", "perf/deep/soak.run.yaml");
 
-        var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _current), _repository, _runs, _registry, _current)
+        var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
             .ExecuteAsync("perf");
 
         Assert.True(deleted.IsSuccess);
@@ -175,7 +177,7 @@ public class RunFolderUseCaseTests
     {
         Folder("shop", "shop/list.yaml", "shop/smoke.run.yaml");
 
-        var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _current), _repository, _runs, _registry, _current)
+        var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
             .ExecuteAsync("shop");
 
         Assert.Equal(ErrorCodes.InvalidRequest, deleted.Error?.Code);
@@ -188,7 +190,7 @@ public class RunFolderUseCaseTests
     {
         Folder("perf", "perf/smoke.run.yaml", "perf/notes.txt");
 
-        var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _current), _repository, _runs, _registry, _current)
+        var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
             .ExecuteAsync("perf");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, deleted.Error?.Code);
