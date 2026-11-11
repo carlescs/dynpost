@@ -1046,13 +1046,15 @@ export class MockBackend {
           ? ok({ body: MOCK_PDF })
           : fail('response_not_found', 'The response was not saved.');
       case 'run.delete': {
-        const runId = payload?.['runId'] as string;
-        const run = this.runs.get(runId);
-        if (!run) return fail('run_not_found', 'There is no such run.');
-        if (this.simulateRun(runId, run).state === 'running')
-          return fail('invalid_request', 'Stop the run before deleting it.');
-        this.runs.delete(runId);
-        return ok(null);
+        const runIds = (payload?.['runIds'] as string[] | undefined) ?? [];
+        if (!runIds.length) return fail('invalid_request', 'Choose the runs to delete.');
+        for (const runId of runIds) {
+          const run = this.runs.get(runId);
+          if (run && this.simulateRun(runId, run).state === 'running')
+            return fail('invalid_request', 'Stop the run before deleting it.');
+        }
+        const missing = runIds.filter((runId) => !this.runs.delete(runId));
+        return missing.length ? fail('run_not_found', 'There is no such run.') : ok(null);
       }
       case 'run.clear': {
         const runs = [...this.runs].filter(([, run]) => run.path === path);

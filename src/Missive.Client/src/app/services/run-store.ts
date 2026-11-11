@@ -251,27 +251,36 @@ export class RunStore {
     }
   }
 
-  /** Deletes an earlier run of a plan after asking; the dashboard empties if it showed that run. */
-  async deleteRun(key: string, runId: string): Promise<void> {
+  /** Deletes earlier runs of a plan after asking; the dashboard empties if it showed one of them. */
+  async deleteRuns(key: string, runIds: string[]): Promise<void> {
     const draft = this.find(key);
-    if (!draft) return;
-    if (draft.run?.runId === runId && isRunPlanRunning(draft)) {
+    if (!draft || !runIds.length) return;
+    if (draft.run && runIds.includes(draft.run.runId) && isRunPlanRunning(draft)) {
       this.report('Stop the run before deleting it.', key);
       return;
     }
-    const run = draft.history.find((summary) => summary.runId === runId);
-    const when = run ? ` from ${new Date(run.startedAt).toLocaleString()}` : '';
-    const ok = await this.dialogs.confirm(
-      `Delete the run${when} of '${this.nameOf(draft.path)}' and its request log?`,
-      { title: 'Delete run?', confirmLabel: 'Delete', danger: true },
-    );
+    const name = this.nameOf(draft.path);
+    let message: string;
+    if (runIds.length === 1) {
+      const run = draft.history.find((summary) => summary.runId === runIds[0]);
+      const when = run ? ` from ${new Date(run.startedAt).toLocaleString()}` : '';
+      message = `Delete the run${when} of '${name}' and its request log?`;
+    } else {
+      message = `Delete ${runIds.length} runs of '${name}' and their request logs?`;
+    }
+    const ok = await this.dialogs.confirm(message, {
+      title: runIds.length === 1 ? 'Delete run?' : 'Delete runs?',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
     if (!ok) return;
+    const deleted = new Set(runIds);
     try {
-      await this.bridge.send('run.delete', { runId });
+      await this.bridge.send('run.delete', { runIds });
       this.patch(key, (d) => ({
         ...d,
-        run: d.run?.runId === runId ? null : d.run,
-        history: d.history.filter((summary) => summary.runId !== runId),
+        run: d.run && deleted.has(d.run.runId) ? null : d.run,
+        history: d.history.filter((summary) => !deleted.has(summary.runId)),
       }));
     } catch (error) {
       this.report(error, key);

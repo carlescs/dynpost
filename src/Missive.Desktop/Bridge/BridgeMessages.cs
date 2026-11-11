@@ -213,7 +213,7 @@ internal static class BridgeMessageTypes
     /// <summary>The earlier runs of a plan, newest first. Payload: <see cref="RunPlanPathPayload"/>. Result: run summaries.</summary>
     public const string RunList = "run.list";
 
-    /// <summary>Deletes an earlier run and its request log. Payload: <see cref="RunIdPayload"/>. Result: none.</summary>
+    /// <summary>Deletes earlier runs and their request logs. Payload: <see cref="RunIdsPayload"/>. Result: none.</summary>
     public const string RunDelete = "run.delete";
 
     /// <summary>Deletes all the earlier runs of a plan. Payload: <see cref="RunPlanPathPayload"/>. Result: none.</summary>
@@ -483,6 +483,8 @@ internal sealed record SaveRunPlanPayload(string Path, string Yaml);
 internal sealed record StartRunPayload(string Path, bool ConfirmLarge = false);
 
 internal sealed record RunIdPayload(string RunId);
+
+internal sealed record RunIdsPayload(IReadOnlyList<string> RunIds);
 
 internal sealed record RunResponsePayload(string RunId, string File);
 

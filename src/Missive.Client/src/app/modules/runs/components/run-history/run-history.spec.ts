@@ -28,7 +28,7 @@ describe('RunHistory', () => {
     ]);
     fixture.componentRef.setInput('selected', 'r1');
     const selected: string[] = [];
-    const removed: string[] = [];
+    const removed: string[][] = [];
     let cleared = 0;
     fixture.componentInstance.select.subscribe((id) => selected.push(id));
     fixture.componentInstance.remove.subscribe((id) => removed.push(id));
@@ -38,7 +38,23 @@ describe('RunHistory', () => {
     const buttons = [...element.querySelectorAll<HTMLElement>('button[data-select]')];
     const deletes = [...element.querySelectorAll<HTMLElement>('button[data-delete]')];
     const clear = element.querySelector<HTMLElement>('button[data-clear]')!;
-    return { buttons, deletes, clear, selected, removed, cleared: () => cleared };
+    const checks = [...element.querySelectorAll<HTMLInputElement>('input[data-check]')];
+    const checkAll = element.querySelector<HTMLInputElement>('input[data-check-all]')!;
+    const query = (selector: string) => element.querySelector<HTMLElement>(selector);
+    const header = () => element.querySelector('h3')!.textContent!.trim();
+    return {
+      fixture,
+      buttons,
+      deletes,
+      clear,
+      checks,
+      checkAll,
+      query,
+      header,
+      selected,
+      removed,
+      cleared: () => cleared,
+    };
   }
 
   it('says how each run went', () => {
@@ -73,8 +89,54 @@ describe('RunHistory', () => {
     const { deletes, clear, selected, removed, cleared } = create();
     deletes[2].click();
     clear.click();
-    expect(removed).toEqual(['r0']);
+    expect(removed).toEqual([['r0']]);
     expect(selected).toEqual([]);
     expect(cleared()).toBe(1);
+  });
+
+  it('deletes the checked runs together', () => {
+    const { fixture, checks, query, header, removed, selected } = create();
+    checks[0].click();
+    checks[2].click();
+    fixture.detectChanges();
+
+    expect(header()).toBe('2 selected');
+    expect(query('button[data-clear]')).toBeNull();
+    query('button[data-delete-selected]')!.click();
+
+    expect(removed).toEqual([['r2', 'r0']]);
+    expect(selected).toEqual([]);
+  });
+
+  it('checks a range with shift-click and every run from the header', () => {
+    const { fixture, checks, checkAll, query, header, removed } = create();
+    checks[0].click();
+    checks[2].dispatchEvent(new MouseEvent('click', { shiftKey: true }));
+    fixture.detectChanges();
+    expect(header()).toBe('3 selected');
+    expect(checkAll.checked).toBe(true);
+
+    checkAll.click();
+    fixture.detectChanges();
+    expect(header()).toBe('History');
+
+    checkAll.click();
+    fixture.detectChanges();
+    query('button[data-delete-selected]')!.click();
+    expect(removed).toEqual([['r2', 'r1', 'r0']]);
+
+    query('button[data-deselect]')!.click();
+    fixture.detectChanges();
+    expect(header()).toBe('History');
+  });
+
+  it('forgets checked runs that are no longer listed', () => {
+    const { fixture, checks, header } = create();
+    checks[0].click();
+    checks[1].click();
+    fixture.componentRef.setInput('runs', [summary({ runId: 'r1' })]);
+    fixture.detectChanges();
+
+    expect(header()).toBe('1 selected');
   });
 });

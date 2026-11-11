@@ -79,6 +79,54 @@ public class DeleteRunTests
     }
 
     [Fact]
+    public async Task DeletesSeveralRuns()
+    {
+        _registry.Add(Finished("run-1"));
+        _registry.Add(Finished("run-2"));
+
+        var deleted = await new DeleteRun(_registry, _runs, _current).ExecuteAsync(["run-1", "run-2", "run-1"]);
+
+        Assert.True(deleted.IsSuccess);
+        await _runs.Received(1).DeleteAsync(Root, "run-1", Arg.Any<CancellationToken>());
+        await _runs.Received(1).DeleteAsync(Root, "run-2", Arg.Any<CancellationToken>());
+        Assert.Null(_registry.Find("run-1"));
+        Assert.Null(_registry.Find("run-2"));
+    }
+
+    [Fact]
+    public async Task DeletesNoneOfSeveralRunsWhenOneIsInProgress()
+    {
+        _registry.Add(Finished("run-1"));
+        _registry.Add(Run("run-2"));
+
+        var deleted = await new DeleteRun(_registry, _runs, _current).ExecuteAsync(["run-1", "run-2"]);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, deleted.Error!.Code);
+        await _runs.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.NotNull(_registry.Find("run-1"));
+    }
+
+    [Fact]
+    public async Task DeletesTheOtherRunsWhenOneIsMissing()
+    {
+        _runs.DeleteAsync(Root, "gone", Arg.Any<CancellationToken>())
+            .Returns(new Error(RunErrorCodes.RunNotFound, "There is no run 'gone'."));
+
+        var deleted = await new DeleteRun(_registry, _runs, _current).ExecuteAsync(["gone", "run-2"]);
+
+        Assert.Equal(RunErrorCodes.RunNotFound, deleted.Error!.Code);
+        await _runs.Received().DeleteAsync(Root, "run-2", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefusesAnEmptySelection()
+    {
+        var deleted = await new DeleteRun(_registry, _runs, _current).ExecuteAsync(Array.Empty<string>());
+
+        Assert.Equal(ErrorCodes.InvalidRequest, deleted.Error!.Code);
+    }
+
+    [Fact]
     public async Task ClearsTheRunsOfAPlan()
     {
         _registry.Add(Finished("run-1"));

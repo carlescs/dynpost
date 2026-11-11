@@ -116,10 +116,13 @@ public sealed class GetRunResponse(IRunStore store, CurrentWorkspace current)
     }
 }
 
-/// <summary>Deletes an earlier run of a plan with its request log and saved responses; a run in progress can't be deleted.</summary>
+/// <summary>
+/// Deletes earlier runs of a plan with their request logs and saved responses. Nothing is deleted
+/// when one of them is still in progress; otherwise every run is tried and the first failure is reported.
+/// </summary>
 public sealed class DeleteRun(RunRegistry registry, IRunStore store, CurrentWorkspace current)
 {
-    public async Task<Result<Unit>> ExecuteAsync(string runId, CancellationToken cancellationToken = default)
+    public async Task<Result<Unit>> ExecuteAsync(IReadOnlyList<string> runIds, CancellationToken cancellationToken = default)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)
@@ -127,19 +130,43 @@ public sealed class DeleteRun(RunRegistry registry, IRunStore store, CurrentWork
             return root.Error!;
         }
 
-        if (registry.Find(runId) is { } run && (run.State == "running" || !run.PersistenceComplete))
+        if (runIds.Count == 0)
         {
-            return new Error(ErrorCodes.InvalidRequest, "Stop the run before deleting it.");
+            return new Error(ErrorCodes.InvalidRequest, "Choose the runs to delete.");
         }
 
-        var deleted = await store.DeleteAsync(root.Value, runId, cancellationToken);
-        if (deleted.IsSuccess)
+        foreach (var runId in runIds)
         {
-            registry.Forget(runId);
+            if (registry.Find(runId) is { } run && (run.State == "running" || !run.PersistenceComplete))
+            {
+                return new Error(ErrorCodes.InvalidRequest, "Stop the run before deleting it.");
+            }
         }
 
-        return deleted;
+        Error? failure = null;
+        foreach (var runId in runIds.Distinct(StringComparer.Ordinal))
+        {
+            var deleted = await store.DeleteAsync(root.Value, runId, cancellationToken);
+            if (deleted.IsSuccess)
+            {
+                registry.Forget(runId);
+            }
+            else
+            {
+                failure ??= deleted.Error;
+            }
+        }
+
+        if (failure is not null)
+        {
+            return failure;
+        }
+
+        return Unit.Value;
     }
+
+    public Task<Result<Unit>> ExecuteAsync(string runId, CancellationToken cancellationToken = default) =>
+        ExecuteAsync([runId], cancellationToken);
 }
 
 /// <summary>Deletes all the earlier runs of a plan, keeping the plan; refused while the plan is being run.</summary>

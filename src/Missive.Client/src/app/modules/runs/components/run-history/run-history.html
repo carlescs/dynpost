@@ -1,14 +1,48 @@
 <div class="mb-1.5 flex items-center gap-2">
-  <h3 class="flex-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">History</h3>
-  <button
-    type="button"
-    class="rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-200 hover:text-rose-700"
-    title="Delete every saved run of this plan"
-    data-clear
-    (click)="clear.emit()"
-  >
-    Clear
-  </button>
+  <input
+    type="checkbox"
+    class="ml-3.5 accent-sky-600"
+    [title]="allChosen() ? 'Deselect every run' : 'Select every run'"
+    [attr.aria-label]="allChosen() ? 'Deselect every run' : 'Select every run'"
+    [checked]="allChosen()"
+    [indeterminate]="chosen().length > 0 && !allChosen()"
+    data-check-all
+    (change)="toggleAll()"
+  />
+  @if (chosen().length) {
+    <h3 class="flex-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+      {{ chosen().length }} selected
+    </h3>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-200"
+      title="Deselect every run"
+      data-deselect
+      (click)="deselect()"
+    >
+      Deselect
+    </button>
+    <button
+      type="button"
+      class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-rose-700 hover:bg-rose-50"
+      title="Delete the selected runs"
+      data-delete-selected
+      (click)="removeChosen()"
+    >
+      <fa-icon [icon]="faTrash" /> Delete
+    </button>
+  } @else {
+    <h3 class="flex-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">History</h3>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-200 hover:text-rose-700"
+      title="Delete every saved run of this plan"
+      data-clear
+      (click)="clear.emit()"
+    >
+      Clear
+    </button>
+  }
 </div>
 <ul class="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
   @for (row of rows(); track row.run.runId) {
@@ -16,6 +50,16 @@
       class="group flex items-stretch border-l-2"
       [class]="selected() === row.run.runId ? 'border-sky-600 bg-sky-50' : 'border-transparent'"
     >
+      <label class="flex shrink-0 cursor-pointer items-center pl-3 hover:bg-slate-50">
+        <input
+          type="checkbox"
+          class="accent-sky-600"
+          [attr.aria-label]="'Select the run from ' + (row.run.startedAt | date: 'MMM d, HH:mm:ss')"
+          [checked]="row.checked"
+          data-check
+          (click)="toggle(row.run.runId, $event)"
+        />
+      </label>
       <button
         type="button"
         class="flex min-w-0 flex-1 items-center gap-3 px-3 py-1.5 text-left text-xs hover:bg-slate-50"
@@ -56,7 +100,7 @@
         title="Delete this run"
         aria-label="Delete this run"
         data-delete
-        (click)="remove.emit(row.run.runId)"
+        (click)="remove.emit([row.run.runId])"
       >
         <fa-icon [icon]="faTrash" />
       </button>

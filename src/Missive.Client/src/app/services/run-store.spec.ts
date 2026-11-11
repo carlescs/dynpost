@@ -261,20 +261,41 @@ describe('RunStore', () => {
       drafts.map((d) => ({ ...d, run: result(), history: [summary] })),
     );
 
-    await store.deleteRun(key(), 'r1');
+    await store.deleteRuns(key(), ['r1']);
 
     expect(dialogs.confirm).toHaveBeenCalled();
-    expect(send).toHaveBeenCalledWith('run.delete', { runId: 'r1' });
+    expect(send).toHaveBeenCalledWith('run.delete', { runIds: ['r1'] });
     expect(send).toHaveBeenLastCalledWith('run.list', { path: 'a.run.yaml' });
     expect(store.draft()?.run).toBeNull();
     expect(store.draft()?.history).toEqual([]);
+  });
+
+  it('deletes several earlier runs at once', async () => {
+    await store.open('a.run.yaml');
+    const summaries = ['r1', 'r2', 'r3'].map(
+      (runId) => ({ runId, startedAt: '2026-01-02T03:04:05Z' }) as RunSummaryDto,
+    );
+    store.drafts.update((drafts) =>
+      drafts.map((d) => ({ ...d, run: result({ runId: 'r3' }), history: summaries })),
+    );
+    handlers['run.list'] = () => [summaries[2]];
+
+    await store.deleteRuns(key(), ['r1', 'r2']);
+
+    expect(dialogs.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('Delete 2 runs'),
+      expect.objectContaining({ title: 'Delete runs?' }),
+    );
+    expect(send).toHaveBeenCalledWith('run.delete', { runIds: ['r1', 'r2'] });
+    expect(store.draft()?.run?.runId).toBe('r3');
+    expect(store.draft()?.history.map((summary) => summary.runId)).toEqual(['r3']);
   });
 
   it('keeps the run when its deletion is not confirmed', async () => {
     dialogs.confirm = vi.fn().mockResolvedValue(false);
     await store.open('a.run.yaml');
 
-    await store.deleteRun(key(), 'r1');
+    await store.deleteRuns(key(), ['r1']);
 
     expect(send).not.toHaveBeenCalledWith('run.delete', expect.anything());
   });
@@ -295,7 +316,7 @@ describe('RunStore', () => {
       drafts.map((d) => ({ ...d, run: result({ state: 'running' }) })),
     );
 
-    await store.deleteRun(key(), 'r1');
+    await store.deleteRuns(key(), ['r1']);
     await store.clearHistory(key());
 
     expect(dialogs.confirm).not.toHaveBeenCalled();
