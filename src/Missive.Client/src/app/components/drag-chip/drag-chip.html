@@ -1,0 +1,23 @@
+<div
+  class="flex flex-col gap-0.5 rounded-md border bg-white px-2 py-1 text-sm text-slate-800 shadow-lg transition-colors"
+  [class.border-sky-400]="moves()"
+  [class.border-slate-300]="!moves()"
+>
+  <div class="flex items-center gap-1.5"><ng-content /></div>
+  <div
+    class="flex items-center gap-1 text-[11px]"
+    [class.text-sky-700]="moves()"
+    [class.text-slate-500]="!moves()"
+    data-testid="drag-hint"
+  >
+    @if (moves()) {
+      <fa-icon class="text-[10px]" [icon]="faArrowRight" />
+      <span class="truncate"
+        >Move to <span class="font-semibold">{{ hint() }}</span></span
+      >
+    } @else {
+      <fa-icon class="text-[10px]" [icon]="faBan" />
+      <span class="truncate">{{ hint() }}</span>
+    }
+  </div>
+</div>

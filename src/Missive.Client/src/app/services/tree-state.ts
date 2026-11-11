@@ -7,6 +7,17 @@ export interface TreeItem {
   kind: string;
 }
 
+/**
+ * What dropping the dragged node now would do: move it into `folder`, or nothing — because the
+ * pointer is not over the tree (`outside`), the node is already there (`same`), or the folder is
+ * the node itself or inside it (`inside`).
+ */
+export type DropHint =
+  { kind: 'move'; folder: string } | { kind: 'none'; reason: 'outside' | 'same' | 'inside' };
+
+/** How long the pointer has to rest on a collapsed folder during a drag for it to open. */
+export const HOVER_EXPAND_DELAY_MS = 700;
+
 /** A folder name being typed in the tree: a new folder inside `parent`, or a rename of `path`. */
 export type Editing = { kind: 'create'; parent: string } | { kind: 'rename'; path: string };
 
@@ -44,14 +55,33 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
     const target = this.hovered();
     return node && target !== null && canMove(node, target) ? target : null;
   });
+  /** What dropping now would do, for the drag preview; `null` when nothing is being dragged. */
+  readonly dropHint = computed<DropHint | null>(() => {
+    const node = this.dragged();
+    if (!node) return null;
+    const target = this.hovered();
+    if (target === null) return { kind: 'none', reason: 'outside' };
+    if (canMove(node, target)) return { kind: 'move', folder: target };
+    return { kind: 'none', reason: target === parentPath(node.path) ? 'same' : 'inside' };
+  });
+  /** Whether the dragged node can move to the workspace root (it is not already there). */
+  readonly canDropAtRoot = computed(() => {
+    const node = this.dragged();
+    return node !== null && canMove(node, '');
+  });
 
   /** Drop list elements of the tree, with a getter for the folder each one stands for. */
   private readonly dropLists = new Map<Element, () => string>();
   private pointer = { x: 0, y: 0 };
   private readonly trackPointer = (event: PointerEvent) => {
     this.pointer = { x: event.clientX, y: event.clientY };
-    this.hovered.set(this.folderAt(event.clientX, event.clientY));
+    const folder = this.folderAt(event.clientX, event.clientY);
+    this.hovered.set(folder);
+    this.scheduleExpand(folder);
   };
+  /** The collapsed folder that opens if the pointer stays on it, and its timer. */
+  private expandCandidate: string | null = null;
+  private expandTimer: ReturnType<typeof setTimeout> | undefined;
 
   isExpanded(node: TreeItem): boolean {
     return !this.collapsed().has(node.path);
@@ -130,12 +160,30 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
   /** Ends a drag; moves the node into the folder under the pointer, if that is a valid move. */
   async endDrag(): Promise<void> {
     window.removeEventListener('pointermove', this.trackPointer, { capture: true });
+    this.scheduleExpand(null);
     const node = this.dragged();
     const target = this.dropTarget();
     this.dragged.set(null);
     this.hovered.set(null);
     if (!node || target === null) return;
     if (await this.move(node, target)) this.expand(target);
+  }
+
+  /**
+   * Opens a collapsed folder the pointer rests on during a drag, so entries can be dropped into
+   * its sub-folders without first leaving the drag to expand it.
+   */
+  private scheduleExpand(folder: string | null): void {
+    if (folder === this.expandCandidate) return;
+    clearTimeout(this.expandTimer);
+    this.expandTimer = undefined;
+    this.expandCandidate = folder;
+    const node = this.dragged();
+    if (!folder || !node || !this.collapsed().has(folder) || !canMove(node, folder)) return;
+    this.expandTimer = setTimeout(() => {
+      this.expandTimer = undefined;
+      if (this.dragged() && this.hovered() === folder) this.expand(folder);
+    }, HOVER_EXPAND_DELAY_MS);
   }
 
   private folderAt(x: number, y: number): string | null {
@@ -172,6 +220,11 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
 export function canMove(node: TreeItem, folder: string): boolean {
   if (folder === parentPath(node.path)) return false;
   return node.kind !== 'folder' || !(folder === node.path || folder.startsWith(`${node.path}/`));
+}
+
+/** The display name of a folder: its last path segment. */
+export function folderName(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
 }
 
 /** The folder a path is in; `''` for the workspace root. */

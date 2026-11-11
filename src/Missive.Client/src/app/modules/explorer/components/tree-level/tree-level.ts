@@ -17,8 +17,10 @@ import {
 import { InterchangeStore } from '../../../../services/interchange-store';
 import { METHOD_COLORS, WorkspaceNode } from '../../../../models/workspace';
 import { ExplorerState } from '../../services/explorer-state';
+import { DragChip } from '../../../../components/drag-chip/drag-chip';
 import { FolderDrop } from '../../../../components/folder-drop/folder-drop';
 import { NameInput } from '../../../../components/name-input/name-input';
+import { RootDropZone } from '../../../../components/root-drop-zone/root-drop-zone';
 
 /**
  * One level of the explorer tree: the entries of a folder. Folders render their own level
@@ -33,9 +35,11 @@ import { NameInput } from '../../../../components/name-input/name-input';
     CdkDrag,
     CdkDragPlaceholder,
     CdkDragPreview,
+    DragChip,
     FaIconComponent,
     FolderDrop,
     NameInput,
+    RootDropZone,
     TreeLevel,
   ],
   templateUrl: './tree-level.html',
@@ -72,6 +76,10 @@ export class TreeLevel {
 
   protected methodColor(node: WorkspaceNode): string {
     return METHOD_COLORS[node.method ?? 'GET'];
+  }
+
+  protected isDropTarget(node: { path: string }): boolean {
+    return this.state.dropTarget() === node.path;
   }
 
   protected dragStarted(node: WorkspaceNode, event: CdkDragStart<WorkspaceNode>): void {
