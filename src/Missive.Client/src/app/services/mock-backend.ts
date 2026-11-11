@@ -306,6 +306,8 @@ export class MockBackend {
     if (request.type === 'update.restart') {
       return fail(ERROR_CODES.updateFailed, 'The browser preview cannot update itself.');
     }
+    // The browser preview's tab is the browser's to close.
+    if (request.type === 'app.quit') return ok(null);
     if (request.type === 'workspace.pick' || request.type === 'workspace.open') {
       this.open = true;
       return ok(this.workspace());

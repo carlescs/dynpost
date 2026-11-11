@@ -25,6 +25,7 @@ import { Sidebar } from './components/sidebar/sidebar';
 import { ThemeStore } from './services/theme-store';
 import { UpdateStore } from './services/update-store';
 import { InterchangeStore } from './services/interchange-store';
+import { Shortcuts } from './services/shortcuts';
 import { WorkspaceStore } from './services/workspace-store';
 
 @Component({
@@ -57,6 +58,7 @@ export class App implements OnInit {
   protected readonly interchange = inject(InterchangeStore);
   private readonly updates = inject(UpdateStore);
   private readonly theme = inject(ThemeStore);
+  private readonly shortcuts = inject(Shortcuts);
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faPlus = faPlus;
   protected readonly faFolderOpen = faFolderOpen;
@@ -71,23 +73,6 @@ export class App implements OnInit {
   }
 
   protected onKeydown(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      const draft = this.environments.draft();
-      const plan = this.runs.draft();
-      const editing = !this.git.conflict() && !this.git.diff();
-      if (draft && editing) void this.environments.save(draft.key);
-      else if (plan && editing) void this.runs.save(plan.key);
-      else void this.store.saveActive();
-    } else if (
-      (event.ctrlKey || event.metaKey) &&
-      !event.altKey &&
-      event.key === 'Enter' &&
-      !this.environments.draft() &&
-      !this.runs.draft()
-    ) {
-      event.preventDefault();
-      void this.store.sendActive();
-    }
+    this.shortcuts.handle(event);
   }
 }

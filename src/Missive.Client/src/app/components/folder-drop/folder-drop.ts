@@ -5,18 +5,19 @@ import { TreeItem, TreeState } from '../../services/tree-state';
 /**
  * Makes an element the drop area of a folder (`''` for the workspace root) in a folder tree: a CDK
  * drop list, connected to the others through the tree's `cdkDropListGroup`, that only accepts
- * items when the pointer is over it rather than over a folder nested inside it. The tree provides
- * its `TreeState`.
+ * items when the pointer is over it rather than over a folder nested inside it. The folder the
+ * dragged entry would move into is outlined. The tree provides its `TreeState`.
  */
 @Directive({
   selector: '[appFolderDrop]',
   hostDirectives: [{ directive: CdkDropList, inputs: ['cdkDropListData: appFolderDrop'] }],
   host: {
+    class: 'rounded-sm transition-colors',
     '[class.bg-sky-100]': 'isTarget()',
-    '[class.outline]': 'isTarget()',
-    '[class.outline-1]': 'isTarget()',
-    '[class.-outline-offset-1]': 'isTarget()',
-    '[class.outline-sky-400]': 'isTarget()',
+    '[class.outline-2]': 'isTarget()',
+    '[class.outline-dashed]': 'isTarget()',
+    '[class.-outline-offset-2]': 'isTarget()',
+    '[class.outline-sky-500]': 'isTarget()',
   },
 })
 export class FolderDrop {
@@ -24,9 +25,13 @@ export class FolderDrop {
   private readonly list = inject<CdkDropList<string>>(CdkDropList);
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
+  /**
+   * Whether this folder is the drop target now. The root's area is the whole tree, so it is not
+   * highlighted itself: the tree's `RootDropZone` lights up instead.
+   */
   protected readonly isTarget = computed(() => {
     const target = this.state.dropTarget();
-    return target !== null && target === this.list.data;
+    return target !== null && target !== '' && target === this.list.data;
   });
 
   constructor() {

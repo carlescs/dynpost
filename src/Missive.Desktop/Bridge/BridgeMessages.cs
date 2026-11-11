@@ -372,6 +372,9 @@ internal static class BridgeMessageTypes
     /// <summary>Installs the downloaded update and restarts the app. Payload: none. Result: none (the app exits).</summary>
     public const string UpdateRestart = "update.restart";
 
+    /// <summary>Closes the app window, which ends the app. Payload: none. Result: none.</summary>
+    public const string AppQuit = "app.quit";
+
     /// <summary>Reads the user settings. Payload: none. Result: settings.</summary>
     public const string SettingsGet = "settings.get";
 

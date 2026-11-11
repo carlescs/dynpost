@@ -262,8 +262,11 @@ doesn't know are not preserved when a request is saved with changes.
 
 Folders are collections and can be nested. From the explorer you can create,
 rename (F2) and delete them. Drag a request or a folder onto another folder
-(or onto empty space in the explorer for the workspace root) to move it there;
-moved files keep their names, and nothing is moved if the destination already
+(or onto the "Drop here to move to the workspace root" zone that appears at the
+bottom of the explorer, or its empty space) to move it there. While dragging, the
+destination folder is outlined and marked "Move here", the dragged chip says where
+the entry would go (or why it can't), and a collapsed folder opens when you hold
+the entry over it for a moment; moved files keep their names, and nothing is moved if the destination already
 has an entry with that name. Open requests follow renamed and moved folders. Folder
 names are kept as typed, but must work on Windows, macOS and Linux (no
 `/ \ < > : " | ? *`, no leading dot or trailing dot, no reserved names such as
@@ -361,6 +364,27 @@ forgets them.
 In the request editor, `{{variable}}` references are highlighted in the URL and
 body: in violet when the selected environment defines them, in red when it
 doesn't. Hover over one to see its value (secret values are not shown).
+
+## Keyboard shortcuts
+
+On macOS, use Cmd wherever Ctrl is listed. **F1**, or *Keyboard shortcuts* in
+the settings menu, lists them in the app.
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl+Enter | Send the request |
+| Ctrl+S | Save the active request, environment or run plan |
+| Ctrl+N | New request |
+| Ctrl+O | Open a workspace folder |
+| Ctrl+W, Ctrl+F4 | Close the open conflict, commit or diff, or else the active tab (asking first if it has unsaved changes) |
+| Ctrl+Tab, Ctrl+PageDown | Next tab |
+| Ctrl+Shift+Tab, Ctrl+PageUp | Previous tab |
+| Ctrl+B | Show or hide the sidebar |
+| Ctrl+1 … Ctrl+4 | Explorer, Environments, Load runs, Source control |
+| F1 | Keyboard shortcuts |
+| Ctrl+Q | Quit Missive (asking first if tabs have unsaved changes or load runs are running; desktop app only) |
+
+Shortcuts don't apply while a dialog is open.
 
 ## Sending requests
 
@@ -575,7 +599,8 @@ the folders that hold plans, plus folders without any requests (such as one just
 for plans; folders with only requests stay in the explorer). Its header makes a new plan or
 folder at the top; hover a folder to make a plan or a sub-folder in it, rename it (F2) or delete
 it (Delete), and right-click it to duplicate it as "… copy". Drag a plan or a folder onto
-another folder, or onto empty space for the top level, to move it. A plan keeps its earlier
+another folder, or onto the drop zone at the bottom (or empty space) for the top level, to move
+it; the drag shows the destination as in the explorer. A plan keeps its earlier
 runs when it or its folder is renamed or moved; deleting a folder deletes its plans and their
 runs, after asking. Folder actions here never touch requests: a folder that also holds requests
 is refused (organize it in the explorer instead), and so is a folder with a running plan.

@@ -44,7 +44,7 @@ public sealed class WorkspaceBridgeTests : IDisposable
             .AddTransient<ShowWorkspaceFolder>()
             .BuildServiceProvider();
         _services.GetRequiredService<CurrentWorkspace>().Open(Root);
-        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>());
+        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
     }
 
     public void Dispose() => _services.Dispose();

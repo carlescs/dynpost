@@ -157,6 +157,15 @@
         <button
           type="button"
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="showShortcuts()"
+        >
+          <fa-icon class="w-4 text-slate-500" [icon]="faKeyboard" />
+          <span class="flex-1">Keyboard shortcuts</span>
+          <kbd class="text-xs text-slate-400">F1</kbd>
+        </button>
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
           (click)="showAbout()"
         >
           <fa-icon class="w-4 text-slate-500" [icon]="faCircleInfo" />

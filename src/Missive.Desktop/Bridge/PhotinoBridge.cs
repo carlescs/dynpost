@@ -4,7 +4,7 @@ using Photino.NET;
 namespace Missive.Desktop.Bridge;
 
 /// <summary>Connects a <see cref="BridgeRouter"/> to a Photino window's message channel.</summary>
-internal sealed class PhotinoBridge(PhotinoWindow window) : IFileDialogs
+internal sealed class PhotinoBridge(PhotinoWindow window) : IFileDialogs, IAppWindow
 {
     public void Attach(BridgeRouter router)
     {
@@ -28,6 +28,9 @@ internal sealed class PhotinoBridge(PhotinoWindow window) : IFileDialogs
             });
         });
     }
+
+    // Messages are handled off the UI thread (see Attach); the window must be closed on it.
+    public void Close() => window.Invoke(window.Close);
 
     public async Task<string?> PickFolderAsync(string title)
     {

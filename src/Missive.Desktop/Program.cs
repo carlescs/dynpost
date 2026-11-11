@@ -76,7 +76,7 @@ internal static class Program
         }
 
         var bridge = new PhotinoBridge(window);
-        bridge.Attach(BridgeHandlers.Create(services, bridge));
+        bridge.Attach(BridgeHandlers.Create(services, bridge, bridge));
 
         window.Load(BundledAssets.StartUri).WaitForClose();
     }

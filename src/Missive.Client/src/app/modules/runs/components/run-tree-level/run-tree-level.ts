@@ -13,8 +13,10 @@ import {
   faPlus,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
+import { DragChip } from '../../../../components/drag-chip/drag-chip';
 import { FolderDrop } from '../../../../components/folder-drop/folder-drop';
 import { NameInput } from '../../../../components/name-input/name-input';
+import { RootDropZone } from '../../../../components/root-drop-zone/root-drop-zone';
 import { SharingToggle } from '../../../../components/sharing-toggle/sharing-toggle';
 import { RunTreeNode } from '../../models/run-tree';
 import { RunTreeState } from '../../services/run-tree-state';
@@ -31,9 +33,11 @@ import { RunTreeState } from '../../services/run-tree-state';
     CdkDrag,
     CdkDragPlaceholder,
     CdkDragPreview,
+    DragChip,
     FaIconComponent,
     FolderDrop,
     NameInput,
+    RootDropZone,
     SharingToggle,
     RunTreeLevel,
   ],
@@ -65,6 +69,10 @@ export class RunTreeLevel {
 
   protected chevron(node: RunTreeNode) {
     return this.state.isExpanded(node) ? faChevronDown : faChevronRight;
+  }
+
+  protected isDropTarget(node: { path: string }): boolean {
+    return this.state.dropTarget() === node.path;
   }
 
   protected dragStarted(node: RunTreeNode, event: CdkDragStart<RunTreeNode>): void {

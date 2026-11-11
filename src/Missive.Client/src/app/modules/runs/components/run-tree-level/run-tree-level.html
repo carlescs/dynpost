@@ -24,15 +24,13 @@
     <div *cdkDragPlaceholder class="h-0"></div>
     <!-- The CDK resets the preview root's box styles, so the chip is an inner element. -->
     <div *cdkDragPreview>
-      <div
-        class="flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 shadow-md"
-      >
+      <app-drag-chip rootLabel="top level">
         <fa-icon
           [class]="node.kind === 'folder' ? 'text-amber-500' : 'text-sky-600'"
           [icon]="node.kind === 'folder' ? faFolder : faGaugeHigh"
         />
         {{ node.name }}
-      </div>
+      </app-drag-chip>
     </div>
 
     @if (node.kind === 'folder') {
@@ -50,7 +48,7 @@
             />
           </div>
         } @else {
-          <div class="group flex items-center hover:bg-slate-200">
+          <div class="group flex items-center" [class.hover:bg-slate-200]="!state.dragged()">
             <button
               type="button"
               class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 pr-2 text-left"
@@ -62,48 +60,57 @@
               <fa-icon class="w-3 text-[10px] text-slate-400" [icon]="chevron(node)" />
               <fa-icon
                 class="text-amber-500"
-                [icon]="state.isExpanded(node) ? faFolderOpen : faFolder"
+                [icon]="state.isExpanded(node) || isDropTarget(node) ? faFolderOpen : faFolder"
               />
               <span class="truncate">{{ node.name }}</span>
+              @if (isDropTarget(node)) {
+                <span
+                  class="ml-auto shrink-0 rounded bg-sky-600 px-1.5 text-[10px] leading-4 font-semibold text-white"
+                  >Move here</span
+                >
+              }
             </button>
-            <div class="mr-1 hidden shrink-0 gap-0.5 group-focus-within:flex group-hover:flex">
-              <button
-                type="button"
-                [class]="rowButton"
-                [title]="'New run plan in ' + node.name"
-                [attr.aria-label]="'New run plan in ' + node.name"
-                (click)="state.newPlan(node.path)"
-              >
-                <fa-icon [icon]="faPlus" />
-              </button>
-              <button
-                type="button"
-                [class]="rowButton"
-                [title]="'New folder in ' + node.name"
-                [attr.aria-label]="'New folder in ' + node.name"
-                (click)="state.startCreate(node.path)"
-              >
-                <fa-icon [icon]="faFolderPlus" />
-              </button>
-              <button
-                type="button"
-                [class]="rowButton"
-                [title]="'Rename ' + node.name + ' (F2)'"
-                [attr.aria-label]="'Rename ' + node.name"
-                (click)="state.startRename(node)"
-              >
-                <fa-icon [icon]="faPen" />
-              </button>
-              <button
-                type="button"
-                [class]="rowButton + ' hover:text-rose-700'"
-                [title]="'Delete ' + node.name + ' (Delete)'"
-                [attr.aria-label]="'Delete ' + node.name"
-                (click)="state.store.deleteFolder(node.path)"
-              >
-                <fa-icon [icon]="faTrash" />
-              </button>
-            </div>
+            <!-- Hidden while dragging so the rows under the pointer stay readable. -->
+            @if (!state.dragged()) {
+              <div class="mr-1 hidden shrink-0 gap-0.5 group-focus-within:flex group-hover:flex">
+                <button
+                  type="button"
+                  [class]="rowButton"
+                  [title]="'New run plan in ' + node.name"
+                  [attr.aria-label]="'New run plan in ' + node.name"
+                  (click)="state.newPlan(node.path)"
+                >
+                  <fa-icon [icon]="faPlus" />
+                </button>
+                <button
+                  type="button"
+                  [class]="rowButton"
+                  [title]="'New folder in ' + node.name"
+                  [attr.aria-label]="'New folder in ' + node.name"
+                  (click)="state.startCreate(node.path)"
+                >
+                  <fa-icon [icon]="faFolderPlus" />
+                </button>
+                <button
+                  type="button"
+                  [class]="rowButton"
+                  [title]="'Rename ' + node.name + ' (F2)'"
+                  [attr.aria-label]="'Rename ' + node.name"
+                  (click)="state.startRename(node)"
+                >
+                  <fa-icon [icon]="faPen" />
+                </button>
+                <button
+                  type="button"
+                  [class]="rowButton + ' hover:text-rose-700'"
+                  [title]="'Delete ' + node.name + ' (Delete)'"
+                  [attr.aria-label]="'Delete ' + node.name"
+                  (click)="state.store.deleteFolder(node.path)"
+                >
+                  <fa-icon [icon]="faTrash" />
+                </button>
+              </div>
+            }
           </div>
         }
         @if (state.isExpanded(node)) {
@@ -118,7 +125,8 @@
       </div>
     } @else {
       <div
-        class="group flex items-center gap-1 pr-2 hover:bg-slate-200"
+        class="group flex items-center gap-1 pr-2"
+        [class.hover:bg-slate-200]="!state.dragged()"
         [class.bg-sky-100]="state.store.draft()?.path === node.path"
         (contextmenu)="state.openMenu(node, $event)"
       >
@@ -161,4 +169,7 @@
   <li class="py-0.5 pr-2 text-xs text-slate-400 italic" [style.padding-left.px]="indent() + 18">
     Empty folder
   </li>
+}
+@if (!parent() && state.canDropAtRoot()) {
+  <li app-root-drop-zone label="top level"></li>
 }
