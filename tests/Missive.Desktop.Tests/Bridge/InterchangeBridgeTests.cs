@@ -56,7 +56,7 @@ public sealed class InterchangeBridgeTests : IDisposable
             .AddTransient<ExportWorkspace>()
             .AddTransient<ImportCollection>()
             .BuildServiceProvider();
-        _router = BridgeHandlers.Create(_services, _dialogs);
+        _router = BridgeHandlers.Create(_services, _dialogs, Substitute.For<IAppWindow>());
     }
 
     public void Dispose() => _services.Dispose();

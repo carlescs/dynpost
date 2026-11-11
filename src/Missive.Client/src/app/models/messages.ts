@@ -910,6 +910,8 @@ export interface BridgeMessages {
   'update.check': { payload: void; result: UpdateStatus };
   /** Installs the downloaded update and restarts the app; on success no response arrives. */
   'update.restart': { payload: void; result: null };
+  /** Closes the app window, which ends the app; the response may not arrive before it closes. */
+  'app.quit': { payload: void; result: null };
 }
 
 export type BridgeMessageType = keyof BridgeMessages;

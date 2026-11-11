@@ -5,6 +5,7 @@ import {
   faCircleArrowUp,
   faCircleInfo,
   faGear,
+  faKeyboard,
   faMoon,
   faFolderOpen,
   faLayerGroup,
@@ -12,6 +13,7 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { AboutDialog } from '../about-dialog/about-dialog';
+import { ShortcutsDialog } from '../shortcuts-dialog/shortcuts-dialog';
 import { Dialogs } from '../../services/dialogs';
 import { EnvironmentStore } from '../../services/environment-store';
 import { ThemeStore } from '../../services/theme-store';
@@ -50,6 +52,7 @@ export class AppHeader {
   protected readonly faGear = faGear;
   protected readonly faCircleInfo = faCircleInfo;
   protected readonly faMoon = faMoon;
+  protected readonly faKeyboard = faKeyboard;
   protected readonly faCircleArrowUp = faCircleArrowUp;
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faLayerGroup = faLayerGroup;
@@ -91,6 +94,11 @@ export class AppHeader {
   protected showAbout(): void {
     this.menuOpen.set(false);
     this.dialogs.open(AboutDialog, { ariaLabelledBy: 'about-title' });
+  }
+
+  protected showShortcuts(): void {
+    this.menuOpen.set(false);
+    this.dialogs.open(ShortcutsDialog, { ariaLabelledBy: 'shortcuts-title' });
   }
 
   protected onEscape(): void {

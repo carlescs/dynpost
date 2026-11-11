@@ -20,7 +20,7 @@ public sealed class AboutBridgeTests
             .AddSingleton(info)
             .AddTransient<GetAboutInfo>()
             .BuildServiceProvider();
-        var router = BridgeHandlers.Create(services, Substitute.For<IFileDialogs>());
+        var router = BridgeHandlers.Create(services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
 
         var json = await router.HandleAsync(JsonSerializer.Serialize(new { id = "1", type = "about.get" }));
         var response = JsonDocument.Parse(json!).RootElement;
