@@ -386,6 +386,11 @@ the settings menu, lists them in the app.
 
 Shortcuts don't apply while a dialog is open.
 
+The views in the activity bar (the icons on the left) can be put in any order:
+drag an icon to its new place, or focus it and press Alt+Up or Alt+Down. The
+order is remembered in your user settings. Ctrl+1 … Ctrl+4 keep opening the
+same views whatever their order.
+
 ## Sending requests
 
 **Send** (or Ctrl+Enter) sends the request as it is in the editor, saved or

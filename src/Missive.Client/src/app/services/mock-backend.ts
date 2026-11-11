@@ -132,6 +132,7 @@ export class MockBackend {
   private readonly localOnly = new Set<string>();
   private open = false;
   private theme: Theme = 'light';
+  private activityOrder: string[] = [];
   private historySettings: HistorySettingsDto = {
     enabled: true,
     maxEntries: 20,
@@ -277,7 +278,11 @@ export class MockBackend {
       if (index >= 0) this.recentWorkspaces.splice(index, 1);
       return ok(null);
     }
-    const settings = () => ({ theme: this.theme, history: { ...this.historySettings } });
+    const settings = () => ({
+      theme: this.theme,
+      history: { ...this.historySettings },
+      activityOrder: [...this.activityOrder],
+    });
     if (request.type === 'settings.get') return ok(settings());
     if (request.type === 'settings.setTheme') {
       this.theme = payload?.['theme'] as Theme;
@@ -292,6 +297,17 @@ export class MockBackend {
         return fail('settings.invalid_history', 'The body size limit must be between 0 and 50 MB.');
       }
       this.historySettings = { ...history };
+      return ok(settings());
+    }
+    if (request.type === 'settings.setActivityOrder') {
+      const order = (payload?.['order'] as string[] | undefined) ?? [];
+      if (new Set(order).size !== order.length || order.some((id) => !id.trim())) {
+        return fail(
+          'settings.invalid_activity_order',
+          'The activity order must list distinct, non-empty view ids.',
+        );
+      }
+      this.activityOrder = [...order];
       return ok(settings());
     }
     if (request.type === 'about.get') {

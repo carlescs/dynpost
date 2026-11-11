@@ -165,7 +165,8 @@ public class ResponseHistoryTests
 
         var result = await new SetHistorySettings(_settings).ExecuteAsync(new HistorySettingsDto(false, 50, 2048));
 
-        Assert.Equal(new AppSettingsDto("dark", new HistorySettingsDto(false, 50, 2048)), result.Value);
+        Assert.Equal("dark", result.Value!.Theme);
+        Assert.Equal(new HistorySettingsDto(false, 50, 2048), result.Value.History);
     }
 
     [Fact]

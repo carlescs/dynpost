@@ -276,6 +276,8 @@ internal static class BridgeHandlers
                 (p, ct) => Use<SetTheme>().ExecuteAsync(p.Theme, ct))
             .Register<HistorySettingsDto, AppSettingsDto>(BridgeMessageTypes.SettingsSetHistory,
                 (p, ct) => Use<SetHistorySettings>().ExecuteAsync(p, ct))
+            .Register<SetActivityOrderPayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetActivityOrder,
+                (p, ct) => Use<SetActivityOrder>().ExecuteAsync(p.Order, ct))
             .Register(BridgeMessageTypes.AboutGet,
                 _ => Task.FromResult(Result<AboutDto>.Success(Use<GetAboutInfo>().Execute())))
             .Register(BridgeMessageTypes.UpdateCheck,

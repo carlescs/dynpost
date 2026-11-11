@@ -120,6 +120,7 @@ internal static class Program
             .AddTransient<GetAppSettings>()
             .AddTransient<SetTheme>()
             .AddTransient<SetHistorySettings>()
+            .AddTransient<SetActivityOrder>()
             .AddTransient<ListResponseHistory>()
             .AddTransient<GetResponseHistoryEntry>()
             .AddTransient<DeleteResponseHistory>()

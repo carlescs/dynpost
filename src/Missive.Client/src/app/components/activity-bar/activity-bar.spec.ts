@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { Bridge } from '../../services/bridge';
 import { WorkspaceStore } from '../../services/workspace-store';
-import { ActivityBar } from './activity-bar';
+import { ActivityBar, orderActivities } from './activity-bar';
 
 @Component({ template: '' })
 class Panel {}
@@ -11,8 +11,10 @@ class Panel {}
 describe('ActivityBar', () => {
   let router: Router;
   let store: WorkspaceStore;
+  let send: (...args: unknown[]) => Promise<unknown>;
 
   beforeEach(async () => {
+    send = vi.fn(() => new Promise<unknown>(() => {}));
     TestBed.configureTestingModule({
       providers: [
         provideRouter(
@@ -20,7 +22,7 @@ describe('ActivityBar', () => {
         ),
         {
           provide: Bridge,
-          useValue: { isDesktop: true, send: vi.fn(() => new Promise(() => {})) },
+          useValue: { isDesktop: true, send: (...args: unknown[]) => send(...args) },
         },
       ],
     });
@@ -40,7 +42,11 @@ describe('ActivityBar', () => {
       button(label).click();
       await fixture.whenStable();
     };
-    return { button, click };
+    const labels = () =>
+      [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].map((b) =>
+        b.getAttribute('aria-label'),
+      );
+    return { fixture, button, click, labels };
   }
 
   it('marks the routed activity as active', async () => {
@@ -67,5 +73,48 @@ describe('ActivityBar', () => {
     expect(button('Explorer').getAttribute('aria-pressed')).toBe('false');
     await click('Explorer');
     expect(store.sidebarOpen()).toBe(true);
+  });
+
+  it('shows the activities in the saved order', async () => {
+    send = vi.fn().mockResolvedValue({ activityOrder: ['git', 'removed', 'runs'] });
+    const { fixture, labels } = await render();
+    await fixture.whenStable();
+    expect(labels()).toEqual(['Source control', 'Load runs', 'Explorer', 'Environments']);
+  });
+
+  it('moves the focused activity with Alt+arrows and saves the order', async () => {
+    send = vi.fn().mockResolvedValue({ activityOrder: [] });
+    const { fixture, button, labels } = await render();
+    const key = async (label: string, key: string) => {
+      button(label).dispatchEvent(
+        new KeyboardEvent('keydown', { key, altKey: true, bubbles: true, cancelable: true }),
+      );
+      await fixture.whenStable();
+    };
+
+    await key('Load runs', 'ArrowUp');
+    expect(labels()).toEqual(['Explorer', 'Load runs', 'Environments', 'Source control']);
+    await key('Explorer', 'ArrowUp');
+    expect(labels()).toEqual(['Explorer', 'Load runs', 'Environments', 'Source control']);
+    await key('Explorer', 'ArrowDown');
+    expect(labels()).toEqual(['Load runs', 'Explorer', 'Environments', 'Source control']);
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenLastCalledWith('settings.setActivityOrder', {
+        order: ['runs', 'explorer', 'environments', 'git'],
+      }),
+    );
+    expect(router.url).toBe('/explorer');
+  });
+});
+
+describe('orderActivities', () => {
+  it('drops unknown and repeated ids and appends the missing activities', () => {
+    expect(orderActivities(['runs', 'nope', 'runs', 'git'])).toEqual([
+      'runs',
+      'git',
+      'explorer',
+      'environments',
+    ]);
+    expect(orderActivities([])).toEqual(['explorer', 'environments', 'runs', 'git']);
   });
 });
