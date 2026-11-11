@@ -8,6 +8,7 @@ import {
   faFolderTree,
   faGaugeHigh,
   faLayerGroup,
+  faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons';
 import { Bridge } from '../../services/bridge';
 import { GitStore } from '../../services/git-store';
@@ -30,6 +31,7 @@ const ACTIVITIES: readonly ActivityItem[] = [
   { view: 'runs', label: 'Load runs', icon: faGaugeHigh },
   { view: 'git', label: 'Source control', icon: faCodeBranch },
 ];
+const DEFAULT_ORDER: readonly Activity[] = ACTIVITIES.map((item) => item.view);
 
 /**
  * Puts the activities in a saved order: ids that are no longer activities are ignored, and
@@ -66,10 +68,15 @@ export class ActivityBar {
   );
 
   /** The order the user arranged the activities in, remembered in the user's settings. */
-  private readonly order = signal<Activity[]>(ACTIVITIES.map((item) => item.view));
+  private readonly order = signal<Activity[]>([...DEFAULT_ORDER]);
   protected readonly items = computed(() =>
     this.order().map((view) => ACTIVITIES.find((item) => item.view === view)!),
   );
+  /** Whether the user moved the activities away from their default order. */
+  protected readonly reordered = computed(() =>
+    this.order().some((view, i) => view !== DEFAULT_ORDER[i]),
+  );
+  protected readonly faRotateLeft = faRotateLeft;
   /** The dragged copy is outside the bar, so it carries the bar's colors itself. */
   protected readonly previewClasses = ['always-dark', 'bg-slate-700', 'text-white', 'shadow-lg'];
   /** Bumped by each reorder, so a slow settings load doesn't undo it. */
@@ -123,11 +130,23 @@ export class ActivityBar {
     );
   }
 
+  /** Puts the activities back in their default order. */
+  protected resetOrder(): void {
+    if (!this.reordered()) return;
+    this.order.set([...DEFAULT_ORDER]);
+    // An empty order is the default one, so views added later keep their default place.
+    this.save([]);
+  }
+
   private move(from: number, to: number): void {
     if (from === to) return;
     const order = [...this.order()];
     moveItemInArray(order, from, to);
     this.order.set(order);
+    this.save(order);
+  }
+
+  private save(order: Activity[]): void {
     this.reorders++;
     this.saveQueue = this.saveQueue
       .then(() => this.bridge.send('settings.setActivityOrder', { order }))

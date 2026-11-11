@@ -34,3 +34,13 @@
     </button>
   }
 </div>
+<button
+  type="button"
+  class="mt-auto flex size-8 items-center justify-center rounded-md text-xs text-slate-500 hover:text-white disabled:pointer-events-none disabled:opacity-40"
+  aria-label="Reset the order of the views"
+  title="Reset the order of the views"
+  [disabled]="!reordered()"
+  (click)="resetOrder()"
+>
+  <fa-icon [icon]="faRotateLeft" />
+</button>

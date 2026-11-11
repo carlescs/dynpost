@@ -43,8 +43,8 @@ describe('ActivityBar', () => {
       await fixture.whenStable();
     };
     const labels = () =>
-      [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].map((b) =>
-        b.getAttribute('aria-label'),
+      [...(fixture.nativeElement as HTMLElement).querySelectorAll('button[data-activity]')].map(
+        (b) => b.getAttribute('aria-label'),
       );
     return { fixture, button, click, labels };
   }
@@ -104,6 +104,34 @@ describe('ActivityBar', () => {
       }),
     );
     expect(router.url).toBe('/explorer');
+  });
+});
+
+describe('ActivityBar reset', () => {
+  it('restores the default order and saves an empty order', async () => {
+    const send = vi.fn().mockResolvedValue({ activityOrder: ['git', 'runs'] });
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), { provide: Bridge, useValue: { isDesktop: true, send } }],
+    });
+    const fixture = TestBed.createComponent(ActivityBar);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    const reset = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Reset the order of the views"]',
+    )!;
+    const labels = () =>
+      [...host.querySelectorAll('button[data-activity]')].map((b) => b.getAttribute('aria-label'));
+    expect(labels()[0]).toBe('Source control');
+    expect(reset.disabled).toBe(false);
+
+    reset.click();
+    await fixture.whenStable();
+
+    expect(labels()).toEqual(['Explorer', 'Environments', 'Load runs', 'Source control']);
+    expect(reset.disabled).toBe(true);
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenLastCalledWith('settings.setActivityOrder', { order: [] }),
+    );
   });
 });
 
