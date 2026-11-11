@@ -4,10 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
+using Missive.Application.History;
 using Missive.Application.Http;
 using Missive.Application.Interchange;
 using Missive.Application.OAuth2;
 using Missive.Application.Requests;
+using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Http;
@@ -51,6 +53,9 @@ public sealed class SendBridgeTests : IDisposable
             .AddSingleton(Substitute.For<IOAuth2TokenStore>())
             .AddSingleton(Substitute.For<IAuthorizationBrowser>())
             .AddSingleton<OAuth2Tokens>()
+            .AddSingleton(Substitute.For<IHistoryStore>())
+            .AddSingleton(Substitute.For<IAppSettingsStore>())
+            .AddSingleton<ResponseHistory>()
             .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
             .AddTransient<InspectRequestFiles>()

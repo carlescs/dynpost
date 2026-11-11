@@ -1,0 +1,130 @@
+<aside class="flex w-64 shrink-0 flex-col border-r border-slate-200" aria-label="Kept responses">
+  <div class="flex h-8 shrink-0 items-center gap-2 px-3 text-xs text-slate-500">
+    <span class="flex-1">
+      {{ entries().length }} {{ entries().length === 1 ? 'response' : 'responses' }}
+    </span>
+    @if (entries().length) {
+      <button type="button" class="hover:text-rose-600" (click)="clear()">Clear</button>
+    }
+  </div>
+  <ul class="min-h-0 flex-1 overflow-auto text-xs">
+    @for (entry of entries(); track entry.id) {
+      <li
+        class="group flex items-center border-t border-slate-200 hover:bg-slate-100"
+        [class.bg-sky-50]="selected()?.entry?.id === entry.id"
+      >
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-1.5 text-left"
+          [attr.aria-current]="selected()?.entry?.id === entry.id ? 'true' : null"
+          [title]="entry.method + ' ' + entry.url"
+          (click)="select(entry.id)"
+        >
+          <span class="flex items-center gap-2">
+            <span class="rounded px-1 font-mono font-bold" [class]="statusClass(entry.status)">{{
+              entry.status
+            }}</span>
+            <span class="truncate text-slate-700">{{ formatTime(entry.sentAt) }}</span>
+          </span>
+          <span class="flex gap-2 text-slate-500">
+            <span>{{ formatDuration(entry.durationMs) }}</span>
+            <span>{{ formatSize(entry.size) }}</span>
+            @if (entry.id === currentId()) {
+              <span class="text-sky-600">current</span>
+            }
+          </span>
+        </button>
+        <button
+          type="button"
+          class="mr-1 flex size-6 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-rose-600 focus:opacity-100"
+          [attr.aria-label]="'Delete the response of ' + formatTime(entry.sentAt)"
+          title="Delete this response"
+          (click)="remove(entry)"
+        >
+          <fa-icon [icon]="faTrash" />
+        </button>
+      </li>
+    }
+  </ul>
+</aside>
+
+<section class="flex min-w-0 flex-1 flex-col" aria-label="Kept response">
+  @if (error(); as text) {
+    <p class="border-b border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700" role="alert">
+      {{ text }}
+    </p>
+  }
+  @if (selected(); as s) {
+    <div class="flex h-8 shrink-0 items-center gap-3 px-3 text-xs text-slate-500">
+      <div class="flex gap-1" role="group" aria-label="Compare">
+        <button
+          type="button"
+          class="rounded px-2 py-0.5 hover:bg-slate-200"
+          [class.bg-slate-200]="view() === 'body'"
+          [attr.aria-pressed]="view() === 'body'"
+          (click)="view.set('body')"
+        >
+          Body
+        </button>
+        <button
+          type="button"
+          class="rounded px-2 py-0.5 hover:bg-slate-200"
+          [class.bg-slate-200]="view() === 'headers'"
+          [attr.aria-pressed]="view() === 'headers'"
+          (click)="view.set('headers')"
+        >
+          Status and headers
+        </button>
+      </div>
+      <label
+        class="flex items-center gap-1"
+        [class.opacity-50]="!canCompare()"
+        [title]="
+          canCompare()
+            ? 'Show the differences between this response and the one in the viewer'
+            : 'Send the request to compare a kept response with the new one'
+        "
+      >
+        <input
+          type="checkbox"
+          [checked]="comparing()"
+          [disabled]="!canCompare()"
+          (change)="compareWanted.set($any($event.target).checked)"
+        />
+        Compare with current response
+      </label>
+      <span class="ml-auto truncate font-mono" [title]="s.entry.method + ' ' + s.entry.url">
+        {{ s.entry.method }} {{ s.entry.url }}
+      </span>
+    </div>
+    @if (s.response.truncated && view() === 'body') {
+      <p class="border-y border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800">
+        Only the start of this body was kept.
+      </p>
+    }
+    @if (comparing()) {
+      <app-code-diff-editor
+        class="flex-1 border-t border-slate-200"
+        ariaLabel="Kept response compared with the current one"
+        [original]="selectedText()"
+        [modified]="currentText()"
+        [language]="language()"
+        [wordWrap]="true"
+      />
+    } @else {
+      <app-code-editor
+        class="flex-1 border-t border-slate-200"
+        ariaLabel="Kept response"
+        [value]="selectedText()"
+        [language]="language()"
+        [readOnly]="true"
+        [wordWrap]="true"
+      />
+    }
+  } @else if (!loading() && !entries().length) {
+    <p class="flex flex-1 items-center justify-center px-6 text-center text-sm text-slate-400">
+      No responses are kept for this request yet. Each response is kept here when the request is
+      sent, on this computer only.
+    </p>
+  }
+</section>

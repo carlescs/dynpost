@@ -16,6 +16,7 @@ namespace Missive.Application.Http;
 /// <param name="Sent">The request as sent (after redirects), with secrets hidden; <c>null</c> when unknown.</param>
 /// <param name="Cookies">The cookies set by this response and by the redirects before it.</param>
 /// <param name="Captures">What the request's capture rules did; <c>null</c> when it has none.</param>
+/// <param name="HistoryId">The id of the request's history entry that keeps this response; <c>null</c> when it wasn't kept.</param>
 public sealed record ResponseDto(
     int Status,
     string StatusText,
@@ -31,7 +32,8 @@ public sealed record ResponseDto(
     IReadOnlyList<RedirectDto>? Redirects = null,
     SentRequestDto? Sent = null,
     IReadOnlyList<ResponseCookieDto>? Cookies = null,
-    IReadOnlyList<CaptureResultDto>? Captures = null);
+    IReadOnlyList<CaptureResultDto>? Captures = null,
+    string? HistoryId = null);
 
 /// <summary>The phases of an exchange in milliseconds; connection phases are null when no connection was opened.</summary>
 public sealed record TimingsDto(double? Dns, double? Connect, double? Tls, double Wait, double Download);

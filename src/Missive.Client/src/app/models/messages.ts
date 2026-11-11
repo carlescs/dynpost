@@ -139,6 +139,41 @@ export interface ResponseDto {
   cookies?: ResponseCookieDto[] | null;
   /** What the request's capture rules did; missing when it has none. */
   captures?: CaptureResultDto[] | null;
+  /** The id of the request's history entry that keeps this response; `null` when it wasn't kept. */
+  historyId?: string | null;
+}
+
+/** A response kept in a request's history (in `.missive/history/`), as listed. */
+export interface HistoryEntryDto {
+  id: string;
+  /** ISO date the request was sent. */
+  sentAt: string;
+  method: string;
+  /** The URL it was sent to, with secrets hidden. */
+  url: string;
+  status: number;
+  statusText: string;
+  durationMs: number;
+  /** The size of the body as received, in bytes. */
+  size: number;
+  contentType?: string | null;
+  /** The body was binary and too large to keep (text bodies are cut off instead). */
+  bodyOmitted?: boolean;
+}
+
+/** An entry of a request's history with the response kept (cookie values and secrets hidden). */
+export interface HistoryEntryDetailsDto {
+  entry: HistoryEntryDto;
+  response: ResponseDto;
+}
+
+/** How responses are kept in the requests' history. */
+export interface HistorySettingsDto {
+  enabled: boolean;
+  /** Responses kept per request (1–500). */
+  maxEntries: number;
+  /** Bodies larger than this are cut off (text) or not kept (binary); at most 50 MB. */
+  maxBodyBytes: number;
 }
 
 /** What one capture rule did: `value` is set when it was captured and stored, `error` otherwise. */
@@ -497,6 +532,7 @@ export type Theme = 'light' | 'dark';
 /** The per-user settings the UI can change. */
 export interface AppSettingsDto {
   theme: Theme;
+  history: HistorySettingsDto;
 }
 
 /** A workspace folder opened recently. */
@@ -720,6 +756,8 @@ export interface BridgeMessages {
   'settings.get': { payload: void; result: AppSettingsDto };
   /** Remembers the color theme. */
   'settings.setTheme': { payload: { theme: Theme }; result: AppSettingsDto };
+  /** Changes whether and how much of the responses are kept in the requests' history. */
+  'settings.setHistory': { payload: HistorySettingsDto; result: AppSettingsDto };
   'workspace.pick': { payload: void; result: WorkspaceDto | null };
   'workspace.open': { payload: { path: string }; result: WorkspaceDto };
   /** Reopens the workspace from the previous session; `null` when there is none. */
@@ -775,9 +813,19 @@ export interface BridgeMessages {
   'sharing.set': { payload: { path: string; localOnly: boolean }; result: SharingDto };
   /**
    * Sends a request (saved or not) from the host and waits for the response. `id` is chosen by
-   * the UI and can be passed to `request.cancel`.
+   * the UI and can be passed to `request.cancel`. `path` is the request's file, whose history
+   * keeps the response; `null` for an unsaved request.
    */
-  'request.send': { payload: { id: string; request: RequestDto }; result: ResponseDto };
+  'request.send': {
+    payload: { id: string; request: RequestDto; path?: string | null };
+    result: ResponseDto;
+  };
+  /** The responses kept in a request's history, newest first. */
+  'history.list': { payload: { path: string }; result: HistoryEntryDto[] };
+  /** One response of a request's history. */
+  'history.get': { payload: { path: string; id: string }; result: HistoryEntryDetailsDto };
+  /** Deletes one response from a request's history (or all, without `id`); the result is what is left. */
+  'history.delete': { payload: { path: string; id?: string | null }; result: HistoryEntryDto[] };
   /** Cancels a request being sent; the result says whether it was still being sent. */
   'request.cancel': { payload: { id: string }; result: boolean };
   /**

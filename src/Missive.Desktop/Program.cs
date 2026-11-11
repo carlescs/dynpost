@@ -4,6 +4,7 @@ using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Folders;
 using Missive.Application.Git;
+using Missive.Application.History;
 using Missive.Application.Http;
 using Missive.Application.Interchange;
 using Missive.Application.OAuth2;
@@ -19,6 +20,7 @@ using Missive.Desktop.Hosting;
 using Missive.Infrastructure.Cookies;
 using Missive.Infrastructure.Environments;
 using Missive.Infrastructure.Git;
+using Missive.Infrastructure.History;
 using Missive.Infrastructure.Http;
 using Missive.Infrastructure.Interchange;
 using Missive.Infrastructure.OAuth2;
@@ -98,6 +100,8 @@ internal static class Program
             .AddSingleton<IHttpSender, HttpClientSender>()
             .AddSingleton<InFlightRequests>()
             .AddSingleton<ResponseBodies>()
+            .AddSingleton<IHistoryStore, JsonHistoryStore>()
+            .AddSingleton<ResponseHistory>()
             .AddSingleton<IRunPlanStore, FileSystemRunPlanStore>()
             .AddSingleton<IRunPlanFormat, YamlRunPlanFormat>()
             .AddSingleton<IRunDataReader, CsvRunDataReader>()
@@ -115,6 +119,10 @@ internal static class Program
             .AddTransient<GetAboutInfo>()
             .AddTransient<GetAppSettings>()
             .AddTransient<SetTheme>()
+            .AddTransient<SetHistorySettings>()
+            .AddTransient<ListResponseHistory>()
+            .AddTransient<GetResponseHistoryEntry>()
+            .AddTransient<DeleteResponseHistory>()
             .AddTransient<CheckForUpdate>()
             .AddTransient<RestartToUpdate>()
             .AddTransient<OpenWorkspace>()

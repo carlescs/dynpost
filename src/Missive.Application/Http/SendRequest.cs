@@ -2,6 +2,7 @@ using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
+using Missive.Application.History;
 using Missive.Application.OAuth2;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
@@ -18,7 +19,8 @@ namespace Missive.Application.Http;
 /// request's capture rules pick out of a successful response are stored for that environment in
 /// <see cref="ICapturedValueStore"/>. The raw body is kept in <see cref="ResponseBodies"/> under
 /// the same id, for <see cref="SaveResponseBody"/>. A request with OAuth 2.0 auth gets its token
-/// from <see cref="OAuth2Tokens"/> (cached, refreshed or newly obtained) before it is sent.
+/// from <see cref="OAuth2Tokens"/> (cached, refreshed or newly obtained) before it is sent. The
+/// response to a saved request is kept in its history by <see cref="ResponseHistory"/>.
 /// </summary>
 public sealed class SendRequest(
     IHttpSender sender,
@@ -29,10 +31,19 @@ public sealed class SendRequest(
     ICapturedValueStore captures,
     CurrentWorkspace current,
     TimeProvider time,
-    OAuth2Tokens tokens)
+    OAuth2Tokens tokens,
+    ResponseHistory history)
 {
     /// <param name="id">An id chosen by the caller, used to cancel the request.</param>
-    public async Task<Result<ResponseDto>> ExecuteAsync(string id, RequestDto request, CancellationToken cancellationToken = default)
+    /// <param name="path">
+    /// The workspace path of the request file the request in the editor belongs to; its response is
+    /// kept in that file's history. <c>null</c> for a request that hasn't been saved.
+    /// </param>
+    public async Task<Result<ResponseDto>> ExecuteAsync(
+        string id,
+        RequestDto request,
+        string? path = null,
+        CancellationToken cancellationToken = default)
     {
         // The name doesn't matter for sending; an unnamed request can still be tried out.
         var named = string.IsNullOrWhiteSpace(request.Name) ? request with { Name = "Untitled" } : request;
@@ -84,6 +95,7 @@ public sealed class SendRequest(
             outgoing = outgoing with { Cookies = jar.Value };
         }
 
+        var sentAt = time.GetUtcNow();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (!inFlight.TryStart(id, cancellation))
         {
@@ -128,6 +140,19 @@ public sealed class SendRequest(
             }
 
             bodies.Add(id, new StoredBody(response.Value.Body, dto.FileName));
+            if (root is not null && current.Root == root)
+            {
+                var historyId = await history.RecordAsync(
+                    root,
+                    path,
+                    outgoing.Method,
+                    dto.Sent?.Url ?? masking.Url(outgoing.Url),
+                    dto,
+                    variables.Value.SecretValues ?? [],
+                    sentAt);
+                dto = dto with { HistoryId = historyId };
+            }
+
             return dto;
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)

@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
@@ -10,7 +11,7 @@ namespace Missive.Application.Requests;
 /// still the slug of the old name, the file is renamed to match the new name; files with
 /// hand-picked names keep them.
 /// </summary>
-public sealed class SaveRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
+public sealed class SaveRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, IHistoryStore history, CurrentWorkspace current)
 {
     public async Task<Result<SavedRequestDto>> ExecuteAsync(string path, RequestDto request, CancellationToken cancellationToken = default)
     {
@@ -50,6 +51,7 @@ public sealed class SaveRequest(IWorkspaceRepository repository, ILocalOnlyFiles
             }
 
             savedPath = target;
+            history.Move(root.Value, requestPath, target);
 
             // A local-only request must stay out of git under its new file name.
             var followed = localFiles.Move(root.Value, requestPath, target);

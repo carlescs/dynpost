@@ -78,3 +78,39 @@ describe('MockBackend request.send', () => {
     expect(new URL(inQuery.url).searchParams.getAll('api_key')).toEqual(['••••••', '••••••']);
   });
 });
+
+describe('MockBackend response history', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('keeps the responses of saved requests and follows them when they move', async () => {
+    const backend = new MockBackend();
+    const call = async (type: string, payload?: unknown) => {
+      const reply = backend.handle({ id: '1', type, payload } as never);
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await reply;
+      if (!result.ok) throw new Error(result.error.message);
+      return result.payload as never;
+    };
+    await call('workspace.open', { path: '/preview' });
+    const request = await call('request.load', { path: 'health.yaml' });
+
+    const sent: ResponseDto = await call('request.send', {
+      id: 's1',
+      request,
+      path: 'health.yaml',
+    });
+    const unsaved: ResponseDto = await call('request.send', { id: 's2', request });
+    await call('request.move', { path: 'health.yaml', folder: 'orders' });
+    const listed: { id: string }[] = await call('history.list', { path: 'orders/health.yaml' });
+
+    expect(sent.historyId).toBeTruthy();
+    expect(unsaved.historyId).toBeFalsy();
+    expect(listed.map((e) => e.id)).toEqual([sent.historyId]);
+    const kept: { response: ResponseDto } = await call('history.get', {
+      path: 'orders/health.yaml',
+      id: sent.historyId,
+    });
+    expect(kept.response.cookies?.[0].value).toBe('••••••');
+  });
+});

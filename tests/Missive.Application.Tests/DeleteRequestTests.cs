@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Sharing;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
@@ -13,6 +14,7 @@ public class DeleteRequestTests
 
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
+    private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
     private readonly CurrentWorkspace _current = new();
 
     public DeleteRequestTests()
@@ -27,7 +29,7 @@ public class DeleteRequestTests
         var path = WorkspacePath.Parse("users/get-user.yaml");
         _repository.FileExists(Root, path).Returns(true);
 
-        var result = new DeleteRequest(_repository, _localFiles, _current).Execute("users/get-user.yaml");
+        var result = new DeleteRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml");
 
         Assert.True(result.IsSuccess);
         _repository.Received(1).DeleteFile(Root, path);
@@ -36,7 +38,7 @@ public class DeleteRequestTests
     [Fact]
     public void RefusesMissingFiles()
     {
-        var result = new DeleteRequest(_repository, _localFiles, _current).Execute("users/missing.yaml");
+        var result = new DeleteRequest(_repository, _localFiles, _history, _current).Execute("users/missing.yaml");
 
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
         _repository.DidNotReceiveWithAnyArgs().DeleteFile(default!, default!);
@@ -45,7 +47,7 @@ public class DeleteRequestTests
     [Fact]
     public void RefusesNonRequestPaths()
     {
-        var result = new DeleteRequest(_repository, _localFiles, _current).Execute("users/notes.txt");
+        var result = new DeleteRequest(_repository, _localFiles, _history, _current).Execute("users/notes.txt");
 
         Assert.Equal(ErrorCodes.InvalidPath, result.Error?.Code);
     }
@@ -56,8 +58,19 @@ public class DeleteRequestTests
         var path = WorkspacePath.Parse("users/get-user.yaml");
         _repository.FileExists(Root, path).Returns(true);
 
-        new DeleteRequest(_repository, _localFiles, _current).Execute("users/get-user.yaml");
+        new DeleteRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml");
 
         _localFiles.Received(1).Remove(Root, path);
+    }
+
+    [Fact]
+    public void DeletesTheRequestsHistory()
+    {
+        var path = WorkspacePath.Parse("users/get-user.yaml");
+        _repository.FileExists(Root, path).Returns(true);
+
+        new DeleteRequest(_repository, _localFiles, _history, _current).Execute("users/get-user.yaml");
+
+        _history.Received(1).Remove(Root, path);
     }
 }

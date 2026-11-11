@@ -1,4 +1,5 @@
 using Missive.Application.Common;
+using Missive.Application.History;
 using Missive.Application.Sharing;
 using Missive.Application.Workspaces;
 using Missive.Domain.Workspaces;
@@ -6,7 +7,7 @@ using Missive.Domain.Workspaces;
 namespace Missive.Application.Requests;
 
 /// <summary>Deletes a request file from the open workspace.</summary>
-public sealed class DeleteRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, CurrentWorkspace current)
+public sealed class DeleteRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, IHistoryStore history, CurrentWorkspace current)
 {
     public Result<Unit> Execute(string path)
     {
@@ -32,6 +33,7 @@ public sealed class DeleteRequest(IWorkspaceRepository repository, ILocalOnlyFil
         {
             // Best effort: a leftover .gitignore line for a deleted file does no harm.
             localFiles.Remove(root.Value, requestPath);
+            history.Remove(root.Value, requestPath);
         }
 
         return deleted;

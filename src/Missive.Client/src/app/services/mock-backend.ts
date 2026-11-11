@@ -9,6 +9,8 @@ import {
   CookieDto,
   ERROR_CODES,
   EnvironmentDto,
+  HistoryEntryDetailsDto,
+  HistorySettingsDto,
   OAuth2TokenDto,
   RequestDto,
   ResponseDto,
@@ -130,6 +132,14 @@ export class MockBackend {
   private readonly localOnly = new Set<string>();
   private open = false;
   private theme: Theme = 'light';
+  private historySettings: HistorySettingsDto = {
+    enabled: true,
+    maxEntries: 20,
+    maxBodyBytes: 1024 * 1024,
+  };
+  /** Responses kept per request path, newest first. */
+  private readonly history = new Map<string, HistoryEntryDetailsDto[]>();
+  private historyCount = 0;
   /** Sends in progress, by id: calling the function cancels it. */
   private readonly sends = new Map<string, () => void>();
   /** The file names suggested for recent responses, by send id, for `response.saveBody`. */
@@ -189,7 +199,12 @@ export class MockBackend {
 
     // Sending works without a workspace, like in the host.
     if (request.type === 'request.send') {
-      return this.send(request.id, payload?.['id'] as string, payload?.['request'] as RequestDto);
+      return this.send(
+        request.id,
+        payload?.['id'] as string,
+        payload?.['request'] as RequestDto,
+        (payload?.['path'] as string | null | undefined) ?? null,
+      );
     }
     if (request.type === 'request.pickFile') return ok(null);
     // No file dialog in a browser: pretend the user picked files from the workspace.
@@ -262,10 +277,22 @@ export class MockBackend {
       if (index >= 0) this.recentWorkspaces.splice(index, 1);
       return ok(null);
     }
-    if (request.type === 'settings.get') return ok({ theme: this.theme });
+    const settings = () => ({ theme: this.theme, history: { ...this.historySettings } });
+    if (request.type === 'settings.get') return ok(settings());
     if (request.type === 'settings.setTheme') {
       this.theme = payload?.['theme'] as Theme;
-      return ok({ theme: this.theme });
+      return ok(settings());
+    }
+    if (request.type === 'settings.setHistory') {
+      const history = payload as unknown as HistorySettingsDto;
+      if (history.maxEntries < 1 || history.maxEntries > 500) {
+        return fail('settings.invalid_history', 'Keep between 1 and 500 responses per request.');
+      }
+      if (history.maxBodyBytes < 0 || history.maxBodyBytes > 50 * 1024 * 1024) {
+        return fail('settings.invalid_history', 'The body size limit must be between 0 and 50 MB.');
+      }
+      this.historySettings = { ...history };
+      return ok(settings());
     }
     if (request.type === 'about.get') {
       return ok({
@@ -451,6 +478,7 @@ export class MockBackend {
           const target = this.freePath(folder, dto.name, path);
           this.files.delete(path);
           this.files.set(target, dto);
+          this.moveHistory(path, target);
           path = target;
         }
         return ok({ path, request: structuredClone(dto) });
@@ -503,6 +531,7 @@ export class MockBackend {
           return fail(ERROR_CODES.alreadyExists, `'${target}' already exists.`);
         this.files.delete(path);
         this.files.set(target, dto);
+        this.moveHistory(path, target);
         return ok({ path: target });
       }
       case 'request.duplicate': {
@@ -545,7 +574,26 @@ export class MockBackend {
         const path = payload?.['path'] as string;
         if (!this.files.delete(path))
           return fail(ERROR_CODES.notFound, `The request file '${path}' does not exist.`);
+        this.history.delete(path);
         return ok(null);
+      }
+      case 'history.list':
+        return ok((this.history.get(payload?.['path'] as string) ?? []).map((h) => h.entry));
+      case 'history.get': {
+        const found = this.history
+          .get(payload?.['path'] as string)
+          ?.find((h) => h.entry.id === payload?.['id']);
+        return found
+          ? ok(structuredClone(found))
+          : fail(ERROR_CODES.notFound, 'That response is no longer kept in the history.');
+      }
+      case 'history.delete': {
+        const path = payload?.['path'] as string;
+        const id = payload?.['id'] as string | null | undefined;
+        const left = id ? (this.history.get(path) ?? []).filter((h) => h.entry.id !== id) : [];
+        if (left.length) this.history.set(path, left);
+        else this.history.delete(path);
+        return ok(left.map((h) => h.entry));
       }
       case 'folder.delete': {
         const path = payload?.['path'] as string;
@@ -553,6 +601,8 @@ export class MockBackend {
           if (isWithin(folder, path)) this.folders.delete(folder);
         for (const file of [...this.files.keys()])
           if (isWithin(file, path)) this.files.delete(file);
+        for (const file of [...this.history.keys()])
+          if (isWithin(file, path)) this.history.delete(file);
         for (const plan of [...this.runPlans.keys()].filter((p) => isWithin(p, path))) {
           this.runPlans.delete(plan);
           for (const [runId, run] of this.runs) if (run.path === plan) this.runs.delete(runId);
@@ -599,6 +649,7 @@ export class MockBackend {
     envelopeId: string,
     id: string,
     dto: RequestDto,
+    path: string | null,
   ): Promise<BridgeResponseEnvelope> {
     const fail = (code: string, message: string): BridgeResponseEnvelope => ({
       id: envelopeId,
@@ -790,41 +841,66 @@ export class MockBackend {
     const segment = url.pathname.split('/').filter(Boolean).pop() ?? 'response';
     const fileName = segment.includes('.') ? segment : `${segment}.json`;
     this.bodies.set(id, fileName);
-    return {
-      id: envelopeId,
-      ok: true,
-      payload: {
-        status: 200,
-        statusText: 'OK',
-        headers: responseHeaders,
-        contentType: 'application/json',
-        body,
-        bodyEncoding: 'text',
-        size: new TextEncoder().encode(body).length,
-        truncated: false,
-        durationMs,
-        fileName,
-        timings: {
-          dns: 2.4,
-          connect: 6.1,
-          tls: url.protocol === 'https:' ? 21.7 : null,
-          wait: Math.max(durationMs - 40, 1),
-          download: 3.2,
+    const response = {
+      status: 200,
+      statusText: 'OK',
+      headers: responseHeaders,
+      contentType: 'application/json',
+      body,
+      bodyEncoding: 'text',
+      size: new TextEncoder().encode(body).length,
+      truncated: false,
+      durationMs,
+      fileName,
+      timings: {
+        dns: 2.4,
+        connect: 6.1,
+        tls: url.protocol === 'https:' ? 21.7 : null,
+        wait: Math.max(durationMs - 40, 1),
+        download: 3.2,
+      },
+      redirects: [],
+      sent: { method: dto.method, url: sentUrl.toString(), headers: sentHeaders, parts },
+      cookies: [
+        {
+          name: 'preview-session',
+          value: 'abc123',
+          path: '/',
+          secure: false,
+          httpOnly: true,
         },
-        redirects: [],
-        sent: { method: dto.method, url: sentUrl.toString(), headers: sentHeaders, parts },
-        cookies: [
-          {
-            name: 'preview-session',
-            value: 'abc123',
-            path: '/',
-            secure: false,
-            httpOnly: true,
-          },
-        ],
-        captures,
-      } satisfies ResponseDto,
+      ],
+      captures,
+    } satisfies ResponseDto;
+    return { id: envelopeId, ok: true, payload: this.recordHistory(path, dto.method, response) };
+  }
+
+  /** Keeps a response in a request's history, like the host; returns it with its entry id. */
+  private recordHistory(path: string | null, method: string, response: ResponseDto): ResponseDto {
+    if (!path || !this.files.has(path) || !this.historySettings.enabled) return response;
+    const id = `preview-${++this.historyCount}`;
+    const kept: ResponseDto = {
+      ...structuredClone(response),
+      headers: response.headers.map((h) =>
+        /^set-cookie$/i.test(h.key) ? { ...h, value: h.value.replace(/=[^;]*/, '=••••••') } : h,
+      ),
+      cookies: response.cookies?.map((c) => ({ ...c, value: '••••••' })),
+      historyId: null,
     };
+    const entry = {
+      id,
+      sentAt: new Date().toISOString(),
+      method,
+      url: response.sent?.url ?? '',
+      status: response.status,
+      statusText: response.statusText,
+      durationMs: response.durationMs,
+      size: response.size,
+      contentType: response.contentType,
+    };
+    const entries = [{ entry, response: kept }, ...(this.history.get(path) ?? [])];
+    this.history.set(path, entries.slice(0, this.historySettings.maxEntries));
+    return { ...response, historyId: id };
   }
 
   private capturedList(id: string): CapturedValueDto[] {
@@ -895,8 +971,16 @@ export class MockBackend {
     return resolved;
   }
 
+  private moveHistory(path: string, target: string): void {
+    for (const [file, entries] of [...this.history].filter(([f]) => isWithin(f, path))) {
+      this.history.delete(file);
+      this.history.set(target + file.slice(path.length), entries);
+    }
+  }
+
   private relocateFolder(path: string, target: string): void {
     const move = (p: string) => target + p.slice(path.length);
+    this.moveHistory(path, target);
     for (const folder of [...this.folders].filter((f) => isWithin(f, path))) {
       this.folders.delete(folder);
       this.folders.add(move(folder));

@@ -4,6 +4,7 @@ using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Folders;
 using Missive.Application.Git;
+using Missive.Application.History;
 using Missive.Application.Http;
 using Missive.Application.Interchange;
 using Missive.Application.OAuth2;
@@ -106,7 +107,13 @@ internal static class BridgeHandlers
             .Register<MoveRequestPayload, MovedRequestDto>(BridgeMessageTypes.RequestMove,
                 (p, _) => Task.FromResult(Use<MoveRequest>().Execute(p.Path, p.Folder)))
             .Register<SendRequestPayload, ResponseDto>(BridgeMessageTypes.RequestSend,
-                (p, ct) => Use<SendRequest>().ExecuteAsync(p.Id, p.Request, ct))
+                (p, ct) => Use<SendRequest>().ExecuteAsync(p.Id, p.Request, p.Path, ct))
+            .Register<HistoryPathPayload, IReadOnlyList<HistoryEntryDto>>(BridgeMessageTypes.HistoryList,
+                (p, ct) => Use<ListResponseHistory>().ExecuteAsync(p.Path, ct))
+            .Register<HistoryEntryPayload, HistoryEntryDetailsDto>(BridgeMessageTypes.HistoryGet,
+                (p, ct) => Use<GetResponseHistoryEntry>().ExecuteAsync(p.Path, p.Id, ct))
+            .Register<DeleteHistoryPayload, IReadOnlyList<HistoryEntryDto>>(BridgeMessageTypes.HistoryDelete,
+                (p, ct) => Use<DeleteResponseHistory>().ExecuteAsync(p.Path, p.Id, ct))
             .Register<CancelRequestPayload, bool>(BridgeMessageTypes.RequestCancel,
                 (p, _) => Task.FromResult(Result<bool>.Success(Use<CancelRequest>().Execute(p.Id))))
             .Register<SaveResponseBodyPayload, SavedFileDto?>(BridgeMessageTypes.ResponseSaveBody, async (p, ct) =>
@@ -267,6 +274,8 @@ internal static class BridgeHandlers
                 ct => Use<GetAppSettings>().ExecuteAsync(ct))
             .Register<SetThemePayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetTheme,
                 (p, ct) => Use<SetTheme>().ExecuteAsync(p.Theme, ct))
+            .Register<HistorySettingsDto, AppSettingsDto>(BridgeMessageTypes.SettingsSetHistory,
+                (p, ct) => Use<SetHistorySettings>().ExecuteAsync(p, ct))
             .Register(BridgeMessageTypes.AboutGet,
                 _ => Task.FromResult(Result<AboutDto>.Success(Use<GetAboutInfo>().Execute())))
             .Register(BridgeMessageTypes.UpdateCheck,

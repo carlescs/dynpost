@@ -89,7 +89,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token, API key and OAuth 2.0 (client
       credentials, and authorization code with PKCE in the system browser)
-- [ ] Local response history (kept out of git)
+- [x] Local response history per request, compared with the latest response
+      in a diff view (kept out of git, see [Response history](#response-history))
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
       (switch, create, check out, delete), remotes, and clear reporting of
       merge conflicts
@@ -527,6 +528,54 @@ captured values, where each can be forgotten (bringing back the environment's
 value), or all at once.
 
 Captures are not imported or exported: other tools express them as scripts.
+
+## Response history
+
+Every response to a saved request is kept on this computer, in the workspace's
+git-ignored `.missive/history/` folder. The **History** button in the response
+panel lists the responses kept for the request, newest first, with their
+status, time, duration and size. Select one to see its body (pretty-printed
+when it is JSON) or its status line and headers, and tick **Compare with
+current response** to see the differences from the response in the viewer in a
+diff editor. Responses can be deleted one by one, or all at once with **Clear**.
+Requests that have never been saved have no history.
+
+The history follows its request when the request is renamed (with its file),
+moved, or its folder is renamed or moved, and is deleted with the request or the
+folder. It is kept per request file, so a file renamed or moved outside Missive
+starts a new history.
+
+What is written to disk is the response as shown, with the request as sent
+(credentials already hidden). Cookie values (in `Set-Cookie` headers and the
+cookies list) and the values of the environment's secret variables are hidden
+too. **Response history…** in the settings menu turns the history off, and sets
+how many responses are kept per request (20 by default) and the largest body
+kept (1 MB by default): longer text bodies are cut off and larger binary bodies
+are left out. When a workspace's history passes 256 MB, its oldest responses
+are dropped. These settings are per user, in Missive's own settings file.
+
+`.missive/history/index.json` lists the entries of each request file; each
+response is a JSON file next to it, named after its entry id:
+
+```json
+{
+  "users/get-user.yaml": [
+    {
+      "id": "20261107T120000000-1a2b3c4d",
+      "sentAt": "2026-11-07T12:00:00+00:00",
+      "method": "GET",
+      "url": "https://api.example.com/users/1",
+      "status": 200,
+      "statusText": "OK",
+      "durationMs": 120,
+      "size": 85,
+      "contentType": "application/json",
+      "bytes": 1460,
+      "bodyOmitted": false
+    }
+  ]
+}
+```
 
 ## Load runs
 

@@ -89,7 +89,12 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   (the handler's `AllowAutoRedirect` and `UseCookies` stay off) so every hop
   can be reported. Per-environment cookie jars (`Application/Cookies`) live in
   `.missive/cookies.json`; raw response bodies are kept in memory by
-  `ResponseBodies` for `SaveResponseBody`.
+  `ResponseBodies` for `SaveResponseBody`. The response to a saved request is
+  recorded by `Application/History/ResponseHistory.cs` (cookie values and secrets
+  hidden) through the `IHistoryStore` port into `.missive/history/`
+  (`Infrastructure/History/JsonHistoryStore.cs`, keyed by request path); use
+  cases that rename, move or delete requests or folders keep it in step, and
+  its limits are per-user `AppSettings.History`.
 - All projects are in `Missive.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
