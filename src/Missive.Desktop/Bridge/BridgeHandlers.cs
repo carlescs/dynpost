@@ -135,6 +135,18 @@ internal static class BridgeHandlers
                 (p, ct) => Use<SaveRunPlan>().ExecuteAsync(p.Path, p.Yaml, ct))
             .Register<RunPlanPathPayload, Unit?>(BridgeMessageTypes.RunPlanDelete,
                 async (p, ct) => NoValue(await Use<DeleteRunPlan>().ExecuteAsync(p.Path, ct)))
+            .Register<MoveRunPlanPayload, MovedRunPlanDto>(BridgeMessageTypes.RunPlanMove,
+                (p, ct) => Use<MoveRunPlan>().ExecuteAsync(p.Path, p.Folder, ct))
+            .Register(BridgeMessageTypes.RunFolderList,
+                ct => Use<ListRunFolders>().ExecuteAsync(ct))
+            .Register<RenameFolderPayload, FolderDto>(BridgeMessageTypes.RunFolderRename,
+                (p, ct) => Use<RenameRunFolder>().ExecuteAsync(p.Path, p.Name, ct))
+            .Register<MoveFolderPayload, FolderDto>(BridgeMessageTypes.RunFolderMove,
+                (p, ct) => Use<MoveRunFolder>().ExecuteAsync(p.Path, p.Parent, ct))
+            .Register<DuplicateFolderPayload, FolderDto>(BridgeMessageTypes.RunFolderDuplicate,
+                (p, _) => Task.FromResult(Use<DuplicateRunFolder>().Execute(p.Path)))
+            .Register<DeleteFolderPayload, Unit?>(BridgeMessageTypes.RunFolderDelete,
+                async (p, ct) => NoValue(await Use<DeleteRunFolder>().ExecuteAsync(p.Path, ct)))
             .Register<StartRunPayload, StartedRunDto>(BridgeMessageTypes.RunStart,
                 (p, ct) => Use<StartRun>().ExecuteAsync(p.Path, p.ConfirmLarge, ct))
             .Register<RunIdPayload, Unit?>(BridgeMessageTypes.RunCancel,

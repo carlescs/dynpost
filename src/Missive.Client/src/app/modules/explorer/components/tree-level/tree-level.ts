@@ -17,8 +17,8 @@ import {
 import { InterchangeStore } from '../../../../services/interchange-store';
 import { METHOD_COLORS, WorkspaceNode } from '../../../../models/workspace';
 import { ExplorerState } from '../../services/explorer-state';
-import { FolderDrop } from '../folder-drop/folder-drop';
-import { NameInput } from '../name-input/name-input';
+import { FolderDrop } from '../../../../components/folder-drop/folder-drop';
+import { NameInput } from '../../../../components/name-input/name-input';
 
 /**
  * One level of the explorer tree: the entries of a folder. Folders render their own level

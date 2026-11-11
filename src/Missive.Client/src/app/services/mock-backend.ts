@@ -59,7 +59,7 @@ const sample = (
 export class MockBackend {
   private readonly root = '/browser-preview/my-api';
   private readonly recentWorkspaces = [{ name: 'my-api (browser preview)', path: this.root }];
-  private readonly folders = new Set(['users', 'orders']);
+  private readonly folders = new Set(['users', 'orders', 'perf']);
   private readonly files = new Map<string, RequestDto>([
     ['users/get-user.yaml', sample('Get user', 'GET', '{{baseUrl}}/users/1')],
     [
@@ -228,6 +228,28 @@ export class MockBackend {
       return ok(!!cancel);
     }
     if (request.type === 'workspace.openLast') return ok(null);
+    if (request.type.startsWith('runFolder.')) {
+      const path = payload?.['path'] as string;
+      if (request.type === 'runFolder.list') {
+        const holds = (folder: string, paths: Iterable<string>) =>
+          [...paths].some((p) => isWithin(p, folder));
+        return ok(
+          [...this.folders]
+            .filter((f) => holds(f, this.runPlans.keys()) || !holds(f, this.files.keys()))
+            .sort((a, b) => a.localeCompare(b)),
+        );
+      }
+      if ([...this.files.keys()].some((file) => isWithin(file, path))) {
+        return fail(
+          ERROR_CODES.invalidRequest,
+          `'${path}' also holds requests, so it can't be changed here; use the Explorer instead.`,
+        );
+      }
+      return this.handle({
+        ...request,
+        type: request.type.replace('runFolder.', 'folder.') as typeof request.type,
+      });
+    }
     if (request.type.startsWith('runPlan.') || request.type.startsWith('run.')) {
       return this.handleRuns(request, ok, fail);
     }
@@ -501,6 +523,8 @@ export class MockBackend {
           this.folders.add(copyPath(folder));
         for (const [file, dto] of [...this.files].filter(([f]) => isWithin(f, path)))
           this.files.set(copyPath(file), structuredClone(dto));
+        for (const [plan, yaml] of [...this.runPlans].filter(([p]) => isWithin(p, path)))
+          this.runPlans.set(copyPath(plan), yaml);
         return ok({ path: target });
       }
       case 'sharing.set': {
@@ -527,6 +551,10 @@ export class MockBackend {
           if (isWithin(folder, path)) this.folders.delete(folder);
         for (const file of [...this.files.keys()])
           if (isWithin(file, path)) this.files.delete(file);
+        for (const plan of [...this.runPlans.keys()].filter((p) => isWithin(p, path))) {
+          this.runPlans.delete(plan);
+          for (const [runId, run] of this.runs) if (run.path === plan) this.runs.delete(runId);
+        }
         return ok(null);
       }
       default:
@@ -875,11 +903,18 @@ export class MockBackend {
       this.files.delete(file);
       this.files.set(move(file), dto);
     }
+    for (const [plan, yaml] of [...this.runPlans].filter(([p]) => isWithin(p, path))) {
+      this.runPlans.delete(plan);
+      this.runPlans.set(move(plan), yaml);
+      for (const run of this.runs.values()) if (run.path === plan) run.path = move(plan);
+    }
   }
 
   private exists(path: string): boolean {
     const lower = path.toLowerCase();
-    return [...this.folders, ...this.files.keys()].some((p) => p.toLowerCase() === lower);
+    return [...this.folders, ...this.files.keys(), ...this.runPlans.keys()].some(
+      (p) => p.toLowerCase() === lower,
+    );
   }
 
   private clean(dto: RequestDto): RequestDto {
@@ -985,6 +1020,19 @@ export class MockBackend {
         }
         this.runPlans.set(savedPath, yaml);
         return ok({ ...document(yaml), path: savedPath });
+      }
+      case 'runPlan.move': {
+        const yaml = this.runPlans.get(path);
+        if (yaml === undefined) return fail(ERROR_CODES.notFound, 'The run plan does not exist.');
+        const target = join(payload?.['folder'] as string, nameOf(path));
+        if (target === path) return ok({ path });
+        if (this.exists(target))
+          return fail(ERROR_CODES.alreadyExists, `'${target}' already exists.`);
+        this.runPlans.delete(path);
+        this.runPlans.set(target, yaml);
+        for (const run of this.runs.values()) if (run.path === path) run.path = target;
+        if (this.localOnly.delete(path)) this.localOnly.add(target);
+        return ok({ path: target });
       }
       case 'runPlan.delete': {
         if (!this.runPlans.delete(path)) {

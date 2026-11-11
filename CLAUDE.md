@@ -26,8 +26,9 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   (`inlineStyleLanguage: scss`, global `src/styles.scss`). Tailwind CSS v4 runs
   through PostCSS (`.postcssrc.json`) from its own entry, `src/tailwind.css`. Icons with Font Awesome
   (`@fortawesome/angular-fontawesome`, free solid icons). Drag and drop uses
-  Angular CDK (`@angular/cdk/drag-drop`); the explorer tree's nested drop
-  lists are explained in `modules/explorer/services/explorer-state.ts`. Dialogs use Angular CDK
+  Angular CDK (`@angular/cdk/drag-drop`); the folder trees (explorer, Load runs) share
+  `services/tree-state.ts`, which explains their nested drop lists, and
+  `components/folder-drop`. Dialogs use Angular CDK
   Dialog (`@angular/cdk/dialog`) through the root `Dialogs` service (`services/dialogs.ts`):
   `dialogs.confirm(...)` replaces `window.confirm` (never use the browser's `confirm`/`alert`/
   `prompt`), and `dialogs.open(Component)` opens any other dialog over the shared blurred
@@ -51,7 +52,7 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   to emit the same (SCSS, no inline template or styles, plus a `.spec.ts`):
   - `components/<name>/<name>.ts` — the shell (header, activity bar, sidebar,
     document tabs) and UI shared by several modules (code and diff editors, PDF
-    viewer, key/value table, variable input).
+    viewer, key/value table, variable input, folder drop target and name input of the folder trees).
   - `services/` — root-provided stores and the `Bridge` (with its `MockBackend`).
   - `models/` — bridge message types (`messages.ts`), the client model
     (`workspace.ts`), DTO mapping and other pure helpers.

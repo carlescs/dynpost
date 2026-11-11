@@ -672,6 +672,25 @@ export interface BridgeMessages {
   /** Deletes a run plan file and its saved runs; a plan that is being run can't be deleted. */
   'runPlan.delete': { payload: { path: string }; result: null };
   /**
+   * Moves a run plan file into `folder` (`''` is the root), keeping its file name; its saved runs
+   * follow. A plan that is being run can't be moved.
+   */
+  'runPlan.move': { payload: { path: string; folder: string }; result: { path: string } };
+  /**
+   * The folders shown in the Load runs view, parents first: those holding run plans (at any
+   * depth) and those holding no requests at all. Create one with `folder.create`.
+   */
+  'runFolder.list': { payload: void; result: string[] };
+  /**
+   * The folder actions of the Load runs view. They refuse folders that also hold requests (those
+   * are organized in the Explorer) or a plan that is being run; the plans' saved runs follow a
+   * rename or move and are deleted with the folder.
+   */
+  'runFolder.rename': { payload: { path: string; name: string }; result: FolderDto };
+  'runFolder.move': { payload: { path: string; parent: string }; result: FolderDto };
+  'runFolder.duplicate': { payload: { path: string }; result: FolderDto };
+  'runFolder.delete': { payload: { path: string }; result: null };
+  /**
    * Starts a load run in the background. Runs of more than 200 threads fail with
    * `confirmation_required` until `confirmLarge` is set.
    */
