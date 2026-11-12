@@ -29,14 +29,14 @@ public class RequestUseCaseTests
     [Fact]
     public async Task LoadRequest_ReturnsTheRequestAsDto()
     {
-        var path = WorkspacePath.Parse("users/get-user.yaml");
+        var path = WorkspacePath.Parse("requests/users/get-user.yaml");
         _repository.FileExists(Root, path).Returns(true);
         _repository.ReadRequestAsync(Root, path, Arg.Any<CancellationToken>()).Returns(new HttpRequestDefinition(
             "Get user", RequestMethod.Get, "/users/1",
             headers: [new KeyValueEntry("Accept", "application/json", Enabled: false)],
             auth: new ApiKeyAuth("X-Key", "{{key}}", ApiKeyLocation.Query)));
 
-        var result = await new LoadRequest(_repository, _current).ExecuteAsync("users/get-user.yaml");
+        var result = await new LoadRequest(_repository, _current).ExecuteAsync("requests/users/get-user.yaml");
 
         Assert.True(result.IsSuccess);
         Assert.Equal("GET", result.Value.Method);
@@ -57,13 +57,13 @@ public class RequestUseCaseTests
     [Fact]
     public async Task CreateRequest_WritesASlugNamedFileInTheFolder()
     {
-        var result = await new CreateRequest(_repository, _current).ExecuteAsync("users", RequestDtoFactory.Create());
+        var result = await new CreateRequest(_repository, _current).ExecuteAsync("requests/users", RequestDtoFactory.Create());
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("users/create-user.yaml", result.Value.Path);
+        Assert.Equal("requests/users/create-user.yaml", result.Value.Path);
         await _repository.Received(1).WriteRequestAsync(
             Root,
-            WorkspacePath.Parse("users/create-user.yaml"),
+            WorkspacePath.Parse("requests/users/create-user.yaml"),
             Arg.Is<HttpRequestDefinition>(r => r.Name == "Create user" && r.Method == RequestMethod.Post && r.Body.Type == BodyType.Json),
             Arg.Any<CancellationToken>());
     }
@@ -71,33 +71,36 @@ public class RequestUseCaseTests
     [Fact]
     public async Task CreateRequest_PicksAFreeNameWhenTheSlugIsTaken()
     {
-        _repository.FileExists(Root, WorkspacePath.Parse("create-user.yaml")).Returns(true);
-        _repository.FileExists(Root, WorkspacePath.Parse("create-user-2.yaml")).Returns(true);
+        _repository.FileExists(Root, WorkspacePath.Parse("requests/create-user.yaml")).Returns(true);
+        _repository.FileExists(Root, WorkspacePath.Parse("requests/create-user-2.yaml")).Returns(true);
 
-        var result = await new CreateRequest(_repository, _current).ExecuteAsync("", RequestDtoFactory.Create());
+        var result = await new CreateRequest(_repository, _current).ExecuteAsync("requests", RequestDtoFactory.Create());
 
-        Assert.Equal("create-user-3.yaml", result.Value.Path);
+        Assert.Equal("requests/create-user-3.yaml", result.Value.Path);
     }
 
     [Fact]
     public async Task CreateRequest_DropsBlankRowsAndRejectsInvalidRequests()
     {
         var blankRows = RequestDtoFactory.Create() with { Params = [new KeyValueDto("", "", true)] };
-        var created = await new CreateRequest(_repository, _current).ExecuteAsync("", blankRows);
+        var created = await new CreateRequest(_repository, _current).ExecuteAsync("requests", blankRows);
         Assert.Empty(created.Value.Request.Params);
 
         var unnamed = RequestDtoFactory.Create(name: "  ");
-        var invalid = await new CreateRequest(_repository, _current).ExecuteAsync("", unnamed);
+        var invalid = await new CreateRequest(_repository, _current).ExecuteAsync("requests", unnamed);
         Assert.Equal(ErrorCodes.InvalidRequest, invalid.Error?.Code);
 
-        var badMethod = await new CreateRequest(_repository, _current).ExecuteAsync("", RequestDtoFactory.Create(method: "FETCH"));
+        var badMethod = await new CreateRequest(_repository, _current).ExecuteAsync("requests", RequestDtoFactory.Create(method: "FETCH"));
         Assert.Equal(ErrorCodes.InvalidRequest, badMethod.Error?.Code);
+
+        var outside = await new CreateRequest(_repository, _current).ExecuteAsync("", RequestDtoFactory.Create());
+        Assert.Equal(ErrorCodes.InvalidPath, outside.Error?.Code);
     }
 
     [Fact]
     public async Task SaveRequest_WritesInPlaceWhenTheNameIsUnchanged()
     {
-        var path = WorkspacePath.Parse("users/create-user.yaml");
+        var path = WorkspacePath.Parse("requests/users/create-user.yaml");
         GivenExisting(path, "Create user");
 
         var result = await new SaveRequest(_repository, _localFiles, _history, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create());
@@ -110,20 +113,20 @@ public class RequestUseCaseTests
     [Fact]
     public async Task SaveRequest_RenamesASlugNamedFileWhenTheRequestIsRenamed()
     {
-        var path = WorkspacePath.Parse("users/create-user.yaml");
+        var path = WorkspacePath.Parse("requests/users/create-user.yaml");
         GivenExisting(path, "Create user");
 
         var result = await new SaveRequest(_repository, _localFiles, _history, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create(name: "Add user"));
 
-        Assert.Equal("users/add-user.yaml", result.Value.Path);
-        _repository.Received(1).MoveFile(Root, path, WorkspacePath.Parse("users/add-user.yaml"));
-        _history.Received(1).Move(Root, path, WorkspacePath.Parse("users/add-user.yaml"));
+        Assert.Equal("requests/users/add-user.yaml", result.Value.Path);
+        _repository.Received(1).MoveFile(Root, path, WorkspacePath.Parse("requests/users/add-user.yaml"));
+        _history.Received(1).Move(Root, path, WorkspacePath.Parse("requests/users/add-user.yaml"));
     }
 
     [Fact]
     public async Task SaveRequest_KeepsHandPickedFileNames()
     {
-        var path = WorkspacePath.Parse("users/my-special-name.yaml");
+        var path = WorkspacePath.Parse("requests/users/my-special-name.yaml");
         GivenExisting(path, "Create user");
 
         var result = await new SaveRequest(_repository, _localFiles, _history, _current).ExecuteAsync(path.Value, RequestDtoFactory.Create(name: "Add user"));

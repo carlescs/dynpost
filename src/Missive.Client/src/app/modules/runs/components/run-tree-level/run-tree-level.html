@@ -165,11 +165,11 @@
     }
   </li>
 }
-@if (parent() && !nodes().length && !state.isCreatingIn(parent())) {
+@if (parent() !== state.root && !nodes().length && !state.isCreatingIn(parent())) {
   <li class="py-0.5 pr-2 text-xs text-slate-400 italic" [style.padding-left.px]="indent() + 18">
     Empty folder
   </li>
 }
-@if (!parent() && state.canDropAtRoot()) {
+@if (parent() === state.root && state.canDropAtRoot()) {
   <li app-root-drop-zone label="top level"></li>
 }

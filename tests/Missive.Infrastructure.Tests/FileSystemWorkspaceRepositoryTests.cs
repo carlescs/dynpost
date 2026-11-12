@@ -16,27 +16,41 @@ public sealed class FileSystemWorkspaceRepositoryTests : IDisposable
     [Fact]
     public async Task List_ReturnsCollectionsAndRequestsSortedFoldersFirst()
     {
-        Write("health.yaml", "name: Health check\nmethod: GET\nurl: /health\n");
-        Write("users/get-user.yaml", "name: Get user\nmethod: GET\nurl: /users/1\n");
-        Write("users/_folder.yaml", "headers:\n  Accept: application/json\n");
-        Write("users/broken.yaml", "name: [oops");
+        Write("requests/health.yaml", "name: Health check\nmethod: GET\nurl: /health\n");
+        Write("requests/users/get-user.yaml", "name: Get user\nmethod: GET\nurl: /users/1\n");
+        Write("requests/users/_folder.yaml", "headers:\n  Accept: application/json\n");
+        Write("requests/users/broken.yaml", "name: [oops");
+        Write("requests/users/smoke.run.yaml", "name: Smoke\n");
+        Write("requests/.hidden/x.yaml", "name: X\n");
         Write("environments/dev.yaml", "name: Development\n");
-        Write("missive.yaml", "name: my-api\n");
+        Write("plans/get.yaml", "name: Get\n");
+        Write("outside.yaml", "name: Outside\n");
+        Write("missive.yaml", "layout: 2\n");
         Write(".missive/history.yaml", "x: 1\n");
         Write("README.md", "# hi\n");
-        Directory.CreateDirectory(Path.Combine(_root, "empty"));
+        Directory.CreateDirectory(Path.Combine(_root, "requests", "empty"));
 
         var result = await _repository.ListAsync(_root);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(["empty", "users", "health.yaml"], result.Value.Select(e => e.Path.Value));
+        Assert.Equal(["requests/empty", "requests/users", "requests/health.yaml"], result.Value.Select(e => e.Path.Value));
 
         var users = Assert.IsType<FolderEntry>(result.Value[1]);
-        Assert.Equal(["users/broken.yaml", "users/get-user.yaml"], users.Children.Select(e => e.Path.Value));
+        Assert.Equal(["requests/users/broken.yaml", "requests/users/get-user.yaml"], users.Children.Select(e => e.Path.Value));
         var broken = Assert.IsType<RequestFileEntry>(users.Children[0]);
         Assert.Equal(ErrorCodes.InvalidFile, broken.Request.Error?.Code);
         var getUser = Assert.IsType<RequestFileEntry>(users.Children[1]);
         Assert.Equal("Get user", getUser.Request.Value.Name);
+    }
+
+    [Fact]
+    public async Task List_IsEmptyWithoutARequestsFolder()
+    {
+        Write("health.yaml", "name: Health check\n");
+
+        var result = await _repository.ListAsync(_root);
+
+        Assert.Empty(result.Value);
     }
 
     [Fact]

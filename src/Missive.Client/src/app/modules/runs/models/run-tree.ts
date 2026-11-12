@@ -1,4 +1,5 @@
 import { RunPlanFileDto } from '../../../models/messages';
+import { PLANS_FOLDER } from '../../../models/workspace';
 
 /** An entry of the Load runs view's tree: a folder, or a run plan file. */
 export interface RunTreeNode {
@@ -14,15 +15,21 @@ export interface RunTreeNode {
 }
 
 /**
- * Builds the tree of the Load runs view from the folders it shows and the plan files. Folders a
- * plan is in are added even when the list lacks them, so every plan has a place.
+ * Builds the tree of the Load runs view from the folders it shows and the plan files, whose paths
+ * are inside `root` (the `plans` folder). Folders a plan is in are added even when the list lacks
+ * them, so every plan has a place.
  */
-export function buildRunTree(folders: string[], plans: RunPlanFileDto[]): RunTreeNode[] {
-  const root: RunTreeNode[] = [];
+export function buildRunTree(
+  folders: string[],
+  plans: RunPlanFileDto[],
+  root = PLANS_FOLDER,
+): RunTreeNode[] {
+  const top: RunTreeNode[] = [];
+  const rootFolder = root;
   const byPath = new Map<string, RunTreeNode>();
 
   const folderNode = (path: string): RunTreeNode[] => {
-    if (!path) return root;
+    if (!path || path === rootFolder) return top;
     const existing = byPath.get(path);
     if (existing) return existing.children!;
     const slash = path.lastIndexOf('/');
@@ -53,5 +60,5 @@ export function buildRunTree(folders: string[], plans: RunPlanFileDto[]): RunTre
     for (const node of nodes) if (node.children) sort(node.children);
     return nodes;
   };
-  return sort(root);
+  return sort(top);
 }

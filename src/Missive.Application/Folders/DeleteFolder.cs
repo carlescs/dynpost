@@ -15,7 +15,7 @@ public sealed class DeleteFolder(IWorkspaceRepository repository, ILocalOnlyFile
 {
     private const int MaxListed = 3;
 
-    public Result<Unit> Execute(string path)
+    public Result<Unit> Execute(string path, WorkspacePath? area = null)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)
@@ -23,7 +23,7 @@ public sealed class DeleteFolder(IWorkspaceRepository repository, ILocalOnlyFile
             return root.Error!;
         }
 
-        if (!FolderPaths.TryParseFolder(repository, root.Value, path, allowRoot: false, out var folder, out var error))
+        if (!FolderPaths.TryParseFolder(repository, root.Value, path, allowRoot: false, out var folder, out var error, area))
         {
             return error;
         }

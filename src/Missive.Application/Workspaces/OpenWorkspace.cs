@@ -6,13 +6,15 @@ namespace Missive.Application.Workspaces;
 
 /// <summary>
 /// Opens a folder as the current workspace and lists its requests. The folder is remembered as
-/// the one to reopen at the next launch and added to the top of the recent workspaces.
+/// the one to reopen at the next launch and added to the top of the recent workspaces. A workspace
+/// in the old layout is first moved to the current one (see <see cref="MigrateWorkspaceLayout"/>).
 /// </summary>
 public sealed class OpenWorkspace(
     IWorkspaceRepository repository,
     ILocalOnlyFiles localFiles,
     CurrentWorkspace current,
-    IAppSettingsStore settings)
+    IAppSettingsStore settings,
+    MigrateWorkspaceLayout migrate)
 {
     public async Task<Result<WorkspaceDto>> ExecuteAsync(string folder, CancellationToken cancellationToken = default)
     {
@@ -21,6 +23,7 @@ public sealed class OpenWorkspace(
             return new Error(ErrorCodes.NotFound, $"The folder '{folder}' does not exist.");
         }
 
+        var migration = await migrate.ExecuteAsync(folder, cancellationToken);
         var entries = await repository.ListAsync(folder, cancellationToken);
         if (!entries.IsSuccess)
         {
@@ -29,7 +32,10 @@ public sealed class OpenWorkspace(
 
         current.Open(folder);
         await RememberAsync(folder, cancellationToken);
-        return WorkspaceTreeBuilder.Build(folder, entries.Value, LocalOnlyPaths.ListOrEmpty(localFiles, folder));
+        return WorkspaceTreeBuilder.Build(folder, entries.Value, LocalOnlyPaths.ListOrEmpty(localFiles, folder)) with
+        {
+            Migration = migration,
+        };
     }
 
     /// <summary>Best effort: failing to remember the folder must not stop the user from opening it.</summary>

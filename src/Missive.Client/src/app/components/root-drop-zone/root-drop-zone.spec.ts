@@ -5,6 +5,7 @@ import { RootDropZone } from './root-drop-zone';
 
 @Injectable()
 class TestTreeState extends TreeState {
+  readonly root = '';
   protected createFolder = vi.fn();
   protected renameFolder = vi.fn();
   protected move = vi.fn();

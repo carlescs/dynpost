@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
 import { ERROR_CODES, RunPlanFileDto, RunResultDto, RunSummaryDto } from '../models/messages';
+import { PLANS_FOLDER } from '../models/workspace';
 import { WorkspaceStore } from './workspace-store';
 import { DISCARD, Dialogs } from './dialogs';
 import { joinPath } from './tree-state';
@@ -156,8 +157,8 @@ export class RunStore {
     }
   }
 
-  /** Creates a plan file with a starting template in `folder` (`''` is the root) and opens it. */
-  async create(folder = ''): Promise<void> {
+  /** Creates a plan file with a starting template in `folder` (by default the top of `plans`) and opens it. */
+  async create(folder = PLANS_FOLDER): Promise<void> {
     const taken = new Set(this.plans().map((plan) => plan.path.toLowerCase()));
     let index = 1;
     while (taken.has(joinPath(folder, `plan-${index}.run.yaml`).toLowerCase())) index++;
@@ -193,7 +194,7 @@ export class RunStore {
     await this.refresh();
   }
 
-  /** Moves a plan file into `folder` (`''` is the root); its open tab follows. */
+  /** Moves a plan file into `folder` (`plans` for the top level); its open tab follows. */
   async movePlan(path: string, folder: string): Promise<boolean> {
     const open = this.drafts().find((d) => d.path === path);
     if (open && isRunPlanRunning(open)) {
@@ -206,7 +207,7 @@ export class RunStore {
     });
   }
 
-  /** Creates a folder inside `parent` (`''` is the root); resolves to whether it worked. */
+  /** Creates a folder inside `parent` (`plans` for the top level); resolves to whether it worked. */
   createFolder(parent: string, name: string): Promise<boolean> {
     return this.change(() => this.bridge.send('folder.create', { parent, name }));
   }
@@ -220,7 +221,7 @@ export class RunStore {
     });
   }
 
-  /** Moves a folder of plans into `parent` (`''` is the root); open plans inside it follow. */
+  /** Moves a folder of plans into `parent` (`plans` for the top level); open plans inside it follow. */
   moveFolder(path: string, parent: string): Promise<boolean> {
     if (this.refuseRunningIn(path, 'moving')) return Promise.resolve(false);
     return this.change(async () => {

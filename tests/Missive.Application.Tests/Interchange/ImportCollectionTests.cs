@@ -51,19 +51,19 @@ public class ImportCollectionTests
             "Shop: API",
             [new CollectionFolder("Users", [], [new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1")])],
             [new HttpRequestDefinition("Health", RequestMethod.Get, "/health")]));
-        _repository.EntryExists(Root, P("Shop- API")).Returns(true);
+        _repository.EntryExists(Root, P("requests/Shop- API")).Returns(true);
 
         var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
 
         Assert.True(result.IsSuccess, result.Error?.Message);
-        Assert.Equal("Shop- API 2", result.Value.Folder);
+        Assert.Equal("requests/Shop- API 2", result.Value.Folder);
         Assert.Equal(2, result.Value.Requests);
         Assert.Equal(2, result.Value.Folders);
         Assert.Equal(["note"], result.Value.Warnings);
-        _repository.Received(1).CreateFolder(Root, P("Shop- API 2"));
-        _repository.Received(1).CreateFolder(Root, P("Shop- API 2/Users"));
-        await _repository.Received(1).WriteRequestAsync(Root, P("Shop- API 2/health.yaml"), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
-        await _repository.Received(1).WriteRequestAsync(Root, P("Shop- API 2/Users/get-user.yaml"), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
+        _repository.Received(1).CreateFolder(Root, P("requests/Shop- API 2"));
+        _repository.Received(1).CreateFolder(Root, P("requests/Shop- API 2/Users"));
+        await _repository.Received(1).WriteRequestAsync(Root, P("requests/Shop- API 2/health.yaml"), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
+        await _repository.Received(1).WriteRequestAsync(Root, P("requests/Shop- API 2/Users/get-user.yaml"), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -78,8 +78,8 @@ public class ImportCollectionTests
 
         await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
 
-        await _repository.Received(1).WriteRequestAsync(Root, P("Shop/ping.yaml"), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
-        await _repository.Received(1).WriteRequestAsync(Root, P("Shop/ping-2.yaml"), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
+        await _repository.Received(1).WriteRequestAsync(Root, P("requests/Shop/ping.yaml"), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
+        await _repository.Received(1).WriteRequestAsync(Root, P("requests/Shop/ping-2.yaml"), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class ImportCollectionTests
 
         await _repository.Received(1).WriteRequestAsync(
             Root,
-            P("Shop/post-items.yaml"),
+            P("requests/Shop/post-items.yaml"),
             Arg.Is<HttpRequestDefinition>(r =>
                 r.Name == "POST /items"
                 && r.Params.Select(p => p.Key).SequenceEqual(new[] { "id", "flag" })
@@ -142,22 +142,22 @@ public class ImportCollectionTests
     public async Task ImportsIntoTheChosenFolder()
     {
         Returns(new CollectionFolder("environments", [], [new HttpRequestDefinition("A", RequestMethod.Get, "/a")]));
-        _repository.DirectoryExists(Root, P("team")).Returns(true);
+        _repository.DirectoryExists(Root, P("requests/team")).Returns(true);
 
-        var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source, "team"));
+        var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source, "requests/team"));
 
-        // "environments" is only reserved at the workspace root.
-        Assert.Equal("team/environments", result.Value.Folder);
+        Assert.Equal("requests/team/environments", result.Value.Folder);
     }
 
     [Fact]
-    public async Task AvoidsTheReservedEnvironmentsFolderAtTheRoot()
+    public async Task ImportsIntoTheRequestsFolderByDefault()
     {
         Returns(new CollectionFolder("environments", [], [new HttpRequestDefinition("A", RequestMethod.Get, "/a")]));
 
         var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
 
-        Assert.Equal("environments 2", result.Value.Folder);
+        // "environments" isn't reserved inside requests/.
+        Assert.Equal("requests/environments", result.Value.Folder);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class ImportCollectionTests
     [Fact]
     public async Task NeedsAWorkspaceAndAnExistingFolder()
     {
-        Assert.Equal(ErrorCodes.NotFound, (await UseCase().ExecuteAsync(new ImportCollectionRequest(Source, "missing"))).Error?.Code);
+        Assert.Equal(ErrorCodes.NotFound, (await UseCase().ExecuteAsync(new ImportCollectionRequest(Source, "requests/missing"))).Error?.Code);
 
         var noWorkspace = new ImportCollection(_repository, _environments, _secrets, _files, _importer, new CurrentWorkspace());
         Assert.Equal(ErrorCodes.NoWorkspace, (await noWorkspace.ExecuteAsync(new ImportCollectionRequest(Source))).Error?.Code);

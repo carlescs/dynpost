@@ -13,8 +13,8 @@ import { TreeState, folderName } from '../../services/tree-state';
   templateUrl: './drag-chip.html',
 })
 export class DragChip {
-  /** How the workspace root is called in this tree's hint. */
-  readonly rootLabel = input('workspace root');
+  /** How the top level is called in this tree's hint. */
+  readonly rootLabel = input('top level');
 
   private readonly state = inject(TreeState);
 
@@ -27,7 +27,8 @@ export class DragChip {
   protected readonly hint = computed(() => {
     const hint = this.state.dropHint();
     if (!hint) return '';
-    if (hint.kind === 'move') return hint.folder ? folderName(hint.folder) : this.rootLabel();
+    if (hint.kind === 'move')
+      return hint.folder !== this.state.root ? folderName(hint.folder) : this.rootLabel();
     switch (hint.reason) {
       case 'same':
         return 'Already here';

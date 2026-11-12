@@ -12,7 +12,7 @@ namespace Missive.Application.Tests.History;
 public class ResponseHistoryTests
 {
     private const string Root = "/work/my-api";
-    private const string Path = "users/get-user.yaml";
+    private const string Path = "requests/users/get-user.yaml";
     private static readonly DateTimeOffset Now = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
 
     private readonly IHistoryStore _store = Substitute.For<IHistoryStore>();
@@ -90,7 +90,7 @@ public class ResponseHistoryTests
 
     [Theory]
     [InlineData(null)]
-    [InlineData("users/notes.txt")]
+    [InlineData("requests/users/notes.txt")]
     [InlineData("../outside.yaml")]
     public async Task Record_IgnoresRequestsThatArentFiles(string? path)
     {

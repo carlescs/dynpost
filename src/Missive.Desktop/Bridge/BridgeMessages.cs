@@ -2,6 +2,7 @@ using System.Text.Json;
 using Missive.Application.Common;
 using Missive.Application.Environments;
 using Missive.Application.Requests;
+using Missive.Domain.Workspaces;
 
 namespace Missive.Desktop.Bridge;
 
@@ -404,8 +405,8 @@ internal sealed record SetActivityOrderPayload(IReadOnlyList<string>? Order);
 /// <param name="IncludeEnvironments">Whether to export the environments (secret values never are).</param>
 internal sealed record ExportWorkspacePayload(string Format, bool IncludeEnvironments = true);
 
-/// <param name="Folder">The folder to import into; <c>""</c> is the workspace root.</param>
-internal sealed record ImportCollectionPayload(string Folder = "");
+/// <param name="Folder">The folder to import into: <c>requests</c> or a folder inside it.</param>
+internal sealed record ImportCollectionPayload(string Folder = WorkspaceLayout.RequestsFolder);
 
 internal sealed record LoadRequestPayload(string Path);
 internal sealed record PickRequestFilesPayload(bool Multiple = false);
@@ -449,13 +450,13 @@ internal sealed record OAuth2TokenPayload(AuthDto Auth);
 
 internal sealed record DeleteCookiePayload(string Environment, string Name, string Domain, string Path);
 
-/// <param name="Folder">The destination folder; <c>""</c> is the workspace root.</param>
+/// <param name="Folder">The destination folder: <c>requests</c> or a folder inside it.</param>
 internal sealed record MoveRequestPayload(string Path, string Folder);
 
-/// <param name="Parent">The destination folder; <c>""</c> is the workspace root.</param>
+/// <param name="Parent">The destination folder: <c>requests</c> or a folder inside it.</param>
 internal sealed record MoveFolderPayload(string Path, string Parent);
 
-/// <param name="Parent">The containing folder; <c>""</c> is the workspace root.</param>
+/// <param name="Parent">The containing folder: <c>requests</c> or a folder inside it.</param>
 internal sealed record CreateFolderPayload(string Parent, string Name);
 
 internal sealed record RenameFolderPayload(string Path, string Name);
@@ -535,7 +536,7 @@ internal sealed record RunPlanPathPayload(string Path);
 
 internal sealed record SaveRunPlanPayload(string Path, string Yaml);
 
-/// <param name="Folder">The destination folder; <c>""</c> is the workspace root.</param>
+/// <param name="Folder">The destination folder: <c>plans</c> or a folder inside it.</param>
 internal sealed record MoveRunPlanPayload(string Path, string Folder);
 
 internal sealed record StartRunPayload(string Path, bool ConfirmLarge = false);

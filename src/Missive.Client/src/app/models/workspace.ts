@@ -1,5 +1,11 @@
 import { CaptureDto, ResponseDto } from './messages';
 
+/** The workspace folder holding every request and collection folder. */
+export const REQUESTS_FOLDER = 'requests';
+
+/** The workspace folder holding every load run plan and the folders organizing them. */
+export const PLANS_FOLDER = 'plans';
+
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
@@ -102,7 +108,7 @@ export type ResponseState =
 export interface RequestDocument extends RequestContent {
   /** Workspace-relative file path; `null` for a new request that has not been saved yet. */
   path: string | null;
-  /** Where a new request will be saved (`''` is the workspace root). */
+  /** The folder a new request will be saved in (`requests` or a folder inside it). */
   folder: string;
   /** Stable id for the open document (the path, or a generated id for unsaved requests). */
   id: string;

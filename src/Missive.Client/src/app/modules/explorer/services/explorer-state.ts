@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { WorkspaceNode } from '../../../models/workspace';
+import { REQUESTS_FOLDER, WorkspaceNode } from '../../../models/workspace';
 import { TreeState } from '../../../services/tree-state';
 import { WorkspaceStore } from '../../../services/workspace-store';
 
@@ -13,6 +13,7 @@ export { canMove } from '../../../services/tree-state';
 @Injectable()
 export class ExplorerState extends TreeState<WorkspaceNode> {
   readonly store = inject(WorkspaceStore);
+  readonly root = REQUESTS_FOLDER;
 
   /** The explorer entry whose context menu is open, with the pointer position. */
   readonly menu = signal<{ node: WorkspaceNode; x: number; y: number } | null>(null);

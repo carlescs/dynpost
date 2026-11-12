@@ -60,138 +60,112 @@ public class RunFolderUseCaseTests
     }
 
     [Fact]
-    public async Task List_ShowsFoldersWithPlansOrWithoutRequests()
+    public async Task List_ShowsTheVisibleFoldersInsideThePlansFolder()
     {
-        var request = Result<HttpRequestDefinition>.Success(new HttpRequestDefinition("Get", RequestMethod.Get, "https://x"));
-        _repository.ListAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<WorkspaceEntry>>.Success(
-        [
-            new FolderEntry(P("empty"), []),
-            new FolderEntry(P("perf"), [new FolderEntry(P("perf/nightly"), [])]),
-            new FolderEntry(P("shop"),
-            [
-                new RequestFileEntry(P("shop/list.yaml"), request),
-                new FolderEntry(P("shop/load"), []),
-            ]),
-            new FolderEntry(P("users"), [new RequestFileEntry(P("users/get.yaml"), request)]),
-        ]));
-        _store.List(Root).Returns(Result<IReadOnlyList<WorkspacePath>>.Success([P("shop/smoke.run.yaml")]));
+        _repository.DirectoryExists(Root, P("plans")).Returns(true);
+        _repository.ReadFolderContents(Root, P("plans")).Returns(new FolderContents(
+            [P("plans/perf/smoke.run.yaml")],
+            [P("plans/perf/nightly"), P("plans/empty"), P("plans/perf"), P("plans/.hidden"), P("plans/.hidden/inner")],
+            []));
 
-        var folders = await new ListRunFolders(_repository, _store, _current).ExecuteAsync();
+        var folders = await new ListRunFolders(_repository, _current).ExecuteAsync();
 
-        Assert.Equal(["empty", "perf", "perf/nightly", "shop", "shop/load"], folders.Value);
+        Assert.Equal(["plans/empty", "plans/perf", "plans/perf/nightly"], folders.Value);
+    }
+
+    [Fact]
+    public async Task List_IsEmptyWithoutAPlansFolder()
+    {
+        var folders = await new ListRunFolders(_repository, _current).ExecuteAsync();
+
+        Assert.Empty(folders.Value);
     }
 
     [Fact]
     public async Task Rename_MovesTheFolderAndTheRunsOfItsPlans()
     {
-        Folder("perf", "perf/smoke.run.yaml", "perf/deep/soak.run.yaml", "perf/_folder.yaml");
+        Folder("plans/perf", "plans/perf/smoke.run.yaml", "plans/perf/deep/soak.run.yaml", "plans/perf/_folder.yaml");
 
         var renamed = await new RenameRunFolder(new RenameFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
-            .ExecuteAsync("perf", "load");
+            .ExecuteAsync("plans/perf", "load");
 
-        Assert.Equal("load", renamed.Value.Path);
-        _repository.Received(1).MoveFolder(Root, P("perf"), P("load"));
-        await _runs.Received(1).MovePlanAsync(Root, "perf/smoke.run.yaml", "load/smoke.run.yaml", Arg.Any<CancellationToken>());
-        await _runs.Received(1).MovePlanAsync(Root, "perf/deep/soak.run.yaml", "load/deep/soak.run.yaml", Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Rename_RefusesFoldersWithRequests()
-    {
-        Folder("shop", "shop/smoke.run.yaml", "shop/list.yaml");
-
-        var renamed = await new RenameRunFolder(new RenameFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
-            .ExecuteAsync("shop", "store");
-
-        Assert.Equal(ErrorCodes.InvalidRequest, renamed.Error?.Code);
-        Assert.Contains("Explorer", renamed.Error!.Message);
-        _repository.DidNotReceiveWithAnyArgs().MoveFolder(default!, default!, default!);
+        Assert.Equal("plans/load", renamed.Value.Path);
+        _repository.Received(1).MoveFolder(Root, P("plans/perf"), P("plans/load"));
+        await _runs.Received(1).MovePlanAsync(Root, "plans/perf/smoke.run.yaml", "plans/load/smoke.run.yaml", Arg.Any<CancellationToken>());
+        await _runs.Received(1).MovePlanAsync(Root, "plans/perf/deep/soak.run.yaml", "plans/load/deep/soak.run.yaml", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Move_RefusesFoldersWithARunningPlan()
     {
-        Folder("perf", "perf/smoke.run.yaml");
-        Running("perf/smoke.run.yaml");
+        Folder("plans/perf", "plans/perf/smoke.run.yaml");
+        Running("plans/perf/smoke.run.yaml");
 
         var moved = await new MoveRunFolder(new MoveFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
-            .ExecuteAsync("perf", "");
+            .ExecuteAsync("plans/perf", "plans");
 
         Assert.Equal(ErrorCodes.InvalidRequest, moved.Error?.Code);
         _repository.DidNotReceiveWithAnyArgs().MoveFolder(default!, default!, default!);
     }
 
     [Fact]
+    public async Task Rename_RefusesFoldersOutsideThePlansFolder()
+    {
+        Folder("requests/shop", "requests/shop/list.yaml");
+
+        var renamed = await new RenameRunFolder(new RenameFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
+            .ExecuteAsync("requests/shop", "store");
+
+        Assert.Equal(ErrorCodes.InvalidPath, renamed.Error?.Code);
+        _repository.DidNotReceiveWithAnyArgs().MoveFolder(default!, default!, default!);
+    }
+
+    [Fact]
     public async Task Move_MovesTheFolderAndTheRunsOfItsPlans()
     {
-        Folder("perf", "perf/smoke.run.yaml");
-        Folder("archive");
+        Folder("plans/perf", "plans/perf/smoke.run.yaml");
+        Folder("plans/archive");
 
         var moved = await new MoveRunFolder(new MoveFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
-            .ExecuteAsync("perf", "archive");
+            .ExecuteAsync("plans/perf", "plans/archive");
 
-        Assert.Equal("archive/perf", moved.Value.Path);
-        await _runs.Received(1).MovePlanAsync(Root, "perf/smoke.run.yaml", "archive/perf/smoke.run.yaml", Arg.Any<CancellationToken>());
+        Assert.Equal("plans/archive/perf", moved.Value.Path);
+        await _runs.Received(1).MovePlanAsync(Root, "plans/perf/smoke.run.yaml", "plans/archive/perf/smoke.run.yaml", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public void Duplicate_CopiesAFolderOfPlans()
     {
-        Folder("perf", "perf/smoke.run.yaml");
+        Folder("plans/perf", "plans/perf/smoke.run.yaml");
 
         var copy = new DuplicateRunFolder(new DuplicateFolder(_repository, _localFiles, _current), _repository, _current)
-            .Execute("perf");
+            .Execute("plans/perf");
 
-        Assert.Equal("perf copy", copy.Value.Path);
-        _repository.Received(1).CopyFile(Root, P("perf/smoke.run.yaml"), P("perf copy/smoke.run.yaml"));
-    }
-
-    [Fact]
-    public void Duplicate_RefusesFoldersWithRequests()
-    {
-        Folder("shop", "shop/list.yaml");
-
-        var copy = new DuplicateRunFolder(new DuplicateFolder(_repository, _localFiles, _current), _repository, _current)
-            .Execute("shop");
-
-        Assert.Equal(ErrorCodes.InvalidRequest, copy.Error?.Code);
-        _repository.DidNotReceiveWithAnyArgs().CopyFile(default!, default!, default!);
+        Assert.Equal("plans/perf copy", copy.Value.Path);
+        _repository.Received(1).CopyFile(Root, P("plans/perf/smoke.run.yaml"), P("plans/perf copy/smoke.run.yaml"));
     }
 
     [Fact]
     public async Task Delete_DeletesTheFolderAndTheRunsOfItsPlans()
     {
-        Folder("perf", "perf/smoke.run.yaml", "perf/deep/soak.run.yaml");
+        Folder("plans/perf", "plans/perf/smoke.run.yaml", "plans/perf/deep/soak.run.yaml");
 
         var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
-            .ExecuteAsync("perf");
+            .ExecuteAsync("plans/perf");
 
         Assert.True(deleted.IsSuccess);
-        _repository.Received(1).DeleteFolder(Root, P("perf"));
-        await _runs.Received(1).DeletePlanAsync(Root, "perf/smoke.run.yaml", Arg.Any<CancellationToken>());
-        await _runs.Received(1).DeletePlanAsync(Root, "perf/deep/soak.run.yaml", Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Delete_RefusesFoldersWithRequests()
-    {
-        Folder("shop", "shop/list.yaml", "shop/smoke.run.yaml");
-
-        var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
-            .ExecuteAsync("shop");
-
-        Assert.Equal(ErrorCodes.InvalidRequest, deleted.Error?.Code);
-        _repository.DidNotReceiveWithAnyArgs().DeleteFolder(default!, default!);
-        await _runs.DidNotReceiveWithAnyArgs().DeletePlanAsync(default!, default!, default);
+        _repository.Received(1).DeleteFolder(Root, P("plans/perf"));
+        await _runs.Received(1).DeletePlanAsync(Root, "plans/perf/smoke.run.yaml", Arg.Any<CancellationToken>());
+        await _runs.Received(1).DeletePlanAsync(Root, "plans/perf/deep/soak.run.yaml", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Delete_KeepsTheRunsWhenTheFolderCantBeDeleted()
     {
-        Folder("perf", "perf/smoke.run.yaml", "perf/notes.txt");
+        Folder("plans/perf", "plans/perf/smoke.run.yaml", "plans/perf/notes.txt");
 
         var deleted = await new DeleteRunFolder(new DeleteFolder(_repository, _localFiles, _history, _current), _repository, _runs, _registry, _current)
-            .ExecuteAsync("perf");
+            .ExecuteAsync("plans/perf");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, deleted.Error?.Code);
         await _runs.DidNotReceiveWithAnyArgs().DeletePlanAsync(default!, default!, default);
@@ -202,47 +176,47 @@ public class RunFolderUseCaseTests
     [Fact]
     public async Task MovePlan_MovesTheFileWithItsRunsAndSharing()
     {
-        _store.Exists(Root, P("smoke.run.yaml")).Returns(true);
-        _repository.DirectoryExists(Root, P("perf")).Returns(true);
+        _store.Exists(Root, P("plans/smoke.run.yaml")).Returns(true);
+        _repository.DirectoryExists(Root, P("plans/perf")).Returns(true);
 
-        var moved = await MovePlan().ExecuteAsync("smoke.run.yaml", "perf");
+        var moved = await MovePlan().ExecuteAsync("plans/smoke.run.yaml", "plans/perf");
 
-        Assert.Equal("perf/smoke.run.yaml", moved.Value.Path);
-        _store.Received(1).Move(Root, P("smoke.run.yaml"), P("perf/smoke.run.yaml"));
-        _localFiles.Received(1).Move(Root, P("smoke.run.yaml"), P("perf/smoke.run.yaml"));
-        await _runs.Received(1).MovePlanAsync(Root, "smoke.run.yaml", "perf/smoke.run.yaml", Arg.Any<CancellationToken>());
+        Assert.Equal("plans/perf/smoke.run.yaml", moved.Value.Path);
+        _store.Received(1).Move(Root, P("plans/smoke.run.yaml"), P("plans/perf/smoke.run.yaml"));
+        _localFiles.Received(1).Move(Root, P("plans/smoke.run.yaml"), P("plans/perf/smoke.run.yaml"));
+        await _runs.Received(1).MovePlanAsync(Root, "plans/smoke.run.yaml", "plans/perf/smoke.run.yaml", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task MovePlan_ToTheRoot()
     {
-        _store.Exists(Root, P("perf/smoke.run.yaml")).Returns(true);
+        _store.Exists(Root, P("plans/perf/smoke.run.yaml")).Returns(true);
 
-        var moved = await MovePlan().ExecuteAsync("perf/smoke.run.yaml", "");
+        var moved = await MovePlan().ExecuteAsync("plans/perf/smoke.run.yaml", "plans");
 
-        Assert.Equal("smoke.run.yaml", moved.Value.Path);
+        Assert.Equal("plans/smoke.run.yaml", moved.Value.Path);
     }
 
     [Fact]
     public async Task MovePlan_LeavesAPlanInItsOwnFolderAlone()
     {
-        _store.Exists(Root, P("perf/smoke.run.yaml")).Returns(true);
-        _repository.DirectoryExists(Root, P("perf")).Returns(true);
+        _store.Exists(Root, P("plans/perf/smoke.run.yaml")).Returns(true);
+        _repository.DirectoryExists(Root, P("plans/perf")).Returns(true);
 
-        var moved = await MovePlan().ExecuteAsync("perf/smoke.run.yaml", "perf");
+        var moved = await MovePlan().ExecuteAsync("plans/perf/smoke.run.yaml", "plans/perf");
 
-        Assert.Equal("perf/smoke.run.yaml", moved.Value.Path);
+        Assert.Equal("plans/perf/smoke.run.yaml", moved.Value.Path);
         _store.DidNotReceiveWithAnyArgs().Move(default!, default!, default!);
     }
 
     [Fact]
     public async Task MovePlan_RefusesTakenNames()
     {
-        _store.Exists(Root, P("smoke.run.yaml")).Returns(true);
-        _store.Exists(Root, P("perf/smoke.run.yaml")).Returns(true);
-        _repository.DirectoryExists(Root, P("perf")).Returns(true);
+        _store.Exists(Root, P("plans/smoke.run.yaml")).Returns(true);
+        _store.Exists(Root, P("plans/perf/smoke.run.yaml")).Returns(true);
+        _repository.DirectoryExists(Root, P("plans/perf")).Returns(true);
 
-        var moved = await MovePlan().ExecuteAsync("smoke.run.yaml", "perf");
+        var moved = await MovePlan().ExecuteAsync("plans/smoke.run.yaml", "plans/perf");
 
         Assert.Equal(ErrorCodes.AlreadyExists, moved.Error?.Code);
         _store.DidNotReceiveWithAnyArgs().Move(default!, default!, default!);
@@ -251,11 +225,11 @@ public class RunFolderUseCaseTests
     [Fact]
     public async Task MovePlan_RefusesARunningPlan()
     {
-        _store.Exists(Root, P("smoke.run.yaml")).Returns(true);
-        _repository.DirectoryExists(Root, P("perf")).Returns(true);
-        Running("smoke.run.yaml");
+        _store.Exists(Root, P("plans/smoke.run.yaml")).Returns(true);
+        _repository.DirectoryExists(Root, P("plans/perf")).Returns(true);
+        Running("plans/smoke.run.yaml");
 
-        var moved = await MovePlan().ExecuteAsync("smoke.run.yaml", "perf");
+        var moved = await MovePlan().ExecuteAsync("plans/smoke.run.yaml", "plans/perf");
 
         Assert.Equal(ErrorCodes.InvalidRequest, moved.Error?.Code);
         _store.DidNotReceiveWithAnyArgs().Move(default!, default!, default!);
@@ -264,8 +238,14 @@ public class RunFolderUseCaseTests
     [Fact]
     public async Task MovePlan_RefusesPathsThatAreNotPlans()
     {
-        var moved = await MovePlan().ExecuteAsync("users/get.yaml", "");
-
+        var moved = await MovePlan().ExecuteAsync("users/get.yaml", "plans");
         Assert.Equal(ErrorCodes.InvalidPath, moved.Error?.Code);
+
+        var outside = await MovePlan().ExecuteAsync("smoke.run.yaml", "plans");
+        Assert.Equal(ErrorCodes.InvalidPath, outside.Error?.Code);
+
+        _store.Exists(Root, P("plans/smoke.run.yaml")).Returns(true);
+        var intoRequests = await MovePlan().ExecuteAsync("plans/smoke.run.yaml", "requests");
+        Assert.Equal(ErrorCodes.InvalidPath, intoRequests.Error?.Code);
     }
 }

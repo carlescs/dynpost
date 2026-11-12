@@ -5,7 +5,7 @@ using Missive.Domain.Workspaces;
 namespace Missive.Application.Requests;
 
 /// <summary>
-/// Saves a new request in a folder of the open workspace, as a file named after the request
+/// Saves a new request in a folder of the open workspace's <c>requests/</c> folder, as a file named after the request
 /// (<c>create-user.yaml</c>, or <c>create-user-2.yaml</c> if that name is taken).
 /// </summary>
 public sealed class CreateRequest(IWorkspaceRepository repository, CurrentWorkspace current)
@@ -20,7 +20,7 @@ public sealed class CreateRequest(IWorkspaceRepository repository, CurrentWorksp
             return root.Error!;
         }
 
-        if (!WorkspacePath.TryParse(folder, out var folderPath))
+        if (!WorkspacePath.TryParse(folder, out var folderPath) || !WorkspaceLayout.IsAreaFolder(WorkspaceLayout.RequestsRoot, folderPath))
         {
             return new Error(ErrorCodes.InvalidPath, $"'{folder}' is not a valid folder path.");
         }

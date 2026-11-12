@@ -9,7 +9,7 @@
     (input)="patch({ name: $any($event.target).value })"
   />
   <span class="truncate text-xs text-slate-400" [title]="doc.path ?? ''">{{
-    doc.path ?? 'New request — will be saved in ' + (doc.folder || 'the workspace root')
+    doc.path ?? 'New request — will be saved in ' + (doc.folder || 'requests')
   }}</span>
   <button
     type="button"

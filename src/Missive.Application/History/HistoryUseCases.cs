@@ -110,7 +110,7 @@ internal static class HistoryPaths
     {
         error = null!;
         if (WorkspacePath.TryParse(path, out request) && !request.IsRoot
-            && WorkspaceLayout.IsRequestFile(request.Parent, request.FileName))
+            && WorkspaceLayout.IsRequestPath(request))
         {
             return true;
         }

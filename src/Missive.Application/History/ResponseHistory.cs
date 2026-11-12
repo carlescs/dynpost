@@ -28,7 +28,7 @@ public sealed class ResponseHistory(IHistoryStore store, IAppSettingsStore setti
         DateTimeOffset sentAt)
     {
         if (path is null || !WorkspacePath.TryParse(path, out var request) || request.IsRoot
-            || !WorkspaceLayout.IsRequestFile(request.Parent, request.FileName))
+            || !WorkspaceLayout.IsRequestPath(request))
         {
             return null;
         }

@@ -32,7 +32,10 @@ public interface IWorkspaceRepository
     /// <summary>Whether <paramref name="root"/> is an existing folder.</summary>
     bool FolderExists(string root);
 
-    /// <summary>Lists the collection folders and request files in the workspace, sorted.</summary>
+    /// <summary>
+    /// Lists the collection folders and request files in the workspace's <c>requests/</c> folder,
+    /// sorted; empty when there is no such folder.
+    /// </summary>
     Task<Result<IReadOnlyList<WorkspaceEntry>>> ListAsync(string root, CancellationToken cancellationToken = default);
 
     bool FileExists(string root, WorkspacePath path);

@@ -16,7 +16,7 @@
         [class]="headerButton"
         title="New folder"
         aria-label="New folder"
-        (click)="state.startCreate('')"
+        (click)="state.startCreate(state.root)"
       >
         <fa-icon [icon]="faFolderPlus" />
       </button>
@@ -36,9 +36,9 @@
 @if (!workspace.workspace()) {
   <p class="px-3 py-1 text-sm text-slate-500">Open a workspace folder to use its run plans.</p>
 } @else {
-  <!-- The root list is also the drop area for moving entries to the workspace root. -->
+  <!-- The top-level list is also the drop area for moving entries to the top level. -->
   <div class="flex min-h-0 flex-1 flex-col" cdkDropListGroup>
-    @if (!state.tree().length && !state.isCreatingIn('')) {
+    @if (!state.tree().length && !state.isCreatingIn(state.root)) {
       <p class="px-3 py-1 text-sm text-slate-500">
         No run plans yet. A plan is a <code>*.run.yaml</code> file.
       </p>
@@ -48,7 +48,8 @@
       class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm"
       role="tree"
       aria-label="Run plans"
-      appFolderDrop=""
+      [appFolderDrop]="state.root"
+      [parent]="state.root"
       [nodes]="state.tree()"
     ></ul>
   </div>

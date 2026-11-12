@@ -622,14 +622,14 @@ public class SendRequestTests
             new Dictionary<string, string> { ["token"] = "s3cret" });
         var request = Request() with { Auth = new AuthDto("bearer", Token: "{{token}}") };
 
-        var result = await CreateSendRequest().ExecuteAsync("1", request, "users/list-users.yaml");
+        var result = await CreateSendRequest().ExecuteAsync("1", request, "requests/users/list-users.yaml");
 
         Assert.True(result.IsSuccess, result.Error?.Message);
         Assert.NotNull(result.Value.HistoryId);
         Assert.Equal("""{"token":"s3cret"}""", result.Value.Body);
         await _history.Received(1).AddAsync(
             Root,
-            Missive.Domain.Workspaces.WorkspacePath.Parse("users/list-users.yaml"),
+            Missive.Domain.Workspaces.WorkspacePath.Parse("requests/users/list-users.yaml"),
             Arg.Is<HistoryEntryDetailsDto>(e =>
                 e.Entry.Id == result.Value.HistoryId
                 && e.Entry.SentAt == Now
@@ -650,7 +650,7 @@ public class SendRequestTests
 
         var unsaved = await CreateSendRequest().ExecuteAsync("1", Request());
         _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new AppSettings(History: new HistorySettings(Enabled: false)));
-        var off = await CreateSendRequest().ExecuteAsync("2", Request(), "users/list-users.yaml");
+        var off = await CreateSendRequest().ExecuteAsync("2", Request(), "requests/users/list-users.yaml");
 
         Assert.Null(unsaved.Value.HistoryId);
         Assert.Null(off.Value.HistoryId);

@@ -320,6 +320,23 @@ export interface WorkspaceDto {
   name: string;
   root: string;
   nodes: WorkspaceNodeDto[];
+  /** Set when opening moved the workspace to the current layout: what was moved. */
+  migration?: LayoutMigrationDto | null;
+}
+
+/**
+ * What opening a workspace in the old layout did to move its requests into `requests/` and its run
+ * plans into `plans/`.
+ */
+export interface LayoutMigrationDto {
+  /** Request files (and folder defaults) moved into `requests/`. */
+  requests: number;
+  /** Run plans moved into `plans/`. */
+  plans: number;
+  /** Files left where they were because their new place was taken, each with why. */
+  leftInPlace: string[];
+  /** Why the migration stopped early, if it did. */
+  error?: string | null;
 }
 
 /** A format the workspace can be exported to. */
@@ -710,19 +727,19 @@ export interface BridgeMessages {
   /** Deletes a run plan file and its saved runs; a plan that is being run can't be deleted. */
   'runPlan.delete': { payload: { path: string }; result: null };
   /**
-   * Moves a run plan file into `folder` (`''` is the root), keeping its file name; its saved runs
+   * Moves a run plan file into `folder` (`plans` or a folder inside it), keeping its file name; its saved runs
    * follow. A plan that is being run can't be moved.
    */
   'runPlan.move': { payload: { path: string; folder: string }; result: { path: string } };
   /**
-   * The folders shown in the Load runs view, parents first: those holding run plans (at any
-   * depth) and those holding no requests at all. Create one with `folder.create`.
+   * The folders shown in the Load runs view, parents first: every folder inside `plans`. Create one
+   * with `folder.create`.
    */
   'runFolder.list': { payload: void; result: string[] };
   /**
-   * The folder actions of the Load runs view. They refuse folders that also hold requests (those
-   * are organized in the Explorer) or a plan that is being run; the plans' saved runs follow a
-   * rename or move and are deleted with the folder.
+   * The folder actions of the Load runs view, on folders inside `plans`. They refuse a folder with
+   * a plan that is being run; the plans' saved runs follow a rename or move and are deleted with
+   * the folder.
    */
   'runFolder.rename': { payload: { path: string; name: string }; result: FolderDto };
   'runFolder.move': { payload: { path: string; parent: string }; result: FolderDto };
@@ -789,7 +806,7 @@ export interface BridgeMessages {
   };
   /**
    * Asks for a file exported by another app (Postman, Insomnia, HAR, OpenAPI) and imports it into
-   * a new folder inside `folder` (`''` is the root); `null` when cancelled.
+   * a new folder inside `folder` (`requests` or a folder inside it); `null` when cancelled.
    */
   'workspace.import': { payload: { folder: string }; result: ImportResultDto | null };
   'request.load': { payload: { path: string }; result: RequestDto };
@@ -799,13 +816,13 @@ export interface BridgeMessages {
   'request.pickFiles': { payload: { multiple: boolean }; result: PickedFileDto[] };
   /** Describes the files a request body sends: size, missing, outside the workspace. */
   'request.inspectFiles': { payload: { paths: string[] }; result: RequestFileInfoDto[] };
-  /** Saves a new request in a folder (`''` is the workspace root). */
+  /** Saves a new request in a folder (`requests` or a folder inside it). */
   'request.create': { payload: { folder: string; request: RequestDto }; result: SavedRequestDto };
   /** Saves an existing request file; the result path differs if the file was renamed. */
   'request.save': { payload: { path: string; request: RequestDto }; result: SavedRequestDto };
   /** Copies a request next to it as "… copy", in a new file named after the copy. */
   'request.duplicate': { payload: { path: string }; result: SavedRequestDto };
-  /** Moves a request file into `folder` (`''` is the root), keeping its file name. */
+  /** Moves a request file into `folder` (`requests` or a folder inside it), keeping its file name. */
   'request.move': { payload: { path: string; folder: string }; result: { path: string } };
   /** Deletes a request file. */
   'request.delete': { payload: { path: string }; result: null };
@@ -864,11 +881,11 @@ export interface BridgeMessages {
   'oauth2.token.clear': { payload: { auth: AuthDto }; result: null };
   /** Stops waiting for a browser sign-in; `true` when one was in progress. */
   'oauth2.signIn.cancel': { payload: void; result: boolean };
-  /** Creates a folder inside `parent` (`''` is the workspace root). */
+  /** Creates a folder inside `parent`: `requests`, `plans` or a folder inside one of them. */
   'folder.create': { payload: { parent: string; name: string }; result: FolderDto };
   /** Renames a folder within its parent; the result is its new path. */
   'folder.rename': { payload: { path: string; name: string }; result: FolderDto };
-  /** Moves a folder into `parent` (`''` is the root), keeping its name. */
+  /** Moves a folder into `parent` (`requests` or a folder inside it), keeping its name. */
   'folder.move': { payload: { path: string; parent: string }; result: FolderDto };
   /** Copies a folder with everything in it next to it as "… copy" ("… copy 2", … if taken). */
   'folder.duplicate': { payload: { path: string }; result: FolderDto };

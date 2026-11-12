@@ -52,31 +52,31 @@ public sealed class WorkspaceBridgeTests : IDisposable
     [Fact]
     public async Task DuplicateRequest_ReturnsTheCopy()
     {
-        var path = WorkspacePath.Parse("get-user.yaml");
+        var path = WorkspacePath.Parse("requests/get-user.yaml");
         _repository.FileExists(Root, path).Returns(true);
         _repository.ReadRequestAsync(Root, path, Arg.Any<CancellationToken>())
             .Returns(new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1"));
         _repository.WriteRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>())
             .Returns(Result<bool>.Success(true));
 
-        var response = await SendAsync("request.duplicate", """{ "path": "get-user.yaml" }""");
+        var response = await SendAsync("request.duplicate", """{ "path": "requests/get-user.yaml" }""");
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
-        Assert.Equal("get-user-copy.yaml", response.GetProperty("payload").GetProperty("path").GetString());
+        Assert.Equal("requests/get-user-copy.yaml", response.GetProperty("payload").GetProperty("path").GetString());
         Assert.Equal("Get user copy", response.GetProperty("payload").GetProperty("request").GetProperty("name").GetString());
     }
 
     [Fact]
     public async Task DuplicateFolder_ReturnsTheCopysPath()
     {
-        _repository.DirectoryExists(Root, WorkspacePath.Parse("users")).Returns(true);
-        _repository.ReadFolderContents(Root, WorkspacePath.Parse("users")).Returns(new FolderContents([], [], []));
+        _repository.DirectoryExists(Root, WorkspacePath.Parse("requests/users")).Returns(true);
+        _repository.ReadFolderContents(Root, WorkspacePath.Parse("requests/users")).Returns(new FolderContents([], [], []));
         _repository.CreateFolder(Root, Arg.Any<WorkspacePath>()).Returns(Unit.Value);
 
-        var response = await SendAsync("folder.duplicate", """{ "path": "users" }""");
+        var response = await SendAsync("folder.duplicate", """{ "path": "requests/users" }""");
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
-        Assert.Equal("users copy", response.GetProperty("payload").GetProperty("path").GetString());
+        Assert.Equal("requests/users copy", response.GetProperty("payload").GetProperty("path").GetString());
     }
 
     [Fact]

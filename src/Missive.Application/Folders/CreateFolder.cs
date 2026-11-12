@@ -4,10 +4,10 @@ using Missive.Domain.Workspaces;
 
 namespace Missive.Application.Folders;
 
-/// <summary>Creates a collection folder inside the open workspace.</summary>
+/// <summary>Creates a folder inside the open workspace's <c>requests/</c> or <c>plans/</c> folder.</summary>
 public sealed class CreateFolder(IWorkspaceRepository repository, CurrentWorkspace current)
 {
-    public Result<FolderDto> Execute(string parent, string name)
+    public Result<FolderDto> Execute(string parent, string name, WorkspacePath? area = null)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)
@@ -15,7 +15,8 @@ public sealed class CreateFolder(IWorkspaceRepository repository, CurrentWorkspa
             return root.Error!;
         }
 
-        if (!FolderPaths.TryParseFolder(repository, root.Value, parent, allowRoot: true, out var parentPath, out var error))
+        area ??= FolderPaths.AreaOf(parent);
+        if (!FolderPaths.TryParseFolder(repository, root.Value, parent, allowRoot: true, out var parentPath, out var error, area))
         {
             return error;
         }

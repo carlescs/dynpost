@@ -21,7 +21,7 @@ public class LastWorkspaceTests
     public LastWorkspaceTests()
     {
         _localFiles.List(Arg.Any<string>()).Returns(new HashSet<WorkspacePath>());
-        _open = new OpenWorkspace(_repository, _localFiles, _current, _settings);
+        _open = new OpenWorkspace(_repository, _localFiles, _current, _settings, Workspaces.Migrations.UpToDate());
         _repository.ListAsync(default!, default)
             .ReturnsForAnyArgs(Result<IReadOnlyList<WorkspaceEntry>>.Success(Array.Empty<WorkspaceEntry>()));
         _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => _storedSettings);

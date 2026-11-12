@@ -23,7 +23,7 @@ import { RunTreeState } from '../../services/run-tree-state';
 
 /**
  * One level of the Load runs tree: the folders and plans of a folder. Folders render their own
- * level recursively. Every entry can be dragged onto a folder (or the workspace root) to move it
+ * level recursively. Every entry can be dragged onto a folder (or the top level) to move it
  * there; like the explorer's tree, this is a component so each `cdkDrag` finds its folder's drop
  * list through dependency injection.
  */
@@ -46,7 +46,7 @@ import { RunTreeState } from '../../services/run-tree-state';
 export class RunTreeLevel {
   readonly nodes = input.required<RunTreeNode[]>();
   readonly depth = input(0);
-  /** Path of the folder these entries are in; `''` for the workspace root. */
+  /** Path of the folder these entries are in; the tree's `root` for the top level. */
   readonly parent = input('');
 
   protected readonly state = inject(RunTreeState);

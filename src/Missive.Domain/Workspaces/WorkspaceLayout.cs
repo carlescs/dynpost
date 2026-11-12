@@ -2,7 +2,11 @@ using System.Text;
 
 namespace Missive.Domain.Workspaces;
 
-/// <summary>Rules for which files and folders of a workspace hold requests.</summary>
+/// <summary>
+/// Rules for which files and folders of a workspace hold requests and run plans. Requests and
+/// their collection folders live in <c>requests/</c>, run plans in <c>plans/</c> and environments
+/// in <c>environments/</c>; every other file belongs to the user.
+/// </summary>
 public static class WorkspaceLayout
 {
     public const string RequestExtension = ".yaml";
@@ -10,6 +14,18 @@ public static class WorkspaceLayout
     public const string FolderDefaultsFile = "_folder.yaml";
     public const string EnvironmentsFolder = "environments";
     public const string LocalFolder = ".missive";
+
+    public const string RequestsFolder = "requests";
+    public const string PlansFolder = "plans";
+
+    /// <summary>The folder holding every request and collection folder: <c>requests/</c>.</summary>
+    public static WorkspacePath RequestsRoot { get; } = WorkspacePath.Root.Combine(RequestsFolder);
+
+    /// <summary>The folder holding every run plan and the folders organizing them: <c>plans/</c>.</summary>
+    public static WorkspacePath PlansRoot { get; } = WorkspacePath.Root.Combine(PlansFolder);
+
+    /// <summary>The current layout of a workspace, recorded as <c>layout</c> in <see cref="WorkspaceFile"/>.</summary>
+    public const int CurrentLayoutVersion = 2;
 
     /// <summary>Whether a file directly inside <paramref name="folder"/> is a request file.</summary>
     public static bool IsRequestFile(WorkspacePath folder, string fileName)
@@ -25,17 +41,37 @@ public static class WorkspaceLayout
 
     /// <summary>
     /// Whether <paramref name="path"/> is a request file shown in the explorer: a request file
-    /// inside collection folders only (not in <c>environments</c> or a hidden folder).
+    /// inside <c>requests/</c>, not in a hidden folder.
     /// </summary>
-    public static bool IsRequestPath(WorkspacePath path)
+    public static bool IsRequestPath(WorkspacePath path) =>
+        !path.IsRoot
+        && IsRequestFile(path.Parent, path.FileName)
+        && IsAreaFolder(RequestsRoot, path.Parent);
+
+    /// <summary>Whether <paramref name="path"/> is a run plan file shown in the Load runs view: a <c>*.run.yaml</c> inside <c>plans/</c>.</summary>
+    public static bool IsRunPlanPath(WorkspacePath path) =>
+        !path.IsRoot
+        && IsRunPlanFileName(path.FileName)
+        && IsAreaFolder(PlansRoot, path.Parent);
+
+    /// <summary>
+    /// Whether <paramref name="folder"/> is <paramref name="area"/> (<see cref="RequestsRoot"/> or
+    /// <see cref="PlansRoot"/>) or a folder inside it that isn't hidden.
+    /// </summary>
+    public static bool IsAreaFolder(WorkspacePath area, WorkspacePath folder)
     {
-        if (path.IsRoot || !IsRequestFile(path.Parent, path.FileName))
+        if (folder == area)
+        {
+            return true;
+        }
+
+        if (!folder.Value.StartsWith(area.Value + "/", StringComparison.Ordinal))
         {
             return false;
         }
 
-        var parent = WorkspacePath.Root;
-        foreach (var segment in path.Parent.Segments)
+        var parent = area;
+        foreach (var segment in folder.Segments.Skip(area.Segments.Count))
         {
             if (!IsCollectionFolder(parent, segment))
             {
@@ -48,10 +84,8 @@ public static class WorkspaceLayout
         return true;
     }
 
-    /// <summary>Whether a sub-folder of <paramref name="parent"/> is a collection shown in the explorer.</summary>
-    public static bool IsCollectionFolder(WorkspacePath parent, string folderName) =>
-        !folderName.StartsWith('.')
-        && !(parent.IsRoot && string.Equals(folderName, EnvironmentsFolder, StringComparison.OrdinalIgnoreCase));
+    /// <summary>Whether a sub-folder of <paramref name="parent"/> is a folder shown in the explorer or the Load runs view.</summary>
+    public static bool IsCollectionFolder(WorkspacePath parent, string folderName) => !folderName.StartsWith('.');
 
     /// <summary>Whether a file name is a load run plan (<c>*.run.yaml</c>), which isn't a request.</summary>
     public static bool IsRunPlanFileName(string fileName) =>
@@ -186,11 +220,6 @@ public static class WorkspaceLayout
             return $"'{name}' is a reserved name on Windows.";
         }
 
-        if (!IsCollectionFolder(parent, name))
-        {
-            return $"'{name}' is reserved for workspace settings.";
-        }
-
         return null;
     }
 
@@ -199,8 +228,7 @@ public static class WorkspaceLayout
     /// <see cref="ValidateFolderName"/> for a sub-folder: characters that aren't allowed become
     /// <c>-</c>, leading and trailing dots and spaces are removed, Windows device names get a
     /// <c>_</c> suffix and long names are shortened. Returns <paramref name="fallback"/> when
-    /// nothing usable is left. A folder at the workspace root can still clash with
-    /// <see cref="EnvironmentsFolder"/>; check it with <see cref="ValidateFolderName"/>.
+    /// nothing usable is left.
     /// </summary>
     public static string ToFolderName(string? name, string fallback = "Folder")
     {
@@ -239,6 +267,13 @@ public static class WorkspaceLayout
     /// and Missive's own or OS-generated files. Anything else belongs to the user and blocks the
     /// deletion.
     /// </summary>
+    /// <summary>
+    /// Whether a file is OS clutter or a <c>.gitkeep</c>: files a folder can hold and still count
+    /// as empty.
+    /// </summary>
+    public static bool IsClutterFile(string fileName) =>
+        DisposableFiles.Contains(fileName) && !string.Equals(fileName, FolderDefaultsFile, StringComparison.OrdinalIgnoreCase);
+
     public static bool IsDisposableFile(string fileName) =>
         DisposableFiles.Contains(fileName) || (!fileName.StartsWith('.') && HasRequestExtension(fileName));
 }
