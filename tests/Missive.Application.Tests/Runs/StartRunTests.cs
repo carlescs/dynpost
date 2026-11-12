@@ -660,13 +660,15 @@ public class StartRunTests
     {
         var plan = Plan(2, 100_000, requests: ["users/get.yaml", "users/get.yaml"]) with
         {
+            // The second thread would start, and the first send again, well after the run ends; the
+            // run still lasts long enough for the first send on a slow, busy machine.
             Load = new RunLoad(
                 2,
                 null,
-                TimeSpan.FromMilliseconds(250),
                 TimeSpan.FromSeconds(1),
-                TimeSpan.FromSeconds(1),
-                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(10),
+                TimeSpan.FromSeconds(10),
+                TimeSpan.FromSeconds(10),
                 null),
         };
         UsePlan(plan);
