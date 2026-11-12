@@ -253,13 +253,19 @@ public sealed class RunInfrastructureTests : IDisposable
     public async Task PlanStore_ListsPlansAndWritesOnlyChanges()
     {
         var store = new FileSystemRunPlanStore();
-        var path = WorkspacePath.Parse("perf/smoke.run.yaml");
+        var path = WorkspacePath.Parse("plans/perf/smoke.run.yaml");
+        Assert.Empty(store.List(_root).Value);
 
         Assert.True((await store.WriteAsync(_root, path, "name: a\n")).Value);
         Assert.False((await store.WriteAsync(_root, path, "name: a\n")).Value);
         Directory.CreateDirectory(Path.Combine(_root, ".missive"));
+        Directory.CreateDirectory(Path.Combine(_root, "plans", ".hidden"));
+        Directory.CreateDirectory(Path.Combine(_root, "requests"));
         await File.WriteAllTextAsync(Path.Combine(_root, ".missive", "hidden.run.yaml"), "x");
-        await File.WriteAllTextAsync(Path.Combine(_root, "request.yaml"), "x");
+        await File.WriteAllTextAsync(Path.Combine(_root, "plans", ".hidden", "hidden.run.yaml"), "x");
+        await File.WriteAllTextAsync(Path.Combine(_root, "requests", "outside.run.yaml"), "x");
+        await File.WriteAllTextAsync(Path.Combine(_root, "outside.run.yaml"), "x");
+        await File.WriteAllTextAsync(Path.Combine(_root, "plans", "request.yaml"), "x");
 
         Assert.Equal([path], store.List(_root).Value);
         Assert.Equal("name: a\n", (await store.ReadAsync(_root, path)).Value);

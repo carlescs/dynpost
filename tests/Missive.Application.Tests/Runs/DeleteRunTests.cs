@@ -10,7 +10,7 @@ namespace Missive.Application.Tests.Runs;
 public class DeleteRunTests
 {
     private const string Root = "/work/api";
-    private const string PlanFile = "perf/smoke.run.yaml";
+    private const string PlanFile = "plans/perf/smoke.run.yaml";
 
     private readonly IRunStore _runs = Substitute.For<IRunStore>();
     private readonly RunRegistry _registry = new();
@@ -130,7 +130,7 @@ public class DeleteRunTests
     public async Task ClearsTheRunsOfAPlan()
     {
         _registry.Add(Finished("run-1"));
-        _registry.Add(Finished("run-2", "other.run.yaml"));
+        _registry.Add(Finished("run-2", "plans/other.run.yaml"));
 
         var cleared = await new ClearRuns(_registry, _runs, _current).ExecuteAsync(PlanFile);
 

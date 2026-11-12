@@ -32,7 +32,7 @@ public class GetFileDiffTests
     public async Task AFileWithoutChanges_IsRejected()
     {
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
-            .Returns(Ok(Status(changes: [new GitChange("a.yaml", GitFileStatus.Modified)])));
+            .Returns(Ok(Status(changes: [new GitChange("requests/a.yaml", GitFileStatus.Modified)])));
 
         var result = await _useCase.ExecuteAsync("../secret.txt");
 
@@ -43,13 +43,13 @@ public class GetFileDiffTests
     [Fact]
     public async Task ARequestFile_IsParsedOnBothSides()
     {
-        var change = new GitChange("users/get-user.yaml", GitFileStatus.Modified);
+        var change = new GitChange("requests/users/get-user.yaml", GitFileStatus.Modified);
         Changed(change, new GitFileDiff(change.Path, change.Status, null, "old", "new"));
-        var path = Missive.Domain.Workspaces.WorkspacePath.Parse("users/get-user.yaml");
+        var path = Missive.Domain.Workspaces.WorkspacePath.Parse("requests/users/get-user.yaml");
         _format.Parse("old", path).Returns(Request("Get user", "https://a"));
         _format.Parse("new", path).Returns(Request("Get user", "https://b"));
 
-        var result = await _useCase.ExecuteAsync("users/get-user.yaml");
+        var result = await _useCase.ExecuteAsync("requests/users/get-user.yaml");
 
         Assert.True(result.IsSuccess, result.Error?.Message);
         var dto = result.Value;
@@ -65,25 +65,25 @@ public class GetFileDiffTests
     [Fact]
     public async Task ARenamedRequest_ParsesTheOriginalAtItsOldPath()
     {
-        var change = new GitChange("users/b.yaml", GitFileStatus.Renamed, "users/a.yaml");
-        Changed(change, new GitFileDiff(change.Path, change.Status, "users/a.yaml", "old", "new"));
+        var change = new GitChange("requests/users/b.yaml", GitFileStatus.Renamed, "requests/users/a.yaml");
+        Changed(change, new GitFileDiff(change.Path, change.Status, "requests/users/a.yaml", "old", "new"));
         _format.Parse(default!, default!).ReturnsForAnyArgs(Request("A", "https://a"));
 
-        var result = await _useCase.ExecuteAsync("users/b.yaml");
+        var result = await _useCase.ExecuteAsync("requests/users/b.yaml");
 
         Assert.True(result.Value.IsRequest);
-        _format.Received(1).Parse("old", Missive.Domain.Workspaces.WorkspacePath.Parse("users/a.yaml"));
-        _format.Received(1).Parse("new", Missive.Domain.Workspaces.WorkspacePath.Parse("users/b.yaml"));
+        _format.Received(1).Parse("old", Missive.Domain.Workspaces.WorkspacePath.Parse("requests/users/a.yaml"));
+        _format.Received(1).Parse("new", Missive.Domain.Workspaces.WorkspacePath.Parse("requests/users/b.yaml"));
     }
 
     [Fact]
     public async Task AnAddedRequest_HasOnlyTheModifiedSide()
     {
-        var change = new GitChange("new.yaml", GitFileStatus.Untracked);
+        var change = new GitChange("requests/new.yaml", GitFileStatus.Untracked);
         Changed(change, new GitFileDiff(change.Path, change.Status, null, null, "new"));
         _format.Parse("new", Arg.Any<Missive.Domain.Workspaces.WorkspacePath>()).Returns(Request("New", "https://n"));
 
-        var result = await _useCase.ExecuteAsync("new.yaml");
+        var result = await _useCase.ExecuteAsync("requests/new.yaml");
 
         Assert.True(result.Value.IsRequest);
         Assert.Null(result.Value.OriginalRequest);
@@ -93,13 +93,13 @@ public class GetFileDiffTests
     [Fact]
     public async Task AnInvalidRequestFile_ReportsWhy_AndKeepsTheText()
     {
-        var change = new GitChange("broken.yaml", GitFileStatus.Modified);
+        var change = new GitChange("requests/broken.yaml", GitFileStatus.Modified);
         Changed(change, new GitFileDiff(change.Path, change.Status, null, "name: A\n", "name: [\n"));
         _format.Parse("name: A\n", Arg.Any<Missive.Domain.Workspaces.WorkspacePath>()).Returns(Request("A", "https://a"));
         _format.Parse("name: [\n", Arg.Any<Missive.Domain.Workspaces.WorkspacePath>())
             .Returns(Result<HttpRequestDefinition>.Failure(ErrorCodes.InvalidFile, "Not valid."));
 
-        var result = await _useCase.ExecuteAsync("broken.yaml");
+        var result = await _useCase.ExecuteAsync("requests/broken.yaml");
 
         Assert.True(result.Value.IsRequest);
         Assert.Equal("Not valid.", result.Value.RequestError);
@@ -110,7 +110,7 @@ public class GetFileDiffTests
     [Theory]
     [InlineData("environments/dev.yaml")]
     [InlineData(".gitignore")]
-    [InlineData("users/_folder.yaml")]
+    [InlineData("requests/users/_folder.yaml")]
     public async Task OtherFiles_AreNotParsed(string path)
     {
         var change = new GitChange(path, GitFileStatus.Modified);
@@ -126,10 +126,10 @@ public class GetFileDiffTests
     [Fact]
     public async Task BinaryFiles_AreNotParsed()
     {
-        var change = new GitChange("odd.yaml", GitFileStatus.Modified);
+        var change = new GitChange("requests/odd.yaml", GitFileStatus.Modified);
         Changed(change, new GitFileDiff(change.Path, change.Status, null, null, null, IsBinary: true));
 
-        var result = await _useCase.ExecuteAsync("odd.yaml");
+        var result = await _useCase.ExecuteAsync("requests/odd.yaml");
 
         Assert.True(result.Value.Binary);
         Assert.False(result.Value.IsRequest);

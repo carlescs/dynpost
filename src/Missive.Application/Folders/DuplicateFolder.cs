@@ -22,12 +22,12 @@ public sealed class DuplicateFolder(IWorkspaceRepository repository, ILocalOnlyF
     /// </summary>
     private static readonly SemaphoreSlim Gate = new(1, 1);
 
-    public Result<FolderDto> Execute(string path)
+    public Result<FolderDto> Execute(string path, WorkspacePath? area = null)
     {
         Gate.Wait();
         try
         {
-            return Duplicate(path);
+            return Duplicate(path, area);
         }
         finally
         {
@@ -35,7 +35,7 @@ public sealed class DuplicateFolder(IWorkspaceRepository repository, ILocalOnlyF
         }
     }
 
-    private Result<FolderDto> Duplicate(string path)
+    private Result<FolderDto> Duplicate(string path, WorkspacePath? area)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)
@@ -43,7 +43,7 @@ public sealed class DuplicateFolder(IWorkspaceRepository repository, ILocalOnlyF
             return root.Error!;
         }
 
-        if (!FolderPaths.TryParseFolder(repository, root.Value, path, allowRoot: false, out var folder, out var error))
+        if (!FolderPaths.TryParseFolder(repository, root.Value, path, allowRoot: false, out var folder, out var error, area))
         {
             return error;
         }

@@ -17,7 +17,7 @@ namespace Missive.Application.Tests.Runs;
 public class StartRunTests
 {
     private const string Root = "/work/api";
-    private const string PlanFile = "perf/smoke.run.yaml";
+    private const string PlanFile = "plans/perf/smoke.run.yaml";
 
     private readonly IRunPlanStore _plans = Substitute.For<IRunPlanStore>();
     private readonly IRunPlanFormat _format = Substitute.For<IRunPlanFormat>();

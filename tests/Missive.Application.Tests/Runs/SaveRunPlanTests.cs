@@ -48,68 +48,68 @@ public class SaveRunPlanTests
     [Fact]
     public async Task RenamesTheFileWhenItIsTheSlugOfTheOldName()
     {
-        OnDisk("perf/plan-1.run.yaml", "Plan 1\n");
+        OnDisk("plans/perf/plan-1.run.yaml", "Plan 1\n");
 
-        var saved = await Create().ExecuteAsync("perf/plan-1.run.yaml", "Checkout smoke\n");
+        var saved = await Create().ExecuteAsync("plans/perf/plan-1.run.yaml", "Checkout smoke\n");
 
-        Assert.Equal("perf/checkout-smoke.run.yaml", saved.Value.Path);
-        _store.Received().Move(Root, WorkspacePath.Parse("perf/plan-1.run.yaml"), WorkspacePath.Parse("perf/checkout-smoke.run.yaml"));
-        await _runs.Received().MovePlanAsync(Root, "perf/plan-1.run.yaml", "perf/checkout-smoke.run.yaml", Arg.Any<CancellationToken>());
-        _localFiles.Received(1).Move(Root, WorkspacePath.Parse("perf/plan-1.run.yaml"), WorkspacePath.Parse("perf/checkout-smoke.run.yaml"));
+        Assert.Equal("plans/perf/checkout-smoke.run.yaml", saved.Value.Path);
+        _store.Received().Move(Root, WorkspacePath.Parse("plans/perf/plan-1.run.yaml"), WorkspacePath.Parse("plans/perf/checkout-smoke.run.yaml"));
+        await _runs.Received().MovePlanAsync(Root, "plans/perf/plan-1.run.yaml", "plans/perf/checkout-smoke.run.yaml", Arg.Any<CancellationToken>());
+        _localFiles.Received(1).Move(Root, WorkspacePath.Parse("plans/perf/plan-1.run.yaml"), WorkspacePath.Parse("plans/perf/checkout-smoke.run.yaml"));
     }
 
     [Fact]
     public async Task PicksAFreeNameAndKeepsTheExtension()
     {
-        OnDisk("smoke.run.yml", "Smoke\n");
-        _store.Exists(Root, WorkspacePath.Parse("load.run.yml")).Returns(true);
+        OnDisk("plans/smoke.run.yml", "Smoke\n");
+        _store.Exists(Root, WorkspacePath.Parse("plans/load.run.yml")).Returns(true);
 
-        var saved = await Create().ExecuteAsync("smoke.run.yml", "Load\n");
+        var saved = await Create().ExecuteAsync("plans/smoke.run.yml", "Load\n");
 
-        Assert.Equal("load-2.run.yml", saved.Value.Path);
+        Assert.Equal("plans/load-2.run.yml", saved.Value.Path);
     }
 
     [Fact]
     public async Task KeepsHandPickedFileNames()
     {
-        OnDisk("nightly.run.yaml", "Smoke\n");
+        OnDisk("plans/nightly.run.yaml", "Smoke\n");
 
-        var saved = await Create().ExecuteAsync("nightly.run.yaml", "Load\n");
+        var saved = await Create().ExecuteAsync("plans/nightly.run.yaml", "Load\n");
 
-        Assert.Equal("nightly.run.yaml", saved.Value.Path);
+        Assert.Equal("plans/nightly.run.yaml", saved.Value.Path);
         _store.DidNotReceive().Move(Arg.Any<string>(), Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>());
     }
 
     [Fact]
     public async Task KeepsTheFileWhenTheNameIsUnchangedOrNew()
     {
-        OnDisk("smoke.run.yaml", "Smoke\n");
+        OnDisk("plans/smoke.run.yaml", "Smoke\n");
 
-        Assert.Equal("smoke.run.yaml", (await Create().ExecuteAsync("smoke.run.yaml", "Smoke\nmore")).Value.Path);
-        Assert.Equal("new.run.yaml", (await Create().ExecuteAsync("new.run.yaml", "Other\n")).Value.Path);
+        Assert.Equal("plans/smoke.run.yaml", (await Create().ExecuteAsync("plans/smoke.run.yaml", "Smoke\nmore")).Value.Path);
+        Assert.Equal("plans/new.run.yaml", (await Create().ExecuteAsync("plans/new.run.yaml", "Other\n")).Value.Path);
         _store.DidNotReceive().Move(Arg.Any<string>(), Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>());
     }
 
     [Fact]
     public async Task KeepsTheFileWhenTheNewTextDoesNotParse()
     {
-        OnDisk("smoke.run.yaml", "Smoke\n");
+        OnDisk("plans/smoke.run.yaml", "Smoke\n");
         _format.Parse("broken\n").Returns(new Error(ErrorCodes.InvalidFile, "bad"));
 
-        var saved = await Create().ExecuteAsync("smoke.run.yaml", "broken");
+        var saved = await Create().ExecuteAsync("plans/smoke.run.yaml", "broken");
 
-        Assert.Equal("smoke.run.yaml", saved.Value.Path);
+        Assert.Equal("plans/smoke.run.yaml", saved.Value.Path);
         Assert.Equal("bad", saved.Value.Error);
     }
 
     [Fact]
     public async Task KeepsTheFileWhileThePlanIsBeingRun()
     {
-        OnDisk("smoke.run.yaml", "Smoke\n");
-        using var reservation = _registry.TryReserve(Root, "smoke.run.yaml");
+        OnDisk("plans/smoke.run.yaml", "Smoke\n");
+        using var reservation = _registry.TryReserve(Root, "plans/smoke.run.yaml");
 
-        var saved = await Create().ExecuteAsync("smoke.run.yaml", "Load\n");
+        var saved = await Create().ExecuteAsync("plans/smoke.run.yaml", "Load\n");
 
-        Assert.Equal("smoke.run.yaml", saved.Value.Path);
+        Assert.Equal("plans/smoke.run.yaml", saved.Value.Path);
     }
 }

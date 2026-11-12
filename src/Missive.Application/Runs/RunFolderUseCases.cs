@@ -9,19 +9,14 @@ namespace Missive.Application.Runs;
 /// <summary>A run plan's new path after a move.</summary>
 public sealed record MovedRunPlanDto(string Path);
 
-/// <summary>
-/// What a folder holds, as far as the Load runs view cares: the run plans inside it (at any
-/// depth) and whether it also holds requests. Folder actions of the Load runs view only act on
-/// folders without requests, so organizing plans never moves, copies or deletes a request (and
-/// never breaks the request paths that plans refer to).
-/// </summary>
+/// <summary>The run plans inside a folder of <c>plans/</c>, at any depth.</summary>
 internal static class RunFolders
 {
-    public sealed record Scan(WorkspacePath Folder, IReadOnlyList<WorkspacePath> Plans, bool HoldsRequests);
+    public sealed record Scan(WorkspacePath Folder, IReadOnlyList<WorkspacePath> Plans);
 
-    public static Result<Scan> Read(IWorkspaceRepository repository, string root, string? path, bool allowRoot = false)
+    public static Result<Scan> Read(IWorkspaceRepository repository, string root, string? path)
     {
-        if (!FolderPaths.TryParseFolder(repository, root, path, allowRoot, out var folder, out var error))
+        if (!FolderPaths.TryParseFolder(repository, root, path, allowRoot: false, out var folder, out var error, WorkspaceLayout.PlansRoot))
         {
             return error;
         }
@@ -33,30 +28,20 @@ internal static class RunFolders
         }
 
         var plans = contents.Value.Files
-            .Where(f => WorkspaceLayout.IsRunPlanFileName(f.FileName) && IsCollectionPath(f.Parent))
+            .Where(WorkspaceLayout.IsRunPlanPath)
             .OrderBy(f => f.Value, StringComparer.Ordinal)
             .ToList();
-        var holdsRequests = contents.Value.Files.Any(WorkspaceLayout.IsRequestPath);
-        return new Scan(folder, plans, holdsRequests);
+        return new Scan(folder, plans);
     }
 
-    /// <summary>Refuses folders with requests in them, or with a plan that is being run.</summary>
+    /// <summary>Refuses folders with a plan that is being run.</summary>
     public static Error? Check(Scan scan, RunRegistry registry, string root, string action)
     {
-        if (scan.HoldsRequests)
-        {
-            return RequestsError(scan, action);
-        }
-
         var running = scan.Plans.FirstOrDefault(p => registry.IsBusy(root, p.Value));
         return running is null
             ? null
             : new Error(ErrorCodes.InvalidRequest, $"Stop the run of '{running}' before this folder is {action}.");
     }
-
-    public static Error RequestsError(Scan scan, string action) => new(
-        ErrorCodes.InvalidRequest,
-        $"'{scan.Folder}' also holds requests, so it can't be {action} here; use the Explorer instead.");
 
     /// <summary>Points the saved runs of the plans that were in <paramref name="from"/> at their paths under <paramref name="to"/>.</summary>
     public static async Task FollowAsync(
@@ -73,89 +58,36 @@ internal static class RunFolders
             await runs.MovePlanAsync(root, plan.Value, to.Value + plan.Value[from.Value.Length..], cancellationToken);
         }
     }
-
-    private static bool IsCollectionPath(WorkspacePath folder)
-    {
-        var parent = WorkspacePath.Root;
-        foreach (var segment in folder.Segments)
-        {
-            if (!WorkspaceLayout.IsCollectionFolder(parent, segment))
-            {
-                return false;
-            }
-
-            parent = parent.Combine(segment);
-        }
-
-        return true;
-    }
 }
 
-/// <summary>
-/// The folders shown in the Load runs view: the collection folders that hold run plans (at any
-/// depth), and those that hold no requests at all (such as a folder just made for plans). Folders
-/// with requests but no plans are left to the Explorer. The list is in tree order, parents first.
-/// </summary>
-public sealed class ListRunFolders(IWorkspaceRepository repository, IRunPlanStore store, CurrentWorkspace current)
+/// <summary>The folders shown in the Load runs view: every folder inside <c>plans/</c>, parents first.</summary>
+public sealed class ListRunFolders(IWorkspaceRepository repository, CurrentWorkspace current)
 {
-    public async Task<Result<IReadOnlyList<string>>> ExecuteAsync(CancellationToken cancellationToken = default)
+    public Task<Result<IReadOnlyList<string>>> ExecuteAsync(CancellationToken cancellationToken = default)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)
         {
-            return root.Error!;
+            return Task.FromResult<Result<IReadOnlyList<string>>>(root.Error!);
         }
 
-        var entries = await repository.ListAsync(root.Value, cancellationToken);
-        if (!entries.IsSuccess)
+        if (!repository.DirectoryExists(root.Value, WorkspaceLayout.PlansRoot))
         {
-            return entries.Error!;
+            return Task.FromResult(Result<IReadOnlyList<string>>.Success([]));
         }
 
-        var plans = store.List(root.Value);
-        if (!plans.IsSuccess)
+        var contents = repository.ReadFolderContents(root.Value, WorkspaceLayout.PlansRoot);
+        if (!contents.IsSuccess)
         {
-            return plans.Error!;
+            return Task.FromResult<Result<IReadOnlyList<string>>>(contents.Error!);
         }
 
-        // Every folder that has a plan somewhere inside it.
-        var withPlans = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var plan in plans.Value)
-        {
-            for (var folder = plan.Parent; !folder.IsRoot; folder = folder.Parent)
-            {
-                withPlans.Add(folder.Value);
-            }
-        }
-
-        var folders = new List<string>();
-        Collect(entries.Value, withPlans, folders);
-        return folders;
-    }
-
-    /// <summary>Adds the folders to show among <paramref name="entries"/>; returns whether they hold requests.</summary>
-    private static bool Collect(IReadOnlyList<WorkspaceEntry> entries, HashSet<string> withPlans, List<string> folders)
-    {
-        var holdsRequests = false;
-        foreach (var entry in entries)
-        {
-            if (entry is RequestFileEntry)
-            {
-                holdsRequests = true;
-            }
-            else if (entry is FolderEntry folder)
-            {
-                var index = folders.Count;
-                var inner = Collect(folder.Children, withPlans, folders);
-                holdsRequests |= inner;
-                if (!inner || withPlans.Contains(folder.Path.Value))
-                {
-                    folders.Insert(index, folder.Path.Value);
-                }
-            }
-        }
-
-        return holdsRequests;
+        IReadOnlyList<string> folders = contents.Value.Folders
+            .Where(f => WorkspaceLayout.IsAreaFolder(WorkspaceLayout.PlansRoot, f))
+            .Select(f => f.Value)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        return Task.FromResult(Result<IReadOnlyList<string>>.Success(folders));
     }
 }
 
@@ -189,7 +121,7 @@ public sealed class RenameRunFolder(
             return refused;
         }
 
-        var renamed = rename.Execute(path, name);
+        var renamed = rename.Execute(path, name, WorkspaceLayout.PlansRoot);
         if (renamed.IsSuccess && renamed.Value.Path != scan.Value.Folder.Value)
         {
             await RunFolders.FollowAsync(
@@ -201,8 +133,8 @@ public sealed class RenameRunFolder(
 }
 
 /// <summary>
-/// Moves a folder of run plans into another folder (<c>''</c> is the workspace root); the plans
-/// move along with their saved runs. Folders that also hold requests, or a plan being run, are refused.
+/// Moves a folder of run plans into another folder (<c>plans</c> itself for the top level); the plans
+/// move along with their saved runs. A folder with a plan being run is refused.
 /// </summary>
 public sealed class MoveRunFolder(
     MoveFolder move,
@@ -230,7 +162,7 @@ public sealed class MoveRunFolder(
             return refused;
         }
 
-        var moved = move.Execute(path, parent);
+        var moved = move.Execute(path, parent, WorkspaceLayout.PlansRoot);
         if (moved.IsSuccess && moved.Value.Path != scan.Value.Folder.Value)
         {
             await RunFolders.FollowAsync(
@@ -243,7 +175,6 @@ public sealed class MoveRunFolder(
 
 /// <summary>
 /// Copies a folder of run plans next to it as <c>… copy</c>. The copies start without runs.
-/// Folders that also hold requests are refused, so duplicating plans never duplicates requests.
 /// </summary>
 public sealed class DuplicateRunFolder(
     DuplicateFolder duplicate,
@@ -264,19 +195,14 @@ public sealed class DuplicateRunFolder(
             return scan.Error!;
         }
 
-        // Copying a plan that is being run is harmless, so only requests are refused.
-        if (scan.Value.HoldsRequests)
-        {
-            return RunFolders.RequestsError(scan.Value, "duplicated");
-        }
-
-        return duplicate.Execute(path);
+        // Copying a plan that is being run is harmless.
+        return duplicate.Execute(path, WorkspaceLayout.PlansRoot);
     }
 }
 
 /// <summary>
-/// Deletes a folder of run plans with the saved runs of its plans. Folders that also hold requests
-/// (or files that aren't Missive's), or a plan being run, are refused.
+/// Deletes a folder of run plans with the saved runs of its plans. Folders that hold files that
+/// aren't Missive's, or a plan being run, are refused.
 /// </summary>
 public sealed class DeleteRunFolder(
     DeleteFolder delete,
@@ -304,7 +230,7 @@ public sealed class DeleteRunFolder(
             return refused;
         }
 
-        var deleted = delete.Execute(path);
+        var deleted = delete.Execute(path, WorkspaceLayout.PlansRoot);
         if (deleted.IsSuccess)
         {
             // Run history is local and only a convenience, so a failure here doesn't undo the delete.
@@ -319,7 +245,7 @@ public sealed class DeleteRunFolder(
 }
 
 /// <summary>
-/// Moves a run plan file into another folder (<c>''</c> is the workspace root), keeping its file
+/// Moves a run plan file into another folder (<c>plans</c> itself for the top level), keeping its file
 /// name; its saved runs and local-only setting follow it. A plan being run can't be moved.
 /// </summary>
 public sealed class MoveRunPlan(
@@ -344,7 +270,7 @@ public sealed class MoveRunPlan(
             return parsed.Error!;
         }
 
-        if (!FolderPaths.TryParseFolder(repository, root.Value, folder, allowRoot: true, out var target, out var error))
+        if (!FolderPaths.TryParseFolder(repository, root.Value, folder, allowRoot: true, out var target, out var error, WorkspaceLayout.PlansRoot))
         {
             return error;
         }

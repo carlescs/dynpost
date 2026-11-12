@@ -72,8 +72,7 @@ public sealed class SetLocalOnly(
             return WorkspaceLayout.IsEnvironmentFile(path.FileName);
         }
 
-        return WorkspaceLayout.IsRunPlanFileName(path.FileName)
-            && path.Segments.All(segment => !segment.StartsWith('.'));
+        return WorkspaceLayout.IsRunPlanPath(path);
     }
 
     private static bool IsWithoutGit(Error error) =>

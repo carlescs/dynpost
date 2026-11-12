@@ -3,6 +3,9 @@ using Missive.Application.Runs;
 using Missive.Domain.Runs;
 using Missive.Domain.Workspaces;
 using Missive.Infrastructure.Yaml;
+using System.Text;
+using System.Text.RegularExpressions;
+using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 
 namespace Missive.Infrastructure.Runs;
@@ -20,8 +23,71 @@ namespace Missive.Infrastructure.Runs;
 /// <c>bodyNotContains</c>) and <c>thresholds</c> (<c>p50</c>, <c>p90</c>, <c>p95</c>, <c>p99</c>,
 /// <c>average</c>, <c>errorRate</c>, <c>throughput</c>).
 /// </summary>
-public sealed class YamlRunPlanFormat : IRunPlanFormat
+public sealed partial class YamlRunPlanFormat : IRunPlanFormat
 {
+    public string RewriteRequestPaths(string text, IReadOnlyDictionary<string, string> moves)
+    {
+        YamlMappingNode root;
+        try
+        {
+            var stream = new YamlStream();
+            stream.Load(new StringReader(text));
+            if (stream.Documents.Count != 1 || stream.Documents[0].RootNode is not YamlMappingNode mapping)
+            {
+                return text;
+            }
+
+            root = mapping;
+        }
+        catch (YamlException)
+        {
+            return text;
+        }
+
+        var edits = new List<(int Start, int End, string Replacement)>();
+        foreach (var (key, value) in root.Children)
+        {
+            IEnumerable<YamlNode> references = (key as YamlScalarNode)?.Value switch
+            {
+                "requests" or "disabled" when value is YamlSequenceNode list => list.Children,
+                "weights" or "bodies" or "assert" when value is YamlMappingNode map => map.Children.Keys,
+                _ => [],
+            };
+
+            foreach (var node in references)
+            {
+                if (node is YamlScalarNode { Value: { } item } scalar
+                    && WorkspacePath.TryParse(item, out var path)
+                    && moves.TryGetValue(path.Value, out var to)
+                    && Quote(scalar.Style, to) is { } replacement)
+                {
+                    edits.Add(((int)scalar.Start.Index, (int)scalar.End.Index, replacement));
+                }
+            }
+        }
+
+        // From the end, so earlier positions stay valid.
+        var builder = new StringBuilder(text);
+        foreach (var (start, end, replacement) in edits.OrderByDescending(e => e.Start))
+        {
+            builder.Remove(start, end - start).Insert(start, replacement);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>A path written in the same style as the scalar it replaces; <c>null</c> for block scalars, which are left alone.</summary>
+    private static string? Quote(ScalarStyle style, string value) => style switch
+    {
+        ScalarStyle.Plain when PlainPath().IsMatch(value) => value,
+        ScalarStyle.Plain or ScalarStyle.SingleQuoted => $"'{value.Replace("'", "''")}'",
+        ScalarStyle.DoubleQuoted => $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"",
+        _ => null,
+    };
+
+    [GeneratedRegex(@"^[A-Za-z0-9_][A-Za-z0-9_./-]*$")]
+    private static partial Regex PlainPath();
+
     public Result<RunPlan> Parse(string text)
     {
         try

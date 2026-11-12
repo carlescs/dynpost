@@ -114,12 +114,12 @@ public sealed class InterchangeBridgeTests : IDisposable
             new RequestCollection(new CollectionFolder("Shop", [], [new HttpRequestDefinition("Ping", RequestMethod.Get, "/ping")]), []),
             []));
 
-        var response = await SendAsync("workspace.import", """{ "folder": "" }""");
+        var response = await SendAsync("workspace.import", """{ "folder": "requests" }""");
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         var payload = response.GetProperty("payload");
         Assert.Equal("Postman collection v2.1", payload.GetProperty("format").GetString());
-        Assert.Equal("Shop", payload.GetProperty("folder").GetString());
+        Assert.Equal("requests/Shop", payload.GetProperty("folder").GetString());
         Assert.Equal(1, payload.GetProperty("requests").GetInt32());
     }
 
@@ -128,7 +128,7 @@ public sealed class InterchangeBridgeTests : IDisposable
     {
         _dialogs.PickFileAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<FileFilter>>()).Returns((string?)null);
 
-        var response = await SendAsync("workspace.import", """{ "folder": "" }""");
+        var response = await SendAsync("workspace.import", """{ "folder": "requests" }""");
 
         Assert.Equal(JsonValueKind.Null, response.GetProperty("payload").ValueKind);
         _importer.DidNotReceiveWithAnyArgs().Parse(default!, default!);

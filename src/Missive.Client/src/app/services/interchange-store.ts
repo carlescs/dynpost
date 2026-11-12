@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
 import { ExportFormatDto } from '../models/messages';
+import { REQUESTS_FOLDER } from '../models/workspace';
 import { EnvironmentStore } from './environment-store';
 import { WorkspaceStore } from './workspace-store';
 
@@ -44,8 +45,8 @@ export class InterchangeStore {
     }
   }
 
-  /** Asks for a file and imports it into a new folder inside `folder` (`''` is the root). */
-  async importInto(folder = ''): Promise<void> {
+  /** Asks for a file and imports it into a new folder inside `folder` (by default the top of `requests`). */
+  async importInto(folder = REQUESTS_FOLDER): Promise<void> {
     if (this.busy()) return;
     this.busy.set(true);
     try {

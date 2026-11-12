@@ -12,7 +12,7 @@ namespace Missive.Application.Folders;
 /// </summary>
 public sealed class MoveFolder(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, IHistoryStore history, CurrentWorkspace current)
 {
-    public Result<FolderDto> Execute(string path, string parent)
+    public Result<FolderDto> Execute(string path, string parent, WorkspacePath? area = null)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)
@@ -20,8 +20,8 @@ public sealed class MoveFolder(IWorkspaceRepository repository, ILocalOnlyFiles 
             return root.Error!;
         }
 
-        if (!FolderPaths.TryParseFolder(repository, root.Value, path, allowRoot: false, out var folder, out var error)
-            || !FolderPaths.TryParseFolder(repository, root.Value, parent, allowRoot: true, out var target, out error))
+        if (!FolderPaths.TryParseFolder(repository, root.Value, path, allowRoot: false, out var folder, out var error, area)
+            || !FolderPaths.TryParseFolder(repository, root.Value, parent, allowRoot: true, out var target, out error, area))
         {
             return error;
         }

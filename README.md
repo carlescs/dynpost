@@ -112,16 +112,55 @@ A workspace is a folder, usually a git repository:
 
 ```text
 my-api/
-├── missive.yaml            # workspace metadata
+├── missive.yaml            # workspace metadata: the layout version (`layout: 2`)
 ├── environments/
 │   ├── dev.yaml
 │   └── prod.yaml
-├── users/                  # a folder is a collection
-│   ├── _folder.yaml        # optional folder-level defaults (headers, auth)
-│   ├── get-user.yaml
-│   └── create-user.yaml
+├── requests/               # every request; a folder in it is a collection
+│   ├── health.yaml
+│   └── users/
+│       ├── _folder.yaml    # optional folder-level defaults (headers, auth)
+│       ├── get-user.yaml
+│       └── create-user.yaml
+├── plans/                  # load run plans, organized in folders
+│   └── perf/
+│       └── checkout-smoke.run.yaml
+├── uploads/                # anything else is yours: body files, data files, notes
+│   └── report.pdf
 └── .missive/               # local only, git-ignored: secrets, cookies, captured values, OAuth 2.0 tokens, history, UI state
 ```
+
+Requests and their collection folders live in `requests/`, run plans in
+`plans/` and environments in `environments/`. Paths in files and in the app are
+always relative to the workspace folder (`requests/users/get-user.yaml`), so a
+run plan refers to a request as `requests/users/get-user.yaml` and a body file as
+`uploads/report.pdf`. Missive leaves every other file and folder alone.
+
+### Moving from the old layout
+
+Workspaces made by earlier versions kept requests, collection folders and run
+plans anywhere in the workspace folder. The first time Missive opens such a
+workspace it reorganizes it, and says what it did:
+
+- Request files and `_folder.yaml` files move into `requests/`, keeping their
+  folders (`users/get-user.yaml` → `requests/users/get-user.yaml`), and run plans
+  move into `plans/` (`perf/smoke.run.yaml` → `plans/perf/smoke.run.yaml`).
+  Empty collection folders move too (with their `.gitkeep`), and folders left
+  empty are removed.
+- A YAML file only counts as a request when it has a `method` or only request
+  keys (`name`, `url`, `headers`, …), so other YAML files (CI or compose files,
+  OpenAPI documents) stay where they are, as do all other files, such as body
+  and data files, so the paths that point at them keep working.
+- Run plans are updated to refer to the requests' new paths; only those paths
+  change in the file, comments and formatting stay. Response history, saved
+  runs and local-only settings follow the moved files.
+- Nothing is overwritten: a file whose new place is already taken stays where
+  it is and is listed.
+- `missive.yaml` gets `layout: 2`, so it happens only once, and Missive also
+  records it there for a workspace that had nothing to move. Nothing is
+  committed: the moves show up in **Source control**, ready to review and
+  commit. Teammates on an older version of Missive should update before they
+  pull that commit.
 
 A request file:
 
@@ -254,15 +293,15 @@ the network.
 New requests are saved as a file named after the request (`Create user` →
 `create-user.yaml`, or `create-user-2.yaml` if that name is taken). Renaming a
 request renames its file too, unless the file name was chosen by hand. The
-explorer lists every `.yaml`/`.yml` file except `missive.yaml`, `_folder.yaml`,
-the `environments/` folder and hidden files and folders; files that can't be
-read are shown with an error instead of being hidden. Saving a request whose
+explorer lists every `.yaml`/`.yml` file in `requests/` except `_folder.yaml`,
+`*.run.yaml` plans and hidden files and folders; files that can't be read are
+shown with an error instead of being hidden. Saving a request whose
 content didn't change leaves its file untouched. Comments and keys Missive
 doesn't know are not preserved when a request is saved with changes.
 
 Folders are collections and can be nested. From the explorer you can create,
 rename (F2) and delete them. Drag a request or a folder onto another folder
-(or onto the "Drop here to move to the workspace root" zone that appears at the
+(or onto the "Drop here to move to the top level" zone that appears at the
 bottom of the explorer, or its empty space) to move it there. While dragging, the
 destination folder is outlined and marked "Move here", the dragged chip says where
 the entry would go (or why it can't), and a collapsed folder opens when you hold
@@ -270,7 +309,7 @@ the entry over it for a moment; moved files keep their names, and nothing is mov
 has an entry with that name. Open requests follow renamed and moved folders. Folder
 names are kept as typed, but must work on Windows, macOS and Linux (no
 `/ \ < > : " | ? *`, no leading dot or trailing dot, no reserved names such as
-`CON`), and `environments` is reserved at the workspace root. Deleting a folder
+`CON`). Deleting a folder
 removes the requests in it and only goes ahead when the folder holds nothing
 else — request files, `_folder.yaml`, `.gitkeep` and OS files such as
 `.DS_Store` — so other files you keep there are never deleted. Links, and
@@ -565,7 +604,7 @@ response is a JSON file next to it, named after its entry id:
 
 ```json
 {
-  "users/get-user.yaml": [
+  "requests/users/get-user.yaml": [
     {
       "id": "20261107T120000000-1a2b3c4d",
       "sentAt": "2026-11-07T12:00:00+00:00",
@@ -600,17 +639,14 @@ them. Deleting a plan (the trash button next to it in the list or in its
 editor) removes its file and its saved runs, after asking; a plan can't be
 deleted while it is running.
 
-Plans are organized in folders, like requests. The **Load runs** view shows them as a tree:
-the folders that hold plans, plus folders without any requests (such as one just made
-for plans; folders with only requests stay in the explorer). Its header makes a new plan or
+Plans live in the workspace's `plans/` folder and are organized in folders inside it, like
+requests in `requests/`. The **Load runs** view shows them as a tree. Its header makes a new plan or
 folder at the top; hover a folder to make a plan or a sub-folder in it, rename it (F2) or delete
 it (Delete), and right-click it to duplicate it as "… copy". Drag a plan or a folder onto
 another folder, or onto the drop zone at the bottom (or empty space) for the top level, to move
 it; the drag shows the destination as in the explorer. A plan keeps its earlier
 runs when it or its folder is renamed or moved; deleting a folder deletes its plans and their
-runs, after asking. Folder actions here never touch requests: a folder that also holds requests
-is refused (organize it in the explorer instead), and so is a folder with a running plan.
-Plans keep their file names when moved, so the request paths inside them stay valid.
+runs, after asking. A folder with a running plan can't be renamed, moved or deleted.
 
 The visual form lists the requests as steps you can drag into order (and picks
 their order, with each request's weight and share for a random pick), sums up the
@@ -650,14 +686,14 @@ again to restore the side-by-side layout.
 ```yaml
 name: Checkout smoke
 requests:
-  - shop/list-products.yaml
-  - shop/create-order.yaml
-  - shop/cancel-order.yaml
+  - requests/shop/list-products.yaml
+  - requests/shop/create-order.yaml
+  - requests/shop/cancel-order.yaml
 disabled:            # listed requests that are not sent (kept for later)
-  - shop/cancel-order.yaml
+  - requests/shop/cancel-order.yaml
 order: random        # sequential (default), shuffle, random or roundRobin
 weights:             # with random: relative chance of each request (default 1)
-  shop/list-products.yaml: 4
+  requests/shop/list-products.yaml: 4
 load:
   threads: 10        # concurrent virtual users
   iterations: 50     # per thread; or `duration: 2m`
@@ -669,7 +705,7 @@ data:
   mode: perThread    # sequential (default), random or perThread
   onEof: stop        # recycle (default) or stop
 bodies:              # per request: send a file of a folder as its body
-  shop/create-order.yaml:
+  requests/shop/create-order.yaml:
     folder: perf/orders
     pattern: "*.json"  # optional: only files whose names match
     mode: random       # sequential (default), random or perThread
@@ -916,7 +952,7 @@ in the workspace's `.gitignore`, so any git tool leaves the file out too:
 ```gitignore
 .missive/
 /environments/local.yaml
-/users/scratch.yaml
+/requests/users/scratch.yaml
 ```
 
 If the file was already committed, Missive also stops tracking it

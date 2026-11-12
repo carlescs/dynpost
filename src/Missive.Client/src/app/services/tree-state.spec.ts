@@ -4,6 +4,7 @@ import { HOVER_EXPAND_DELAY_MS, TreeItem, TreeState, canMove, folderName } from 
 
 @Injectable()
 class TestTreeState extends TreeState {
+  readonly root = '';
   readonly moved = vi.fn().mockResolvedValue(true);
   protected createFolder = vi.fn().mockResolvedValue(true);
   protected renameFolder = vi.fn().mockResolvedValue(true);

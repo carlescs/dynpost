@@ -16,7 +16,7 @@
         [class]="headerButton"
         title="New folder"
         aria-label="New folder"
-        (click)="state.startCreate('')"
+        (click)="state.startCreate(state.root)"
       >
         <fa-icon [icon]="faFolderPlus" />
       </button>
@@ -26,7 +26,7 @@
         title="Import from Postman, Insomnia, HAR or OpenAPI"
         aria-label="Import"
         [disabled]="interchange.busy()"
-        (click)="interchange.importInto('')"
+        (click)="interchange.importInto(state.root)"
       >
         <fa-icon [icon]="faFileImport" />
       </button>
@@ -144,16 +144,17 @@
     {{ workspace.name }}
   </div>
 
-  <!-- The root list is also the drop area for moving entries to the workspace root. -->
+  <!-- The top-level list is also the drop area for moving entries to the top level. -->
   <div class="flex min-h-0 flex-1 flex-col" cdkDropListGroup>
     <ul
       app-tree-level
       class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm"
       role="tree"
-      appFolderDrop=""
+      [appFolderDrop]="state.root"
+      [parent]="state.root"
       [nodes]="store.tree()"
     ></ul>
-    @if (!store.tree().length && !state.isCreatingIn('')) {
+    @if (!store.tree().length && !state.isCreatingIn(state.root)) {
       <p class="px-3 py-1 text-sm text-slate-500">No requests yet.</p>
     }
   </div>

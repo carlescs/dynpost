@@ -10,8 +10,8 @@ export interface ConfirmOptions {
   title?: string;
   /** Label of the confirming button; defaults to "OK". */
   confirmLabel?: string;
-  /** Label of the cancelling button; defaults to "Cancel". */
-  cancelLabel?: string;
+  /** Label of the cancelling button; defaults to "Cancel". `null` leaves the button out. */
+  cancelLabel?: string | null;
   /** Styles the confirming button as destructive. */
   danger?: boolean;
 }

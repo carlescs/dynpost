@@ -29,14 +29,14 @@ public class DeleteRunPlanTests
     [Fact]
     public async Task DeletesThePlanAndItsRuns()
     {
-        var path = WorkspacePath.Parse("perf/smoke.run.yaml");
+        var path = WorkspacePath.Parse("plans/perf/smoke.run.yaml");
         _store.Exists(Root, path).Returns(true);
 
-        var deleted = await Create().ExecuteAsync("perf/smoke.run.yaml");
+        var deleted = await Create().ExecuteAsync("plans/perf/smoke.run.yaml");
 
         Assert.True(deleted.IsSuccess);
         _store.Received().Delete(Root, path);
-        await _runs.Received().DeletePlanAsync(Root, "perf/smoke.run.yaml", Arg.Any<CancellationToken>());
+        await _runs.Received().DeletePlanAsync(Root, "plans/perf/smoke.run.yaml", Arg.Any<CancellationToken>());
         _localFiles.Received().Remove(Root, path);
     }
 
@@ -52,7 +52,7 @@ public class DeleteRunPlanTests
     [Fact]
     public async Task ReportsAMissingPlan()
     {
-        var deleted = await Create().ExecuteAsync("gone.run.yaml");
+        var deleted = await Create().ExecuteAsync("plans/gone.run.yaml");
 
         Assert.Equal(ErrorCodes.NotFound, deleted.Error!.Code);
         _store.DidNotReceive().Delete(Arg.Any<string>(), Arg.Any<WorkspacePath>());
@@ -61,11 +61,11 @@ public class DeleteRunPlanTests
     [Fact]
     public async Task RefusesAPlanThatIsBeingRun()
     {
-        var path = WorkspacePath.Parse("smoke.run.yaml");
+        var path = WorkspacePath.Parse("plans/smoke.run.yaml");
         _store.Exists(Root, path).Returns(true);
-        using var reservation = _registry.TryReserve(Root, "smoke.run.yaml");
+        using var reservation = _registry.TryReserve(Root, "plans/smoke.run.yaml");
 
-        var deleted = await Create().ExecuteAsync("smoke.run.yaml");
+        var deleted = await Create().ExecuteAsync("plans/smoke.run.yaml");
 
         Assert.Equal(ErrorCodes.InvalidRequest, deleted.Error!.Code);
         _store.DidNotReceive().Delete(Arg.Any<string>(), Arg.Any<WorkspacePath>());
@@ -75,11 +75,11 @@ public class DeleteRunPlanTests
     [Fact]
     public async Task KeepsTheRunsWhenTheFileCannotBeDeleted()
     {
-        var path = WorkspacePath.Parse("smoke.run.yaml");
+        var path = WorkspacePath.Parse("plans/smoke.run.yaml");
         _store.Exists(Root, path).Returns(true);
         _store.Delete(Root, path).Returns(new Error(ErrorCodes.Io, "locked"));
 
-        var deleted = await Create().ExecuteAsync("smoke.run.yaml");
+        var deleted = await Create().ExecuteAsync("plans/smoke.run.yaml");
 
         Assert.Equal(ErrorCodes.Io, deleted.Error!.Code);
         _localFiles.DidNotReceive().Remove(Arg.Any<string>(), Arg.Any<WorkspacePath>());

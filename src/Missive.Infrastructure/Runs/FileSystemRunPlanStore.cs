@@ -5,7 +5,7 @@ using static Missive.Infrastructure.Workspaces.WorkspaceFiles;
 
 namespace Missive.Infrastructure.Runs;
 
-/// <summary>Run plans are the <c>*.run.yaml</c> files anywhere in the workspace's collection folders.</summary>
+/// <summary>Run plans are the <c>*.run.yaml</c> files anywhere in the workspace's <c>plans/</c> folder.</summary>
 public sealed class FileSystemRunPlanStore : IRunPlanStore
 {
     public Result<IReadOnlyList<WorkspacePath>> List(string root)
@@ -13,7 +13,10 @@ public sealed class FileSystemRunPlanStore : IRunPlanStore
         var plans = new List<WorkspacePath>();
         try
         {
-            Collect(root, WorkspacePath.Root, plans);
+            if (Directory.Exists(FullPath(root, WorkspaceLayout.PlansRoot)))
+            {
+                Collect(root, WorkspaceLayout.PlansRoot, plans);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

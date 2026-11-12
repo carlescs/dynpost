@@ -9,9 +9,11 @@ internal static class RunPlanPaths
 {
     public static Result<WorkspacePath> Parse(string path)
     {
-        if (!WorkspacePath.TryParse(path, out var parsed) || parsed.IsRoot || !WorkspaceLayout.IsRunPlanFileName(parsed.FileName))
+        if (!WorkspacePath.TryParse(path, out var parsed) || !WorkspaceLayout.IsRunPlanPath(parsed))
         {
-            return new Error(ErrorCodes.InvalidPath, $"'{path}' is not a run plan path: run plans are named '*.run.yaml'.");
+            return new Error(
+                ErrorCodes.InvalidPath,
+                $"'{path}' is not a run plan path: run plans are named '*.run.yaml' and kept in '{WorkspaceLayout.PlansFolder}/'.");
         }
 
         return parsed;

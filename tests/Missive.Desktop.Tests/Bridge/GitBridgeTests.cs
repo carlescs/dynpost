@@ -2,7 +2,9 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Missive.Application.Common;
 using Missive.Application.Git;
+using Missive.Application.History;
 using Missive.Application.Requests;
+using Missive.Application.Runs;
 using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Application.Sharing;
@@ -28,6 +30,13 @@ public sealed class GitBridgeTests : IDisposable
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
 
+    private static IWorkspaceLayoutStore UpToDateLayout()
+    {
+        var layout = Substitute.For<IWorkspaceLayoutStore>();
+        layout.ReadVersionAsync(default!, default).ReturnsForAnyArgs(Result<int>.Success(WorkspaceLayout.CurrentLayoutVersion));
+        return layout;
+    }
+
     public GitBridgeTests()
     {
         _services = new ServiceCollection()
@@ -37,6 +46,12 @@ public sealed class GitBridgeTests : IDisposable
             .AddSingleton(_settings)
             .AddSingleton(_current)
             .AddSingleton(_format)
+            .AddSingleton(UpToDateLayout())
+            .AddSingleton(Substitute.For<IRunPlanStore>())
+            .AddSingleton(Substitute.For<IRunPlanFormat>())
+            .AddSingleton(Substitute.For<IHistoryStore>())
+            .AddSingleton(Substitute.For<IRunStore>())
+            .AddTransient<MigrateWorkspaceLayout>()
             .AddTransient<OpenWorkspace>()
             .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetGitStatus>()
@@ -93,7 +108,7 @@ public sealed class GitBridgeTests : IDisposable
                 0,
                 false,
                 [
-                    new GitChange("users/get-user.yaml", GitFileStatus.Modified),
+                    new GitChange("requests/users/get-user.yaml", GitFileStatus.Modified),
                     new GitChange("new.yaml", GitFileStatus.Renamed, "old.yaml"),
                 ])));
 
@@ -105,7 +120,7 @@ public sealed class GitBridgeTests : IDisposable
         Assert.Equal(1, payload.GetProperty("ahead").GetInt32());
         Assert.False(payload.GetProperty("merging").GetBoolean());
         var changes = payload.GetProperty("changes");
-        Assert.Equal("users/get-user.yaml", changes[0].GetProperty("path").GetString());
+        Assert.Equal("requests/users/get-user.yaml", changes[0].GetProperty("path").GetString());
         Assert.Equal("modified", changes[0].GetProperty("status").GetString());
         Assert.Equal("renamed", changes[1].GetProperty("status").GetString());
         Assert.Equal("old.yaml", changes[1].GetProperty("originalPath").GetString());
@@ -372,7 +387,7 @@ public sealed class GitBridgeTests : IDisposable
     public async Task GitDiff_ReturnsBothVersions_AndTheParsedRequests()
     {
         _current.Open(Folder);
-        var change = new GitChange("users/get-user.yaml", GitFileStatus.Modified);
+        var change = new GitChange("requests/users/get-user.yaml", GitFileStatus.Modified);
         _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
             .Returns(Result<GitStatus>.Success(new GitStatus("main", null, 0, 0, false, [change])));
         _git.GetFileDiffAsync(Folder, change, Arg.Any<CancellationToken>())
@@ -380,7 +395,7 @@ public sealed class GitBridgeTests : IDisposable
         _format.Parse(default!, default!).ReturnsForAnyArgs(
             new HttpRequestDefinition("Get user", RequestMethod.Get, "https://x", [], [], RequestAuth.None, RequestBody.None));
 
-        var response = await SendAsync("git.diff", """{ "path": "users/get-user.yaml" }""");
+        var response = await SendAsync("git.diff", """{ "path": "requests/users/get-user.yaml" }""");
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         var payload = response.GetProperty("payload");

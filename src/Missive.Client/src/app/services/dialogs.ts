@@ -36,6 +36,11 @@ export class Dialogs {
     });
     return (await firstValueFrom(ref.closed)) === true;
   }
+
+  /** Tells the user something, with a single button to close the dialog. */
+  async inform(message: string, options: { title?: string } = {}): Promise<void> {
+    await this.confirm(message, { ...options, cancelLabel: null });
+  }
 }
 
 /** Options of the questions that discard unsaved edits. */

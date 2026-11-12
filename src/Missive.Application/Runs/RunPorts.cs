@@ -29,6 +29,14 @@ public interface IRunPlanFormat
 {
     /// <summary>Parses a plan file; problems with its shape are returned as an error.</summary>
     Result<RunPlan> Parse(string text);
+
+    /// <summary>
+    /// Replaces the request paths a plan's text refers to (its <c>requests</c> and <c>disabled</c>
+    /// lists and the keys of <c>weights</c>, <c>bodies</c> and <c>assert</c>) by their new paths in
+    /// <paramref name="moves"/>, changing nothing else (comments and formatting are kept). Text
+    /// that isn't a valid plan is returned unchanged.
+    /// </summary>
+    string RewriteRequestPaths(string text, IReadOnlyDictionary<string, string> moves);
 }
 
 /// <summary>Reads a CSV file of a workspace: the header row names the variables, each other row is a set of values.</summary>

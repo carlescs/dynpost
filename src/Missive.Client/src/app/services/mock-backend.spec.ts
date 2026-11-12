@@ -93,22 +93,24 @@ describe('MockBackend response history', () => {
       return result.payload as never;
     };
     await call('workspace.open', { path: '/preview' });
-    const request = await call('request.load', { path: 'health.yaml' });
+    const request = await call('request.load', { path: 'requests/health.yaml' });
 
     const sent: ResponseDto = await call('request.send', {
       id: 's1',
       request,
-      path: 'health.yaml',
+      path: 'requests/health.yaml',
     });
     const unsaved: ResponseDto = await call('request.send', { id: 's2', request });
-    await call('request.move', { path: 'health.yaml', folder: 'orders' });
-    const listed: { id: string }[] = await call('history.list', { path: 'orders/health.yaml' });
+    await call('request.move', { path: 'requests/health.yaml', folder: 'requests/orders' });
+    const listed: { id: string }[] = await call('history.list', {
+      path: 'requests/orders/health.yaml',
+    });
 
     expect(sent.historyId).toBeTruthy();
     expect(unsaved.historyId).toBeFalsy();
     expect(listed.map((e) => e.id)).toEqual([sent.historyId]);
     const kept: { response: ResponseDto } = await call('history.get', {
-      path: 'orders/health.yaml',
+      path: 'requests/orders/health.yaml',
       id: sent.historyId,
     });
     expect(kept.response.cookies?.[0].value).toBe('••••••');

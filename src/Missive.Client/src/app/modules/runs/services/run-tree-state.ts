@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { PLANS_FOLDER } from '../../../models/workspace';
 import { RunStore } from '../../../services/run-store';
 import { TreeState } from '../../../services/tree-state';
 import { RunTreeNode, buildRunTree } from '../models/run-tree';
@@ -10,8 +11,9 @@ import { RunTreeNode, buildRunTree } from '../models/run-tree';
 @Injectable()
 export class RunTreeState extends TreeState<RunTreeNode> {
   readonly store = inject(RunStore);
+  readonly root = PLANS_FOLDER;
 
-  readonly tree = computed(() => buildRunTree(this.store.folders(), this.store.plans()));
+  readonly tree = computed(() => buildRunTree(this.store.folders(), this.store.plans(), this.root));
 
   /** The folder whose context menu is open, with the pointer position. */
   readonly menu = signal<{ node: RunTreeNode; x: number; y: number } | null>(null);

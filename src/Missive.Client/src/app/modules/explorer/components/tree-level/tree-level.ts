@@ -24,7 +24,7 @@ import { RootDropZone } from '../../../../components/root-drop-zone/root-drop-zo
 
 /**
  * One level of the explorer tree: the entries of a folder. Folders render their own level
- * recursively. Every entry can be dragged onto a folder (or the workspace root) to move it there.
+ * recursively. Every entry can be dragged onto a folder (or the top level) to move it there.
  *
  * This is a component rather than a recursive `ng-template` so each `cdkDrag` finds the drop list
  * of the folder it is in through dependency injection.
@@ -47,7 +47,7 @@ import { RootDropZone } from '../../../../components/root-drop-zone/root-drop-zo
 export class TreeLevel {
   readonly nodes = input.required<WorkspaceNode[]>();
   readonly depth = input(0);
-  /** Path of the folder these entries are in; `''` for the workspace root. */
+  /** Path of the folder these entries are in; the tree's `root` for the top level. */
   readonly parent = input('');
 
   protected readonly state = inject(ExplorerState);

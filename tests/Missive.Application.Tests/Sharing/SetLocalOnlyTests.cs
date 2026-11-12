@@ -28,9 +28,9 @@ public sealed class SetLocalOnlyTests
     private SetLocalOnly UseCase() => new(_localFiles, _repository, _git, _current);
 
     [Theory]
-    [InlineData("users/get-user.yaml")]
+    [InlineData("requests/users/get-user.yaml")]
     [InlineData("environments/local.yaml")]
-    [InlineData("load/smoke.run.yaml")]
+    [InlineData("plans/load/smoke.run.yaml")]
     public async Task MakingAFileLocalOnly_IgnoresItAndStopsTrackingIt(string path)
     {
         var result = await UseCase().ExecuteAsync(path, localOnly: true);
@@ -57,7 +57,7 @@ public sealed class SetLocalOnlyTests
     {
         _git.StopTrackingAsync(Root, Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new Error(code, "no git"));
 
-        var result = await UseCase().ExecuteAsync("users/get-user.yaml", localOnly: true);
+        var result = await UseCase().ExecuteAsync("requests/users/get-user.yaml", localOnly: true);
 
         Assert.True(result.IsSuccess);
     }
@@ -68,7 +68,7 @@ public sealed class SetLocalOnlyTests
         _git.StopTrackingAsync(Root, Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new Error(GitErrors.RepositoryLockedCode, "locked"));
 
-        var result = await UseCase().ExecuteAsync("users/get-user.yaml", localOnly: true);
+        var result = await UseCase().ExecuteAsync("requests/users/get-user.yaml", localOnly: true);
 
         Assert.Equal(GitErrors.RepositoryLockedCode, result.Error?.Code);
     }
@@ -76,8 +76,10 @@ public sealed class SetLocalOnlyTests
     [Theory]
     [InlineData("missive.yaml")]
     [InlineData(".gitignore")]
-    [InlineData("users/notes.txt")]
-    [InlineData("users/_folder.yaml")]
+    [InlineData("requests/users/notes.txt")]
+    [InlineData("requests/users/_folder.yaml")]
+    [InlineData("users/get-user.yaml")]
+    [InlineData("requests/load/smoke.run.yaml")]
     [InlineData(".missive/secrets.yaml")]
     [InlineData("environments/nested/dev.yaml")]
     [InlineData("../outside.yaml")]
@@ -93,9 +95,9 @@ public sealed class SetLocalOnlyTests
     [Fact]
     public async Task RefusesMissingFiles()
     {
-        _repository.FileExists(Root, WorkspacePath.Parse("users/gone.yaml")).Returns(false);
+        _repository.FileExists(Root, WorkspacePath.Parse("requests/users/gone.yaml")).Returns(false);
 
-        var result = await UseCase().ExecuteAsync("users/gone.yaml", localOnly: true);
+        var result = await UseCase().ExecuteAsync("requests/users/gone.yaml", localOnly: true);
 
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
     }
@@ -104,7 +106,7 @@ public sealed class SetLocalOnlyTests
     public async Task RequiresAnOpenWorkspace()
     {
         var result = await new SetLocalOnly(_localFiles, _repository, _git, new CurrentWorkspace())
-            .ExecuteAsync("users/get-user.yaml", localOnly: true);
+            .ExecuteAsync("requests/users/get-user.yaml", localOnly: true);
 
         Assert.Equal(ErrorCodes.NoWorkspace, result.Error?.Code);
     }

@@ -16,14 +16,16 @@
       {{ data.message }}
     </p>
     <div class="mt-5 flex justify-end gap-2">
-      <button
-        type="button"
-        data-testid="confirm-cancel"
-        class="rounded border border-slate-300 bg-white px-3 py-1 hover:bg-slate-100"
-        (click)="ref.close(false)"
-      >
-        {{ data.cancelLabel ?? 'Cancel' }}
-      </button>
+      @if (data.cancelLabel !== null) {
+        <button
+          type="button"
+          data-testid="confirm-cancel"
+          class="rounded border border-slate-300 bg-white px-3 py-1 hover:bg-slate-100"
+          (click)="ref.close(false)"
+        >
+          {{ data.cancelLabel ?? 'Cancel' }}
+        </button>
+      }
       <button
         type="button"
         data-testid="confirm-ok"

@@ -32,4 +32,15 @@ describe('buildRunTree', () => {
     expect(tree[0].children![0].path).toBe('a/b');
     expect(tree[0].children![0].children![0].path).toBe('a/b/c.run.yaml');
   });
+
+  it('shows the contents of the plans folder as the top level', () => {
+    const tree = buildRunTree(
+      ['plans/perf'],
+      [plan('plans/top.run.yaml', 'Top'), plan('plans/perf/a.run.yaml', 'A')],
+      'plans',
+    );
+
+    expect(tree.map((n) => n.path)).toEqual(['plans/perf', 'plans/top.run.yaml']);
+    expect(tree[0].children!.map((n) => n.path)).toEqual(['plans/perf/a.run.yaml']);
+  });
 });

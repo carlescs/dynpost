@@ -28,28 +28,29 @@ public class FolderUseCaseTests
     [Fact]
     public void Create_CreatesATrimmedFolderInsideTheParent()
     {
-        _repository.DirectoryExists(Root, P("users")).Returns(true);
+        _repository.DirectoryExists(Root, P("requests/users")).Returns(true);
 
-        var result = new CreateFolder(_repository, _current).Execute("users", "  admin ");
+        var result = new CreateFolder(_repository, _current).Execute("requests/users", "  admin ");
 
-        Assert.Equal("users/admin", result.Value.Path);
-        _repository.Received(1).CreateFolder(Root, P("users/admin"));
+        Assert.Equal("requests/users/admin", result.Value.Path);
+        _repository.Received(1).CreateFolder(Root, P("requests/users/admin"));
     }
 
     [Fact]
     public void Create_AtTheRoot()
     {
-        var result = new CreateFolder(_repository, _current).Execute("", "orders");
+        var result = new CreateFolder(_repository, _current).Execute("requests", "orders");
 
-        Assert.Equal("orders", result.Value.Path);
+        Assert.Equal("requests/orders", result.Value.Path);
     }
 
     [Theory]
-    [InlineData("", "a/b", ErrorCodes.InvalidPath)]
-    [InlineData("", "environments", ErrorCodes.InvalidPath)]
+    [InlineData("requests", "a/b", ErrorCodes.InvalidPath)]
+    [InlineData("", "x", ErrorCodes.InvalidPath)]
+    [InlineData("environments", "x", ErrorCodes.InvalidPath)]
     [InlineData("../outside", "x", ErrorCodes.InvalidPath)]
     [InlineData(".git", "x", ErrorCodes.InvalidPath)]
-    [InlineData("missing", "x", ErrorCodes.NotFound)]
+    [InlineData("requests/missing", "x", ErrorCodes.NotFound)]
     public void Create_RejectsInvalidInput(string parent, string name, string code)
     {
         var result = new CreateFolder(_repository, _current).Execute(parent, name);
@@ -59,11 +60,19 @@ public class FolderUseCaseTests
     }
 
     [Fact]
+    public void Create_InThePlansFolder()
+    {
+        var result = new CreateFolder(_repository, _current).Execute("plans", "perf");
+
+        Assert.Equal("plans/perf", result.Value.Path);
+    }
+
+    [Fact]
     public void Create_RefusesExistingNames()
     {
-        _repository.EntryExists(Root, P("orders")).Returns(true);
+        _repository.EntryExists(Root, P("requests/orders")).Returns(true);
 
-        var result = new CreateFolder(_repository, _current).Execute("", "orders");
+        var result = new CreateFolder(_repository, _current).Execute("requests", "orders");
 
         Assert.Equal(ErrorCodes.AlreadyExists, result.Error?.Code);
     }
@@ -71,37 +80,37 @@ public class FolderUseCaseTests
     [Fact]
     public void Rename_MovesTheFolderWithinItsParent()
     {
-        _repository.DirectoryExists(Root, P("api/users")).Returns(true);
+        _repository.DirectoryExists(Root, P("requests/api/users")).Returns(true);
 
-        var result = new RenameFolder(_repository, _localFiles, _history, _current).Execute("api/users", "people");
+        var result = new RenameFolder(_repository, _localFiles, _history, _current).Execute("requests/api/users", "people");
 
-        Assert.Equal("api/people", result.Value.Path);
-        _repository.Received(1).MoveFolder(Root, P("api/users"), P("api/people"));
-        _history.Received(1).Move(Root, P("api/users"), P("api/people"));
+        Assert.Equal("requests/api/people", result.Value.Path);
+        _repository.Received(1).MoveFolder(Root, P("requests/api/users"), P("requests/api/people"));
+        _history.Received(1).Move(Root, P("requests/api/users"), P("requests/api/people"));
     }
 
     [Fact]
     public void Rename_RefusesExistingNamesButAllowsCaseChanges()
     {
-        _repository.DirectoryExists(Root, P("users")).Returns(true);
+        _repository.DirectoryExists(Root, P("requests/users")).Returns(true);
         _repository.EntryExists(Root, Arg.Any<WorkspacePath>()).Returns(true);
 
-        var clash = new RenameFolder(_repository, _localFiles, _history, _current).Execute("users", "orders");
+        var clash = new RenameFolder(_repository, _localFiles, _history, _current).Execute("requests/users", "orders");
         Assert.Equal(ErrorCodes.AlreadyExists, clash.Error?.Code);
 
-        var caseOnly = new RenameFolder(_repository, _localFiles, _history, _current).Execute("users", "Users");
-        Assert.Equal("Users", caseOnly.Value.Path);
-        _repository.Received(1).MoveFolder(Root, P("users"), P("Users"));
+        var caseOnly = new RenameFolder(_repository, _localFiles, _history, _current).Execute("requests/users", "Users");
+        Assert.Equal("requests/Users", caseOnly.Value.Path);
+        _repository.Received(1).MoveFolder(Root, P("requests/users"), P("requests/Users"));
     }
 
     [Fact]
     public void Rename_ToTheSameNameDoesNothing()
     {
-        _repository.DirectoryExists(Root, P("users")).Returns(true);
+        _repository.DirectoryExists(Root, P("requests/users")).Returns(true);
 
-        var result = new RenameFolder(_repository, _localFiles, _history, _current).Execute("users", "users");
+        var result = new RenameFolder(_repository, _localFiles, _history, _current).Execute("requests/users", "users");
 
-        Assert.Equal("users", result.Value.Path);
+        Assert.Equal("requests/users", result.Value.Path);
         _repository.DidNotReceiveWithAnyArgs().MoveFolder(default!, default!, default!);
     }
 
@@ -116,33 +125,33 @@ public class FolderUseCaseTests
     [Fact]
     public void Delete_RemovesFoldersThatOnlyHoldRequests()
     {
-        GivenFolder("users", files: ["users/get-user.yaml", "users/_folder.yaml", "users/admin/.gitkeep"], folders: ["users/admin"]);
+        GivenFolder("requests/users", files: ["requests/users/get-user.yaml", "requests/users/_folder.yaml", "requests/users/admin/.gitkeep"], folders: ["requests/users/admin"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("requests/users");
 
         Assert.True(result.IsSuccess);
-        _repository.Received(1).DeleteFolder(Root, P("users"));
-        _history.Received(1).Remove(Root, P("users"));
+        _repository.Received(1).DeleteFolder(Root, P("requests/users"));
+        _history.Received(1).Remove(Root, P("requests/users"));
     }
 
     [Fact]
     public void Delete_RefusesFoldersWithOtherFiles()
     {
-        GivenFolder("users", files: ["users/get-user.yaml", "users/notes.md", "users/admin/run.sh"], folders: ["users/admin"]);
+        GivenFolder("requests/users", files: ["requests/users/get-user.yaml", "requests/users/notes.md", "requests/users/admin/run.sh"], folders: ["requests/users/admin"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("requests/users");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
-        Assert.Contains("users/admin/run.sh, users/notes.md", result.Error!.Message);
+        Assert.Contains("requests/users/admin/run.sh, requests/users/notes.md", result.Error!.Message);
         _repository.DidNotReceiveWithAnyArgs().DeleteFolder(default!, default!);
     }
 
     [Fact]
     public void Delete_RefusesFoldersWithLinks()
     {
-        GivenFolder("users", files: [], folders: [], links: ["users/shared"]);
+        GivenFolder("requests/users", files: [], folders: [], links: ["requests/users/shared"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("requests/users");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
     }
@@ -151,16 +160,16 @@ public class FolderUseCaseTests
     public void Delete_RefusesFoldersWithUnsupportedNames()
     {
         GivenFolder(
-            "users",
-            files: ["users/get-user.yaml"],
+            "requests/users",
+            files: ["requests/users/get-user.yaml"],
             folders: [],
             unsupported: ["notes:2026.txt", "admin/back\\slash.txt", "drafts:old"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("requests/users");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
         Assert.Contains(
-            "users/admin/back\\slash.txt, users/drafts:old, users/notes:2026.txt",
+            "requests/users/admin/back\\slash.txt, requests/users/drafts:old, requests/users/notes:2026.txt",
             result.Error!.Message);
         _repository.DidNotReceiveWithAnyArgs().DeleteFolder(default!, default!);
     }
@@ -169,23 +178,23 @@ public class FolderUseCaseTests
     public void Delete_ListsUnsupportedNamesWithOtherBlockingFiles()
     {
         GivenFolder(
-            "users",
-            files: ["users/notes.md", "users/run.sh"],
+            "requests/users",
+            files: ["requests/users/notes.md", "requests/users/run.sh"],
             folders: [],
-            links: ["users/shared"],
+            links: ["requests/users/shared"],
             unsupported: ["a:b.txt"]);
 
-        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, _current).Execute("requests/users");
 
         Assert.Equal(ErrorCodes.FolderNotEmpty, result.Error?.Code);
-        Assert.Contains("(users/a:b.txt, users/notes.md, users/run.sh and 1 more)", result.Error!.Message);
+        Assert.Contains("(requests/users/a:b.txt, requests/users/notes.md, requests/users/run.sh and 1 more)", result.Error!.Message);
         _repository.DidNotReceiveWithAnyArgs().DeleteFolder(default!, default!);
     }
 
     [Fact]
     public void Delete_RequiresAnOpenWorkspace()
     {
-        var result = new DeleteFolder(_repository, _localFiles, _history, new CurrentWorkspace()).Execute("users");
+        var result = new DeleteFolder(_repository, _localFiles, _history, new CurrentWorkspace()).Execute("requests/users");
 
         Assert.Equal(ErrorCodes.NoWorkspace, result.Error?.Code);
     }

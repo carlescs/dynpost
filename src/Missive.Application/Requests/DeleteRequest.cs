@@ -18,7 +18,7 @@ public sealed class DeleteRequest(IWorkspaceRepository repository, ILocalOnlyFil
         }
 
         if (!WorkspacePath.TryParse(path, out var requestPath) || requestPath.IsRoot
-            || !WorkspaceLayout.IsRequestFile(requestPath.Parent, requestPath.FileName))
+            || !WorkspaceLayout.IsRequestPath(requestPath))
         {
             return new Error(ErrorCodes.InvalidPath, $"'{path}' is not a valid request path.");
         }

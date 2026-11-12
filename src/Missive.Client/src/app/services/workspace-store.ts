@@ -1,7 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
 import { ERROR_CODES, RecentWorkspaceDto, WorkspaceDto } from '../models/messages';
+import { describeMigration } from '../models/layout-migration';
 import {
+  REQUESTS_FOLDER,
   RequestContent,
   RequestDocument,
   ResponseState,
@@ -203,8 +205,8 @@ export class WorkspaceStore {
     );
   }
 
-  /** Opens an unsaved request that will be saved in `folder` (`''` is the workspace root). */
-  newRequest(folder = ''): void {
+  /** Opens an unsaved request that will be saved in `folder` (by default the top of `requests`). */
+  newRequest(folder = REQUESTS_FOLDER): void {
     this.untitledCount++;
     const doc: RequestDocument = {
       id: `untitled-${this.untitledCount}`,
@@ -366,7 +368,7 @@ export class WorkspaceStore {
     }
   }
 
-  /** Creates a folder inside `parent` (`''` is the root). Returns its path, or `null` on failure. */
+  /** Creates a folder inside `parent` (`requests` for the top level). Returns its path, or `null` on failure. */
   async createFolder(parent: string, name: string): Promise<string | null> {
     try {
       const { path } = await this.bridge.send('folder.create', { parent, name });
@@ -391,7 +393,7 @@ export class WorkspaceStore {
     }
   }
 
-  /** Moves a folder into `parent` (`''` is the root); open requests inside it follow. */
+  /** Moves a folder into `parent` (`requests` for the top level); open requests inside it follow. */
   async moveFolder(path: string, parent: string): Promise<boolean> {
     if (parent === parentFolder(path) || isWithin(parent, path)) return false;
     try {
@@ -404,7 +406,7 @@ export class WorkspaceStore {
     }
   }
 
-  /** Moves a request file into `folder` (`''` is the root); its open tab follows. */
+  /** Moves a request file into `folder` (`requests` for the top level); its open tab follows. */
   async moveRequest(path: string, folder: string): Promise<boolean> {
     if (folder === parentFolder(path)) return false;
     try {
@@ -631,6 +633,11 @@ export class WorkspaceStore {
   private applyWorkspace(workspace: WorkspaceDto): void {
     this.workspace.set({ name: workspace.name, root: workspace.root });
     this.tree.set(workspace.nodes.map(fromNodeDto));
+    if (workspace.migration) {
+      void this.dialogs.inform(describeMigration(workspace.migration), {
+        title: 'Workspace reorganized',
+      });
+    }
   }
 
   private patchDocument(id: string, patch: Partial<RequestDocument>): void {

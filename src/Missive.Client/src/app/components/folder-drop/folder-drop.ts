@@ -3,7 +3,7 @@ import { CdkDrag, CdkDropList } from '@angular/cdk/drag-drop';
 import { TreeItem, TreeState } from '../../services/tree-state';
 
 /**
- * Makes an element the drop area of a folder (`''` for the workspace root) in a folder tree: a CDK
+ * Makes an element the drop area of a folder (the tree's `root` for its top level) in a folder tree: a CDK
  * drop list, connected to the others through the tree's `cdkDropListGroup`, that only accepts
  * items when the pointer is over it rather than over a folder nested inside it. The folder the
  * dragged entry would move into is outlined. The tree provides its `TreeState`.
@@ -31,7 +31,7 @@ export class FolderDrop {
    */
   protected readonly isTarget = computed(() => {
     const target = this.state.dropTarget();
-    return target !== null && target !== '' && target === this.list.data;
+    return target !== null && target !== this.state.root && target === this.list.data;
   });
 
   constructor() {

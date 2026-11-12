@@ -42,7 +42,7 @@ public class OpenWorkspaceTests
                 Result<HttpRequestDefinition>.Failure(ErrorCodes.InvalidFile, "bad yaml")),
         ]));
 
-        var result = await new OpenWorkspace(_repository, _localFiles, _current, _settings).ExecuteAsync("/work/my-api");
+        var result = await new OpenWorkspace(_repository, _localFiles, _current, _settings, Workspaces.Migrations.UpToDate()).ExecuteAsync("/work/my-api");
 
         Assert.True(result.IsSuccess);
         Assert.Equal("/work/my-api", _current.Root);
@@ -63,7 +63,7 @@ public class OpenWorkspaceTests
         _current.Open("/work/previous");
         _repository.FolderExists("/nope").Returns(false);
 
-        var result = await new OpenWorkspace(_repository, _localFiles, _current, _settings).ExecuteAsync("/nope");
+        var result = await new OpenWorkspace(_repository, _localFiles, _current, _settings, Workspaces.Migrations.UpToDate()).ExecuteAsync("/nope");
 
         Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
         Assert.Equal("/work/previous", _current.Root);

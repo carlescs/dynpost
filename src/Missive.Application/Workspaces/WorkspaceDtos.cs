@@ -16,4 +16,7 @@ public sealed record WorkspaceNodeDto(
     IReadOnlyList<WorkspaceNodeDto>? Children = null,
     bool LocalOnly = false);
 
-public sealed record WorkspaceDto(string Name, string Root, IReadOnlyList<WorkspaceNodeDto> Nodes);
+/// <param name="Migration">
+/// When opening the workspace moved it to the current layout (see <see cref="MigrateWorkspaceLayout"/>): what was moved.
+/// </param>
+public sealed record WorkspaceDto(string Name, string Root, IReadOnlyList<WorkspaceNodeDto> Nodes, LayoutMigrationDto? Migration = null);

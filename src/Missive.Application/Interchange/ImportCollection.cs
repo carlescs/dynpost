@@ -9,8 +9,8 @@ using Missive.Domain.Workspaces;
 namespace Missive.Application.Interchange;
 
 /// <param name="Source">The full path of the file to import, chosen by the user.</param>
-/// <param name="Folder">The folder to import into; <c>""</c> is the workspace root.</param>
-public sealed record ImportCollectionRequest(string Source, string Folder = "");
+/// <param name="Folder">The folder to import into: <c>requests</c> or a folder inside it.</param>
+public sealed record ImportCollectionRequest(string Source, string Folder = WorkspaceLayout.RequestsFolder);
 
 /// <summary>
 /// Imports a file exported by another app (Postman, Insomnia, a HAR capture, an OpenAPI

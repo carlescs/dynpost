@@ -5,6 +5,7 @@ import { DragChip } from './drag-chip';
 
 @Injectable()
 class TestTreeState extends TreeState {
+  readonly root = '';
   protected createFolder = vi.fn();
   protected renameFolder = vi.fn();
   protected move = vi.fn();

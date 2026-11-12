@@ -17,7 +17,9 @@ public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
         try
         {
             return Result<IReadOnlyList<WorkspaceEntry>>.Success(
-                await ListFolderAsync(root, WorkspacePath.Root, cancellationToken));
+                Directory.Exists(FullPath(root, WorkspaceLayout.RequestsRoot))
+                    ? await ListFolderAsync(root, WorkspaceLayout.RequestsRoot, cancellationToken)
+                    : []);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

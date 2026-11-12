@@ -2,7 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 
 /** An entry of a folder tree: a folder, or a file of some kind. */
 export interface TreeItem {
-  /** Workspace-relative path; folders are the drop targets, `''` being the workspace root. */
+  /** Workspace-relative path; folders are the drop targets, as is the tree's `root` folder. */
   path: string;
   kind: string;
 }
@@ -27,7 +27,7 @@ export type Editing = { kind: 'create'; parent: string } | { kind: 'rename'; pat
  * which says how to create, rename and move entries, and also provides it as `TreeState` so the
  * shared `FolderDrop` directive finds it.
  *
- * Drop targets are folders (and the workspace root). Folders nest, so their drop lists nest too;
+ * Drop targets are folders (and the tree's top level, its `root` folder). Folders nest, so their drop lists nest too;
  * the CDK picks the first connected list containing the pointer, which for nested lists may be
  * an outer one. To always target the folder the pointer is actually over, the tree tracks the
  * pointer during a drag and only the innermost drop list under it accepts the item.
@@ -38,6 +38,9 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
   readonly busy = signal(false);
   private readonly collapsed = signal(new Set<string>());
 
+  /** The workspace folder the tree shows the contents of (such as `requests`): its top level. */
+  abstract readonly root: string;
+
   /** Creates a folder; resolves to whether it worked. */
   protected abstract createFolder(parent: string, name: string): Promise<boolean>;
   /** Renames a folder; resolves to whether it worked. */
@@ -47,7 +50,7 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
 
   /** The node being dragged, or `null`. */
   readonly dragged = signal<T | null>(null);
-  /** The folder path (`''` for the root) whose drop list is under the pointer, or `null`. */
+  /** The folder path (`root` for the top level) whose drop list is under the pointer, or `null`. */
   readonly hovered = signal<string | null>(null);
   /** The folder the dragged node would move into if dropped now, or `null` for no move. */
   readonly dropTarget = computed(() => {
@@ -64,10 +67,10 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
     if (canMove(node, target)) return { kind: 'move', folder: target };
     return { kind: 'none', reason: target === parentPath(node.path) ? 'same' : 'inside' };
   });
-  /** Whether the dragged node can move to the workspace root (it is not already there). */
+  /** Whether the dragged node can move to the top level (it is not already there). */
   readonly canDropAtRoot = computed(() => {
     const node = this.dragged();
-    return node !== null && canMove(node, '');
+    return node !== null && canMove(node, this.root);
   });
 
   /** Drop list elements of the tree, with a getter for the folder each one stands for. */
@@ -227,12 +230,12 @@ export function folderName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
 }
 
-/** The folder a path is in; `''` for the workspace root. */
+/** The folder a path is in; `''` for a top-level path. */
 export function parentPath(path: string): string {
   return path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
 }
 
-/** The path of `name` inside `folder` (`''` is the root). */
+/** The path of `name` inside `folder` (`''` for a top-level path). */
 export function joinPath(folder: string, name: string): string {
   return folder ? `${folder}/${name}` : name;
 }

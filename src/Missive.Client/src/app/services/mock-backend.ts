@@ -23,6 +23,7 @@ import {
   WorkspaceNodeDto,
 } from '../models/messages';
 import { VARIABLE_PATTERN } from '../models/variables';
+import { PLANS_FOLDER, REQUESTS_FOLDER } from '../models/workspace';
 
 /** A one-page PDF, the body of the simulated runs' saved PDF responses. */
 const MOCK_PDF =
@@ -61,11 +62,11 @@ const sample = (
 export class MockBackend {
   private readonly root = '/browser-preview/my-api';
   private readonly recentWorkspaces = [{ name: 'my-api (browser preview)', path: this.root }];
-  private readonly folders = new Set(['users', 'orders', 'perf']);
+  private readonly folders = new Set(['requests/users', 'requests/orders', 'plans/perf']);
   private readonly files = new Map<string, RequestDto>([
-    ['users/get-user.yaml', sample('Get user', 'GET', '{{baseUrl}}/users/1')],
+    ['requests/users/get-user.yaml', sample('Get user', 'GET', '{{baseUrl}}/users/1')],
     [
-      'users/create-user.yaml',
+      'requests/users/create-user.yaml',
       sample('Create user', 'POST', '{{baseUrl}}/users', {
         headers: [{ key: 'Content-Type', value: 'application/json', enabled: true }],
         auth: { type: 'bearer', token: '{{apiToken}}' },
@@ -74,7 +75,7 @@ export class MockBackend {
       }),
     ],
     [
-      'users/upload-avatar.yaml',
+      'requests/users/upload-avatar.yaml',
       sample('Upload avatar', 'POST', '{{baseUrl}}/users/1/avatar', {
         body: {
           type: 'form',
@@ -100,8 +101,8 @@ export class MockBackend {
         },
       }),
     ],
-    ['orders/list-orders.yaml', sample('List orders', 'GET', '{{baseUrl}}/orders')],
-    ['health.yaml', sample('Health check', 'GET', '{{baseUrl}}/health')],
+    ['requests/orders/list-orders.yaml', sample('List orders', 'GET', '{{baseUrl}}/orders')],
+    ['requests/health.yaml', sample('Health check', 'GET', '{{baseUrl}}/health')],
   ]);
   private readonly environments = new Map<string, EnvironmentDto>([
     [
@@ -153,23 +154,23 @@ export class MockBackend {
   /** Run plan files by path. */
   private readonly runPlans = new Map<string, string>([
     [
-      'perf/users-smoke.run.yaml',
+      'plans/perf/users-smoke.run.yaml',
       [
         'name: Users smoke load',
         'requests:',
-        '  - users/get-user.yaml',
-        '  - users/create-user.yaml',
+        '  - requests/users/get-user.yaml',
+        '  - requests/users/create-user.yaml',
         'load:',
         '  threads: 10',
         '  iterations: 20',
         '  rampUp: 2s',
         '  thinkTime: 100ms',
         'bodies:',
-        '  users/create-user.yaml:',
+        '  requests/users/create-user.yaml:',
         '    folder: perf/bodies/create-user',
         "    pattern: '*.json'",
         'assert:',
-        '  users/create-user.yaml:',
+        '  requests/users/create-user.yaml:',
         '    status: 201',
         'thresholds:',
         '  p95: 500ms',
@@ -247,18 +248,10 @@ export class MockBackend {
     if (request.type.startsWith('runFolder.')) {
       const path = payload?.['path'] as string;
       if (request.type === 'runFolder.list') {
-        const holds = (folder: string, paths: Iterable<string>) =>
-          [...paths].some((p) => isWithin(p, folder));
         return ok(
           [...this.folders]
-            .filter((f) => holds(f, this.runPlans.keys()) || !holds(f, this.files.keys()))
+            .filter((f) => f.startsWith(`${PLANS_FOLDER}/`))
             .sort((a, b) => a.localeCompare(b)),
-        );
-      }
-      if ([...this.files.keys()].some((file) => isWithin(file, path))) {
-        return fail(
-          ERROR_CODES.invalidRequest,
-          `'${path}' also holds requests, so it can't be changed here; use the Explorer instead.`,
         );
       }
       return this.handle({
@@ -361,7 +354,7 @@ export class MockBackend {
       }
       case 'workspace.import': {
         // No open dialog in a browser: import a small sample collection.
-        const parent = (payload?.['folder'] as string) ?? '';
+        const parent = (payload?.['folder'] as string) ?? REQUESTS_FOLDER;
         let name = 'Imported sample';
         for (let n = 2; this.exists(parent ? `${parent}/${name}` : name); n++) {
           name = `Imported sample ${n}`;
@@ -1063,7 +1056,7 @@ export class MockBackend {
         .sort(byPath);
       return [...folders, ...files];
     };
-    return { name: 'my-api (browser preview)', root: this.root, nodes: nodes('') };
+    return { name: 'my-api (browser preview)', root: this.root, nodes: nodes(REQUESTS_FOLDER) };
   }
 
   private handleRuns(
@@ -1252,7 +1245,7 @@ export class MockBackend {
     const failed = index % 50 === 49;
     if (index % 10 === 4) {
       return {
-        request: 'users/get-report.yaml',
+        request: 'requests/users/get-report.yaml',
         thread: (index % 10) + 1,
         iteration: Math.floor(index / 10) + 1,
         atMs: index * 25,
@@ -1268,7 +1261,7 @@ export class MockBackend {
       };
     }
     return {
-      request: create ? 'users/create-user.yaml' : 'users/get-user.yaml',
+      request: create ? 'requests/users/create-user.yaml' : 'requests/users/get-user.yaml',
       thread: (index % 10) + 1,
       iteration: Math.floor(index / 10) + 1,
       atMs: index * 25,
@@ -1332,8 +1325,8 @@ export class MockBackend {
       activeThreads: finished ? 0 : 10,
       total,
       requests: [
-        { request: 'users/get-user.yaml', stats: stats(0.5, 0.6) },
-        { request: 'users/create-user.yaml', stats: stats(0.5) },
+        { request: 'requests/users/get-user.yaml', stats: stats(0.5, 0.6) },
+        { request: 'requests/users/create-user.yaml', stats: stats(0.5) },
       ],
       timeline: Array.from({ length: seconds + 1 }, (_, second) => ({
         second,
@@ -1346,7 +1339,7 @@ export class MockBackend {
       failedSamples: errors
         ? [
             {
-              request: 'users/create-user.yaml',
+              request: 'requests/users/create-user.yaml',
               thread: 3,
               iteration: 4,
               atMs: 2500,
@@ -1364,7 +1357,7 @@ export class MockBackend {
       slowestSamples: samples
         ? [
             {
-              request: 'users/get-user.yaml',
+              request: 'requests/users/get-user.yaml',
               thread: 7,
               iteration: 2,
               atMs: 900,

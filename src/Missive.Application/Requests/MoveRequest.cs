@@ -10,8 +10,8 @@ namespace Missive.Application.Requests;
 public sealed record MovedRequestDto(string Path);
 
 /// <summary>
-/// Moves a request file to another folder of the open workspace. The file keeps its name; if the
-/// destination already has a file with that name, nothing is moved.
+/// Moves a request file to another folder of the open workspace's <c>requests/</c> folder. The
+/// file keeps its name; if the destination already has a file with that name, nothing is moved.
 /// </summary>
 public sealed class MoveRequest(IWorkspaceRepository repository, ILocalOnlyFiles localFiles, IHistoryStore history, CurrentWorkspace current)
 {
@@ -24,7 +24,7 @@ public sealed class MoveRequest(IWorkspaceRepository repository, ILocalOnlyFiles
         }
 
         if (!WorkspacePath.TryParse(path, out var requestPath) || requestPath.IsRoot
-            || !WorkspaceLayout.IsRequestFile(requestPath.Parent, requestPath.FileName))
+            || !WorkspaceLayout.IsRequestPath(requestPath))
         {
             return new Error(ErrorCodes.InvalidPath, $"'{path}' is not a valid request path.");
         }
@@ -43,12 +43,6 @@ public sealed class MoveRequest(IWorkspaceRepository repository, ILocalOnlyFiles
         if (destination == requestPath)
         {
             return new MovedRequestDto(requestPath.Value);
-        }
-
-        // missive.yaml is the workspace file at the root, so a request with that name can't go there.
-        if (!WorkspaceLayout.IsRequestFile(target, requestPath.FileName))
-        {
-            return new Error(ErrorCodes.InvalidPath, $"'{requestPath.FileName}' can't be moved to the workspace root.");
         }
 
         if (repository.EntryExists(root.Value, destination))

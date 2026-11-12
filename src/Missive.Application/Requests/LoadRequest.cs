@@ -15,7 +15,7 @@ public sealed class LoadRequest(IWorkspaceRepository repository, CurrentWorkspac
             return root.Error!;
         }
 
-        if (!WorkspacePath.TryParse(path, out var requestPath) || requestPath.IsRoot)
+        if (!WorkspacePath.TryParse(path, out var requestPath) || !WorkspaceLayout.IsRequestPath(requestPath))
         {
             return new Error(ErrorCodes.InvalidPath, $"'{path}' is not a valid request path.");
         }

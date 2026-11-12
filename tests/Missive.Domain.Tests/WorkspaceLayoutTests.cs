@@ -18,9 +18,8 @@ public class WorkspaceLayoutTests
     }
 
     [Theory]
-    [InlineData("", "users", true)]
-    [InlineData("", "environments", false)]
-    [InlineData("users", "environments", true)]
+    [InlineData("requests", "users", true)]
+    [InlineData("requests", "environments", true)]
     [InlineData("", ".git", false)]
     [InlineData("", ".missive", false)]
     public void IsCollectionFolder(string parent, string folderName, bool expected)
@@ -58,7 +57,6 @@ public class WorkspaceLayoutTests
     [InlineData("", "trailing.")]
     [InlineData("", "CON")]
     [InlineData("", "nul.txt")]
-    [InlineData("", "environments")]
     [InlineData("", null)]
     public void ValidateFolderName_RejectsUnportableOrReservedNames(string parent, string? name)
     {
@@ -80,19 +78,48 @@ public class WorkspaceLayoutTests
     }
 
     [Theory]
-    [InlineData("health.yaml", true)]
-    [InlineData("users/get-user.yml", true)]
-    [InlineData("users/admin/create-user.yaml", true)]
+    [InlineData("requests/health.yaml", true)]
+    [InlineData("requests/users/get-user.yml", true)]
+    [InlineData("requests/users/admin/create-user.yaml", true)]
+    [InlineData("requests/missive.yaml", true)]
+    [InlineData("requests/environments/get.yaml", true)]
+    [InlineData("requests/users/_folder.yaml", false)]
+    [InlineData("requests/users/smoke.run.yaml", false)]
+    [InlineData("requests/users/.hidden/get.yaml", false)]
+    [InlineData("health.yaml", false)]
+    [InlineData("users/get-user.yaml", false)]
     [InlineData("missive.yaml", false)]
-    [InlineData("users/_folder.yaml", false)]
     [InlineData("environments/dev.yaml", false)]
-    [InlineData("users/environments/get.yaml", true)]
+    [InlineData("plans/get.yaml", false)]
     [InlineData(".github/workflow.yaml", false)]
-    [InlineData("users/.hidden/get.yaml", false)]
-    [InlineData("README.md", false)]
-    public void IsRequestPath_AcceptsRequestFilesInCollectionFoldersOnly(string path, bool expected)
+    [InlineData("requests/README.md", false)]
+    public void IsRequestPath_AcceptsRequestFilesInTheRequestsFolderOnly(string path, bool expected)
     {
         Assert.Equal(expected, WorkspaceLayout.IsRequestPath(WorkspacePath.Parse(path)));
+    }
+
+    [Theory]
+    [InlineData("plans/smoke.run.yaml", true)]
+    [InlineData("plans/checkout/smoke.run.yml", true)]
+    [InlineData("plans/.hidden/smoke.run.yaml", false)]
+    [InlineData("plans/get.yaml", false)]
+    [InlineData("smoke.run.yaml", false)]
+    [InlineData("requests/smoke.run.yaml", false)]
+    public void IsRunPlanPath_AcceptsRunPlansInThePlansFolderOnly(string path, bool expected)
+    {
+        Assert.Equal(expected, WorkspaceLayout.IsRunPlanPath(WorkspacePath.Parse(path)));
+    }
+
+    [Theory]
+    [InlineData("requests", true)]
+    [InlineData("requests/users", true)]
+    [InlineData("requests/users/.hidden", false)]
+    [InlineData("requestsx", false)]
+    [InlineData("", false)]
+    [InlineData("plans", false)]
+    public void IsAreaFolder_AcceptsTheAreaAndVisibleFoldersInIt(string folder, bool expected)
+    {
+        Assert.Equal(expected, WorkspaceLayout.IsAreaFolder(WorkspaceLayout.RequestsRoot, WorkspacePath.Parse(folder)));
     }
 
     [Theory]
