@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -552,6 +553,59 @@ public sealed class HttpClientSenderTests
             Assert.Equal(wire.OrderBy(h => h.Name), reported.OrderBy(h => h.Name));
             Assert.Equal(("host", $"127.0.0.1:{port}"), reported[0]);
             Assert.Contains(reported, header => header.Name == "accept-encoding");
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task SendAsync_AcceptsAndDecompressesZstandardResponses()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var serving = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            var received = new StringBuilder();
+            var buffer = new byte[4096];
+            while (!received.ToString().Contains("\r\n\r\n"))
+            {
+                var read = await stream.ReadAsync(buffer);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                received.Append(Encoding.ASCII.GetString(buffer, 0, read));
+            }
+
+            using var compressed = new MemoryStream();
+            using (var zstd = new ZstandardStream(compressed, CompressionMode.Compress, leaveOpen: true))
+            {
+                zstd.Write("hello zstd"u8);
+            }
+
+            var head = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: zstd\r\nContent-Length: {compressed.Length}\r\nConnection: close\r\n\r\n";
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(head));
+            await stream.WriteAsync(compressed.ToArray());
+            return received.ToString();
+        });
+
+        try
+        {
+            using var sender = new HttpClientSender();
+            var result = await sender.SendAsync(new OutgoingRequest("GET", new Uri($"http://127.0.0.1:{port}/"), [], null));
+
+            Assert.True(result.IsSuccess, result.Error?.Message);
+            Assert.Equal("hello zstd", Encoding.UTF8.GetString(result.Value.Body));
+            var acceptEncoding = (await serving)
+                .Split("\r\n")
+                .Single(line => line.StartsWith("Accept-Encoding: ", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains("zstd", acceptEncoding);
         }
         finally
         {
