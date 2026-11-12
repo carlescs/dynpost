@@ -50,4 +50,45 @@ public sealed class SystemRegionalSettingsTests
 
         Assert.Equal(CultureInfo.CurrentCulture, settings.DateCulture);
     }
+
+    [Fact]
+    public void Linux_TheFirstVariableThatIsSetDecidesEvenWhenItHasNoCulture()
+    {
+        // As in the C library, LC_ALL=C wins over LC_TIME: the dates are not German.
+        var settings = Linux(("LC_ALL", "C"), ("LC_TIME", "de_DE.UTF-8"));
+
+        Assert.Equal(CultureInfo.CurrentCulture, settings.DateCulture);
+    }
+
+    [Fact]
+    public void Linux_SkipsVariablesThatAreBlank()
+    {
+        var settings = Linux(("LC_ALL", ""), ("LC_TIME", "  "), ("LANG", "it_IT.UTF-8"));
+
+        Assert.Equal("it-IT", settings.DateCulture.Name);
+    }
+
+    [Fact]
+    public void Linux_UsesTheCurrentCultureWhenNoVariableIsSet()
+    {
+        Assert.Equal(CultureInfo.CurrentCulture, Linux().DateCulture);
+    }
+
+    [Theory]
+    [InlineData("pt_BR", "pt-BR")]
+    [InlineData("nl_NL@euro", "nl-NL")]
+    [InlineData("ja_JP.eucJP", "ja-JP")]
+    [InlineData("fr", "fr")]
+    public void Linux_ReadsTheCultureFromEveryLocaleForm(string locale, string culture)
+    {
+        Assert.Equal(culture, Linux(("LC_TIME", locale)).DateCulture.Name);
+    }
+
+    [Fact]
+    public void Linux_TheCultureCarriesTheSystemPatterns()
+    {
+        var format = Linux(("LC_TIME", "de_DE.UTF-8")).DateCulture.DateTimeFormat;
+
+        Assert.Equal(CultureInfo.GetCultureInfo("de-DE").DateTimeFormat.ShortDatePattern, format.ShortDatePattern);
+    }
 }

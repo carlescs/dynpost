@@ -123,7 +123,8 @@ Prettier. Client unit tests run on Vitest with jsdom through Angular's
 `@angular/build:unit-test` builder (`ng test`, `tsconfig.spec.json`): each
 `<name>.spec.ts` sits next to the file it tests, uses `TestBed` for components
 and services, and fakes the `Bridge` with `vi.fn()` rather than talking to the
-`MockBackend`. Before finishing, run `dotnet build Missive.sln` and
+`MockBackend`. Helpers shared by client specs live in `src/app/testing/` (e.g.
+`useTestDateFormat()` to check dates are shown in the system format). Before finishing, run `dotnet build Missive.sln` and
 `dotnet test Missive.sln` (or `npm run build` for client-only changes), and
 `npm test -- --watch=false` and `npm run format:check` when you touch the client.
 

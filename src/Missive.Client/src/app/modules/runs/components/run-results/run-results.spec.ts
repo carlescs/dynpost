@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { RunResultDto, RunStatsDto } from '../../../../models/messages';
 import { RunResults } from './run-results';
+import { testDateTime, useTestDateFormat } from '../../../../testing/date-format';
 
 const stats = (patch: Partial<RunStatsDto> = {}): RunStatsDto => ({
   samples: 200,
@@ -144,5 +145,10 @@ describe('RunResults', () => {
   it('reports why a run failed', () => {
     const element = create(run({ state: 'failed', passed: null, message: 'No requests to send.' }));
     expect(text(element.querySelector('[role="alert"]'))).toBe('No requests to send.');
+  });
+
+  it('shows when the run started in the system format', () => {
+    useTestDateFormat();
+    expect(text(create(run()))).toContain(testDateTime('2026-01-02T03:04:05Z'));
   });
 });

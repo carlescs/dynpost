@@ -1,4 +1,4 @@
-import { AuthDto, KeyValueDto, ResponseDto } from '../models/messages';
+import { AuthDto, DateFormat, KeyValueDto, ResponseDto } from '../models/messages';
 import { MockBackend } from './mock-backend';
 
 describe('MockBackend request.send', () => {
@@ -114,5 +114,19 @@ describe('MockBackend response history', () => {
       id: sent.historyId,
     });
     expect(kept.response.cookies?.[0].value).toBe('••••••');
+  });
+});
+
+describe('MockBackend locale.dateFormat', () => {
+  it('reports the en-US patterns with twelve months and seven days', async () => {
+    const reply = await new MockBackend().handle({ id: '1', type: 'locale.dateFormat' });
+
+    if (!reply.ok) throw new Error(reply.error.message);
+    const format = reply.payload as DateFormat;
+    expect(format.shortDatePattern).toBe('M/d/yyyy');
+    expect(format.monthNames).toHaveLength(12);
+    expect(format.abbreviatedMonthNames[8]).toBe('Sep');
+    expect(format.dayNames).toHaveLength(7);
+    expect(format.abbreviatedDayNames[0]).toBe('Sun');
   });
 });

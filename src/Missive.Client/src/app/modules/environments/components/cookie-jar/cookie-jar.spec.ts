@@ -4,6 +4,8 @@ import { CookieDto } from '../../../../models/messages';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { CookieJar } from './cookie-jar';
 import { Dialogs } from '../../../../services/dialogs';
+import { DateFormatStore } from '../../../../services/date-format-store';
+import { TEST_DATE_FORMAT, testDateTime } from '../../../../testing/date-format';
 
 const session: CookieDto = {
   name: 'session',
@@ -78,5 +80,18 @@ describe('CookieJar', () => {
     fixture.detectChanges();
     expect(store.clearCookies).toHaveBeenCalledWith('dev.yaml');
     expect(fixture.nativeElement.textContent).toContain('No cookies yet');
+  });
+
+  it('shows when a cookie expires in the system format, once it is known', async () => {
+    const expires = '2027-03-04T05:06:07Z';
+    store.cookies = vi.fn().mockResolvedValue([{ ...session, expires }]);
+    const fixture = await render();
+    const cell = () => fixture.nativeElement.querySelector('tbody tr').textContent as string;
+    expect(cell()).not.toContain(testDateTime(expires));
+
+    TestBed.inject(DateFormatStore).format.set(TEST_DATE_FORMAT);
+    fixture.detectChanges();
+
+    expect(cell()).toContain(testDateTime(expires));
   });
 });

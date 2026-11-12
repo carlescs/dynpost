@@ -66,4 +66,29 @@ describe('DateFormatStore', () => {
     expect(store.dateTime(undefined)).toBe('');
     expect(store.dateTime('not a date')).toBe('not a date');
   });
+
+  it('falls back to a short date and time without seconds until the patterns are loaded', () => {
+    const date = new Date(2026, 10, 12, 9, 5, 7);
+
+    expect(store.dateTimeShort(date)).toBe(
+      date.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }),
+    );
+  });
+
+  it('shows nothing for an invalid date that is not a string', async () => {
+    await store.load();
+
+    expect(store.dateTime(new Date(Number.NaN))).toBe('');
+    expect(store.date(Number.NaN)).toBe('');
+  });
+
+  it('follows the patterns the host sends with each load', async () => {
+    const date = new Date(2026, 10, 12, 9, 5, 7);
+    await store.load();
+    send.mockResolvedValue({ ...FORMAT, shortDatePattern: 'dd/MM/yyyy', dateSeparator: '.' });
+
+    await store.load();
+
+    expect(store.date(date)).toBe('12.11.2026');
+  });
 });

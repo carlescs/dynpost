@@ -31,4 +31,29 @@ public sealed class LocaleBridgeTests
         Assert.Equal("dd/MM/yyyy", payload.GetProperty("shortDatePattern").GetString());
         Assert.Equal(12, payload.GetProperty("monthNames").GetArrayLength());
     }
+
+    [Fact]
+    public async Task DateFormat_SendsEveryFieldTheClientReads()
+    {
+        var settings = Substitute.For<IRegionalSettings>();
+        settings.DateCulture.Returns(CultureInfo.InvariantCulture);
+        using var services = new ServiceCollection()
+            .AddSingleton(settings)
+            .AddTransient<GetDateFormat>()
+            .BuildServiceProvider();
+        var router = BridgeHandlers.Create(services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
+
+        var json = await router.HandleAsync(JsonSerializer.Serialize(new { id = "2", type = "locale.dateFormat" }));
+        var payload = JsonDocument.Parse(json!).RootElement.GetProperty("payload");
+
+        // The names of models/messages.ts DateFormat, in the client's camel case.
+        string[] fields =
+        [
+            "culture", "shortDatePattern", "shortTimePattern", "longTimePattern", "dateSeparator",
+            "timeSeparator", "amDesignator", "pmDesignator", "monthNames", "abbreviatedMonthNames",
+            "monthGenitiveNames", "abbreviatedMonthGenitiveNames", "dayNames", "abbreviatedDayNames",
+        ];
+        Assert.Equal(fields.Order(), payload.EnumerateObject().Select(p => p.Name).Order());
+        Assert.Equal(7, payload.GetProperty("abbreviatedDayNames").GetArrayLength());
+    }
 }

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { RunSummaryDto } from '../../../../models/messages';
 import { RunHistory } from './run-history';
+import { testDateTime, useTestDateFormat } from '../../../../testing/date-format';
 
 const summary = (patch: Partial<RunSummaryDto>): RunSummaryDto => ({
   runId: 'r1',
@@ -138,5 +139,14 @@ describe('RunHistory', () => {
     fixture.detectChanges();
 
     expect(header()).toBe('1 selected');
+  });
+
+  it('shows when each run started in the system format', () => {
+    useTestDateFormat();
+    const { buttons, checks } = create();
+    const started = testDateTime('2026-01-02T03:04:05Z');
+
+    expect(buttons[0].textContent).toContain(started);
+    expect(checks[0].getAttribute('aria-label')).toBe(`Select the run from ${started}`);
   });
 });
