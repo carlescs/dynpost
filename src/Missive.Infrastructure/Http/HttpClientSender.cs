@@ -301,7 +301,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
             TextBody text => new StringContent(text.Content, new UTF8Encoding(false), text.DefaultMediaType),
             BinaryBody binary => CreateFileContent(binary.FilePath, binary.DefaultMediaType),
             MultipartBody multipart => CreateMultipart(multipart),
-            _ => null,
+            null => null,
         };
 
         var userAgentSet = false;

@@ -466,7 +466,7 @@ internal static partial class PostmanFormat
                 ("client_authentication", oauth.Credentials == OAuth2ClientAuthentication.Body ? "body" : "header"),
                 ("addTokenTo", "header"),
             ]),
-            _ => null,
+            NoAuth => null,
         };
     }
 

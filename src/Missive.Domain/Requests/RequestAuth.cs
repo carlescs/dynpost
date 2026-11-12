@@ -1,7 +1,7 @@
 namespace Missive.Domain.Requests;
 
 /// <summary>How a request authenticates. Values may contain <c>{{variable}}</c> references.</summary>
-public abstract record RequestAuth
+public closed record RequestAuth
 {
     public static RequestAuth None { get; } = new NoAuth();
 }

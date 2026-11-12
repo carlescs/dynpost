@@ -147,7 +147,10 @@ Desktop → Application
 - **Domain**: plain C# — no I/O, no `HttpClient`, no file system, no YAML or git
   libraries, no DI attributes. Holds the request/collection/environment model,
   `{{variable}}` resolution, auth rules, and validation. Prefer immutable
-  records and explicit value objects.
+  records and explicit value objects. Fixed sets of variants (`RequestAuth`,
+  `OutgoingBody`, `CaptureSource`, `WorkspaceEntry`) are C# `closed` records:
+  switch expressions over them list every case with no `_` fallback, so adding a
+  variant is a compiler warning at each switch that must handle it.
 - **Application**: one class per use case (e.g. `SendRequest`,
   `SaveRequest`, `OpenWorkspace`, `CommitChanges`, `PullChanges`,
   `PushChanges`). Defines the ports it needs as interfaces (`IWorkspaceRepository`,
