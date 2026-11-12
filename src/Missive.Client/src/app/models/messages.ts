@@ -533,6 +533,33 @@ export interface AboutInfo {
   operatingSystem: string;
 }
 
+/**
+ * How the operating system formats dates and times: .NET custom format patterns (such as
+ * `dd/MM/yyyy`) plus the names and separators they refer to. Formatted by `models/date-format.ts`.
+ */
+export interface DateFormat {
+  /** The culture the patterns come from, such as `es-ES`. */
+  culture: string;
+  shortDatePattern: string;
+  shortTimePattern: string;
+  longTimePattern: string;
+  /** What `/` in a pattern stands for. */
+  dateSeparator: string;
+  /** What `:` in a pattern stands for. */
+  timeSeparator: string;
+  amDesignator: string;
+  pmDesignator: string;
+  /** January first; twelve names. */
+  monthNames: string[];
+  abbreviatedMonthNames: string[];
+  /** The month names used next to a day number ("d MMMM"); equal to `monthNames` in most cultures. */
+  monthGenitiveNames: string[];
+  abbreviatedMonthGenitiveNames: string[];
+  /** Sunday first; seven names. */
+  dayNames: string[];
+  abbreviatedDayNames: string[];
+}
+
 export interface UpdateStatus {
   /**
    * `unsupported`: this copy cannot update itself (not installed). `upToDate`: no newer version.
@@ -975,6 +1002,8 @@ export interface BridgeMessages {
   'git.remote.remove': { payload: { name: string }; result: GitRemote[] };
   /** Reads the app version and the platform it runs on. */
   'about.get': { payload: void; result: AboutInfo };
+  /** Reads how the operating system formats dates and times. */
+  'locale.dateFormat': { payload: void; result: DateFormat };
   /** Looks for a newer version of the app and downloads it, without installing it. */
   'update.check': { payload: void; result: UpdateStatus };
   /** Installs the downloaded update and restarts the app; on success no response arrives. */

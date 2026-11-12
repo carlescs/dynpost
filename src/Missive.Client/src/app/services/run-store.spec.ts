@@ -5,6 +5,7 @@ import { Bridge, BridgeError } from './bridge';
 import { RunStore, isRunPlanDirty } from './run-store';
 import { WorkspaceStore } from './workspace-store';
 import { Dialogs } from './dialogs';
+import { testDateTime, useTestDateFormat } from '../testing/date-format';
 
 const result = (patch: Partial<RunResultDto> = {}): RunResultDto =>
   ({ runId: 'r1', state: 'completed', ...patch }) as RunResultDto;
@@ -434,5 +435,19 @@ describe('RunStore', () => {
       expect(send).not.toHaveBeenCalledWith('runFolder.rename', expect.anything());
       expect(send).not.toHaveBeenCalledWith('runPlan.move', expect.anything());
     });
+  });
+
+  it('names the run to delete by when it started, in the system format', async () => {
+    useTestDateFormat();
+    await store.open('a.run.yaml');
+    const summary = { runId: 'r1', startedAt: '2026-01-02T03:04:05Z' } as RunSummaryDto;
+    store.drafts.update((drafts) => drafts.map((d) => ({ ...d, history: [summary] })));
+
+    await store.deleteRuns(key(), ['r1']);
+
+    expect(dialogs.confirm).toHaveBeenCalledWith(
+      expect.stringContaining(`Delete the run from ${testDateTime('2026-01-02T03:04:05Z')} of`),
+      expect.anything(),
+    );
   });
 });

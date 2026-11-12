@@ -103,7 +103,7 @@
             </p>
             <p class="truncate text-xs text-slate-500" [title]="branch.subject">
               {{ branch.upstream ? '→ ' + branch.upstream + ' · ' : '' }}{{ branch.subject }}
-              @if (formatDate(branch.date); as date) {
+              @if (dates.date(branch.date); as date) {
                 · {{ date }}
               }
             </p>

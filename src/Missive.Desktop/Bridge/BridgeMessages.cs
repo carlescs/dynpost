@@ -365,6 +365,9 @@ internal static class BridgeMessageTypes
     /// <summary>Reads the app version and platform. Payload: none. Result: about info.</summary>
     public const string AboutGet = "about.get";
 
+    /// <summary>Reads how the operating system formats dates and times. Payload: none. Result: date format.</summary>
+    public const string LocaleDateFormat = "locale.dateFormat";
+
     /// <summary>
     /// Looks for a newer version of the app and downloads it. Payload: none. Result: update status.
     /// </summary>

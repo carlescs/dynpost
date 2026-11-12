@@ -1,5 +1,5 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, computed, input, output, signal } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faBan,
@@ -10,6 +10,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { RunSummaryDto } from '../../../../models/messages';
 import { RUN_STATE_LABELS, formatElapsed, formatMs } from '../../models/run-format';
+import { DateFormatStore } from '../../../../services/date-format-store';
 
 /**
  * The earlier runs of a plan, newest first; their p95 bars share one scale so runs compare. Each
@@ -18,11 +19,12 @@ import { RUN_STATE_LABELS, formatElapsed, formatMs } from '../../models/run-form
  */
 @Component({
   selector: 'app-run-history',
-  imports: [DatePipe, DecimalPipe, FaIconComponent],
+  imports: [DecimalPipe, FaIconComponent],
   host: { class: 'block' },
   templateUrl: './run-history.html',
 })
 export class RunHistory {
+  protected readonly dates = inject(DateFormatStore);
   readonly runs = input.required<RunSummaryDto[]>();
   /** The run shown in the dashboard. */
   readonly selected = input<string | null>(null);

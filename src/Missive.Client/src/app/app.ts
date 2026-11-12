@@ -23,6 +23,7 @@ import { ActivityBar } from './components/activity-bar/activity-bar';
 import { AppHeader } from './components/app-header/app-header';
 import { Sidebar } from './components/sidebar/sidebar';
 import { ThemeStore } from './services/theme-store';
+import { DateFormatStore } from './services/date-format-store';
 import { UpdateStore } from './services/update-store';
 import { InterchangeStore } from './services/interchange-store';
 import { Shortcuts } from './services/shortcuts';
@@ -58,6 +59,7 @@ export class App implements OnInit {
   protected readonly interchange = inject(InterchangeStore);
   private readonly updates = inject(UpdateStore);
   private readonly theme = inject(ThemeStore);
+  private readonly dateFormat = inject(DateFormatStore);
   private readonly shortcuts = inject(Shortcuts);
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faPlus = faPlus;
@@ -68,6 +70,7 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     void this.theme.load();
+    void this.dateFormat.load();
     void this.store.restore();
     void this.updates.check();
   }

@@ -16,6 +16,7 @@ import {
 import { GitBranch } from '../../../../models/messages';
 import { GitStore } from '../../../../services/git-store';
 import { Dialogs } from '../../../../services/dialogs';
+import { DateFormatStore } from '../../../../services/date-format-store';
 
 /** The new-branch form's values. */
 interface BranchForm {
@@ -36,6 +37,7 @@ interface BranchForm {
   templateUrl: './git-branches.html',
 })
 export class GitBranches {
+  protected readonly dates = inject(DateFormatStore);
   protected readonly git = inject(GitStore);
   private readonly dialogs = inject(Dialogs);
   protected readonly expanded = signal(false);
@@ -158,12 +160,6 @@ export class GitBranches {
       return;
     }
     await this.track(branch.name, () => this.git.deleteRemoteBranch(branch.name));
-  }
-
-  protected formatDate(iso: string | null): string {
-    if (!iso) return '';
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString();
   }
 
   private async track(name: string, action: () => Promise<boolean>): Promise<void> {

@@ -15,6 +15,7 @@ import { fromRequestDto } from '../../../../models/request-mapping';
 import { GitHistoryStore } from '../../../../services/git-history-store';
 import { STATUS_BADGES, fileName, folderOf, languageForPath } from '../../models/git-format';
 import { RequestDiff } from '../request-diff/request-diff';
+import { DateFormatStore } from '../../../../services/date-format-store';
 
 type DiffMode = 'request' | 'text';
 
@@ -30,6 +31,7 @@ type DiffMode = 'request' | 'text';
   templateUrl: './commit-view.html',
 })
 export class CommitView {
+  protected readonly dates = inject(DateFormatStore);
   protected readonly history = inject(GitHistoryStore);
   protected readonly badges = STATUS_BADGES;
   protected readonly sideBySide = signal(true);
@@ -82,9 +84,5 @@ export class CommitView {
 
   protected describe(change: GitChange): string {
     return change.originalPath ? `${change.originalPath} → ${change.path}` : change.path;
-  }
-
-  protected formatDate(date: string): string {
-    return new Date(date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   }
 }

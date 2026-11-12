@@ -13,6 +13,7 @@ using Missive.Application.Runs;
 using Missive.Application.Settings;
 using Missive.Application.Sharing;
 using Missive.Application.About;
+using Missive.Application.Locale;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
@@ -28,6 +29,7 @@ using Missive.Infrastructure.Runs;
 using Missive.Infrastructure.Settings;
 using Missive.Infrastructure.Sharing;
 using Missive.Infrastructure.About;
+using Missive.Infrastructure.Locale;
 using Missive.Infrastructure.Updates;
 using Missive.Infrastructure.Workspaces;
 using Missive.Infrastructure.Yaml;
@@ -116,8 +118,10 @@ internal static class Program
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath))
             .AddSingleton<IAppUpdater>(new VelopackAppUpdater(ReleasesRepository))
             .AddSingleton<IAppInfo, AssemblyAppInfo>()
+            .AddSingleton<IRegionalSettings, SystemRegionalSettings>()
             .AddSingleton<IFileManager, SystemFileManager>()
             .AddTransient<GetAboutInfo>()
+            .AddTransient<GetDateFormat>()
             .AddTransient<GetAppSettings>()
             .AddTransient<SetTheme>()
             .AddTransient<SetHistorySettings>()

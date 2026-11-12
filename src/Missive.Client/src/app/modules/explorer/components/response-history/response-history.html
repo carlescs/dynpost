@@ -24,7 +24,7 @@
             <span class="rounded px-1 font-mono font-bold" [class]="statusClass(entry.status)">{{
               entry.status
             }}</span>
-            <span class="truncate text-slate-700">{{ formatTime(entry.sentAt) }}</span>
+            <span class="truncate text-slate-700">{{ dates.dateTime(entry.sentAt) }}</span>
           </span>
           <span class="flex gap-2 text-slate-500">
             <span>{{ formatDuration(entry.durationMs) }}</span>
@@ -37,7 +37,7 @@
         <button
           type="button"
           class="mr-1 flex size-6 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-rose-600 focus:opacity-100"
-          [attr.aria-label]="'Delete the response of ' + formatTime(entry.sentAt)"
+          [attr.aria-label]="'Delete the response of ' + dates.dateTime(entry.sentAt)"
           title="Delete this response"
           (click)="remove(entry)"
         >

@@ -6,6 +6,7 @@ import { HistoryEntryDto, ResponseDto } from '../../../../models/messages';
 import { Bridge } from '../../../../services/bridge';
 import { Dialogs } from '../../../../services/dialogs';
 import { ResponseHistory } from './response-history';
+import { testDateTime, useTestDateFormat } from '../../../../testing/date-format';
 
 const response = (body: string, historyId: string | null = null): ResponseDto => ({
   status: 200,
@@ -126,5 +127,17 @@ describe('ResponseHistory', () => {
     expect(confirm).toHaveBeenCalled();
     expect(send).toHaveBeenLastCalledWith('history.delete', { path: 'users/get-user.yaml' });
     expect(root.textContent).toContain('No responses are kept for this request yet.');
+  });
+
+  it('shows when each response was sent in the system format', async () => {
+    const { fixture } = setup([entry('old')], null);
+    useTestDateFormat();
+    await settle(fixture);
+    const item = (fixture.nativeElement as HTMLElement).querySelector('li')!;
+
+    expect(item.textContent).toContain(testDateTime('2026-11-07T12:00:00Z'));
+    expect(item.querySelector('[aria-label^="Delete the response of"]')?.ariaLabel).toBe(
+      `Delete the response of ${testDateTime('2026-11-07T12:00:00Z')}`,
+    );
   });
 });

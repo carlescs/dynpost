@@ -28,6 +28,7 @@ import { languageForMediaType } from '../../../../components/code-editor/monaco-
 import { previewKind, ResponsePreview } from '../response-preview/response-preview';
 import { ResponseHistory } from '../response-history/response-history';
 import { looksLikeJson, prettyJson } from '../../models/response-text';
+import { DateFormatStore } from '../../../../services/date-format-store';
 
 type ResponseTab = 'body' | 'headers' | 'cookies' | 'captures' | 'timing' | 'request';
 
@@ -64,6 +65,7 @@ type BodyView = 'pretty' | 'raw' | 'preview';
   templateUrl: './response-viewer.html',
 })
 export class ResponseViewer {
+  protected readonly dates = inject(DateFormatStore);
   readonly document = input.required<RequestDocument>();
 
   private readonly store = inject(WorkspaceStore);
@@ -221,9 +223,7 @@ export class ResponseViewer {
   }
 
   protected formatDate(iso: string | null | undefined): string {
-    if (!iso) return 'Session';
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+    return iso ? this.dates.dateTime(iso) : 'Session';
   }
 
   protected formatMs(ms: number): string {

@@ -5,6 +5,7 @@ import { BridgeErrorShape, GitBranch, GitStatus } from '../../../../models/messa
 import { GitStore } from '../../../../services/git-store';
 import { GitBranches } from './git-branches';
 import { Dialogs } from '../../../../services/dialogs';
+import { testDate, useTestDateFormat } from '../../../../testing/date-format';
 
 const branch = (patch: Partial<GitBranch>): GitBranch => ({
   name: 'main',
@@ -219,5 +220,24 @@ describe('GitBranches', () => {
     fixture.detectChanges();
     expect(merge.disabled).toBe(false);
     expect(merge.title).toBe('Merge old into main');
+  });
+
+  it('shows the date of each branch’s last commit in the system format', async () => {
+    git.branches.set([branch({ name: 'main', current: true, date: '2026-05-06T07:08:09Z' })]);
+    const fixture = await render();
+    useTestDateFormat();
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.textContent).toMatch(new RegExp(`Init\\s*· ${testDate('2026-05-06T07:08:09Z')}`));
+  });
+
+  it('shows no date for a branch without one', async () => {
+    const fixture = await render();
+    useTestDateFormat();
+    fixture.detectChanges();
+
+    // The sample branches have no dates, so nothing follows their subjects.
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toMatch(/Init\s*·/);
   });
 });

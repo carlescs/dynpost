@@ -95,6 +95,11 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   (`Infrastructure/History/JsonHistoryStore.cs`, keyed by request path); use
   cases that rename, move or delete requests or folders keep it in step, and
   its limits are per-user `AppSettings.History`.
+- Dates: the client never formats dates with the webview's locale or Angular's
+  `DatePipe`; it uses `DateFormatStore` (`services/date-format-store.ts`), which formats
+  with the operating system's regional patterns read by the host
+  (`Application/Locale`, `Infrastructure/Locale/SystemRegionalSettings.cs`, message
+  `locale.dateFormat`) through `models/date-format.ts`.
 - All projects are in `Missive.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
   (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
@@ -118,7 +123,8 @@ Prettier. Client unit tests run on Vitest with jsdom through Angular's
 `@angular/build:unit-test` builder (`ng test`, `tsconfig.spec.json`): each
 `<name>.spec.ts` sits next to the file it tests, uses `TestBed` for components
 and services, and fakes the `Bridge` with `vi.fn()` rather than talking to the
-`MockBackend`. Before finishing, run `dotnet build Missive.sln` and
+`MockBackend`. Helpers shared by client specs live in `src/app/testing/` (e.g.
+`useTestDateFormat()` to check dates are shown in the system format). Before finishing, run `dotnet build Missive.sln` and
 `dotnet test Missive.sln` (or `npm run build` for client-only changes), and
 `npm test -- --watch=false` and `npm run format:check` when you touch the client.
 
