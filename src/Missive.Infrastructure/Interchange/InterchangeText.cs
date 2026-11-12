@@ -200,7 +200,7 @@ internal static partial class InterchangeText
                     Scope = map(oauth.Scope),
                     Audience = map(oauth.Audience),
                 },
-                var other => other,
+                NoAuth none => none,
             },
             Body = request.Body with
             {

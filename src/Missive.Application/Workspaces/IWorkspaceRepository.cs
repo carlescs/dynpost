@@ -5,7 +5,7 @@ using Missive.Domain.Workspaces;
 namespace Missive.Application.Workspaces;
 
 /// <summary>A file or folder found in a workspace.</summary>
-public abstract record WorkspaceEntry(WorkspacePath Path);
+public closed record WorkspaceEntry(WorkspacePath Path);
 
 public sealed record FolderEntry(WorkspacePath Path, IReadOnlyList<WorkspaceEntry> Children) : WorkspaceEntry(Path);
 

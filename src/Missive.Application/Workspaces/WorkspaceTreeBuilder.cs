@@ -27,7 +27,6 @@ internal static class WorkspaceTreeBuilder
             "request",
             Error: file.Request.Error!.Message,
             LocalOnly: localOnly.Contains(file.Path)),
-        _ => throw new ArgumentOutOfRangeException(nameof(entry)),
     };
 
     internal static string WorkspaceName(string root)

@@ -451,7 +451,7 @@ rules such as CORS don't apply. When sending:
   `form` body whose file field has no file, or whose file is outside the
   workspace, is not sent.
 - A `User-Agent: Missive` header is added unless you set one. Compressed
-  responses are decompressed. No cookies are kept between requests unless the
+  responses (gzip, deflate, Brotli and Zstandard) are decompressed. No cookies are kept between requests unless the
   environment's cookie jar is on. A request times out after 60 seconds.
 - Up to 20 redirects are followed, never from `https` to `http`. A 303, or a
   301/302 answering a POST, continues as a GET without a body; 307 and 308 keep
@@ -1023,7 +1023,7 @@ The Angular client is a separate presentation layer that only talks to
 
 ## Prerequisites
 
-- .NET 10 SDK
+- .NET 11 SDK
 - Node.js 22.22.3+ (22.x) or 24.15.0+ (24.x), with npm
 - git, for workspace synchronization
 - Windows: Microsoft Edge WebView2 Runtime
@@ -1071,7 +1071,7 @@ dotnet publish src/Missive.Desktop -c Release -o artifacts/publish
 
 Run the `Missive` executable (`Missive.exe` on Windows) in
 `artifacts/publish`. Keep its `wwwroot` and `Assets` directories and native
-libraries alongside it. This is a framework-dependent publish: the target machine needs the .NET 10
+libraries alongside it. This is a framework-dependent publish: the target machine needs the .NET 11
 runtime and the platform webview prerequisites above, but not Node.js.
 
 ## Repository layout

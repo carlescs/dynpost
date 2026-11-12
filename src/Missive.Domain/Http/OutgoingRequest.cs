@@ -21,7 +21,7 @@ public sealed record OutgoingRequest(
 }
 
 /// <summary>The body of an <see cref="OutgoingRequest"/>.</summary>
-public abstract record OutgoingBody;
+public closed record OutgoingBody;
 
 /// <summary>A body sent as text, with the media type to use when no Content-Type header is set.</summary>
 public sealed record TextBody(string Content, string DefaultMediaType) : OutgoingBody;

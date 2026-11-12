@@ -159,7 +159,7 @@ public static class RequestMapper
             Scope: oauth.Scope,
             Audience: oauth.Audience,
             Credentials: oauth.Credentials == OAuth2ClientAuthentication.Body ? "body" : "header"),
-        _ => new AuthDto("none"),
+        NoAuth => new AuthDto("none"),
     };
 
     /// <summary>The name of a grant in request files and DTOs.</summary>

@@ -486,7 +486,7 @@ internal static partial class InsomniaFormat
                 ["usePkce"] = true,
                 ["pkceMethod"] = "S256",
             },
-        _ => new JsonObject(),
+        NoAuth => new JsonObject(),
     };
 
     private static JsonObject ExportBody(RequestBody body)

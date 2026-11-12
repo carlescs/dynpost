@@ -11,7 +11,7 @@ namespace Missive.Domain.Requests;
 public sealed record CaptureRule(string Variable, string Expression);
 
 /// <summary>Where a captured value comes from.</summary>
-public abstract record CaptureSource;
+public closed record CaptureSource;
 
 /// <summary>A response header, by name (case-insensitive); the first one when it repeats.</summary>
 public sealed record HeaderCaptureSource(string Name) : CaptureSource;
