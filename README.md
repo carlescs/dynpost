@@ -45,6 +45,11 @@ when one is ready, a **Restart to update** button appears in the header. Nothing
 is installed until you click it. Builds run from source don't update
 themselves.
 
+Dates and times (response history, cookies, commits, branches, load runs) are
+shown in your operating system's regional format, including formats you
+customized in its settings. On Linux the format follows the `LC_ALL`, `LC_TIME`
+or `LANG` locale.
+
 Missive needs [git](https://git-scm.com/downloads) for workspace sync, plus the
 system webview: Windows 10 and 11 normally include the Microsoft Edge WebView2
 Runtime, macOS includes WebKit, and Linux needs GTK 3, WebKitGTK 4.1 and

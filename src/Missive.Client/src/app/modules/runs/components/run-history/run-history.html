@@ -54,7 +54,7 @@
         <input
           type="checkbox"
           class="accent-sky-600"
-          [attr.aria-label]="'Select the run from ' + (row.run.startedAt | date: 'MMM d, HH:mm:ss')"
+          [attr.aria-label]="'Select the run from ' + dates.dateTime(row.run.startedAt)"
           [checked]="row.checked"
           data-check
           (click)="toggle(row.run.runId, $event)"
@@ -70,7 +70,7 @@
         <fa-icon class="text-sm" [class]="row.color" [icon]="row.icon" [title]="row.label" />
         <span class="min-w-0 flex-1">
           <span class="block truncate font-medium">
-            {{ row.run.startedAt | date: 'MMM d, HH:mm:ss' }}
+            {{ dates.dateTime(row.run.startedAt) }}
           </span>
           <span class="block truncate text-slate-500">
             {{ row.label }} · {{ row.run.samples | number }} requests in

@@ -7,6 +7,7 @@ import {
   CaptureResultDto,
   CapturedValueDto,
   CookieDto,
+  DateFormat,
   ERROR_CODES,
   EnvironmentDto,
   HistoryEntryDetailsDto,
@@ -24,6 +25,40 @@ import {
 } from '../models/messages';
 import { VARIABLE_PATTERN } from '../models/variables';
 import { PLANS_FOLDER, REQUESTS_FOLDER } from '../models/workspace';
+
+const US_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+const US_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** The date format the browser preview reports: .NET's for en-US. */
+const US_DATE_FORMAT: DateFormat = {
+  culture: 'en-US',
+  shortDatePattern: 'M/d/yyyy',
+  shortTimePattern: 'h:mm tt',
+  longTimePattern: 'h:mm:ss tt',
+  dateSeparator: '/',
+  timeSeparator: ':',
+  amDesignator: 'AM',
+  pmDesignator: 'PM',
+  monthNames: US_MONTHS,
+  abbreviatedMonthNames: US_MONTHS.map((name) => name.slice(0, 3)),
+  monthGenitiveNames: US_MONTHS,
+  abbreviatedMonthGenitiveNames: US_MONTHS.map((name) => name.slice(0, 3)),
+  dayNames: US_DAYS,
+  abbreviatedDayNames: US_DAYS.map((name) => name.slice(0, 3)),
+};
 
 /** A one-page PDF, the body of the simulated runs' saved PDF responses. */
 const MOCK_PDF =
@@ -310,6 +345,8 @@ export class MockBackend {
         operatingSystem: navigator.platform,
       });
     }
+    // The browser preview has no regional settings to read; it formats dates as en-US does.
+    if (request.type === 'locale.dateFormat') return ok(US_DATE_FORMAT);
     // The browser preview is never installed, so it cannot update itself.
     if (request.type === 'update.check') return ok({ state: 'unsupported' });
     if (request.type === 'update.restart') {

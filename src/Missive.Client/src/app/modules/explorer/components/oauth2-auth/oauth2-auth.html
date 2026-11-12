@@ -118,9 +118,9 @@
       @if (s.expired) {
         Token expired{{ s.refreshable ? '; it is refreshed when you send' : '' }}.
       } @else if (s.expires) {
-        Token valid until {{ formatTime(s.expires) }}.
+        Token valid until {{ dates.dateTime(s.expires) }}.
       } @else {
-        Token obtained {{ formatTime(s.obtained) }}.
+        Token obtained {{ dates.dateTime(s.obtained) }}.
       }
       @if (s.scope) {
         Scope: <code>{{ s.scope }}</code>.

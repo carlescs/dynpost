@@ -5,6 +5,7 @@ import { PLANS_FOLDER } from '../models/workspace';
 import { WorkspaceStore } from './workspace-store';
 import { DISCARD, Dialogs } from './dialogs';
 import { joinPath } from './tree-state';
+import { DateFormatStore } from './date-format-store';
 
 /** A run plan open in an editor tab, with the run it shows. */
 export interface RunPlanDraft {
@@ -53,6 +54,7 @@ const NEW_PLAN = (name: string) =>
  */
 @Injectable({ providedIn: 'root' })
 export class RunStore {
+  private readonly dates = inject(DateFormatStore);
   private readonly bridge = inject(Bridge);
   private readonly dialogs = inject(Dialogs);
   private readonly workspace = inject(WorkspaceStore);
@@ -350,7 +352,7 @@ export class RunStore {
     let message: string;
     if (runIds.length === 1) {
       const run = draft.history.find((summary) => summary.runId === runIds[0]);
-      const when = run ? ` from ${new Date(run.startedAt).toLocaleString()}` : '';
+      const when = run ? ` from ${this.dates.dateTime(run.startedAt)}` : '';
       message = `Delete the run${when} of '${name}' and its request log?`;
     } else {
       message = `Delete ${runIds.length} runs of '${name}' and their request logs?`;

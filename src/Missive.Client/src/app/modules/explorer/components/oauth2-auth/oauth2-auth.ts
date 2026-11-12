@@ -15,6 +15,7 @@ import { toAuthDto } from '../../../../models/request-mapping';
 import { OAUTH2_GRANT_LABELS, OAUTH2_GRANTS, RequestAuth } from '../../../../models/workspace';
 import { Bridge, BridgeError } from '../../../../services/bridge';
 import { EnvironmentStore } from '../../../../services/environment-store';
+import { DateFormatStore } from '../../../../services/date-format-store';
 
 /**
  * The OAuth 2.0 settings of a request and its cached token: **Get new token** obtains one (the
@@ -27,6 +28,7 @@ import { EnvironmentStore } from '../../../../services/environment-store';
   templateUrl: './oauth2-auth.html',
 })
 export class OAuth2Auth {
+  protected readonly dates = inject(DateFormatStore);
   readonly auth = input.required<RequestAuth>();
   /** Changes whenever the request was sent, since sending may obtain or refresh the token. */
   readonly sent = input<unknown>(null);
@@ -109,10 +111,6 @@ export class OAuth2Auth {
     if (context !== this.context()) return;
     this.statusLoad++;
     this.status.set(status);
-  }
-
-  protected formatTime(iso: string): string {
-    return new Date(iso).toLocaleString();
   }
 
   private async loadStatus(auth: string): Promise<void> {

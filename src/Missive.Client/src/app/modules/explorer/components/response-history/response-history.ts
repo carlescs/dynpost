@@ -9,6 +9,7 @@ import { CodeEditor } from '../../../../components/code-editor/code-editor';
 import { CodeDiffEditor } from '../../../../components/code-diff-editor/code-diff-editor';
 import { languageForMediaType } from '../../../../components/code-editor/monaco-loader';
 import { comparableBody, comparableHeaders, looksLikeJson } from '../../models/response-text';
+import { DateFormatStore } from '../../../../services/date-format-store';
 
 type HistoryView = 'body' | 'headers';
 
@@ -23,6 +24,7 @@ type HistoryView = 'body' | 'headers';
   templateUrl: './response-history.html',
 })
 export class ResponseHistory {
+  protected readonly dates = inject(DateFormatStore);
   /** The workspace path of the request file. */
   readonly path = input.required<string>();
   /** The response in the viewer, which the selected entry is compared with. */
@@ -144,11 +146,6 @@ export class ResponseHistory {
     } catch (error) {
       this.error.set(message(error));
     }
-  }
-
-  protected formatTime(iso: string): string {
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
   }
 
   protected formatDuration(ms: number): string {

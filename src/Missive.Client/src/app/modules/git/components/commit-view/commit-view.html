@@ -7,7 +7,7 @@
         <span [title]="details.commit.authorEmail">{{ details.commit.authorName }}</span>
         committed
         <time [attr.datetime]="details.commit.date" [title]="details.commit.date">{{
-          formatDate(details.commit.date)
+          dates.dateTimeShort(details.commit.date)
         }}</time>
         ·
         <span class="font-mono" [title]="details.commit.id">{{

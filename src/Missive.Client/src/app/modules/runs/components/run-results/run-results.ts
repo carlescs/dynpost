@@ -1,5 +1,5 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, computed, input, output } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { Component, computed, inject, input, output } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faBan,
@@ -22,6 +22,7 @@ import {
   statusFill,
 } from '../../models/run-format';
 import { RunChart } from '../run-chart/run-chart';
+import { DateFormatStore } from '../../../../services/date-format-store';
 
 const STATE_ICONS: Record<RunState, IconDefinition> = {
   running: faSpinner,
@@ -39,11 +40,12 @@ const THRESHOLD_NAMES: Record<string, string> = {
 /** The dashboard of a run, live or finished: headline numbers, charts and the samples kept. */
 @Component({
   selector: 'app-run-results',
-  imports: [DatePipe, DecimalPipe, FaIconComponent, RunChart],
+  imports: [DecimalPipe, FaIconComponent, RunChart],
   host: { class: 'flex flex-col gap-4' },
   templateUrl: './run-results.html',
 })
 export class RunResults {
+  protected readonly dates = inject(DateFormatStore);
   readonly run = input.required<RunResultDto>();
   /** Asks to show the table of every request sent with its response. */
   readonly showRequests = output<void>();

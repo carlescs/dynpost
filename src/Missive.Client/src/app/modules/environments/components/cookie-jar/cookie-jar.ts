@@ -4,6 +4,7 @@ import { faCookieBite, faRotate, faTrash } from '@fortawesome/free-solid-svg-ico
 import { CookieDto } from '../../../../models/messages';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { Dialogs } from '../../../../services/dialogs';
+import { DateFormatStore } from '../../../../services/date-format-store';
 
 /** Lists the cookies kept for an environment and lets the user delete them. */
 @Component({
@@ -12,6 +13,7 @@ import { Dialogs } from '../../../../services/dialogs';
   templateUrl: './cookie-jar.html',
 })
 export class CookieJar {
+  protected readonly dates = inject(DateFormatStore);
   private readonly store = inject(EnvironmentStore);
   private readonly dialogs = inject(Dialogs);
 
@@ -57,9 +59,7 @@ export class CookieJar {
   }
 
   protected formatExpires(iso: string | null | undefined): string {
-    if (!iso) return 'Session';
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+    return iso ? this.dates.dateTime(iso) : 'Session';
   }
 
   private async load(id: string): Promise<void> {
