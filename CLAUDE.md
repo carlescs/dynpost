@@ -262,6 +262,10 @@ Desktop → Application
   with `npx commitlint --from HEAD~1 --to HEAD` (after `npm ci` at the repo
   root) before pushing. Pull request titles follow the same format.
 
+- Never squash merge a pull request: merge it with a merge commit, so every
+  commit reaches `main` as written and semantic-release sees each one's type
+  (a squash keeps only the title's, which can hide a `feat:` or `fix:`).
+
 - When merging a pull request that closes an issue, document the outcome in the
   issue itself: add a comment summarizing what was implemented (behavior,
   user-visible changes, notable design decisions, anything left out or deferred)
