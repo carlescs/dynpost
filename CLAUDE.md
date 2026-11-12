@@ -64,7 +64,7 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
     shell (`app.ts`), which uses the modules' editor components. Modules may
     import from the top-level folders, but not from each other — move shared
     code up instead.
-- Backend (.NET 10), clean architecture — see "Backend architecture" below:
+- Backend (.NET 11), clean architecture — see "Backend architecture" below:
   - `src/Missive.Domain` — entities, value objects, pure rules.
   - `src/Missive.Application` — use cases and port interfaces.
   - `src/Missive.Infrastructure` — adapters (YAML files, HTTP, git, secrets,

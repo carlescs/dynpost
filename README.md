@@ -1023,7 +1023,7 @@ The Angular client is a separate presentation layer that only talks to
 
 ## Prerequisites
 
-- .NET 10 SDK
+- .NET 11 SDK
 - Node.js 22.22.3+ (22.x) or 24.15.0+ (24.x), with npm
 - git, for workspace synchronization
 - Windows: Microsoft Edge WebView2 Runtime
@@ -1071,7 +1071,7 @@ dotnet publish src/Missive.Desktop -c Release -o artifacts/publish
 
 Run the `Missive` executable (`Missive.exe` on Windows) in
 `artifacts/publish`. Keep its `wwwroot` and `Assets` directories and native
-libraries alongside it. This is a framework-dependent publish: the target machine needs the .NET 10
+libraries alongside it. This is a framework-dependent publish: the target machine needs the .NET 11
 runtime and the platform webview prerequisites above, but not Node.js.
 
 ## Repository layout

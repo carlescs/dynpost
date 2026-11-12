@@ -659,8 +659,9 @@ public sealed class HttpClientSenderTests
                             var stream = client.GetStream();
                             var buffer = new byte[4096];
                             await stream.ReadAsync(buffer, stop.Token);
-                            await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), stop.Token);
+                            // Counted before writing: the client may assert as soon as it reads.
                             Interlocked.Increment(ref answered);
+                            await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"), stop.Token);
                             await stream.ReadAsync(buffer, stop.Token);
                             client.Client.LingerState = new LingerOption(true, 0);
                         }
@@ -669,6 +670,10 @@ public sealed class HttpClientSenderTests
             }
             catch (OperationCanceledException)
             {
+            }
+            catch (SocketException)
+            {
+                // Stopping the listener can fail the pending accept instead of cancelling it.
             }
         });
 
