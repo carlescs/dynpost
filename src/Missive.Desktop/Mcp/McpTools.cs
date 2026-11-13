@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Missive.Application.Common;
 using Missive.Application.Environments;
 using Missive.Application.Folders;
+using Missive.Application.History;
 using Missive.Application.Git;
 using Missive.Application.Http;
 using Missive.Application.Requests;
@@ -53,6 +54,9 @@ internal static class McpTools
         + "bodies?: { requestPath: { folder, pattern?, mode?, onEof? } }; saveResponses?: bool; "
         + "assert?: { \"*\" or path: { status: 200-299, maxTime: 800ms } }; thresholds?: { p95: 500ms, errorRate: 1%, throughput: 50 }. "
         + "Plans live in plans/ and are named <name>.run.yaml.";
+
+    /// <summary>The most commits listed at once.</summary>
+    public const int MaxCommitsPage = 100;
 
     /// <summary>The most characters of a response body shown to the AI assistant.</summary>
     public const int MaxBodyChars = 64 * 1024;
@@ -139,6 +143,25 @@ internal static class McpTools
                 "Selects the environment requests are sent with, by id (see list_environments); null selects none.",
                 async (p, ct) => await Use<SelectEnvironment>().ExecuteAsync(p.Id, ct),
                 changed: (_, _) => [])
+            .Add<PathArguments, IReadOnlyList<HistoryEntryDto>>(
+                "list_history", "List response history",
+                "Lists the responses kept in a saved request's history, newest first: when it was sent, method, URL, status, time and size. "
+                + "Responses are kept when a saved request is sent (if the user keeps history), with cookie and secret values hidden.",
+                (p, ct) => Use<ListResponseHistory>().ExecuteAsync(p.Path, ct),
+                readOnly: true)
+            .Add<HistoryEntryArguments, HistoryEntryDetailsDto>(
+                "get_history_entry", "Get response from history",
+                "Reads one response of a saved request's history (its id from list_history): status, headers, timings and body; "
+                + $"bodies longer than {MaxBodyChars} characters are cut off and binary bodies are left out.",
+                (p, ct) => Use<GetResponseHistoryEntry>().ExecuteAsync(p.Path, p.Id, ct),
+                present: entry => entry with { Response = ForAssistant(entry.Response) },
+                readOnly: true)
+            .Add<OpenArguments, WorkspaceItemDto>(
+                "open_in_app", "Open in Missive",
+                "Opens a request, run plan or environment file in a tab of the app, or shows its tab if it is open already, so the user sees it. "
+                + "Use it to show the user what you created or changed.",
+                (p, _) => Task.FromResult(Use<FindWorkspaceItem>().Execute(p.Path)),
+                then: (_, item) => events.OpenRequestedAsync(item))
             .Add<NoArguments, IReadOnlyList<RunPlanFileDto>>(
                 "list_run_plans", "List run plans",
                 "Lists the workspace's load run plans (*.run.yaml files in plans/) with their names, and why any can't be read.",
@@ -149,9 +172,15 @@ internal static class McpTools
                 "Reads a run plan's YAML, and why it can't be run yet, if it can't. " + RunPlanShape,
                 (p, ct) => Use<OpenRunPlan>().ExecuteAsync(p.Path, ct),
                 readOnly: true)
+            .Add<CreateRunPlanArguments, RunPlanDocumentDto>(
+                "create_run_plan", "Create run plan",
+                "Saves a new run plan in a folder of plans/ (plans itself for the top level); the file is named after the plan and never replaces another one. "
+                + "Returns its path and why it can't be run yet, if it can't. " + RunPlanShape,
+                (p, ct) => Use<CreateRunPlan>().ExecuteAsync(p.Folder, p.Yaml, ct),
+                changed: (_, saved) => [saved.Path])
             .Add<SaveRunPlanArguments, RunPlanDocumentDto>(
                 "save_run_plan", "Save run plan",
-                "Creates a run plan, or replaces an existing one's YAML; a plan whose file is named after it is renamed with it. "
+                "Replaces an existing run plan's YAML (use create_run_plan for a new plan); a plan whose file is named after it is renamed with it. "
                 + "Returns its (possibly new) path and why it can't be run yet, if it can't. Read an existing plan first and keep what you don't mean to change. "
                 + RunPlanShape,
                 (p, ct) => Use<SaveRunPlan>().ExecuteAsync(p.Path, p.Yaml, ct),
@@ -211,6 +240,23 @@ internal static class McpTools
                 "Shows the workspace's git branch and changed files. Missive leaves committing, pulling and pushing to the user.",
                 async (_, ct) => (await Use<GetGitStatus>().ExecuteAsync(ct)).Map(GitStatusDto.From),
                 readOnly: true)
+            .Add<PathArguments, GitFileDiffDto>(
+                "git_diff", "Git diff",
+                "Shows how a changed file of the workspace (see git_status) differs from the last commit: its text before (original) and now (modified). "
+                + $"Each side is cut off after {MaxBodyChars} characters.",
+                (p, ct) => Use<GetFileDiff>().ExecuteAsync(p.Path, ct),
+                present: ForAssistant,
+                readOnly: true)
+            .Add<GitLogArguments, GitHistoryDto>(
+                "git_log", "Git log",
+                "Lists the commits of the current branch, newest first: id, author, date and subject.",
+                async (p, ct) => (await Use<GetGitHistory>().ExecuteAsync(new GetGitHistoryRequest(Math.Max(0, p.Skip), Math.Clamp(p.Limit, 1, MaxCommitsPage)), ct)).Map(GitHistoryDto.From),
+                readOnly: true)
+            .Add<CommitArguments, GitCommitDetailsDto>(
+                "git_show", "Git show commit",
+                "Shows one commit (its id from git_log): its whole message and the files it changed.",
+                async (p, ct) => (await Use<GetCommit>().ExecuteAsync(p.CommitId, ct)).Map(GitCommitDetailsDto.From),
+                readOnly: true)
             .Build();
 
         Task<Result<ResponseDto>> Send(SendArguments p, CancellationToken ct)
@@ -229,6 +275,22 @@ internal static class McpTools
     /// <summary>A run as the AI assistant sees it: only the latest seconds of its timeline.</summary>
     internal static RunResultDto ForAssistant(RunResultDto run) =>
         run.Timeline.Count > MaxTimelinePoints ? run with { Timeline = run.Timeline.TakeLast(MaxTimelinePoints).ToList() } : run;
+
+    /// <summary>
+    /// A diff as the AI assistant sees it: each side's text cut off when long, and without the
+    /// parsed copies of request files, which repeat the text.
+    /// </summary>
+    internal static GitFileDiffDto ForAssistant(GitFileDiffDto diff) =>
+        diff with
+        {
+            Original = Cut(diff.Original),
+            Modified = Cut(diff.Modified),
+            OriginalRequest = null,
+            ModifiedRequest = null,
+        };
+
+    private static string? Cut(string? text) =>
+        text is { Length: > MaxBodyChars } ? text[..MaxBodyChars] + "\n… (cut off)" : text;
 
     internal static ResponseDto ForAssistant(ResponseDto response) =>
         response switch
@@ -405,11 +467,29 @@ internal sealed record EnvironmentArguments(
 
 internal sealed record CreateEnvironmentArguments(EnvironmentDto Environment);
 
+internal sealed record HistoryEntryArguments(
+    [property: Description("The request's workspace path, such as requests/users/get-user.yaml.")] string Path,
+    [property: Description("The entry's id, from list_history.")] string Id);
+
+internal sealed record OpenArguments(
+    [property: Description("The workspace path of a request (requests/…/x.yaml), run plan (plans/…/x.run.yaml) or environment (environments/x.yaml).")] string Path);
+
+internal sealed record GitLogArguments(
+    [property: Description("How many commits to skip, newest first.")] int Skip = 0,
+    [property: Description("How many commits to list (at most 100).")] int Limit = 20);
+
+internal sealed record CommitArguments(
+    [property: Description("The commit's id, from git_log.")] string CommitId);
+
 internal sealed record PlanPathArguments(
     [property: Description("The plan's workspace path, such as plans/perf/checkout-smoke.run.yaml.")] string Path);
 
+internal sealed record CreateRunPlanArguments(
+    [property: Description("The folder to save it in: plans, or a folder in it such as plans/perf.")] string Folder,
+    [property: Description("The plan's whole YAML text.")] string Yaml);
+
 internal sealed record SaveRunPlanArguments(
-    [property: Description("The plan's workspace path: an existing plan's, or a new one in plans/ ending in .run.yaml.")] string Path,
+    [property: Description("The plan's workspace path, such as plans/perf/checkout-smoke.run.yaml.")] string Path,
     [property: Description("The plan's whole YAML text.")] string Yaml);
 
 internal sealed record MoveRunPlanArguments(

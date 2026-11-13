@@ -21,12 +21,17 @@ describe('WorkspaceSync', () => {
       workspace: () => (open ? { root: '/work/api' } : null),
       refresh: vi.fn().mockResolvedValue(undefined),
       reloadFromDisk: vi.fn().mockResolvedValue(undefined),
+      openRequest: vi.fn().mockResolvedValue(undefined),
     };
-    const environments = { refresh: vi.fn().mockResolvedValue(undefined) };
+    const environments = {
+      refresh: vi.fn().mockResolvedValue(undefined),
+      edit: vi.fn().mockResolvedValue(undefined),
+    };
     const git = { available: true, refresh: vi.fn().mockResolvedValue(undefined) };
     const runs = {
       reloadFromDisk: vi.fn().mockResolvedValue(undefined),
       followStarted: vi.fn().mockResolvedValue(undefined),
+      open: vi.fn().mockResolvedValue(undefined),
     };
     TestBed.configureTestingModule({
       providers: [
@@ -92,11 +97,33 @@ describe('WorkspaceSync', () => {
     expect(runs.followStarted).not.toHaveBeenCalled();
   });
 
+  it('opens the requests, run plans and environments it is asked to show', () => {
+    const { emit, workspace, runs, environments } = setup();
+
+    emit('item.open', { path: 'requests/a.yaml', kind: 'request', id: 'requests/a.yaml' });
+    emit('item.open', { path: 'plans/p.run.yaml', kind: 'runPlan', id: 'plans/p.run.yaml' });
+    emit('item.open', { path: 'environments/dev.yaml', kind: 'environment', id: 'dev.yaml' });
+
+    expect(workspace.openRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'requests/a.yaml', kind: 'request' }),
+    );
+    expect(runs.open).toHaveBeenCalledWith('plans/p.run.yaml');
+    expect(environments.edit).toHaveBeenCalledWith('dev.yaml');
+  });
+
+  it('opens nothing without an open workspace', () => {
+    const { emit, workspace } = setup(false);
+
+    emit('item.open', { path: 'requests/a.yaml', kind: 'request', id: 'requests/a.yaml' });
+
+    expect(workspace.openRequest).not.toHaveBeenCalled();
+  });
+
   it('stops listening when the app is destroyed', () => {
     const { stop } = setup();
 
     TestBed.resetTestingModule();
 
-    expect(stop).toHaveBeenCalledTimes(2);
+    expect(stop).toHaveBeenCalledTimes(3);
   });
 });

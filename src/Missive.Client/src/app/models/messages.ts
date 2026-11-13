@@ -1062,6 +1062,11 @@ export interface BridgeEvents {
   'workspace.changed': { paths: string[] };
   /** A load run of the plan at `path` started outside the UI (an AI assistant, through the MCP server). */
   'run.started': { path: string; runId: string };
+  /**
+   * Something outside the UI (an AI assistant) asks to open a workspace file in a tab: a request,
+   * a run plan or an environment (whose `id` is its file name; for the others it is the path).
+   */
+  'item.open': { path: string; kind: 'request' | 'runPlan' | 'environment'; id: string };
 }
 
 export type BridgeEventType = keyof BridgeEvents;

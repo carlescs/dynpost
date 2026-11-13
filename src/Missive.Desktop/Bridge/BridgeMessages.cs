@@ -412,6 +412,12 @@ internal static class BridgeEventTypes
 
     /// <summary>A load run started outside the UI (the MCP server). Payload: <see cref="RunStartedEvent"/>.</summary>
     public const string RunStarted = "run.started";
+
+    /// <summary>
+    /// Something outside the UI (the MCP server) asks it to open a request, run plan or
+    /// environment in a tab. Payload: <see cref="Missive.Application.Workspaces.WorkspaceItemDto"/>.
+    /// </summary>
+    public const string ItemOpen = "item.open";
 }
 
 /// <summary>A message from the host the UI didn't ask for; unlike a <see cref="BridgeResponse"/> it has no id.</summary>

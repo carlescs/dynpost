@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Missive.Application.Workspaces;
 
 namespace Missive.Desktop.Bridge;
 
@@ -23,6 +24,10 @@ internal sealed class HostEvents
     /// <summary>A run of the plan at <paramref name="planPath"/> started outside the UI, so the UI can follow it.</summary>
     public Task RunStartedAsync(string planPath, string runId) =>
         SendAsync(BridgeEventTypes.RunStarted, new RunStartedEvent(planPath, runId));
+
+    /// <summary>Something outside the UI asked it to open a workspace file in a tab.</summary>
+    public Task OpenRequestedAsync(WorkspaceItemDto item) =>
+        SendAsync(BridgeEventTypes.ItemOpen, item);
 
     private async Task SendAsync(string type, object payload)
     {

@@ -43,6 +43,10 @@ public sealed class McpProtocolTests : IDisposable
             .AddTransient<LoadRequest>()
             .AddTransient<DeleteRequest>()
             .AddTransient<LoadEnvironment>()
+            .AddTransient<ListResponseHistory>()
+            .AddTransient<GetResponseHistoryEntry>()
+            .AddSingleton(Substitute.For<Missive.Application.Runs.IRunPlanStore>())
+            .AddTransient<FindWorkspaceItem>()
             .BuildServiceProvider();
         _services.GetRequiredService<CurrentWorkspace>().Open(Root);
 
@@ -166,6 +170,64 @@ public sealed class McpProtocolTests : IDisposable
         Assert.DoesNotContain("s3cret", text);
         Assert.Contains("https://dev.test", text);
         Assert.Contains("(secret)", text);
+    }
+
+    [Fact]
+    public async Task OpenInApp_AsksTheUiToOpenTheItem()
+    {
+        _repository.FileExists(Root, WorkspacePath.Parse("requests/get-user.yaml")).Returns(true);
+
+        var result = await CallToolAsync("open_in_app", """{ "path": "requests/get-user.yaml" }""");
+
+        Assert.False(result["isError"]!.GetValue<bool>(), Text(result));
+        var message = JsonNode.Parse(Assert.Single(_events))!;
+        Assert.Equal("item.open", message["event"]!.GetValue<string>());
+        Assert.Equal("request", message["payload"]!["kind"]!.GetValue<string>());
+        Assert.Equal("requests/get-user.yaml", message["payload"]!["path"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task OpenInApp_OfAMissingFile_IsAToolErrorAndOpensNothing()
+    {
+        var result = await CallToolAsync("open_in_app", """{ "path": "requests/missing.yaml" }""");
+
+        Assert.True(result["isError"]!.GetValue<bool>());
+        Assert.Empty(_events);
+    }
+
+    [Fact]
+    public async Task HistoryEntries_AreShownWithLongBodiesCutOff()
+    {
+        var path = WorkspacePath.Parse("requests/get-user.yaml");
+        var entry = new HistoryEntryDto("2026-11-13T10-00-00-abc", DateTimeOffset.UnixEpoch, "GET", "https://api.test/users/1", 200, "OK", 12, 5, "text/plain");
+        var response = new ResponseDto(200, "OK", [], "text/plain", new string('a', McpTools.MaxBodyChars + 5), "text", McpTools.MaxBodyChars + 5, false, 12);
+        _history.ListAsync(Root, path, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<HistoryEntryDto>>.Success([entry]));
+        _history.LoadAsync(Root, path, entry.Id, Arg.Any<CancellationToken>())
+            .Returns(Result<HistoryEntryDetailsDto?>.Success(new HistoryEntryDetailsDto(entry, response)));
+
+        var list = await CallToolAsync("list_history", """{ "path": "requests/get-user.yaml" }""");
+        var got = await CallToolAsync("get_history_entry", $$"""{ "path": "requests/get-user.yaml", "id": "{{entry.Id}}" }""");
+
+        Assert.Equal(entry.Id, JsonNode.Parse(Text(list))![0]!["id"]!.GetValue<string>());
+        var shown = JsonNode.Parse(Text(got))!["response"]!;
+        Assert.Equal(McpTools.MaxBodyChars, shown["body"]!.GetValue<string>().Length);
+        Assert.True(shown["truncated"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void Diffs_ShownToTheAssistant_CutLongTextsAndLeaveOutParsedRequests()
+    {
+        var request = new RequestDto("A", "GET", "/", [], [], new AuthDto("none"), new BodyDto("none", ""));
+        var diff = new Missive.Application.Git.GitFileDiffDto(
+            "requests/a.yaml", "modified", null, false, "short", new string('b', McpTools.MaxBodyChars + 1), true, request, request);
+
+        var shown = McpTools.ForAssistant(diff);
+
+        Assert.Equal("short", shown.Original);
+        Assert.StartsWith(new string('b', McpTools.MaxBodyChars), shown.Modified);
+        Assert.EndsWith("(cut off)", shown.Modified);
+        Assert.Null(shown.OriginalRequest);
+        Assert.Null(shown.ModifiedRequest);
     }
 
     [Fact]

@@ -75,6 +75,7 @@ public sealed class McpRunToolsTests : IDisposable
             .AddTransient<WaitForRun>()
             .AddTransient<CancelRun>()
             .AddTransient<DeleteRunPlan>()
+            .AddTransient<CreateRunPlan>()
             .BuildServiceProvider();
         _services.GetRequiredService<CurrentWorkspace>().Open(Root);
 
@@ -144,6 +145,27 @@ public sealed class McpRunToolsTests : IDisposable
         var message = Assert.Single(_events);
         Assert.Equal("workspace.changed", message["event"]!.GetValue<string>());
         Assert.Equal(PlanFile, Assert.Single(message["payload"]!["paths"]!.AsArray())!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task CreateRunPlan_SavesItNamedAfterThePlanAndTellsTheUi()
+    {
+        _format.Parse(Arg.Any<string>()).Returns(new RunPlan(
+            "Checkout smoke",
+            [WorkspacePath.Parse("requests/users.yaml")],
+            new RunLoad(1, 1, null, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, null),
+            null,
+            new Dictionary<string, RunAssertion>(),
+            RunThresholds.None));
+        _plans.WriteAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+
+        var result = await CallToolAsync("create_run_plan", """{ "folder": "plans/perf", "yaml": "name: Checkout smoke" }""");
+
+        Assert.False(result["isError"]!.GetValue<bool>(), Text(result));
+        Assert.Equal("plans/perf/checkout-smoke.run.yaml", JsonNode.Parse(Text(result))!["path"]!.GetValue<string>());
+        var message = Assert.Single(_events);
+        Assert.Equal("workspace.changed", message["event"]!.GetValue<string>());
+        Assert.Equal("plans/perf/checkout-smoke.run.yaml", Assert.Single(message["payload"]!["paths"]!.AsArray())!.GetValue<string>());
     }
 
     [Fact]
