@@ -729,6 +729,10 @@ public sealed class HttpClientSenderTests
             {
                 // Stopping the listener can fail the pending accept instead of cancelling it.
             }
+            catch (InvalidOperationException)
+            {
+                // Stopped between two accepts: the next accept finds the listener no longer listening.
+            }
         });
 
         try
