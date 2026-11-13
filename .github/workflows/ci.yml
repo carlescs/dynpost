@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: src/Dynypost.Client
+        working-directory: src/Dynpost.Client
     steps:
       - uses: actions/checkout@v7
 
@@ -46,7 +46,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/Dynypost.Client/package-lock.json
+          cache-dependency-path: src/Dynpost.Client/package-lock.json
 
       - run: npm ci --no-audit --no-fund
       - run: npm run format:check
@@ -72,7 +72,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/Dynypost.Client/package-lock.json
+          cache-dependency-path: src/Dynpost.Client/package-lock.json
 
-      - run: dotnet build Dynypost.sln -c Release
-      - run: dotnet test Dynypost.sln -c Release --no-build
+      - run: dotnet build Dynpost.sln -c Release
+      - run: dotnet test Dynpost.sln -c Release --no-build

@@ -1,5 +1,5 @@
 {
-  "name": "dynypost-repo",
+  "name": "dynpost-repo",
   "private": true,
   "description": "Repository tooling: commit linting, git hooks and semantic releases.",
   "scripts": {

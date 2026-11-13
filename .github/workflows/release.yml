@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/Dynypost.Client/package-lock.json
+          cache-dependency-path: src/Dynpost.Client/package-lock.json
 
       - name: Determine version
         id: version
@@ -53,12 +53,12 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Test
-        run: dotnet test Dynypost.sln -c Release
+        run: dotnet test Dynpost.sln -c Release
 
       - name: Publish
         shell: bash
         run: >
-          dotnet publish src/Dynypost.Desktop -c Release
+          dotnet publish src/Dynpost.Desktop -c Release
           -r ${{ matrix.rid }} --self-contained
           -p:Version=${{ steps.version.outputs.version }}
           -o artifacts/publish/${{ matrix.rid }}
@@ -78,24 +78,24 @@ jobs:
         shell: bash
         run: |
           case "$RUNNER_OS" in
-            Windows) exe=Dynypost.exe; icon=dynypost.ico; extra=() ;;
-            macOS) exe=Dynypost; icon=dynypost.icns; extra=(--bundleId io.github.carlescs.dynypost) ;;
-            Linux) exe=Dynypost; icon=dynypost.png; extra=(--categories Development) ;;
+            Windows) exe=Dynpost.exe; icon=dynpost.ico; extra=() ;;
+            macOS) exe=Dynpost; icon=dynpost.icns; extra=(--bundleId io.github.carlescs.dynpost) ;;
+            Linux) exe=Dynpost; icon=dynpost.png; extra=(--categories Development) ;;
           esac
           artifacts/tools/vpk pack \
-            --packId Dynypost \
-            --packTitle Dynypost \
+            --packId Dynpost \
+            --packTitle Dynpost \
             --packAuthors "${{ github.repository_owner }}" \
             --packVersion "${{ steps.version.outputs.version }}" \
             --packDir "artifacts/publish/${{ matrix.rid }}" \
             --mainExe "$exe" \
-            --icon "src/Dynypost.Desktop/Assets/$icon" \
+            --icon "src/Dynpost.Desktop/Assets/$icon" \
             --outputDir artifacts/releases \
             "${extra[@]}"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: dynypost-${{ matrix.rid }}
+          name: dynpost-${{ matrix.rid }}
           path: artifacts/releases/*
           if-no-files-found: error
 
@@ -130,6 +130,6 @@ jobs:
           [[ "$GITHUB_REF_NAME" == *-* ]] && prerelease=(--prerelease)
           gh release create "$GITHUB_REF_NAME" "${installers[@]}" "${feed[@]}" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Dynypost $GITHUB_REF_NAME" \
+            --title "Dynpost $GITHUB_REF_NAME" \
             --generate-notes \
             "${prerelease[@]}"
