@@ -3,10 +3,18 @@ namespace Missive.Domain.Requests;
 /// <summary>How a request authenticates. Values may contain <c>{{variable}}</c> references.</summary>
 public closed record RequestAuth
 {
+    /// <summary>No auth, even when a folder above sets some.</summary>
     public static RequestAuth None { get; } = new NoAuth();
+
+    /// <summary>The auth of the nearest folder above that sets one; no auth when none does.</summary>
+    public static RequestAuth Inherit { get; } = new InheritAuth();
 }
 
+/// <summary>Sends no credentials, whatever the folders above set.</summary>
 public sealed record NoAuth : RequestAuth;
+
+/// <summary>Uses the auth of the nearest folder above that sets one (see <see cref="InheritedDefaults"/>).</summary>
+public sealed record InheritAuth : RequestAuth;
 
 public sealed record BasicAuth(string Username, string Password) : RequestAuth;
 

@@ -24,6 +24,7 @@ public sealed class WorkspaceBridgeTests : IDisposable
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
     private readonly IFileManager _fileManager = Substitute.For<IFileManager>();
+    private readonly IFolderDefaultsStore _folders = Substitute.For<IFolderDefaultsStore>();
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
 
@@ -34,6 +35,11 @@ public sealed class WorkspaceBridgeTests : IDisposable
             .AddSingleton(_localFiles)
             .AddSingleton(_settings)
             .AddSingleton(_fileManager)
+            .AddSingleton(_folders)
+            .AddSingleton<FolderInheritance>()
+            .AddTransient<LoadFolderSettings>()
+            .AddTransient<SaveFolderSettings>()
+            .AddTransient<GetInheritedSettings>()
             .AddSingleton<CurrentWorkspace>()
             .AddSingleton(_git)
             .AddTransient<DuplicateRequest>()
@@ -64,6 +70,37 @@ public sealed class WorkspaceBridgeTests : IDisposable
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         Assert.Equal("requests/get-user-copy.yaml", response.GetProperty("payload").GetProperty("path").GetString());
         Assert.Equal("Get user copy", response.GetProperty("payload").GetProperty("request").GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task FolderSettings_AreSavedAndPassedOnToSubFolders()
+    {
+        var users = WorkspacePath.Parse("requests/users");
+        FolderDefaults? saved = null;
+        _repository.DirectoryExists(Root, Arg.Any<WorkspacePath>()).Returns(true);
+        _folders.ReadAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<WorkspacePath>() == users && saved is not null ? saved : FolderDefaults.Empty);
+        _folders.WriteAsync(Root, users, Arg.Do<FolderDefaults>(d => saved = d), Arg.Any<CancellationToken>()).Returns(true);
+
+        var save = await SendAsync("folder.settings.save", """
+            { "path": "requests/users", "settings": {
+                "headers": [{ "key": "Accept", "value": "application/json", "enabled": true }],
+                "auth": { "type": "bearer", "token": "{{token}}" } } }
+            """);
+        var inherited = await SendAsync("folder.settings.inherited", """{ "path": "requests/users/admin" }""");
+
+        Assert.True(save.GetProperty("ok").GetBoolean(), save.ToString());
+        Assert.Equal("bearer", save.GetProperty("payload").GetProperty("auth").GetProperty("type").GetString());
+        Assert.True(inherited.GetProperty("ok").GetBoolean(), inherited.ToString());
+        var payload = inherited.GetProperty("payload");
+        Assert.Equal("requests/users", payload.GetProperty("authFolder").GetString());
+        Assert.Equal("{{token}}", payload.GetProperty("auth").GetProperty("token").GetString());
+        var header = Assert.Single(payload.GetProperty("headers").EnumerateArray());
+        Assert.Equal("Accept", header.GetProperty("key").GetString());
+        Assert.Equal("requests/users", header.GetProperty("folder").GetString());
+
+        var load = await SendAsync("folder.settings.load", """{ "path": "requests/users" }""");
+        Assert.Equal("application/json", load.GetProperty("payload").GetProperty("headers")[0].GetProperty("value").GetString());
     }
 
     [Fact]

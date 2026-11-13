@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Missive.Application.Common;
 using Missive.Application.Environments;
+using Missive.Application.Folders;
 using Missive.Application.Http;
 using Missive.Application.OAuth2;
 using Missive.Application.Workspaces;
@@ -90,7 +91,7 @@ public sealed class RunRegistry
 /// <summary>
 /// Starts a load run of a plan and returns at once; the run goes on in the background and is
 /// followed with <see cref="GetRunProgress"/>. Each request is prepared and sent exactly like
-/// <see cref="SendRequest"/> does (environment variables, auth, OAuth 2.0 tokens), with the CSV
+/// <see cref="SendRequest"/> does (folder defaults, environment variables, auth, OAuth 2.0 tokens), with the CSV
 /// row of the iteration laid over the environment's variables and, for requests with a body folder,
 /// the body taken from the next file of that folder. Runs don't use cookies: every
 /// virtual user starts clean and nothing is written to the environment's cookie jar or captures.
@@ -108,7 +109,8 @@ public sealed class StartRun(
     IRunStore runStore,
     RunRegistry registry,
     CurrentWorkspace current,
-    TimeProvider time)
+    TimeProvider time,
+    FolderInheritance inheritance)
 {
     public async Task<Result<StartedRunDto>> ExecuteAsync(string path, bool confirmLarge, CancellationToken cancellationToken = default)
     {
@@ -165,6 +167,12 @@ public sealed class StartRun(
             }
 
             var read = await repository.ReadRequestAsync(root.Value, request, cancellationToken);
+            if (read.IsSuccess)
+            {
+                // Sent as from the editor: with the headers and auth of the folders it is in.
+                read = await inheritance.ApplyAsync(root.Value, request.Parent, read.Value, cancellationToken);
+            }
+
             if (read.IsSuccess)
             {
                 definitions[request.Value] = read.Value;

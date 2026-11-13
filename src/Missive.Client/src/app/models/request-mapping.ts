@@ -11,7 +11,7 @@ import {
 } from './workspace';
 
 export const EMPTY_AUTH: RequestAuth = {
-  type: 'none',
+  type: 'inherit',
   username: '',
   password: '',
   token: '',
@@ -41,30 +41,35 @@ export function fromRequestDto(dto: RequestDto): RequestContent {
     url: dto.url,
     params: dto.params.map((r) => ({ ...r })),
     headers: dto.headers.map((r) => ({ ...r })),
-    auth: {
-      type: AUTH_TYPES.includes(dto.auth.type) ? dto.auth.type : 'none',
-      username: dto.auth.username ?? '',
-      password: dto.auth.password ?? '',
-      token: dto.auth.token ?? '',
-      key: dto.auth.key ?? '',
-      value: dto.auth.value ?? '',
-      in: dto.auth.in === 'query' ? 'query' : 'header',
-      grant: dto.auth.grant === 'authorizationCode' ? 'authorizationCode' : 'clientCredentials',
-      authUrl: dto.auth.authUrl ?? '',
-      tokenUrl: dto.auth.tokenUrl ?? '',
-      redirectUri: dto.auth.redirectUri ?? '',
-      clientId: dto.auth.clientId ?? '',
-      clientSecret: dto.auth.clientSecret ?? '',
-      scope: dto.auth.scope ?? '',
-      audience: dto.auth.audience ?? '',
-      credentials: dto.auth.credentials === 'body' ? 'body' : 'header',
-    },
+    auth: fromAuthDto(dto.auth),
     bodyType: BODY_TYPES.includes(dto.body.type) ? dto.body.type : 'none',
     body: dto.body.content,
     bodyVariables: dto.body.type === 'graphql' ? (dto.body.variables ?? '{}') : '',
     bodyFields: dto.body.fields ? dto.body.fields.map(fromFieldDto) : null,
     description: dto.description ?? '',
     captures: (dto.captures ?? []).map((c) => ({ ...c })),
+  };
+}
+
+/** The editable auth settings of a DTO; fields of other types are left empty. */
+export function fromAuthDto(auth: AuthDto): RequestAuth {
+  return {
+    type: AUTH_TYPES.includes(auth.type) ? auth.type : 'none',
+    username: auth.username ?? '',
+    password: auth.password ?? '',
+    token: auth.token ?? '',
+    key: auth.key ?? '',
+    value: auth.value ?? '',
+    in: auth.in === 'query' ? 'query' : 'header',
+    grant: auth.grant === 'authorizationCode' ? 'authorizationCode' : 'clientCredentials',
+    authUrl: auth.authUrl ?? '',
+    tokenUrl: auth.tokenUrl ?? '',
+    redirectUri: auth.redirectUri ?? '',
+    clientId: auth.clientId ?? '',
+    clientSecret: auth.clientSecret ?? '',
+    scope: auth.scope ?? '',
+    audience: auth.audience ?? '',
+    credentials: auth.credentials === 'body' ? 'body' : 'header',
   };
 }
 
@@ -146,8 +151,10 @@ export function toAuthDto(auth: RequestAuth): AuthDto {
         credentials: auth.credentials,
       };
     }
-    default:
+    case 'none':
       return { type: 'none' };
+    default:
+      return { type: 'inherit' };
   }
 }
 

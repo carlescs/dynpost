@@ -2,6 +2,7 @@ import {
   Component,
   ElementRef,
   computed,
+  effect,
   inject,
   input,
   linkedSignal,
@@ -11,9 +12,6 @@ import {
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { faBan, faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import {
-  AUTH_LABELS,
-  AUTH_TYPES,
-  AuthType,
   BODY_LABELS,
   BODY_TYPES,
   BodyType,
@@ -31,7 +29,10 @@ import { KeyValueTable } from '../../../../components/key-value-table/key-value-
 import { ResponseViewer } from '../response-viewer/response-viewer';
 import { VariableInput } from '../../../../components/variable-input/variable-input';
 import { MarkdownView } from '../../../../components/markdown-view/markdown-view';
-import { OAuth2Auth } from '../oauth2-auth/oauth2-auth';
+import { AuthEditor } from '../auth-editor/auth-editor';
+import { InheritedHeaders } from '../inherited-headers/inherited-headers';
+import { FolderSettingsStore } from '../../../../services/folder-settings-store';
+import { InheritedSettingsDto } from '../../../../models/messages';
 import { FormFieldsEditor } from '../form-fields-editor/form-fields-editor';
 import { fieldsOf, isAbsolutePath } from '../../../../models/form-fields';
 import { Bridge } from '../../../../services/bridge';
@@ -47,7 +48,8 @@ type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
     CodeEditor,
     VariableInput,
     MarkdownView,
-    OAuth2Auth,
+    AuthEditor,
+    InheritedHeaders,
     FormFieldsEditor,
   ],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
@@ -59,6 +61,26 @@ export class RequestEditor {
   private readonly store = inject(WorkspaceStore);
   private readonly bridge = inject(Bridge);
   protected readonly environments = inject(EnvironmentStore);
+  private readonly folders = inject(FolderSettingsStore);
+
+  /**
+   * What the request inherits from the folders it is in (or will be saved in): shown next to its
+   * own headers and auth. `null` while loading or when it can't be read.
+   */
+  protected readonly inherited = signal<InheritedSettingsDto | null>(null);
+  private readonly folder = computed(() => this.document().folder);
+  private inheritedLoad = 0;
+
+  constructor() {
+    effect(() => {
+      const folder = this.folder();
+      this.folders.changed();
+      const load = ++this.inheritedLoad;
+      void this.folders.inherited(folder).then((inherited) => {
+        if (load === this.inheritedLoad) this.inherited.set(inherited);
+      });
+    });
+  }
 
   protected readonly activeTab = signal<RequestTab>('params');
   protected readonly tabs: { id: RequestTab; label: string }[] = [
@@ -84,18 +106,13 @@ export class RequestEditor {
   protected readonly urlPlaceholder = 'https://api.example.com/users or {{baseUrl}}/users';
   protected readonly methods = HTTP_METHODS;
   protected readonly methodColors = METHOD_COLORS;
-  protected readonly authTypes = AUTH_TYPES;
-  protected readonly authLabels = AUTH_LABELS;
   protected readonly bodyTypes = BODY_TYPES;
   protected readonly bodyLabels = BODY_LABELS;
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faFloppyDisk = faFloppyDisk;
   protected readonly faSpinner = faSpinner;
   protected readonly faBan = faBan;
-  protected readonly secretExample = '{{apiToken}}';
   protected readonly captureExample = '{{token}}';
-  protected readonly fieldClass =
-    'min-w-0 rounded border border-slate-300 px-2 py-1 font-mono focus:border-sky-500 focus:outline-none';
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly responseHeight = signal<number | null>(null);

@@ -195,12 +195,14 @@ internal static partial class InsomniaFormat
     {
         if (auth is null || auth.Bool("disabled"))
         {
-            return RequestAuth.None;
+            return RequestAuth.Inherit;
         }
 
         switch (auth.Str("type"))
         {
-            case null or "none":
+            case null:
+                return RequestAuth.Inherit;
+            case "none":
                 return RequestAuth.None;
             case "basic":
                 return new BasicAuth(auth.Str("username") ?? string.Empty, auth.Str("password") ?? string.Empty);
@@ -486,7 +488,7 @@ internal static partial class InsomniaFormat
                 ["usePkce"] = true,
                 ["pkceMethod"] = "S256",
             },
-        NoAuth => new JsonObject(),
+        NoAuth or InheritAuth => new JsonObject(),
     };
 
     private static JsonObject ExportBody(RequestBody body)

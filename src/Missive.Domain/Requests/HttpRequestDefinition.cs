@@ -17,7 +17,7 @@ public sealed record HttpRequestDefinition
         Url = url;
         Params = @params ?? [];
         Headers = headers ?? [];
-        Auth = auth ?? RequestAuth.None;
+        Auth = auth ?? RequestAuth.Inherit;
         Body = body ?? RequestBody.None;
     }
 
@@ -61,7 +61,7 @@ public sealed record HttpRequestDefinition
         }
 
         CheckEntries(Params, "parameter", StringComparer.Ordinal, errors);
-        CheckEntries(Headers, "header", StringComparer.OrdinalIgnoreCase, errors);
+        CheckHeaders(Headers, errors);
         CheckCaptures(Captures, errors);
 
         return errors;
@@ -90,6 +90,10 @@ public sealed record HttpRequestDefinition
             }
         }
     }
+
+    /// <summary>Checks header names: each needs one, can't start with <see cref="DisabledPrefix"/> and appears once.</summary>
+    internal static void CheckHeaders(IReadOnlyList<KeyValueEntry> headers, List<string> errors) =>
+        CheckEntries(headers, "header", StringComparer.OrdinalIgnoreCase, errors);
 
     private static void CheckEntries(
         IReadOnlyList<KeyValueEntry> entries,

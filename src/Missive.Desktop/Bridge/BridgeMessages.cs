@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Missive.Application.Common;
 using Missive.Application.Environments;
+using Missive.Application.Folders;
 using Missive.Application.Requests;
 using Missive.Domain.Workspaces;
 
@@ -171,6 +172,18 @@ internal static class BridgeMessageTypes
 
     /// <summary>Deletes a folder with its requests. Payload: <see cref="DeleteFolderPayload"/>. Result: none.</summary>
     public const string FolderDelete = "folder.delete";
+
+    /// <summary>Reads the headers and auth a folder sets (its <c>_folder.yaml</c>). Payload: <see cref="FolderSettingsPathPayload"/>. Result: folder settings.</summary>
+    public const string FolderSettingsLoad = "folder.settings.load";
+
+    /// <summary>Saves the headers and auth a folder sets. Payload: <see cref="SaveFolderSettingsPayload"/>. Result: folder settings as saved.</summary>
+    public const string FolderSettingsSave = "folder.settings.save";
+
+    /// <summary>
+    /// What requests and folders directly inside a folder inherit from it and the folders above.
+    /// Payload: <see cref="FolderSettingsPathPayload"/>. Result: inherited settings.
+    /// </summary>
+    public const string FolderSettingsInherited = "folder.settings.inherited";
 
     /// <summary>Lists the environments and the selected one. Payload: none. Result: environment list.</summary>
     public const string EnvironmentList = "environment.list";
@@ -462,7 +475,8 @@ internal sealed record SaveRequestPayload(string Path, RequestDto Request);
 
 /// <param name="Id">Chosen by the UI; pass it to <see cref="BridgeMessageTypes.RequestCancel"/> to cancel.</param>
 /// <param name="Path">The request file the request belongs to, whose history keeps the response; <c>null</c> when unsaved.</param>
-internal sealed record SendRequestPayload(string Id, RequestDto Request, string? Path = null);
+/// <param name="Folder">The folder an unsaved request will be saved in; it inherits that folder's headers and auth.</param>
+internal sealed record SendRequestPayload(string Id, RequestDto Request, string? Path = null, string? Folder = null);
 
 /// <param name="Path">The workspace path of the request file.</param>
 internal sealed record HistoryPathPayload(string Path);
@@ -514,6 +528,11 @@ internal sealed record DuplicateRequestPayload(string Path);
 internal sealed record DuplicateFolderPayload(string Path);
 
 internal sealed record DeleteFolderPayload(string Path);
+
+/// <param name="Path">The folder: <c>requests</c> or a folder inside it.</param>
+internal sealed record FolderSettingsPathPayload(string Path);
+
+internal sealed record SaveFolderSettingsPayload(string Path, FolderSettingsDto Settings);
 
 /// <param name="Id">The environment's file name in the <c>environments</c> folder.</param>
 internal sealed record EnvironmentIdPayload(string Id);

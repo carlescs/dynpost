@@ -82,6 +82,16 @@
               <fa-icon class="w-4 text-slate-500" [icon]="faArrowUpRightFromSquare" />
               {{ revealLabel }}
             </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+              title="Headers and auth for every request in the workspace"
+              (click)="openFolderSettings(root)"
+            >
+              <fa-icon class="w-4 text-slate-500" [icon]="faSliders" />
+              Settings for all requests
+            </button>
           </div>
         }
       </div>
@@ -176,6 +186,17 @@
         <fa-icon [icon]="faClone" />
         Duplicate {{ menu.node.kind === 'folder' ? 'folder' : 'request' }}
       </button>
+      @if (menu.node.kind === 'folder') {
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="openFolderSettings(menu.node.path)"
+        >
+          <fa-icon [icon]="faSliders" />
+          Folder settings (headers, auth)
+        </button>
+      }
       @if (menu.node.kind === 'request') {
         <button
           type="button"

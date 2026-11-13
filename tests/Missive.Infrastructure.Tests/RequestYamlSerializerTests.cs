@@ -380,4 +380,57 @@ public class RequestYamlSerializerTests
     {
         Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.Deserialize(yaml, "x"));
     }
+
+    [Fact]
+    public void Auth_IsOmittedWhenInheritedAndWrittenAsNoneWhenTurnedOff()
+    {
+        var inheriting = new HttpRequestDefinition("Ping", RequestMethod.Get, "/ping");
+        var none = inheriting with { Auth = RequestAuth.None };
+
+        Assert.DoesNotContain("auth", RequestYamlSerializer.Serialize(inheriting));
+        Assert.Equal("name: Ping\nmethod: GET\nurl: /ping\nauth:\n  type: none\n", RequestYamlSerializer.Serialize(none));
+        Assert.Same(RequestAuth.Inherit, RequestYamlSerializer.Deserialize("name: Ping\n", "ping").Auth);
+        Assert.Same(RequestAuth.Inherit, RequestYamlSerializer.Deserialize("auth:\n  type: inherit\n", "ping").Auth);
+        Assert.Same(RequestAuth.None, RequestYamlSerializer.Deserialize("auth:\n  type: none\n", "ping").Auth);
+    }
+
+    [Fact]
+    public void FolderDefaults_RoundTripWithHeadersBeforeAuth()
+    {
+        var defaults = new FolderDefaults(
+            [new KeyValueEntry("Accept", "application/json"), new KeyValueEntry("X-Debug", "1", Enabled: false)],
+            new BearerAuth("{{apiToken}}"));
+
+        var yaml = RequestYamlSerializer.SerializeFolder(defaults);
+
+        Assert.Equal(
+            """
+            headers:
+              Accept: application/json
+              ~X-Debug: "1"
+            auth:
+              type: bearer
+              token: "{{apiToken}}"
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        var parsed = RequestYamlSerializer.DeserializeFolder(yaml);
+        Assert.Equal(defaults.Headers, parsed.Headers);
+        Assert.Equal(defaults.Auth, parsed.Auth);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("# nothing yet\n")]
+    public void FolderDefaults_AnEmptyFileSetsNothing(string yaml)
+    {
+        Assert.True(RequestYamlSerializer.DeserializeFolder(yaml).IsEmpty);
+    }
+
+    [Fact]
+    public void FolderDefaults_RejectsInvalidFiles()
+    {
+        Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.DeserializeFolder("- a list\n"));
+        Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.DeserializeFolder("auth:\n  type: magic\n"));
+    }
 }

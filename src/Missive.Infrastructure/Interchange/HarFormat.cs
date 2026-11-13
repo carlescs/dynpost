@@ -71,7 +71,7 @@ internal static class HarFormat
                 baseUrl,
                 query,
                 InterchangeText.WithoutImpliedContentType(headers, body.Type),
-                RequestAuth.None,
+                RequestAuth.Inherit,
                 body));
         }
 

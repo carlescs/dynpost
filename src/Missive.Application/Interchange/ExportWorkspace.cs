@@ -1,7 +1,10 @@
 using Missive.Application.Common;
 using Missive.Application.Environments;
+using Missive.Application.Folders;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
+using Missive.Domain.Requests;
+using Missive.Domain.Workspaces;
 
 namespace Missive.Application.Interchange;
 
@@ -13,14 +16,16 @@ public sealed record ExportWorkspaceRequest(string Format, string Destination, b
 /// <summary>
 /// Exports the open workspace's requests (and environments) to a file other apps can import.
 /// Request files that can't be read are skipped and reported. Values of secret variables are never
-/// exported: the variables are, with empty values.
+/// exported: the variables are, with empty values. Each request is exported with the headers and
+/// auth it inherits from its folders, as it is sent.
 /// </summary>
 public sealed class ExportWorkspace(
     IWorkspaceRepository repository,
     IEnvironmentStore environments,
     IExternalFiles files,
     IEnumerable<ICollectionExporter> exporters,
-    CurrentWorkspace current)
+    CurrentWorkspace current,
+    FolderInheritance inheritance)
 {
     private const int MaxAttempts = 1000;
 
@@ -55,7 +60,7 @@ public sealed class ExportWorkspace(
         }
 
         var name = WorkspaceTreeBuilder.WorkspaceName(root.Value);
-        var folder = ToFolder(name, entries.Value, warnings);
+        var folder = await ToFolderAsync(root.Value, name, WorkspaceLayout.RequestsRoot, entries.Value, warnings, cancellationToken);
 
         var exported = new List<EnvironmentDefinition>();
         if (request.IncludeEnvironments)
@@ -128,19 +133,32 @@ public sealed class ExportWorkspace(
     private static int CountCapturing(CollectionFolder folder) =>
         folder.Requests.Count(r => r.Captures.Count > 0) + folder.Folders.Sum(CountCapturing);
 
-    private static CollectionFolder ToFolder(string name, IReadOnlyList<WorkspaceEntry> entries, List<string> warnings)
+    private async Task<CollectionFolder> ToFolderAsync(
+        string root,
+        string name,
+        WorkspacePath path,
+        IReadOnlyList<WorkspaceEntry> entries,
+        List<string> warnings,
+        CancellationToken cancellationToken)
     {
+        var inherited = await inheritance.ForFolderAsync(root, path, cancellationToken);
+        if (!inherited.IsSuccess)
+        {
+            warnings.Add($"The requests in '{path}' were exported without their folder defaults: {inherited.Error!.Message}");
+        }
+
+        var defaults = inherited.IsSuccess ? inherited.Value : InheritedDefaults.None;
         var folders = new List<CollectionFolder>();
-        var requests = new List<Domain.Requests.HttpRequestDefinition>();
+        var requests = new List<HttpRequestDefinition>();
         foreach (var entry in entries)
         {
             switch (entry)
             {
                 case FolderEntry folder:
-                    folders.Add(ToFolder(folder.Path.FileName, folder.Children, warnings));
+                    folders.Add(await ToFolderAsync(root, folder.Path.FileName, folder.Path, folder.Children, warnings, cancellationToken));
                     break;
                 case RequestFileEntry { Request.IsSuccess: true } file:
-                    requests.Add(file.Request.Value);
+                    requests.Add(defaults.Apply(file.Request.Value));
                     break;
                 case RequestFileEntry file:
                     warnings.Add($"Skipped '{file.Path}': {file.Request.Error!.Message}");

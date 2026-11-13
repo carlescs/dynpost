@@ -13,10 +13,13 @@ import {
   faLaptop,
   faPlus,
   faShareNodes,
+  faSliders,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 import { revealLabel } from '../../../../models/reveal-label';
 import { InterchangeStore } from '../../../../services/interchange-store';
+import { FolderSettingsStore } from '../../../../services/folder-settings-store';
+import { REQUESTS_FOLDER } from '../../../../models/workspace';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { TreeState } from '../../../../services/tree-state';
 import { ExplorerState } from '../../services/explorer-state';
@@ -37,6 +40,9 @@ export class ExplorerView {
   protected readonly store = inject(WorkspaceStore);
   protected readonly state = inject(ExplorerState);
   protected readonly interchange = inject(InterchangeStore);
+  private readonly folders = inject(FolderSettingsStore);
+  protected readonly root = REQUESTS_FOLDER;
+  protected readonly faSliders = faSliders;
   protected readonly exportOpen = signal(false);
   protected readonly moreOpen = signal(false);
   protected readonly selectedFormat = signal('postman');
@@ -71,6 +77,12 @@ export class ExplorerView {
     this.moreOpen.update((open) => !open);
     this.exportOpen.set(false);
     this.state.closeMenu();
+  }
+
+  /** Opens the headers and auth a folder (or, for `requests`, the whole workspace) sets. */
+  protected openFolderSettings(path: string): void {
+    this.closeMenu();
+    void this.folders.open(path);
   }
 
   protected reveal(): void {

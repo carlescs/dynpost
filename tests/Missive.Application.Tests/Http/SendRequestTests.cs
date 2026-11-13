@@ -2,6 +2,7 @@ using System.Text;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
+using Missive.Application.Folders;
 using Missive.Application.History;
 using Missive.Application.Http;
 using Missive.Application.OAuth2;
@@ -10,6 +11,7 @@ using Missive.Application.Settings;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
 using Missive.Domain.Http;
+using Missive.Domain.Requests;
 using NSubstitute;
 
 namespace Missive.Application.Tests.Http;
@@ -34,8 +36,12 @@ public class SendRequestTests
 
     private readonly TimeProvider _time = Substitute.For<TimeProvider>();
 
+    private readonly IFolderDefaultsStore _folders = Substitute.For<IFolderDefaultsStore>();
+
     public SendRequestTests()
     {
+        _folders.ReadAsync(Arg.Any<string>(), Arg.Any<Missive.Domain.Workspaces.WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(Missive.Domain.Requests.FolderDefaults.Empty);
         _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(AppSettings.Default);
         _history.AddAsync(Arg.Any<string>(), Arg.Any<Missive.Domain.Workspaces.WorkspacePath>(), Arg.Any<HistoryEntryDetailsDto>(), Arg.Any<HistoryLimits>(), Arg.Any<CancellationToken>())
             .Returns(Unit.Value);
@@ -68,7 +74,8 @@ public class SendRequestTests
             _current,
             _time,
             new OAuth2Tokens(_sender, _tokens, _browser, _time),
-            new ResponseHistory(_history, _settings));
+            new ResponseHistory(_history, _settings),
+            new FolderInheritance(_folders));
 
     private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
@@ -123,6 +130,72 @@ public class SendRequestTests
                 && r.Url.AbsoluteUri == "https://api.example.com/users?page=2"
                 && r.Headers.Contains(KeyValuePair.Create("Authorization", "Bearer abc"))),
             Arg.Any<CancellationToken>());
+    }
+
+    private void GivenFolder(string folder, FolderDefaults defaults) =>
+        _folders.ReadAsync(Root, Missive.Domain.Workspaces.WorkspacePath.Parse(folder), Arg.Any<CancellationToken>()).Returns(defaults);
+
+    [Fact]
+    public async Task Execute_ASavedRequestGetsTheHeadersAndAuthOfItsFolders()
+    {
+        _current.Open(Root);
+        GivenFolder("requests", new FolderDefaults([new KeyValueEntry("Accept", "*/*"), new KeyValueEntry("X-Team", "core")], new BasicAuth("ada", "pw")));
+        GivenFolder("requests/users", new FolderDefaults([new KeyValueEntry("Accept", "application/json")], new BearerAuth("folder-token")));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}"));
+        var request = Request() with { Auth = new AuthDto("inherit"), Headers = [new KeyValueDto("X-Team", "mine")] };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request, "requests/users/list.yaml");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r => r.Headers.SequenceEqual(new[]
+            {
+                KeyValuePair.Create("Accept", "application/json"),
+                KeyValuePair.Create("X-Team", "mine"),
+                KeyValuePair.Create("Authorization", "Bearer folder-token"),
+            })),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_ARequestWithItsOwnAuthKeepsIt()
+    {
+        _current.Open(Root);
+        GivenFolder("requests/users", new FolderDefaults(auth: new BearerAuth("folder-token")));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}"));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request() with { Auth = new AuthDto("none") }, "requests/users/list.yaml");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(Arg.Is<OutgoingRequest>(r => r.Headers.Count == 0), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_AnUnsavedRequestInheritsFromTheFolderItWillBeSavedIn()
+    {
+        _current.Open(Root);
+        GivenFolder("requests/users", new FolderDefaults([new KeyValueEntry("Accept", "application/json")]));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}"));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request() with { Auth = new AuthDto("inherit") }, folder: "requests/users");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r => r.Headers.SequenceEqual(new[] { KeyValuePair.Create("Accept", "application/json") })),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_AnUnreadableFolderFile_IsReportedAndNothingIsSent()
+    {
+        _current.Open(Root);
+        _folders.ReadAsync(Root, Missive.Domain.Workspaces.WorkspacePath.Parse("requests/users"), Arg.Any<CancellationToken>())
+            .Returns(new Error(ErrorCodes.InvalidFile, "'requests/users/_folder.yaml' is not a valid folder defaults file."));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request(), "requests/users/list.yaml");
+
+        Assert.Equal(ErrorCodes.InvalidFile, result.Error?.Code);
+        await _sender.DidNotReceive().SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

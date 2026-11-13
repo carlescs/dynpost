@@ -20,7 +20,7 @@ export const BODY_TYPES = [
 ] as const;
 export type BodyType = (typeof BODY_TYPES)[number];
 
-export const AUTH_TYPES = ['none', 'basic', 'bearer', 'apiKey', 'oauth2'] as const;
+export const AUTH_TYPES = ['inherit', 'none', 'basic', 'bearer', 'apiKey', 'oauth2'] as const;
 export type AuthType = (typeof AUTH_TYPES)[number];
 
 export interface KeyValue {
@@ -52,7 +52,10 @@ export const OAUTH2_GRANTS = ['clientCredentials', 'authorizationCode'] as const
 export type OAuth2Grant = (typeof OAUTH2_GRANTS)[number];
 export type OAuth2Credentials = 'header' | 'body';
 
-/** Auth settings. Fields for other types are kept while editing so switching type loses nothing. */
+/**
+ * Auth settings. Fields for other types are kept while editing so switching type loses nothing.
+ * `inherit` uses the auth of the closest folder above that sets one (no auth when none does).
+ */
 export interface RequestAuth {
   type: AuthType;
   username: string;
@@ -155,6 +158,7 @@ export const METHOD_COLORS: Record<HttpMethod, string> = {
 };
 
 export const AUTH_LABELS: Record<AuthType, string> = {
+  inherit: 'Inherit from folder',
   none: 'No auth',
   basic: 'Basic',
   bearer: 'Bearer token',

@@ -11,10 +11,12 @@ import {
   faLaptop,
   faPen,
   faPlus,
+  faSliders,
   faTrash,
   faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons';
 import { InterchangeStore } from '../../../../services/interchange-store';
+import { FolderSettingsStore } from '../../../../services/folder-settings-store';
 import { METHOD_COLORS, WorkspaceNode } from '../../../../models/workspace';
 import { ExplorerState } from '../../services/explorer-state';
 import { DragChip } from '../../../../components/drag-chip/drag-chip';
@@ -52,6 +54,7 @@ export class TreeLevel {
 
   protected readonly state = inject(ExplorerState);
   protected readonly interchange = inject(InterchangeStore);
+  protected readonly folders = inject(FolderSettingsStore);
 
   protected readonly faPlus = faPlus;
   protected readonly faFileImport = faFileImport;
@@ -61,6 +64,7 @@ export class TreeLevel {
   protected readonly faPen = faPen;
   protected readonly faLaptop = faLaptop;
   protected readonly faTrash = faTrash;
+  protected readonly faSliders = faSliders;
   protected readonly faWarning = faTriangleExclamation;
 
   protected readonly rowButton =

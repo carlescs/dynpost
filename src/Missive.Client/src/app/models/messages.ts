@@ -10,7 +10,8 @@ export interface KeyValueDto {
 }
 
 export interface AuthDto {
-  type: 'none' | 'basic' | 'bearer' | 'apiKey' | 'oauth2';
+  /** `inherit` uses the auth of the closest folder above that sets one. */
+  type: 'inherit' | 'none' | 'basic' | 'bearer' | 'apiKey' | 'oauth2';
   username?: string | null;
   password?: string | null;
   token?: string | null;
@@ -28,6 +29,30 @@ export interface AuthDto {
   audience?: string | null;
   /** How the client secret is sent to the token endpoint. */
   credentials?: 'header' | 'body' | null;
+}
+
+/** The headers and auth a folder sets for every request and folder in it. */
+export interface FolderSettingsDto {
+  headers: KeyValueDto[];
+  /** Type `inherit` passes on the auth of the folders above. */
+  auth: AuthDto;
+}
+
+/** A header inherited from a folder. */
+export interface InheritedHeaderDto {
+  key: string;
+  value: string;
+  /** The folder that sets it. */
+  folder: string;
+}
+
+/** What the requests and folders directly inside a folder inherit. */
+export interface InheritedSettingsDto {
+  headers: InheritedHeaderDto[];
+  /** The inherited auth; type `none` when no folder sets one. */
+  auth: AuthDto;
+  /** The folder the auth comes from; `null` when no folder sets one. */
+  authFolder: string | null;
 }
 
 /** A cached OAuth 2.0 token, as far as the UI needs to know (the token itself stays in the host). */
@@ -886,7 +911,11 @@ export interface BridgeMessages {
    * keeps the response; `null` for an unsaved request.
    */
   'request.send': {
-    payload: { id: string; request: RequestDto; path?: string | null };
+    /**
+     * `folder`: for an unsaved request, the folder it will be saved in, whose headers and auth it
+     * inherits (a saved request inherits those of its file's folder).
+     */
+    payload: { id: string; request: RequestDto; path?: string | null; folder?: string | null };
     result: ResponseDto;
   };
   /** The responses kept in a request's history, newest first. */
@@ -939,6 +968,15 @@ export interface BridgeMessages {
   'folder.duplicate': { payload: { path: string }; result: FolderDto };
   /** Deletes a folder with its requests; refused if it holds other files. */
   'folder.delete': { payload: { path: string }; result: null };
+  /** The headers and auth a folder (`requests` or a folder in it) sets, from its `_folder.yaml`. */
+  'folder.settings.load': { payload: { path: string }; result: FolderSettingsDto };
+  /** Saves the headers and auth a folder sets; its `_folder.yaml` is removed when it sets nothing. */
+  'folder.settings.save': {
+    payload: { path: string; settings: FolderSettingsDto };
+    result: FolderSettingsDto;
+  };
+  /** What requests and folders directly inside a folder inherit from it and the folders above. */
+  'folder.settings.inherited': { payload: { path: string }; result: InheritedSettingsDto };
   /** The workspace's environments and the selected one. */
   'environment.list': { payload: void; result: EnvironmentListDto };
   /** Reads an environment, with the values of its secrets from this computer. */

@@ -75,6 +75,8 @@
         <app-run-editor [draft]="plan" />
       } @else if (environments.draft(); as draft) {
         <app-environment-editor [draft]="draft" />
+      } @else if (folders.draft(); as folder) {
+        <app-folder-editor [draft]="folder" />
       } @else if (store.activeDocument(); as doc) {
         <app-request-editor [document]="doc" />
       } @else {

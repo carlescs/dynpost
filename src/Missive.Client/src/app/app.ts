@@ -11,6 +11,8 @@ import {
 import { DocumentTabs } from './components/document-tabs/document-tabs';
 import { EnvironmentEditor } from './modules/environments/components/environment-editor/environment-editor';
 import { RunEditor } from './modules/runs/components/run-editor/run-editor';
+import { FolderEditor } from './modules/explorer/components/folder-editor/folder-editor';
+import { FolderSettingsStore } from './services/folder-settings-store';
 import { RunStore } from './services/run-store';
 import { EnvironmentStore } from './services/environment-store';
 import { RequestEditor } from './modules/explorer/components/request-editor/request-editor';
@@ -42,6 +44,7 @@ import { WorkspaceSync } from './services/workspace-sync';
     DiffView,
     EnvironmentEditor,
     RunEditor,
+    FolderEditor,
     FaIconComponent,
   ],
   selector: 'app-root',
@@ -57,6 +60,7 @@ export class App implements OnInit {
   protected readonly history = inject(GitHistoryStore);
   protected readonly environments = inject(EnvironmentStore);
   protected readonly runs = inject(RunStore);
+  protected readonly folders = inject(FolderSettingsStore);
   protected readonly interchange = inject(InterchangeStore);
   private readonly updates = inject(UpdateStore);
   private readonly theme = inject(ThemeStore);

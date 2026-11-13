@@ -36,7 +36,7 @@ internal static partial class PostmanFormat
         var format = schema.Contains("v2.0", StringComparison.Ordinal) ? "Postman collection v2.0" : "Postman collection v2.1";
         var name = info.Str("name") is { Length: > 0 } infoName ? infoName : fallbackName;
 
-        var auth = ImportAuth(root.Obj("auth"), name, warnings) ?? RequestAuth.None;
+        var auth = ImportAuth(root.Obj("auth"), name, warnings) ?? RequestAuth.Inherit;
         var folder = ImportFolder(name, root.Arr("item"), auth, warnings);
 
         var variables = root.Arr("variable")
@@ -466,7 +466,7 @@ internal static partial class PostmanFormat
                 ("client_authentication", oauth.Credentials == OAuth2ClientAuthentication.Body ? "body" : "header"),
                 ("addTokenTo", "header"),
             ]),
-            NoAuth => null,
+            NoAuth or InheritAuth => null,
         };
     }
 

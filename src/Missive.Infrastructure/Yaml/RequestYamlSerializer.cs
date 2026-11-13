@@ -9,7 +9,9 @@ namespace Missive.Infrastructure.Yaml;
 /// Reads and writes request files. Keys are always written in the same order
 /// (<c>name</c>, <c>method</c>, <c>url</c>, <c>params</c>, <c>headers</c>, <c>auth</c>,
 /// <c>body</c>, <c>capture</c>, <c>description</c>) and empty or default values are omitted. Disabled params and headers are written
-/// with a <c>~</c> prefix on their name.
+/// with a <c>~</c> prefix on their name. A request without <c>auth</c> inherits the auth of its
+/// folders; <c>type: none</c> sends none. Folder defaults (<c>_folder.yaml</c>) use the same
+/// <c>headers</c> and <c>auth</c> keys, in that order.
 /// </summary>
 public static class RequestYamlSerializer
 {
@@ -73,30 +75,32 @@ public static class RequestYamlSerializer
         return writer.ToString();
     }
 
+    /// <summary>Writes the defaults of a folder (<c>_folder.yaml</c>): <c>headers</c>, then <c>auth</c>.</summary>
+    public static string SerializeFolder(FolderDefaults defaults)
+    {
+        var writer = new YamlWriter();
+        WriteEntries(writer, "headers", defaults.Headers);
+        WriteAuth(writer, defaults.Auth);
+        return writer.ToString();
+    }
+
+    /// <summary>
+    /// Parses a folder defaults file. Throws <see cref="RequestFormatException"/> when the text is
+    /// not valid. An empty file sets nothing.
+    /// </summary>
+    public static FolderDefaults DeserializeFolder(string yaml)
+    {
+        var root = Load(yaml, allowEmpty: true);
+        return root is null ? FolderDefaults.Empty : new FolderDefaults(ReadEntries(root, "headers"), ReadAuth(root));
+    }
+
     /// <summary>
     /// Parses a request file. Throws <see cref="RequestFormatException"/> when the text is not a
     /// valid request. <paramref name="fallbackName"/> is used when the file has no <c>name</c>.
     /// </summary>
     public static HttpRequestDefinition Deserialize(string yaml, string fallbackName)
     {
-        YamlMappingNode root;
-        try
-        {
-            var stream = new YamlStream();
-            stream.Load(new StringReader(yaml));
-            if (stream.Documents.Count == 0)
-            {
-                throw new RequestFormatException("The file is empty.");
-            }
-
-            root = stream.Documents[0].RootNode as YamlMappingNode
-                ?? throw new RequestFormatException("The file must contain a YAML mapping (key: value pairs).");
-        }
-        catch (YamlException ex)
-        {
-            throw new RequestFormatException($"Invalid YAML at line {ex.Start.Line}: {ex.Message}");
-        }
-
+        var root = Load(yaml, allowEmpty: false)!;
         var name = OptionalString(root, "name");
         var methodName = OptionalString(root, "method");
         var method = RequestMethod.Get;
@@ -117,6 +121,32 @@ public static class RequestYamlSerializer
             Captures = ReadCaptures(root),
             Description = OptionalString(root, "description") ?? string.Empty,
         };
+    }
+
+    private static YamlMappingNode? Load(string yaml, bool allowEmpty)
+    {
+        try
+        {
+            var stream = new YamlStream();
+            stream.Load(new StringReader(yaml));
+            if (stream.Documents.Count == 0)
+            {
+                return allowEmpty ? null : throw new RequestFormatException("The file is empty.");
+            }
+
+            var node = stream.Documents[0].RootNode;
+            if (allowEmpty && IsNull(node))
+            {
+                return null;
+            }
+
+            return node as YamlMappingNode
+                ?? throw new RequestFormatException("The file must contain a YAML mapping (key: value pairs).");
+        }
+        catch (YamlException ex)
+        {
+            throw new RequestFormatException($"Invalid YAML at line {ex.Start.Line}: {ex.Message}");
+        }
     }
 
     private static void WriteEntries(YamlWriter writer, string key, IReadOnlyList<KeyValueEntry> entries)
@@ -166,7 +196,7 @@ public static class RequestYamlSerializer
 
     private static void WriteAuth(YamlWriter writer, RequestAuth auth)
     {
-        if (auth is NoAuth)
+        if (auth is InheritAuth)
         {
             return;
         }
@@ -175,6 +205,9 @@ public static class RequestYamlSerializer
         {
             switch (auth)
             {
+                case NoAuth:
+                    map.Scalar("type", "none");
+                    break;
                 case BasicAuth basic:
                     map.Scalar("type", "basic");
                     ScalarIfNotEmpty(map, "username", basic.Username);
@@ -274,7 +307,7 @@ public static class RequestYamlSerializer
         var node = Optional(root, "auth");
         if (node is null || IsNull(node))
         {
-            return RequestAuth.None;
+            return RequestAuth.Inherit;
         }
 
         if (node is not YamlMappingNode map)
@@ -282,11 +315,12 @@ public static class RequestYamlSerializer
             throw new RequestFormatException("'auth' must be a mapping.");
         }
 
-        var type = OptionalString(map, "type") ?? "none";
+        var type = OptionalString(map, "type") ?? "inherit";
         string Field(string name) => OptionalString(map, name) ?? string.Empty;
 
         return type.ToLowerInvariant() switch
         {
+            "inherit" => RequestAuth.Inherit,
             "none" => RequestAuth.None,
             "basic" => new BasicAuth(Field("username"), Field("password")),
             "bearer" => new BearerAuth(Field("token")),
