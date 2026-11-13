@@ -21,6 +21,9 @@ With Missive you can:
   virtual users, with live statistics and pass/fail thresholds.
 - **Bring your collections** — import from Postman, Insomnia, HAR and
   OpenAPI/Swagger; export for Postman and Insomnia.
+- **Work with an AI assistant** — an optional, built-in MCP server lets Claude
+  and other AI assistants browse, edit and send your requests (see
+  [AI assistants (MCP)](#ai-assistants-mcp)).
 
 Secrets, cookies, tokens and other local state stay in a git-ignored
 `.missive/` folder and never end up in the repository.
@@ -104,6 +107,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       [Load runs](#load-runs))
 - [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
       Postman and Insomnia
+- [x] A built-in MCP server, off by default, so AI assistants can control the
+      app (see [AI assistants (MCP)](#ai-assistants-mcp))
 
 ### Non-goals
 
@@ -998,6 +1003,55 @@ exist are dropped from the list. Both are stored per user, outside any
 workspace, in `settings.json` in the app data folder (`%APPDATA%\Missive` on
 Windows, `~/.config/Missive` on Linux and macOS).
 
+## AI assistants (MCP)
+
+Missive has a built-in [Model Context Protocol](https://modelcontextprotocol.io)
+server, so an AI assistant such as Claude Code or Claude Desktop can work with
+the workspace open in the app. It is **off by default**: turn it on in
+*Settings* (the gear) → *AI assistants (MCP)…*.
+
+While it is on, the server listens on `http://localhost:47823/mcp` (the port
+can be changed) using the Streamable HTTP transport. Only apps on this computer
+can reach it, and they must send the token shown in the dialog as
+`Authorization: Bearer <token>`; requests from web pages are refused. *Replace…*
+makes a new token, disconnecting clients that have the old one. The setting,
+port and token are kept in your user settings, never in a workspace.
+
+The dialog shows the command that adds Missive to Claude Code:
+
+```sh
+claude mcp add --transport http missive http://localhost:47823/mcp --header "Authorization: Bearer <token>"
+```
+
+and the JSON entry for other clients:
+
+```json
+{
+  "mcpServers": {
+    "missive": {
+      "type": "http",
+      "url": "http://localhost:47823/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+The assistant can use these tools, always on the workspace open in the app:
+
+| Tool | What it does |
+| --- | --- |
+| `get_workspace` | Lists the requests and collection folders. |
+| `read_request`, `create_request`, `save_request`, `move_request`, `delete_request` | Read and change request files. |
+| `create_folder` | Creates a collection folder. |
+| `send_request` | Sends a saved request (keeping the response in its history) or an unsaved one, with the selected environment, and returns the response. Long bodies are cut off at 64 KB of text and binary bodies are left out. |
+| `list_environments`, `read_environment`, `create_environment`, `select_environment` | Work with environments. Secret values are never shown to the assistant. |
+| `git_status` | Shows the branch and changed files. |
+
+Changes the assistant makes appear in the app right away: the explorer, open
+requests without unsaved edits, environments and the git status are re-read.
+Committing, pulling and pushing stay with you — the assistant can't do them.
+
 ## Architecture
 
 ```text
@@ -1021,7 +1075,7 @@ cases.)
 | `Missive.Domain` | Entities and value objects (`Workspace`, `Collection`, `HttpRequestDefinition`, `Environment`, `Auth`), variable resolution and other pure rules. No I/O, no framework dependencies. | — |
 | `Missive.Application` | Use cases (open workspace, save request, send request, resolve environment, commit/pull/push) and the ports they need, e.g. `IWorkspaceRepository`, `IHttpSender`, `IGitService`, `ISecretStore`, `IHistoryStore`. | Domain |
 | `Missive.Infrastructure` | Adapters implementing the ports: YAML file storage, `HttpClient` sender, git, `.missive/` secrets, cookies and history. | Application, Domain |
-| `Missive.Desktop` | Composition root and presentation adapter: Photino window, bridge message dispatch to use cases, dependency injection wiring. | All of the above |
+| `Missive.Desktop` | Composition root and presentation adapters: Photino window, bridge message dispatch to use cases, the MCP server's tools, dependency injection wiring. | All of the above |
 
 The Angular client is a separate presentation layer that only talks to
 `Missive.Desktop` through bridge messages.

@@ -15,6 +15,7 @@ using Missive.Application.Settings;
 using Missive.Application.Sharing;
 using Missive.Application.About;
 using Missive.Application.Locale;
+using Missive.Application.Mcp;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -279,6 +280,12 @@ internal static class BridgeHandlers
                 (p, ct) => Use<SetHistorySettings>().ExecuteAsync(p, ct))
             .Register<SetActivityOrderPayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetActivityOrder,
                 (p, ct) => Use<SetActivityOrder>().ExecuteAsync(p.Order, ct))
+            .Register(BridgeMessageTypes.McpStatus,
+                ct => Use<GetMcpStatus>().ExecuteAsync(ct))
+            .Register<SetMcpPayload, McpStatusDto>(BridgeMessageTypes.McpSet,
+                (p, ct) => Use<SetMcpServer>().ExecuteAsync(p.Enabled, p.Port, ct))
+            .Register(BridgeMessageTypes.McpRegenerateToken,
+                ct => Use<RegenerateMcpToken>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.AboutGet,
                 _ => Task.FromResult(Result<AboutDto>.Success(Use<GetAboutInfo>().Execute())))
             .Register(BridgeMessageTypes.LocaleDateFormat,

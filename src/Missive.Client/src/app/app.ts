@@ -28,6 +28,7 @@ import { UpdateStore } from './services/update-store';
 import { InterchangeStore } from './services/interchange-store';
 import { Shortcuts } from './services/shortcuts';
 import { WorkspaceStore } from './services/workspace-store';
+import { WorkspaceSync } from './services/workspace-sync';
 
 @Component({
   imports: [
@@ -61,6 +62,8 @@ export class App implements OnInit {
   private readonly theme = inject(ThemeStore);
   private readonly dateFormat = inject(DateFormatStore);
   private readonly shortcuts = inject(Shortcuts);
+  /** Shows what AI assistants change through the MCP server. */
+  protected readonly sync = inject(WorkspaceSync);
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faPlus = faPlus;
   protected readonly faFolderOpen = faFolderOpen;

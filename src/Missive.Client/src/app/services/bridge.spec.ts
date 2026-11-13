@@ -54,6 +54,19 @@ describe('Bridge', () => {
       expect(await result).toBe(2);
       expect(errors).toHaveBeenCalledOnce();
     });
+
+    it('passes events from the host to their listeners until they stop listening', () => {
+      const changed = vi.fn();
+      const stop = bridge.on('workspace.changed', changed);
+
+      reply(
+        JSON.stringify({ event: 'workspace.changed', payload: { paths: ['requests/a.yaml'] } }),
+      );
+      stop();
+      reply(JSON.stringify({ event: 'workspace.changed', payload: { paths: [] } }));
+
+      expect(changed).toHaveBeenCalledExactlyOnceWith({ paths: ['requests/a.yaml'] });
+    });
   });
 
   it('falls back to the in-memory mock backend in a browser', async () => {

@@ -95,6 +95,17 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   (`Infrastructure/History/JsonHistoryStore.cs`, keyed by request path); use
   cases that rename, move or delete requests or folders keep it in step, and
   its limits are per-user `AppSettings.History`.
+- MCP server (AI assistants control the app): off by default, toggled in the header's settings
+  menu (`components/mcp-settings-dialog`). Its settings (enabled, port, token) are per-user
+  `AppSettings.Mcp`, changed by the use cases in `Application/Mcp` through the `IMcpServer` port.
+  `Desktop/Mcp` holds the presentation adapter: `McpHttpServer` (Streamable HTTP on
+  `http://localhost:{port}/mcp` via `HttpListener`, bearer token, `Origin` check, JSON responses
+  only, no sessions), `McpProtocol` (JSON-RPC: `initialize`, `ping`, `tools/list`, `tools/call`)
+  and `McpTools`, which maps each tool to one use case like `BridgeHandlers` (argument schemas are
+  generated from the argument records). Tools that change the workspace send the UI a
+  `workspace.changed` event (`Bridge/HostEvents.cs`; the client's `Bridge.on` and
+  `services/workspace-sync.ts` re-read what changed). Keep commit/pull/push out of the tools and
+  never show secret values to the assistant; update the tool table in `README.md` when adding one.
 - Dates: the client never formats dates with the webview's locale or Angular's
   `DatePipe`; it uses `DateFormatStore` (`services/date-format-store.ts`), which formats
   with the operating system's regional patterns read by the host
@@ -185,7 +196,8 @@ Desktop → Application
   the webview. Sending HTTP from .NET avoids CORS and header restrictions.
 - The UI talks to the host through Photino's message bridge. Use a typed
   request/response envelope with a correlation id and an explicit error shape;
-  keep message types defined in one place on each side and keep them in sync:
+  keep message types defined in one place on each side and keep them in sync (host-initiated
+  events, which carry `event` instead of an id, are `BridgeEventTypes` / `BridgeEvents`):
   `src/Missive.Desktop/Bridge/BridgeMessages.cs` (handlers in
   `BridgeHandlers.cs`) and `src/Missive.Client/src/app/models/messages.ts`.
   Outside the desktop host the client's `Bridge` falls back to an in-memory

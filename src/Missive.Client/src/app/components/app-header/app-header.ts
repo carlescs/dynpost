@@ -11,10 +11,12 @@ import {
   faFolderOpen,
   faLayerGroup,
   faPaperPlane,
+  faRobot,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { AboutDialog } from '../about-dialog/about-dialog';
 import { HistorySettingsDialog } from '../history-settings-dialog/history-settings-dialog';
+import { McpSettingsDialog } from '../mcp-settings-dialog/mcp-settings-dialog';
 import { ShortcutsDialog } from '../shortcuts-dialog/shortcuts-dialog';
 import { Dialogs } from '../../services/dialogs';
 import { EnvironmentStore } from '../../services/environment-store';
@@ -61,6 +63,7 @@ export class AppHeader {
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faXmark = faXmark;
+  protected readonly faRobot = faRobot;
 
   constructor() {
     // Removing the last other recent workspace (or a reload finding none) leaves nothing to
@@ -97,6 +100,11 @@ export class AppHeader {
   protected showHistorySettings(): void {
     this.menuOpen.set(false);
     this.dialogs.open(HistorySettingsDialog, { ariaLabelledBy: 'history-settings-title' });
+  }
+
+  protected showMcpSettings(): void {
+    this.menuOpen.set(false);
+    this.dialogs.open(McpSettingsDialog, { ariaLabelledBy: 'mcp-settings-title' });
   }
 
   protected showAbout(): void {
