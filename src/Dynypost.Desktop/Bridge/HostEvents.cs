@@ -21,6 +21,13 @@ internal sealed class HostEvents
     public Task WorkspaceChangedAsync(IReadOnlyList<string> paths) =>
         SendAsync(BridgeEventTypes.WorkspaceChanged, new WorkspaceChangedEvent(paths));
 
+    /// <summary>
+    /// The open workspace's files or git state changed (in the app, in other programs or through
+    /// other git tools), so the git status may have too.
+    /// </summary>
+    public Task GitChangedAsync() =>
+        SendAsync(BridgeEventTypes.GitChanged, new GitChangedEvent());
+
     /// <summary>A run of the plan at <paramref name="planPath"/> started outside the UI, so the UI can follow it.</summary>
     public Task RunStartedAsync(string planPath, string runId) =>
         SendAsync(BridgeEventTypes.RunStarted, new RunStartedEvent(planPath, runId));

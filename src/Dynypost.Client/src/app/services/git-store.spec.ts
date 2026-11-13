@@ -289,4 +289,82 @@ describe('GitStore', () => {
     expect(store.failedOperation()).toBe('branch');
     expect(store.needsIdentity()).toBe(true);
   });
+
+  describe('background refresh', () => {
+    const changed = status({ changes: [{ path: 'requests/a.yaml', status: 'modified' }] as never });
+
+    it('reads the status without showing an operation', async () => {
+      handlers['git.status'] = () => changed;
+      const read = store.refreshInBackground();
+
+      expect(store.busy()).toBeNull();
+      await read;
+      expect(store.changeCount()).toBe(1);
+    });
+
+    it('reads again once a running operation finishes, instead of dropping the change', async () => {
+      let finishFetch!: () => void;
+      handlers['git.fetch'] = () =>
+        new Promise((resolve) => (finishFetch = () => resolve(status())));
+      const fetching = store.fetch();
+      await vi.waitFor(() => expect(store.busy()).toBe('fetch'));
+
+      handlers['git.status'] = () => changed;
+      await store.refreshInBackground();
+      expect(store.changeCount()).toBe(0);
+
+      finishFetch();
+      await fetching;
+      await vi.waitFor(() => expect(store.changeCount()).toBe(1));
+    });
+
+    it('reads once more when asked during a read, so the latest change is seen', async () => {
+      let finishFirst!: () => void;
+      handlers['git.status'] = () =>
+        new Promise((resolve) => (finishFirst = () => resolve(status())));
+      const first = store.refreshInBackground();
+      void store.refreshInBackground();
+      void store.refreshInBackground();
+
+      handlers['git.status'] = () => changed;
+      finishFirst();
+      await first;
+
+      await vi.waitFor(() => expect(store.changeCount()).toBe(1));
+      expect(send.mock.calls.filter(([type]) => type === 'git.status')).toHaveLength(3);
+    });
+
+    it('drops a read an operation overtook', async () => {
+      let finishRead!: () => void;
+      handlers['git.status'] = () =>
+        new Promise((resolve) => (finishRead = () => resolve(changed)));
+      const read = store.refreshInBackground();
+      store.status.set(status({ ahead: 2 }));
+
+      finishRead();
+      await read;
+
+      expect(store.status()?.ahead).toBe(2);
+      expect(store.changeCount()).toBe(0);
+    });
+
+    it('keeps the errors of other operations', async () => {
+      store.failedOperation.set('push');
+      store.error.set({ code: 'git.push_rejected', message: 'Rejected' });
+
+      await store.refreshInBackground();
+
+      expect(store.error()?.code).toBe('git.push_rejected');
+    });
+
+    it('reports a status that can no longer be read', async () => {
+      handlers['git.status'] = () => {
+        throw new BridgeError('git.not_a_repository', 'Not a repository');
+      };
+
+      await store.refreshInBackground();
+
+      expect(store.notARepository()).toBe(true);
+    });
+  });
 });

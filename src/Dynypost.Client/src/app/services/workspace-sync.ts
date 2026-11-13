@@ -10,7 +10,9 @@ import { WorkspaceStore } from './workspace-store';
  * Shows changes made to the open workspace outside the UI — by an AI assistant through the MCP
  * server — as the host reports them: re-reads the tree, the open requests and environments that
  * changed (keeping unsaved edits), run plans and their runs, and the git status; and follows the
- * load runs it starts, and opens the files it asks to show. The app shell injects it to start it.
+ * load runs it starts, and opens the files it asks to show. It also re-reads the git status
+ * whenever the host sees the workspace's files or git state change, whoever changed them. The app
+ * shell injects it to start it.
  */
 @Injectable({ providedIn: 'root' })
 export class WorkspaceSync {
@@ -27,6 +29,10 @@ export class WorkspaceSync {
         if (this.workspace.workspace()) void this.runs.followStarted(path, runId);
       }),
       this.bridge.on('item.open', (item) => void this.open(item)),
+      // The host watches the workspace and its repository, whoever changes them.
+      this.bridge.on('git.changed', () => {
+        if (this.workspace.workspace() && this.git.available) void this.git.refreshInBackground();
+      }),
     ];
     inject(DestroyRef).onDestroy(() => stops.forEach((stop) => stop()));
   }
@@ -53,6 +59,6 @@ export class WorkspaceSync {
     // The selected environment, its variables or captured values may have changed too.
     await this.environments.refresh(paths);
     await this.runs.reloadFromDisk(paths);
-    if (this.git.available) void this.git.refresh();
+    if (this.git.available) void this.git.refreshInBackground();
   }
 }

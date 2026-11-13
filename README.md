@@ -912,8 +912,12 @@ configuration, hooks and credential helpers apply as usual. In detail:
   creating the file if needed. Add a remote (see **Remotes** below) to push it.
 - **Status** lists changed files inside the workspace folder only (the
   workspace can be a subfolder of a larger repository), plus the branch, its
-  upstream and how many commits it is ahead of or behind it. It refreshes when
-  you come back to the window. An upstream branch that was deleted on the
+  upstream and how many commits it is ahead of or behind it. It updates by
+  itself as files change — saved in Dynypost, edited in another program, or
+  committed, staged or checked out with other git tools (including a workspace
+  inside a larger repository or a linked worktree) — and again when you come
+  back to the window; changes under `.dynypost/` don't count. An open diff
+  follows the file as it changes. An upstream branch that was deleted on the
   remote is shown as such.
 - **Fetch** (the cloud button) checks the remotes for new commits without
   changing your files (`git fetch --all --prune`), so the number of commits to

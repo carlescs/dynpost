@@ -1105,6 +1105,11 @@ export interface BridgeEvents {
    * a run plan or an environment (whose `id` is its file name; for the others it is the path).
    */
   'item.open': { path: string; kind: 'request' | 'runPlan' | 'environment'; id: string };
+  /**
+   * The open workspace's files or git state changed — saved in the app, edited in another
+   * program, or committed, checked out or staged with other git tools — so the git status may have.
+   */
+  'git.changed': Record<string, never>;
 }
 
 export type BridgeEventType = keyof BridgeEvents;

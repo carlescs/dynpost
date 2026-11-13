@@ -431,6 +431,12 @@ internal static class BridgeEventTypes
     /// environment in a tab. Payload: <see cref="Dynypost.Application.Workspaces.WorkspaceItemDto"/>.
     /// </summary>
     public const string ItemOpen = "item.open";
+
+    /// <summary>
+    /// The open workspace's files or git state changed, by anyone, so the UI should read the git
+    /// status again. Payload: <see cref="GitChangedEvent"/>.
+    /// </summary>
+    public const string GitChanged = "git.changed";
 }
 
 /// <summary>A message from the host the UI didn't ask for; unlike a <see cref="BridgeResponse"/> it has no id.</summary>
@@ -438,6 +444,9 @@ internal sealed record BridgeEvent(string Event, object Payload);
 
 /// <param name="Paths">The workspace paths of the files and folders that changed; empty when only other state (such as the selected environment) did.</param>
 internal sealed record WorkspaceChangedEvent(IReadOnlyList<string> Paths);
+
+/// <summary>The payload of <see cref="BridgeEventTypes.GitChanged"/>: nothing, the UI reads the status again.</summary>
+internal sealed record GitChangedEvent;
 
 /// <param name="Path">The workspace path of the plan being run.</param>
 internal sealed record RunStartedEvent(string Path, string RunId);

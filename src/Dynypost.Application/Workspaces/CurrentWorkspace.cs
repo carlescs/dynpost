@@ -9,7 +9,14 @@ public sealed class CurrentWorkspace
 
     public string? Root => Volatile.Read(ref _root);
 
-    public void Open(string root) => Volatile.Write(ref _root, root);
+    /// <summary>Raised after a folder is opened as the workspace, with that folder.</summary>
+    public event Action<string>? Opened;
+
+    public void Open(string root)
+    {
+        Volatile.Write(ref _root, root);
+        Opened?.Invoke(root);
+    }
 
     internal Result<string> RequireRoot() =>
         Root is { } root
