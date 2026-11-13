@@ -62,6 +62,22 @@ describe('McpSettingsDialog', () => {
     expect(root.querySelector('pre')!.textContent).toContain('"Authorization": "Bearer abc123"');
   });
 
+  it('hides the port, token and client setup while the server is off', async () => {
+    const { root, send, settle } = await setup(on);
+    expect(root.querySelector('input[name="port"]')).not.toBeNull();
+
+    // Turning the server off keeps its token for the next time it is turned on.
+    send.mockResolvedValue({ ...on, enabled: false, running: false });
+    root.querySelector<HTMLButtonElement>('[role="switch"]')!.click();
+    await settle();
+
+    expect(root.querySelector('[role="status"]')).toBeNull();
+    expect(root.querySelector('input[name="port"]')).toBeNull();
+    expect(root.querySelector('[data-testid="token"]')).toBeNull();
+    expect(root.textContent).not.toContain('claude mcp add');
+    expect(root.querySelector('pre')).toBeNull();
+  });
+
   it('hides the token until asked', async () => {
     const { root, settle, button } = await setup(on);
     const token = () => root.querySelector('[data-testid="token"]')!.textContent;
