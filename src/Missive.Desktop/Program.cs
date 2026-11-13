@@ -147,6 +147,7 @@ internal static class Program
             .AddTransient<GetRecentWorkspaces>()
             .AddTransient<RemoveRecentWorkspace>()
             .AddTransient<GetWorkspaceTree>()
+            .AddTransient<FindWorkspaceItem>()
             .AddTransient<ShowWorkspaceFolder>()
             .AddTransient<ExportWorkspace>()
             .AddTransient<ImportCollection>()

@@ -1044,12 +1044,14 @@ The assistant can use these tools, always on the workspace open in the app:
 | `get_workspace` | Lists the requests and collection folders. |
 | `read_request`, `create_request`, `save_request`, `move_request`, `delete_request` | Read and change request files. |
 | `create_folder` | Creates a folder in `requests/` or `plans/`. |
+| `list_history`, `get_history_entry` | Read the responses kept in a saved request's [history](#response-history) (cookie and secret values are hidden there already), to compare responses or find when something changed. |
+| `open_in_app` | Opens a request, run plan or environment in a tab, so the assistant can show you what it made or changed. |
 | `send_request` | Sends a saved request (keeping the response in its history) or an unsaved one, with the selected environment, and returns the response. Long bodies are cut off at 64 KB of text and binary bodies are left out. |
 | `list_environments`, `read_environment`, `create_environment`, `select_environment` | Work with environments. Secret values are never shown to the assistant. |
 | `list_run_plans`, `read_run_plan`, `create_run_plan`, `save_run_plan`, `move_run_plan`, `delete_run_plan` | Read, create, change and organize [load run](#load-runs) plans. New plans, like new requests, are named after themselves and never replace an existing file. |
 | `start_run`, `get_run`, `cancel_run` | Start a load run of a saved plan (a run of more than 200 threads needs confirming), follow it — `get_run` can wait up to 50 seconds for it to finish — and stop it. A run the assistant starts opens in the plan's tab, where you can follow and cancel it. Only the last 120 seconds of a run's timeline are shown to the assistant. |
 | `list_runs`, `get_run_samples`, `delete_runs` | A plan's earlier runs, a run's request log (up to 100 requests at a time), and deleting saved runs. |
-| `git_status` | Shows the branch and changed files. |
+| `git_status`, `git_diff`, `git_log`, `git_show` | Show the branch and changed files, how a changed file differs from the last commit, the commits of the branch, and one commit's message and files — so the assistant can review its changes before you commit them. |
 
 Changes the assistant makes appear in the app right away: the explorer, open
 requests and run plans without unsaved edits, environments, earlier runs and the

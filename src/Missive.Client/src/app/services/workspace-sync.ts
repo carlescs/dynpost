@@ -1,4 +1,5 @@
 import { DestroyRef, Injectable, inject } from '@angular/core';
+import { BridgeEvents } from '../models/messages';
 import { Bridge } from './bridge';
 import { EnvironmentStore } from './environment-store';
 import { GitStore } from './git-store';
@@ -9,7 +10,7 @@ import { WorkspaceStore } from './workspace-store';
  * Shows changes made to the open workspace outside the UI — by an AI assistant through the MCP
  * server — as the host reports them: re-reads the tree, the open requests and environments that
  * changed (keeping unsaved edits), run plans and their runs, and the git status; and follows the
- * load runs it starts. The app shell injects it to start it.
+ * load runs it starts, and opens the files it asks to show. The app shell injects it to start it.
  */
 @Injectable({ providedIn: 'root' })
 export class WorkspaceSync {
@@ -25,8 +26,24 @@ export class WorkspaceSync {
       this.bridge.on('run.started', ({ path, runId }) => {
         if (this.workspace.workspace()) void this.runs.followStarted(path, runId);
       }),
+      this.bridge.on('item.open', (item) => void this.open(item)),
     ];
     inject(DestroyRef).onDestroy(() => stops.forEach((stop) => stop()));
+  }
+
+  private async open({ path, kind, id }: BridgeEvents['item.open']): Promise<void> {
+    if (!this.workspace.workspace()) return;
+    switch (kind) {
+      case 'request':
+        await this.workspace.openRequest({ path, name: path, kind: 'request' });
+        break;
+      case 'runPlan':
+        await this.runs.open(path);
+        break;
+      case 'environment':
+        await this.environments.edit(id);
+        break;
+    }
   }
 
   private async apply(paths: string[]): Promise<void> {

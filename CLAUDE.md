@@ -103,9 +103,10 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   only, no sessions), `McpProtocol` (JSON-RPC: `initialize`, `ping`, `tools/list`, `tools/call`)
   and `McpTools`, which maps each tool to one use case like `BridgeHandlers` (argument schemas are
   generated from the argument records). Tools that change the workspace send the UI a
-  `workspace.changed` event, and `start_run` a `run.started` event (`Bridge/HostEvents.cs`; the
-  client's `Bridge.on` and `services/workspace-sync.ts` re-read what changed and open the plan's
-  tab to follow the run). `get_run` waits for a run through `Application/Runs/WaitForRun.cs`. Keep commit/pull/push out of the tools and
+  `workspace.changed` event, `start_run` a `run.started` event and `open_in_app` an `item.open`
+  event (`Bridge/HostEvents.cs`; the client's `Bridge.on` and `services/workspace-sync.ts` re-read
+  what changed, open the plan's tab to follow the run, and open the item asked for; the item's kind
+  comes from `Application/Workspaces/FindWorkspaceItem.cs`). `get_run` waits for a run through `Application/Runs/WaitForRun.cs`. Keep commit/pull/push out of the tools and
   never show secret values to the assistant; update the tool table in `README.md` when adding one.
 - Dates: the client never formats dates with the webview's locale or Angular's
   `DatePipe`; it uses `DateFormatStore` (`services/date-format-store.ts`), which formats
