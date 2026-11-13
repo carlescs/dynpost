@@ -390,7 +390,32 @@ internal static class BridgeMessageTypes
 
     /// <summary>Sets the order of the activity bar's views. Payload: <see cref="SetActivityOrderPayload"/>. Result: settings.</summary>
     public const string SettingsSetActivityOrder = "settings.setActivityOrder";
+
+    /// <summary>Reads the MCP server's settings and state. Payload: none. Result: MCP status.</summary>
+    public const string McpStatus = "mcp.status";
+
+    /// <summary>Turns the MCP server on or off, or changes its port. Payload: <see cref="SetMcpPayload"/>. Result: MCP status.</summary>
+    public const string McpSet = "mcp.set";
+
+    /// <summary>Replaces the MCP server's token. Payload: none. Result: MCP status.</summary>
+    public const string McpRegenerateToken = "mcp.regenerateToken";
 }
+
+/// <summary>
+/// The events the host sends the UI unprompted, as a <see cref="BridgeEvent"/>. Keep in sync with
+/// <c>src/Missive.Client/src/app/models/messages.ts</c>.
+/// </summary>
+internal static class BridgeEventTypes
+{
+    /// <summary>Something changed the open workspace outside the UI (the MCP server). Payload: <see cref="WorkspaceChangedEvent"/>.</summary>
+    public const string WorkspaceChanged = "workspace.changed";
+}
+
+/// <summary>A message from the host the UI didn't ask for; unlike a <see cref="BridgeResponse"/> it has no id.</summary>
+internal sealed record BridgeEvent(string Event, object Payload);
+
+/// <param name="Paths">The workspace paths of the files and folders that changed; empty when only other state (such as the selected environment) did.</param>
+internal sealed record WorkspaceChangedEvent(IReadOnlyList<string> Paths);
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
 internal sealed record BridgeRequest(string Id, string Type, JsonElement? Payload);
@@ -403,6 +428,9 @@ internal sealed record RemoveRecentWorkspacePayload(string Path);
 
 internal sealed record SetThemePayload(string Theme);
 internal sealed record SetActivityOrderPayload(IReadOnlyList<string>? Order);
+
+/// <param name="Port">The port to listen on; <c>null</c> keeps the current one.</param>
+internal sealed record SetMcpPayload(bool Enabled, int? Port = null);
 
 /// <param name="Format">The id of an export format, e.g. <c>postman</c> or <c>insomnia</c>.</param>
 /// <param name="IncludeEnvironments">Whether to export the environments (secret values never are).</param>

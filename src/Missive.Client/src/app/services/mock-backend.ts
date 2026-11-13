@@ -12,6 +12,7 @@ import {
   EnvironmentDto,
   HistoryEntryDetailsDto,
   HistorySettingsDto,
+  McpStatusDto,
   OAuth2TokenDto,
   RequestDto,
   ResponseDto,
@@ -169,6 +170,8 @@ export class MockBackend {
   private open = false;
   private theme: Theme = 'light';
   private activityOrder: string[] = [];
+  /** The MCP server's settings; it never runs in the browser preview. */
+  private mcp = { enabled: false, port: 47823, token: null as string | null };
   private historySettings: HistorySettingsDto = {
     enabled: true,
     maxEntries: 20,
@@ -337,6 +340,26 @@ export class MockBackend {
       }
       this.activityOrder = [...order];
       return ok(settings());
+    }
+    const mcpStatus = (): McpStatusDto => ({
+      ...this.mcp,
+      running: false,
+      url: `http://localhost:${this.mcp.port}/mcp`,
+      error: this.mcp.enabled ? 'The MCP server runs only in the desktop app.' : null,
+    });
+    if (request.type === 'mcp.status') return ok(mcpStatus());
+    if (request.type === 'mcp.set') {
+      const port = (payload?.['port'] as number | undefined) ?? this.mcp.port;
+      if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+        return fail('mcp.invalid_port', 'Choose a port between 1024 and 65535.');
+      }
+      const enabled = payload?.['enabled'] === true;
+      this.mcp = { enabled, port, token: this.mcp.token ?? (enabled ? mockToken() : null) };
+      return ok(mcpStatus());
+    }
+    if (request.type === 'mcp.regenerateToken') {
+      this.mcp = { ...this.mcp, token: mockToken() };
+      return ok(mcpStatus());
     }
     if (request.type === 'about.get') {
       return ok({
@@ -1437,4 +1460,11 @@ function slug(name: string, fallback = 'request'): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return value || fallback;
+}
+
+/** A random token like the host's: 32 bytes as lower-case hex. */
+function mockToken(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+    b.toString(16).padStart(2, '0'),
+  ).join('');
 }

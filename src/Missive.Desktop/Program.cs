@@ -14,10 +14,12 @@ using Missive.Application.Settings;
 using Missive.Application.Sharing;
 using Missive.Application.About;
 using Missive.Application.Locale;
+using Missive.Application.Mcp;
 using Missive.Application.Updates;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Desktop.Hosting;
+using Missive.Desktop.Mcp;
 using Missive.Infrastructure.Cookies;
 using Missive.Infrastructure.Environments;
 using Missive.Infrastructure.Git;
@@ -78,7 +80,9 @@ internal static class Program
         }
 
         var bridge = new PhotinoBridge(window);
-        bridge.Attach(BridgeHandlers.Create(services, bridge, bridge));
+        bridge.Attach(BridgeHandlers.Create(services, bridge, bridge), services.GetRequiredService<HostEvents>());
+        // Off unless the user turned it on; a failure to start is shown in its settings.
+        _ = services.GetRequiredService<StartMcpServer>().ExecuteAsync();
 
         window.Load(BundledAssets.StartUri).WaitForClose();
     }
@@ -120,6 +124,12 @@ internal static class Program
             .AddSingleton<IAppInfo, AssemblyAppInfo>()
             .AddSingleton<IRegionalSettings, SystemRegionalSettings>()
             .AddSingleton<IFileManager, SystemFileManager>()
+            .AddSingleton<HostEvents>()
+            .AddSingleton<IMcpServer, McpHttpServer>()
+            .AddTransient<GetMcpStatus>()
+            .AddTransient<SetMcpServer>()
+            .AddTransient<RegenerateMcpToken>()
+            .AddTransient<StartMcpServer>()
             .AddTransient<GetAboutInfo>()
             .AddTransient<GetDateFormat>()
             .AddTransient<GetAppSettings>()
@@ -150,6 +160,7 @@ internal static class Program
             .AddTransient<SetLocalOnly>()
             .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()
+            .AddTransient<SendRequestFile>()
             .AddTransient<CancelRequest>()
             .AddTransient<SaveResponseBody>()
             .AddTransient<ListCookies>()

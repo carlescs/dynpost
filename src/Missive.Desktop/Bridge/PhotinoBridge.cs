@@ -6,8 +6,9 @@ namespace Missive.Desktop.Bridge;
 /// <summary>Connects a <see cref="BridgeRouter"/> to a Photino window's message channel.</summary>
 internal sealed class PhotinoBridge(PhotinoWindow window) : IFileDialogs, IAppWindow
 {
-    public void Attach(BridgeRouter router)
+    public void Attach(BridgeRouter router, HostEvents events)
     {
+        events.Connect(window.SendWebMessageAsync);
         window.RegisterWebMessageReceivedHandler((_, message) =>
         {
             // Messages arrive on the UI thread; do the work elsewhere so the window stays responsive.

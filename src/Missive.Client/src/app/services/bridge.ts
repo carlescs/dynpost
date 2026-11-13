@@ -1,6 +1,9 @@
 import { Injectable } from '@angular/core';
 import {
   BridgeErrorShape,
+  BridgeEventEnvelope,
+  BridgeEventType,
+  BridgeEvents,
   BridgeMessageType,
   BridgeMessages,
   BridgeRequestEnvelope,
@@ -42,6 +45,7 @@ export class Bridge {
   private readonly external = Bridge.findHost();
   private readonly mock = this.external ? null : new MockBackend();
   private readonly pending = new Map<string, Pending>();
+  private readonly listeners = new Set<(event: BridgeEventEnvelope) => void>();
   private nextId = 1;
 
   /** Whether the app runs inside the desktop host rather than a plain browser. */
@@ -73,12 +77,29 @@ export class Bridge {
     });
   }
 
+  /**
+   * Calls `listener` with each `type` event the host sends unprompted, until the returned
+   * function is called. There are none outside the desktop host.
+   */
+  on<K extends BridgeEventType>(type: K, listener: (payload: BridgeEvents[K]) => void): () => void {
+    const filtered = (event: BridgeEventEnvelope) => {
+      if (event.event === type) listener(event.payload as BridgeEvents[K]);
+    };
+    this.listeners.add(filtered);
+    return () => this.listeners.delete(filtered);
+  }
+
   private receive(message: string): void {
-    let response: BridgeResponseEnvelope;
+    let response: BridgeResponseEnvelope | BridgeEventEnvelope;
     try {
       response = JSON.parse(message);
     } catch {
       console.error('Ignoring malformed bridge message', message);
+      return;
+    }
+
+    if ('event' in response) {
+      for (const listener of [...this.listeners]) listener(response);
       return;
     }
 

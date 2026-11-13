@@ -1,4 +1,5 @@
 using Missive.Application.History;
+using Missive.Application.Mcp;
 
 namespace Missive.Application.Settings;
 
@@ -14,12 +15,14 @@ namespace Missive.Application.Settings;
 /// The order of the activity bar's views (their ids, such as <c>explorer</c> or <c>git</c>);
 /// <c>null</c> is the UI's default order. The UI places views missing from it at the end.
 /// </param>
+/// <param name="Mcp">The MCP server AI assistants connect to; <c>null</c> is <see cref="McpSettings.Default"/> (off).</param>
 public sealed record AppSettings(
     string? LastWorkspacePath = null,
     string? Theme = null,
     IReadOnlyList<string>? RecentWorkspaces = null,
     HistorySettings? History = null,
-    IReadOnlyList<string>? ActivityOrder = null)
+    IReadOnlyList<string>? ActivityOrder = null,
+    McpSettings? Mcp = null)
 {
     public static AppSettings Default { get; } = new();
 }

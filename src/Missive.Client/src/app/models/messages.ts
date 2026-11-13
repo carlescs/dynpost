@@ -581,6 +581,21 @@ export interface AppSettingsDto {
   activityOrder: string[];
 }
 
+/** The MCP server AI assistants connect to, as set up and as running. */
+export interface McpStatusDto {
+  /** Whether the user turned it on. */
+  enabled: boolean;
+  /** Whether it is listening. */
+  running: boolean;
+  port: number;
+  /** The URL clients connect to. */
+  url: string;
+  /** The bearer token clients must send; `null` until the server is first turned on. */
+  token: string | null;
+  /** Why it could not start, if it couldn't (for example, the port is in use). */
+  error?: string | null;
+}
+
 /** A workspace folder opened recently. */
 export interface RecentWorkspaceDto {
   /** The folder's name. */
@@ -806,6 +821,12 @@ export interface BridgeMessages {
   'settings.setHistory': { payload: HistorySettingsDto; result: AppSettingsDto };
   /** Sets the order of the activity bar's views; an empty list restores the default order. */
   'settings.setActivityOrder': { payload: { order: string[] }; result: AppSettingsDto };
+  /** The MCP server's settings and state. */
+  'mcp.status': { payload: void; result: McpStatusDto };
+  /** Turns the MCP server on or off, or moves it to another port (omitted: kept). */
+  'mcp.set': { payload: { enabled: boolean; port?: number }; result: McpStatusDto };
+  /** Replaces the MCP server's token; clients given the old one can no longer connect. */
+  'mcp.regenerateToken': { payload: void; result: McpStatusDto };
   'workspace.pick': { payload: void; result: WorkspaceDto | null };
   'workspace.open': { payload: { path: string }; result: WorkspaceDto };
   /** Reopens the workspace from the previous session; `null` when there is none. */
@@ -1027,6 +1048,25 @@ export interface BridgeErrorShape {
 
 export type BridgeResponseEnvelope =
   { id: string; ok: true; payload: unknown } | { id: string; ok: false; error: BridgeErrorShape };
+
+/**
+ * The events the host sends unprompted (with no id). Keep in sync with `BridgeEventTypes` in
+ * `src/Missive.Desktop/Bridge/BridgeMessages.cs`.
+ */
+export interface BridgeEvents {
+  /**
+   * Something outside the UI (an AI assistant, through the MCP server) changed the open
+   * workspace: the files and folders at `paths`, or, with none, other state such as the selected
+   * environment.
+   */
+  'workspace.changed': { paths: string[] };
+}
+
+export type BridgeEventType = keyof BridgeEvents;
+
+export type BridgeEventEnvelope = {
+  [K in BridgeEventType]: { event: K; payload: BridgeEvents[K] };
+}[BridgeEventType];
 
 /** Error codes the host can return. */
 export const ERROR_CODES = {
