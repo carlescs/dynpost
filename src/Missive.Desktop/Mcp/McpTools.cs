@@ -13,6 +13,7 @@ using Missive.Application.Folders;
 using Missive.Application.Git;
 using Missive.Application.Http;
 using Missive.Application.Requests;
+using Missive.Application.Runs;
 using Missive.Application.Workspaces;
 using Missive.Desktop.Bridge;
 using Missive.Domain.Workspaces;
@@ -38,6 +39,20 @@ internal static class McpTools
         // Results are JSON for an AI assistant, never HTML: keep non-ASCII text and quotes readable.
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
+
+    /// <summary>The most seconds of a run's timeline shown to the AI assistant: the latest ones.</summary>
+    public const int MaxTimelinePoints = 120;
+
+    /// <summary>The most logged requests of a run shown to the AI assistant at once.</summary>
+    public const int MaxSamplesPage = 100;
+
+    private const string RunPlanShape =
+        "A plan is YAML: name; requests: [request paths such as requests/shop/list-products.yaml]; disabled?: [paths not sent]; "
+        + "order?: sequential|shuffle|random|roundRobin; weights?: { path: number }; load: { threads, iterations or duration (2m), rampUp?, thinkTime?, maxRps? }; "
+        + "data?: { file: a CSV whose columns become {{variables}}, mode?: sequential|random|perThread, onEof?: recycle|stop }; "
+        + "bodies?: { requestPath: { folder, pattern?, mode?, onEof? } }; saveResponses?: bool; "
+        + "assert?: { \"*\" or path: { status: 200-299, maxTime: 800ms } }; thresholds?: { p95: 500ms, errorRate: 1%, throughput: 50 }. "
+        + "Plans live in plans/ and are named <name>.run.yaml.";
 
     /// <summary>The most characters of a response body shown to the AI assistant.</summary>
     public const int MaxBodyChars = 64 * 1024;
@@ -89,7 +104,7 @@ internal static class McpTools
                 destructive: true)
             .Add<CreateFolderArguments, FolderDto>(
                 "create_folder", "Create folder",
-                "Creates a collection folder inside a folder of requests/ (requests itself for the top level). Returns its path.",
+                "Creates a folder inside requests/ (a collection of requests) or plans/ (a folder of run plans), or a folder in either. Returns its path.",
                 (p, _) => Task.FromResult(Use<CreateFolder>().Execute(p.Parent, p.Name)),
                 changed: (_, folder) => [folder.Path])
             .Add<SendArguments, ResponseDto>(
@@ -124,6 +139,73 @@ internal static class McpTools
                 "Selects the environment requests are sent with, by id (see list_environments); null selects none.",
                 async (p, ct) => await Use<SelectEnvironment>().ExecuteAsync(p.Id, ct),
                 changed: (_, _) => [])
+            .Add<NoArguments, IReadOnlyList<RunPlanFileDto>>(
+                "list_run_plans", "List run plans",
+                "Lists the workspace's load run plans (*.run.yaml files in plans/) with their names, and why any can't be read.",
+                (_, ct) => Use<ListRunPlans>().ExecuteAsync(ct),
+                readOnly: true)
+            .Add<PlanPathArguments, RunPlanDocumentDto>(
+                "read_run_plan", "Read run plan",
+                "Reads a run plan's YAML, and why it can't be run yet, if it can't. " + RunPlanShape,
+                (p, ct) => Use<OpenRunPlan>().ExecuteAsync(p.Path, ct),
+                readOnly: true)
+            .Add<SaveRunPlanArguments, RunPlanDocumentDto>(
+                "save_run_plan", "Save run plan",
+                "Creates a run plan, or replaces an existing one's YAML; a plan whose file is named after it is renamed with it. "
+                + "Returns its (possibly new) path and why it can't be run yet, if it can't. Read an existing plan first and keep what you don't mean to change. "
+                + RunPlanShape,
+                (p, ct) => Use<SaveRunPlan>().ExecuteAsync(p.Path, p.Yaml, ct),
+                changed: (p, saved) => [p.Path, saved.Path],
+                destructive: true)
+            .Add<MoveRunPlanArguments, MovedRunPlanDto>(
+                "move_run_plan", "Move run plan",
+                "Moves a run plan into another folder of plans/; its earlier runs follow it. Returns its new path.",
+                (p, ct) => Use<MoveRunPlan>().ExecuteAsync(p.Path, p.Folder, ct),
+                changed: (p, moved) => [p.Path, moved.Path])
+            .Add<PlanPathArguments, Unit>(
+                "delete_run_plan", "Delete run plan",
+                "Deletes a run plan and its saved runs. Ask the user before deleting anything.",
+                async (p, ct) => await Use<DeleteRunPlan>().ExecuteAsync(p.Path, ct),
+                changed: (p, _) => [p.Path],
+                destructive: true)
+            .Add<StartRunArguments, StartedRunDto>(
+                "start_run", "Start load run",
+                "Starts a load run of a saved plan with the selected environment and returns its id at once; the run goes on in the background "
+                + "and the user sees it in the app. Follow it with get_run. A load run sends many requests: only run plans against servers the user "
+                + $"means to load test, and ask them before a large run (more than {Domain.Runs.RunPlan.WarnThreads} threads needs confirmLarge).",
+                (p, ct) => Use<StartRun>().ExecuteAsync(p.Path, p.ConfirmLarge, ct),
+                then: (p, started) => events.RunStartedAsync(p.Path, started.RunId),
+                openWorld: true)
+            .Add<GetRunArguments, RunResultDto>(
+                "get_run", "Get load run",
+                "Reports a run, live or finished: its state (running, completed, cancelled or failed), overall and per-request statistics "
+                + "(latency percentiles in ms, throughput in requests per second, errors, status codes), thresholds with their verdicts, "
+                + $"and the failed and slowest requests. Give waitSeconds (at most {(int)WaitForRun.MaxWait.TotalSeconds}) to wait for a running run to finish first. "
+                + $"Only the last {MaxTimelinePoints} seconds of the per-second timeline are shown.",
+                (p, ct) => Use<WaitForRun>().ExecuteAsync(p.RunId, TimeSpan.FromSeconds(Math.Max(0, p.WaitSeconds)), ct),
+                present: ForAssistant,
+                readOnly: true)
+            .Add<RunIdArguments, Unit>(
+                "cancel_run", "Cancel load run",
+                "Stops a running load run; the results so far are kept.",
+                (p, _) => Task.FromResult(Use<CancelRun>().Execute(p.RunId)))
+            .Add<PlanPathArguments, IReadOnlyList<RunSummaryDto>>(
+                "list_runs", "List load runs",
+                "Lists the finished runs of a plan, newest first, with their headline numbers.",
+                (p, ct) => Use<ListRuns>().ExecuteAsync(p.Path, ct),
+                readOnly: true)
+            .Add<RunSamplesArguments, RunSamplesPageDto>(
+                "get_run_samples", "Get load run requests",
+                $"Reads a page of a run's request log (the first {ActiveRun.MaxLoggedSamples} requests it sent, in the order they finished): "
+                + $"time into the run, virtual user, iteration, URL, status, latency, error and the start of the response. At most {MaxSamplesPage} per page.",
+                (p, ct) => Use<GetRunSamples>().ExecuteAsync(p.RunId, Math.Max(0, p.Offset), Math.Clamp(p.Limit, 1, MaxSamplesPage), p.FailedOnly, ct),
+                readOnly: true)
+            .Add<RunIdsArguments, Unit>(
+                "delete_runs", "Delete load runs",
+                "Deletes saved runs (their results, request logs and saved responses); the plans stay. Ask the user before deleting anything.",
+                async (p, ct) => await Use<DeleteRun>().ExecuteAsync(p.RunIds, ct),
+                changed: (_, _) => [],
+                destructive: true)
             .Add<NoArguments, GitStatusDto>(
                 "git_status", "Git status",
                 "Shows the workspace's git branch and changed files. Missive leaves committing, pulling and pushing to the user.",
@@ -144,6 +226,10 @@ internal static class McpTools
     }
 
     /// <summary>A response as the AI assistant sees it: long text bodies cut off and binary bodies left out.</summary>
+    /// <summary>A run as the AI assistant sees it: only the latest seconds of its timeline.</summary>
+    internal static RunResultDto ForAssistant(RunResultDto run) =>
+        run.Timeline.Count > MaxTimelinePoints ? run with { Timeline = run.Timeline.TakeLast(MaxTimelinePoints).ToList() } : run;
+
     internal static ResponseDto ForAssistant(ResponseDto response) =>
         response switch
         {
@@ -231,6 +317,7 @@ internal static class McpTools
 
         /// <param name="changed">For tools that change the workspace: the paths that changed, which the UI re-reads.</param>
         /// <param name="present">Turns the result into what the AI assistant is shown.</param>
+        /// <param name="then">Runs after the use case succeeds, to tell the UI about it.</param>
         public Builder Add<TArguments, TResult>(
             string name,
             string title,
@@ -238,6 +325,7 @@ internal static class McpTools
             Func<TArguments, CancellationToken, Task<Result<TResult>>> handler,
             Func<TArguments, TResult, IReadOnlyList<string>>? changed = null,
             Func<TResult, TResult>? present = null,
+            Func<TArguments, TResult, Task>? then = null,
             bool readOnly = false,
             bool destructive = false,
             bool openWorld = false)
@@ -270,6 +358,11 @@ internal static class McpTools
                     await events.WorkspaceChangedAsync(changed(typed, result.Value).Distinct(StringComparer.Ordinal).ToList());
                 }
 
+                if (then is not null)
+                {
+                    await then(typed, result.Value);
+                }
+
                 var value = present is null ? result.Value : present(result.Value);
                 return new McpToolResult(value is Unit ? "Done." : JsonSerializer.Serialize(value, JsonOptions));
             }));
@@ -300,7 +393,7 @@ internal sealed record MoveRequestArguments(
     [property: Description("The folder to move it to: requests, or a folder in it.")] string Folder);
 
 internal sealed record CreateFolderArguments(
-    [property: Description("The folder to create it in: requests, or a folder in it.")] string Parent,
+    [property: Description("The folder to create it in: requests or plans, or a folder in one of them.")] string Parent,
     [property: Description("The new folder's name.")] string Name);
 
 internal sealed record SendArguments(
@@ -311,6 +404,37 @@ internal sealed record EnvironmentArguments(
     [property: Description("The environment's id, from list_environments.")] string Id);
 
 internal sealed record CreateEnvironmentArguments(EnvironmentDto Environment);
+
+internal sealed record PlanPathArguments(
+    [property: Description("The plan's workspace path, such as plans/perf/checkout-smoke.run.yaml.")] string Path);
+
+internal sealed record SaveRunPlanArguments(
+    [property: Description("The plan's workspace path: an existing plan's, or a new one in plans/ ending in .run.yaml.")] string Path,
+    [property: Description("The plan's whole YAML text.")] string Yaml);
+
+internal sealed record MoveRunPlanArguments(
+    [property: Description("The plan's workspace path, such as plans/perf/checkout-smoke.run.yaml.")] string Path,
+    [property: Description("The folder to move it to: plans, or a folder in it.")] string Folder);
+
+internal sealed record StartRunArguments(
+    [property: Description("The plan's workspace path, such as plans/perf/checkout-smoke.run.yaml.")] string Path,
+    [property: Description("Confirms a run of more than 200 threads; ask the user first.")] bool ConfirmLarge = false);
+
+internal sealed record RunIdArguments(
+    [property: Description("The run's id, from start_run or list_runs.")] string RunId);
+
+internal sealed record GetRunArguments(
+    [property: Description("The run's id, from start_run or list_runs.")] string RunId,
+    [property: Description("Seconds to wait for a running run to finish before reporting it (at most 50); 0 reports at once.")] int WaitSeconds = 0);
+
+internal sealed record RunSamplesArguments(
+    [property: Description("The run's id, from start_run or list_runs.")] string RunId,
+    [property: Description("How many logged requests to skip.")] int Offset = 0,
+    [property: Description("How many logged requests to return (at most 100).")] int Limit = 50,
+    [property: Description("Return only the failed requests.")] bool FailedOnly = false);
+
+internal sealed record RunIdsArguments(
+    [property: Description("The ids of the runs to delete, from list_runs.")] IReadOnlyList<string> RunIds);
 
 internal sealed record SelectEnvironmentArguments(
     [property: Description("The environment's id, from list_environments; null for no environment.")] string? Id);

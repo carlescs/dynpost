@@ -328,6 +328,68 @@ describe('RunStore', () => {
     expect(store.draft()?.failure).toContain('Stop the running plan');
   });
 
+  describe('changes made outside the UI', () => {
+    it('reloads changed plans without unsaved edits and the history of every open plan', async () => {
+      await store.open('a.run.yaml');
+      const a = key();
+      await store.open('b.run.yaml');
+      const b = key();
+      store.edit(b, 'name: Unsaved\n');
+      handlers['runPlan.open'] = (p) => ({ path: p.path, yaml: 'name: Changed\n', error: 'Bad' });
+      const history = [{ runId: 'old' } as RunSummaryDto];
+      handlers['run.list'] = () => history;
+
+      await store.reloadFromDisk(['a.run.yaml', 'b.run.yaml']);
+
+      const draft = (k: string) => store.drafts().find((d) => d.key === k)!;
+      expect(draft(a)).toMatchObject({ yaml: 'name: Changed\n', error: 'Bad', history });
+      expect(isRunPlanDirty(draft(a))).toBe(false);
+      expect(draft(b).yaml).toBe('name: Unsaved\n');
+      expect(draft(b).history).toEqual(history);
+    });
+
+    it('closes a plan whose file was deleted', async () => {
+      await store.open('a.run.yaml');
+      handlers['runPlan.open'] = () => {
+        throw new BridgeError(ERROR_CODES.notFound, 'Gone');
+      };
+
+      await store.reloadFromDisk(['a.run.yaml']);
+
+      expect(store.drafts()).toEqual([]);
+      expect(workspace.tabs()).toEqual([]);
+    });
+
+    it('opens the plan of a run started outside the UI and follows it', async () => {
+      handlers['run.progress'] = () => result({ runId: 'ai', state: 'running' });
+
+      await store.followStarted('a.run.yaml', 'ai');
+
+      expect(store.draft()?.path).toBe('a.run.yaml');
+      expect(workspace.activeTab()).toBe(key());
+      expect(store.draft()?.run).toMatchObject({ runId: 'ai', state: 'running' });
+      handlers['run.progress'] = () => result({ runId: 'ai' });
+    });
+
+    it('leaves a plan following its own run alone', async () => {
+      await store.open('a.run.yaml');
+      handlers['run.progress'] = () => result({ runId: 'mine', state: 'running' });
+      await store.start(key());
+      const progress = () => send.mock.calls.filter(([type]) => type === 'run.progress');
+      const before = progress().length;
+
+      await store.followStarted('a.run.yaml', 'ai');
+
+      expect(
+        progress()
+          .slice(before)
+          .some(([, p]) => p.runId === 'ai'),
+      ).toBe(false);
+      expect(store.draft()?.run?.runId).toBe('mine');
+      handlers['run.progress'] = () => result({ runId: 'mine' });
+    });
+  });
+
   describe('folders', () => {
     const running = () =>
       store.drafts.update((drafts) =>
