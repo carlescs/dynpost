@@ -48,108 +48,108 @@
             Not running{{ s.error ? ': ' + s.error : '.' }}
           }
         </p>
-      }
-      <label class="flex items-center gap-2">
-        <span class="flex-1">Port</span>
-        <input
-          type="number"
-          name="port"
-          class="w-24 rounded border border-slate-300 px-2 py-0.5 text-right"
-          min="1024"
-          max="65535"
-          [value]="port()"
-          (input)="port.set($any($event.target).valueAsNumber)"
-          (keydown.enter)="applyPort()"
-        />
-        <button
-          type="button"
-          class="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100 disabled:opacity-50"
-          [disabled]="busy() || !portChanged()"
-          (click)="applyPort()"
-        >
-          Apply
-        </button>
-      </label>
-      @if (s.token) {
-        <div class="flex items-center gap-2">
-          <span class="flex-1">Token</span>
-          <code
-            class="max-w-64 truncate rounded bg-slate-100 px-1.5 py-0.5 text-xs"
-            data-testid="token"
-            >{{ showToken() ? s.token : '••••••••••••••••' }}</code
-          >
-          <button
-            type="button"
-            class="flex size-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
-            [title]="showToken() ? 'Hide token' : 'Show token'"
-            [attr.aria-label]="showToken() ? 'Hide token' : 'Show token'"
-            (click)="showToken.set(!showToken())"
-          >
-            <fa-icon [icon]="showToken() ? faEyeSlash : faEye" />
-          </button>
-          <button
-            type="button"
-            class="flex size-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
-            title="Copy token"
-            aria-label="Copy token"
-            (click)="copy('token', s.token)"
-          >
-            <fa-icon [icon]="faCopy" />
-          </button>
+        <label class="flex items-center gap-2">
+          <span class="flex-1">Port</span>
+          <input
+            type="number"
+            name="port"
+            class="w-24 rounded border border-slate-300 px-2 py-0.5 text-right"
+            min="1024"
+            max="65535"
+            [value]="port()"
+            (input)="port.set($any($event.target).valueAsNumber)"
+            (keydown.enter)="applyPort()"
+          />
           <button
             type="button"
             class="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100 disabled:opacity-50"
-            [disabled]="busy()"
-            (click)="regenerateToken()"
+            [disabled]="busy() || !portChanged()"
+            (click)="applyPort()"
           >
-            Replace…
+            Apply
           </button>
-        </div>
-        <div class="flex flex-col gap-1">
+        </label>
+        @if (s.token) {
           <div class="flex items-center gap-2">
-            <span class="flex-1 font-medium">Add to Claude Code</span>
-            @if (copied() === 'command') {
-              <span class="text-xs text-emerald-700">Copied</span>
-            }
+            <span class="flex-1">Token</span>
+            <code
+              class="max-w-64 truncate rounded bg-slate-100 px-1.5 py-0.5 text-xs"
+              data-testid="token"
+              >{{ showToken() ? s.token : '••••••••••••••••' }}</code
+            >
             <button
               type="button"
-              class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
-              aria-label="Copy the Claude Code command"
-              (click)="copy('command', claudeCommand())"
+              class="flex size-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+              [title]="showToken() ? 'Hide token' : 'Show token'"
+              [attr.aria-label]="showToken() ? 'Hide token' : 'Show token'"
+              (click)="showToken.set(!showToken())"
             >
-              <fa-icon [icon]="faCopy" /> Copy
+              <fa-icon [icon]="showToken() ? faEyeSlash : faEye" />
             </button>
-          </div>
-          <p class="text-xs text-slate-500">Run this in a terminal:</p>
-          <code
-            class="block rounded bg-slate-100 px-2 py-1 text-xs break-all"
-            [class.blur-xs]="!showToken()"
-            >{{ claudeCommand() }}</code
-          >
-        </div>
-        <div class="flex flex-col gap-1">
-          <div class="flex items-center gap-2">
-            <span class="flex-1 font-medium">Other MCP clients</span>
-            @if (copied() === 'json') {
-              <span class="text-xs text-emerald-700">Copied</span>
-            }
             <button
               type="button"
-              class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
-              aria-label="Copy the JSON configuration"
-              (click)="copy('json', jsonConfig())"
+              class="flex size-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+              title="Copy token"
+              aria-label="Copy token"
+              (click)="copy('token', s.token)"
             >
-              <fa-icon [icon]="faCopy" /> Copy
+              <fa-icon [icon]="faCopy" />
+            </button>
+            <button
+              type="button"
+              class="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100 disabled:opacity-50"
+              [disabled]="busy()"
+              (click)="regenerateToken()"
+            >
+              Replace…
             </button>
           </div>
-          <p class="text-xs text-slate-500">
-            Add the server to the client's configuration (Streamable HTTP transport):
-          </p>
-          <pre
-            class="max-h-40 overflow-auto rounded bg-slate-100 px-2 py-1 text-xs"
-            [class.blur-xs]="!showToken()"
-            >{{ jsonConfig() }}</pre>
-        </div>
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+              <span class="flex-1 font-medium">Add to Claude Code</span>
+              @if (copied() === 'command') {
+                <span class="text-xs text-emerald-700">Copied</span>
+              }
+              <button
+                type="button"
+                class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
+                aria-label="Copy the Claude Code command"
+                (click)="copy('command', claudeCommand())"
+              >
+                <fa-icon [icon]="faCopy" /> Copy
+              </button>
+            </div>
+            <p class="text-xs text-slate-500">Run this in a terminal:</p>
+            <code
+              class="block rounded bg-slate-100 px-2 py-1 text-xs break-all"
+              [class.blur-xs]="!showToken()"
+              >{{ claudeCommand() }}</code
+            >
+          </div>
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+              <span class="flex-1 font-medium">Other MCP clients</span>
+              @if (copied() === 'json') {
+                <span class="text-xs text-emerald-700">Copied</span>
+              }
+              <button
+                type="button"
+                class="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
+                aria-label="Copy the JSON configuration"
+                (click)="copy('json', jsonConfig())"
+              >
+                <fa-icon [icon]="faCopy" /> Copy
+              </button>
+            </div>
+            <p class="text-xs text-slate-500">
+              Add the server to the client's configuration (Streamable HTTP transport):
+            </p>
+            <pre
+              class="max-h-40 overflow-auto rounded bg-slate-100 px-2 py-1 text-xs"
+              [class.blur-xs]="!showToken()"
+              >{{ jsonConfig() }}</pre>
+          </div>
+        }
       }
     </div>
   } @else if (!error()) {
