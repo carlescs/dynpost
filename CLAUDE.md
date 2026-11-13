@@ -252,6 +252,13 @@ Desktop → Application
   (`Infrastructure/Git/GitCliService.cs`) runs the `git` CLI rather than a git
   library, with terminal prompts disabled so it never hangs. Git use cases act
   on `CurrentWorkspace` like the other use cases.
+- The status stays current on its own: `Application/Git/WatchWorkingTree` follows the open
+  workspace through the `IWorkingTreeWatcher` port (`Infrastructure/Git/FileSystemWorkingTreeWatcher.cs`:
+  `FileSystemWatcher`s on the workspace and, when elsewhere, its git folder; only `HEAD`, `index`,
+  refs and merge state count there; `.missive/` is ignored; bursts are debounced) and the host
+  sends a `git.changed` event, on which the client's `GitStore.refreshInBackground` re-reads the
+  status without a busy state, queueing behind a running operation rather than dropping the read.
+  Git reads run with `GIT_OPTIONAL_LOCKS=0` so they don't write `.git/index` and re-trigger it.
 - Pull always merges (`--no-rebase`); conflicts are left in the working tree and
   reported. Files under `.missive/` are excluded from status and commits even
   if the `.gitignore` entry is missing.

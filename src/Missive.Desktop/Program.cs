@@ -80,7 +80,10 @@ internal static class Program
         }
 
         var bridge = new PhotinoBridge(window);
-        bridge.Attach(BridgeHandlers.Create(services, bridge, bridge), services.GetRequiredService<HostEvents>());
+        var events = services.GetRequiredService<HostEvents>();
+        bridge.Attach(BridgeHandlers.Create(services, bridge, bridge), events);
+        // Keep the source control view current as files and git state change, whoever changes them.
+        services.GetRequiredService<WatchWorkingTree>().Start(() => _ = events.GitChangedAsync());
         // Off unless the user turned it on; a failure to start is shown in its settings.
         _ = services.GetRequiredService<StartMcpServer>().ExecuteAsync();
 
@@ -104,6 +107,8 @@ internal static class Program
             .AddSingleton<OAuth2Tokens>()
             .AddSingleton(TimeProvider.System)
             .AddSingleton<IGitService, GitCliService>()
+            .AddSingleton<IWorkingTreeWatcher, FileSystemWorkingTreeWatcher>()
+            .AddSingleton<WatchWorkingTree>()
             .AddSingleton<ILocalOnlyFiles, GitIgnoreLocalOnlyFiles>()
             .AddSingleton<IRequestFileFormat, YamlRequestFileFormat>()
             .AddSingleton<IHttpSender, HttpClientSender>()

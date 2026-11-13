@@ -27,7 +27,7 @@ describe('WorkspaceSync', () => {
       refresh: vi.fn().mockResolvedValue(undefined),
       edit: vi.fn().mockResolvedValue(undefined),
     };
-    const git = { available: true, refresh: vi.fn().mockResolvedValue(undefined) };
+    const git = { available: true, refreshInBackground: vi.fn().mockResolvedValue(undefined) };
     const runs = {
       reloadFromDisk: vi.fn().mockResolvedValue(undefined),
       followStarted: vi.fn().mockResolvedValue(undefined),
@@ -61,7 +61,7 @@ describe('WorkspaceSync', () => {
     expect(workspace.reloadFromDisk).toHaveBeenCalledWith(['requests/get-user.yaml']);
     expect(environments.refresh).toHaveBeenCalledWith(['requests/get-user.yaml']);
     expect(runs.reloadFromDisk).toHaveBeenCalledWith(['requests/get-user.yaml']);
-    expect(git.refresh).toHaveBeenCalled();
+    expect(git.refreshInBackground).toHaveBeenCalled();
   });
 
   it('leaves open files alone when only other state changed', async () => {
@@ -119,11 +119,27 @@ describe('WorkspaceSync', () => {
     expect(workspace.openRequest).not.toHaveBeenCalled();
   });
 
+  it('re-reads the git status when the host sees the workspace change', () => {
+    const { git, emit } = setup();
+
+    emit('git.changed', {});
+
+    expect(git.refreshInBackground).toHaveBeenCalled();
+  });
+
+  it('ignores git changes without an open workspace', () => {
+    const { git, emit } = setup(false);
+
+    emit('git.changed', {});
+
+    expect(git.refreshInBackground).not.toHaveBeenCalled();
+  });
+
   it('stops listening when the app is destroyed', () => {
     const { stop } = setup();
 
     TestBed.resetTestingModule();
 
-    expect(stop).toHaveBeenCalledTimes(3);
+    expect(stop).toHaveBeenCalledTimes(4);
   });
 });
