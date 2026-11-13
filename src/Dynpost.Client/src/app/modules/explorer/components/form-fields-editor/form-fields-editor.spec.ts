@@ -1,9 +1,24 @@
+import { Component, input, output } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { emptyField } from '../../../../models/form-fields';
 import { FormField, KeyValue } from '../../../../models/workspace';
 import { Bridge } from '../../../../services/bridge';
+import { CodeEditor } from '../../../../components/code-editor/code-editor';
+import { VariableLookup } from '../../../../models/variables';
 import { FormFieldsEditor } from './form-fields-editor';
+
+/** Stands in for the code editor, which would load Monaco after the test is over. */
+@Component({ selector: 'app-code-editor', template: '' })
+class FakeCodeEditor {
+  readonly value = input('');
+  readonly language = input('');
+  readonly ariaLabel = input('');
+  readonly highlightVariables = input(false);
+  readonly variables = input<VariableLookup | null>(null);
+  readonly valueChange = output<string>();
+  readonly submit = output<void>();
+}
 
 describe('FormFieldsEditor', () => {
   let fixture: ComponentFixture<FormFieldsEditor>;
@@ -19,6 +34,10 @@ describe('FormFieldsEditor', () => {
     headers: KeyValue[] = [],
   ) {
     TestBed.configureTestingModule({ providers: [{ provide: Bridge, useValue: { send } }] });
+    TestBed.overrideComponent(FormFieldsEditor, {
+      remove: { imports: [CodeEditor] },
+      add: { imports: [FakeCodeEditor] },
+    });
     fixture = TestBed.createComponent(FormFieldsEditor);
     fixture.componentRef.setInput('fields', fields);
     fixture.componentRef.setInput('type', type);
