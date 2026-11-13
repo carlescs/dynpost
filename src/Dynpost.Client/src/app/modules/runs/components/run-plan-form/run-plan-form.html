@@ -1,0 +1,599 @@
+@if (form(); as form) {
+  <div class="flex flex-col gap-3 bg-slate-50 p-3 text-sm">
+    <label [class]="label">
+      Name
+      <input
+        [class]="field + ' text-base font-semibold'"
+        [value]="form.name"
+        (change)="set(['name'], $event)"
+      />
+    </label>
+
+    <!-- Requests -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faListOl" /></span>
+        <h3 class="flex-1 font-semibold">Requests</h3>
+        <select
+          class="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs focus:border-sky-500 focus:outline-none"
+          aria-label="Request order"
+          [value]="order(form)"
+          (change)="setOrder($event)"
+        >
+          @for (option of orders; track option) {
+            <option [value]="option" [selected]="option === order(form)">
+              {{ orderInfo[option].label }}
+            </option>
+          }
+        </select>
+      </div>
+      <p class="-mt-1 text-xs text-slate-500" data-order-hint>{{ orderInfo[order(form)].hint }}</p>
+      @if (steps().length === 0) {
+        <p
+          class="rounded-md border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500"
+        >
+          Add at least one request to send.
+        </p>
+      } @else if (enabledCount() === 0) {
+        <p class="text-xs text-amber-700" data-none-enabled>Enable at least one request to send.</p>
+      }
+      <ol
+        class="flex flex-col gap-1.5"
+        cdkDropList
+        (cdkDropListDropped)="dropRequest(form, $event)"
+      >
+        @for (step of steps(); track $index) {
+          <li
+            class="flex items-center gap-2 rounded-md border py-1.5 pr-1.5 pl-1"
+            [class]="
+              (step.missing && step.enabled ? 'border-amber-200' : 'border-slate-200') +
+              (step.enabled ? ' bg-white' : ' bg-slate-50')
+            "
+            cdkDrag
+            data-step
+            [attr.data-disabled]="step.enabled ? null : ''"
+          >
+            <span
+              class="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-xs text-slate-400 hover:text-slate-600"
+              cdkDragHandle
+              title="Drag to reorder"
+            >
+              <fa-icon [icon]="faGripVertical" />
+            </span>
+            <input
+              type="checkbox"
+              class="size-3.5 shrink-0 accent-sky-600"
+              [checked]="step.enabled"
+              [title]="
+                step.enabled
+                  ? 'Sent in runs: uncheck to skip it'
+                  : 'Skipped in runs: check to send it'
+              "
+              [attr.aria-label]="(step.enabled ? 'Disable ' : 'Enable ') + step.name"
+              (change)="setEnabled(step.path, $event)"
+            />
+            <span
+              class="flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700"
+            >
+              {{ $index + 1 }}
+            </span>
+            @if (step.method; as method) {
+              <span
+                class="w-11 shrink-0 text-[11px] font-bold"
+                [class]="methodColors[method]"
+                [class.opacity-50]="!step.enabled"
+              >
+                {{ method }}
+              </span>
+            } @else if (step.missing) {
+              <fa-icon
+                class="w-11 shrink-0 text-amber-600"
+                [icon]="faTriangleExclamation"
+                title="This request isn't in the workspace"
+              />
+            }
+            <span class="min-w-0 flex-1" [class.opacity-50]="!step.enabled" [title]="step.path">
+              <span class="block truncate font-medium" [class.line-through]="!step.enabled">{{
+                step.name
+              }}</span>
+              @if (!step.enabled) {
+                <span class="block truncate text-xs text-slate-500">Disabled: not sent</span>
+              } @else if (step.missing) {
+                <span class="block truncate text-xs text-amber-700"
+                  >Not found in the workspace</span
+                >
+              } @else if (step.name !== step.path) {
+                <span class="block truncate text-xs text-slate-500">{{ step.path }}</span>
+              }
+            </span>
+            @if (order(form) === 'random') {
+              <label
+                class="flex shrink-0 items-center gap-1 text-xs text-slate-500"
+                title="Relative chance of picking this request"
+              >
+                <span class="w-8 text-right" data-share>{{ shares()[$index] }}%</span>
+                <input
+                  type="number"
+                  min="0"
+                  class="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs focus:border-sky-500 focus:outline-none"
+                  aria-label="Weight"
+                  placeholder="1"
+                  [value]="form.weights[step.path] ?? ''"
+                  (change)="setWeight(step.path, $event)"
+                />
+              </label>
+            }
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Move up"
+              aria-label="Move up"
+              [disabled]="$first"
+              (click)="moveRequest(form, $index, -1)"
+            >
+              <fa-icon [icon]="faArrowUp" />
+            </button>
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Move down"
+              aria-label="Move down"
+              [disabled]="$last"
+              (click)="moveRequest(form, $index, 1)"
+            >
+              <fa-icon [icon]="faArrowDown" />
+            </button>
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Remove"
+              aria-label="Remove request"
+              (click)="removeRequest(form, $index)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          </li>
+        }
+      </ol>
+      <select
+        #requestSelect
+        [class]="field"
+        aria-label="Add request"
+        [disabled]="availableRequests().length === 0"
+        (change)="addRequest(requestSelect, form)"
+      >
+        <option value="">+ Add a request…</option>
+        @for (path of availableRequests(); track path) {
+          <option [value]="path">{{ path }}</option>
+        }
+      </select>
+    </section>
+
+    <!-- Load -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faGaugeHigh" /></span>
+        <h3 class="font-semibold">Load</h3>
+      </div>
+
+      @if (load(); as load) {
+        <div class="rounded-md border border-slate-200 p-3">
+          <p class="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-500" data-summary>
+            <span [class]="chip"
+              >{{ load.threads }} {{ load.threads === 1 ? 'user' : 'users' }}</span
+            >
+            @if (load.timed) {
+              @if (load.oneEach) {
+                send
+                <span [class]="chip">1 request</span>
+                at a time
+              } @else {
+                loop over
+                <span [class]="chip">
+                  {{ load.requests }} {{ load.requests === 1 ? 'request' : 'requests' }}
+                </span>
+              }
+              for
+              <span [class]="chip">{{ form.duration || '…' }}</span>
+            } @else {
+              ×
+              <span [class]="chip">
+                {{ load.iterations }} {{ load.iterations === 1 ? 'iteration' : 'iterations' }}
+              </span>
+              ×
+              <span [class]="chip">
+                {{ load.requests }} {{ load.requests === 1 ? 'request' : 'requests' }}
+              </span>
+              =
+              <span class="rounded-md bg-sky-600 px-2 py-0.5 font-semibold text-white">
+                {{ load.total.toLocaleString('en-US') }} requests
+              </span>
+            }
+            @if (form.maxRps) {
+              <span>· at most {{ form.maxRps }} per second</span>
+            }
+          </p>
+          <app-load-profile
+            [threads]="load.threads"
+            [rampUpMs]="load.rampUpMs"
+            [durationMs]="load.durationMs"
+            [rampUpLabel]="form.rampUp"
+            [endLabel]="load.timed ? form.duration : 'until every iteration is done'"
+          />
+        </div>
+      }
+
+      <div class="grid grid-cols-2 gap-x-2 gap-y-3">
+        <div [class]="label + ' col-span-2'">
+          <label for="plan-threads">Virtual users (threads)</label>
+          <div class="flex items-center gap-3">
+            <input
+              id="plan-threads"
+              type="number"
+              min="1"
+              max="5000"
+              [class]="field + ' w-24!'"
+              [value]="form.threads"
+              (change)="set(['load', 'threads'], $event)"
+            />
+            <input
+              type="range"
+              min="1"
+              class="min-w-0 flex-1 accent-sky-600"
+              aria-label="Virtual users"
+              [max]="sliderMax"
+              [value]="form.threads || 1"
+              (change)="set(['load', 'threads'], $event)"
+            />
+          </div>
+        </div>
+
+        <div [class]="label">
+          Stop after
+          <div class="flex rounded border border-slate-300 bg-slate-100 p-0.5" role="group">
+            @for (
+              option of [
+                { mode: 'iterations', label: 'Iterations', icon: faRepeat },
+                { mode: 'duration', label: 'Duration', icon: faClock },
+              ];
+              track option.mode
+            ) {
+              <button
+                type="button"
+                class="flex flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-0.5 text-sm"
+                [class]="
+                  loadMode(form) === option.mode
+                    ? 'bg-white font-semibold text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                "
+                [attr.aria-pressed]="loadMode(form) === option.mode"
+                (click)="setLoadMode(form, $any(option.mode))"
+              >
+                <fa-icon class="text-xs" [icon]="option.icon" /> {{ option.label }}
+              </button>
+            }
+          </div>
+        </div>
+        @if (loadMode(form) === 'duration') {
+          <label [class]="label">
+            Duration (e.g. 2m)
+            <input
+              [class]="field"
+              [value]="form.duration"
+              (change)="set(['load', 'duration'], $event)"
+            />
+          </label>
+        } @else {
+          <label [class]="label">
+            Iterations per user
+            <input
+              type="number"
+              min="1"
+              [class]="field"
+              [value]="form.iterations"
+              (change)="set(['load', 'iterations'], $event)"
+            />
+          </label>
+        }
+        <label [class]="label">
+          Ramp-up (e.g. 10s)
+          <input
+            [class]="field"
+            placeholder="All at once"
+            [value]="form.rampUp"
+            (change)="set(['load', 'rampUp'], $event)"
+          />
+        </label>
+        <label [class]="label">
+          Max requests/s
+          <input
+            type="number"
+            min="0"
+            placeholder="Unlimited"
+            [class]="field"
+            [value]="form.maxRps"
+            (change)="set(['load', 'maxRps'], $event)"
+          />
+        </label>
+        <label [class]="label">
+          Think time (e.g. 100ms)
+          <input
+            [class]="field"
+            placeholder="None"
+            [value]="form.thinkMin"
+            (change)="setThink(form, 'min', $event)"
+          />
+        </label>
+        <label [class]="label">
+          Think time up to (optional)
+          <input
+            [class]="field"
+            placeholder="Same"
+            [value]="form.thinkMax"
+            (change)="setThink(form, 'max', $event)"
+          />
+        </label>
+      </div>
+    </section>
+
+    <!-- Data -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faTable" /></span>
+        <h3 class="flex-1 font-semibold">Data</h3>
+        <span class="text-xs text-slate-500">Each row's columns become variables</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <label [class]="label + ' col-span-2'">
+          CSV file
+          <input
+            [class]="field"
+            placeholder="users.csv"
+            [value]="form.dataFile"
+            (change)="set(['data', 'file'], $event)"
+          />
+        </label>
+        @if (form.dataFile) {
+          <label [class]="label">
+            Row selection
+            <select
+              [class]="field"
+              [value]="form.dataMode"
+              (change)="set(['data', 'mode'], $event)"
+            >
+              <option value="">Sequential</option>
+              <option value="random">Random</option>
+              <option value="perThread">Per thread</option>
+            </select>
+          </label>
+          <label [class]="label">
+            When rows run out
+            <select
+              [class]="field"
+              [value]="form.dataOnEof"
+              (change)="set(['data', 'onEof'], $event)"
+            >
+              <option value="">Recycle</option>
+              <option value="stop">Stop</option>
+            </select>
+          </label>
+        }
+      </div>
+    </section>
+
+    <!-- Bodies -->
+    <section [class]="card" data-bodies>
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faFileLines" /></span>
+        <h3 class="flex-1 font-semibold">Bodies</h3>
+        <span class="text-xs text-slate-500">Send a file of a folder as the request body</span>
+      </div>
+      @for (body of form.bodies; track body.key) {
+        <div
+          class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-2"
+          data-body
+        >
+          <div class="flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate font-medium" [title]="body.key">{{
+              body.key
+            }}</span>
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Remove"
+              aria-label="Remove body folder"
+              (click)="removeBody(body.key)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <label [class]="label">
+              Folder
+              <input
+                [class]="field"
+                placeholder="bodies/create-user"
+                [value]="body.folder"
+                (change)="set(['bodies', body.key, 'folder'], $event)"
+              />
+            </label>
+            <label [class]="label">
+              File names (e.g. *.json)
+              <input
+                [class]="field"
+                placeholder="All files"
+                [value]="body.pattern"
+                (change)="set(['bodies', body.key, 'pattern'], $event)"
+              />
+            </label>
+            <label [class]="label">
+              File selection
+              <select
+                [class]="field"
+                [value]="body.mode"
+                (change)="set(['bodies', body.key, 'mode'], $event)"
+              >
+                <option value="">Sequential</option>
+                <option value="random">Random</option>
+                <option value="perThread">Per thread</option>
+              </select>
+            </label>
+            <label [class]="label">
+              When files run out
+              <select
+                [class]="field"
+                [value]="body.onEof"
+                (change)="set(['bodies', body.key, 'onEof'], $event)"
+              >
+                <option value="">Recycle</option>
+                <option value="stop">Stop</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      }
+      <select
+        #bodySelect
+        [class]="field"
+        aria-label="Add body folder"
+        [disabled]="availableBodyTargets().length === 0"
+        (change)="addBody(bodySelect)"
+      >
+        <option value="">+ Take a request's body from a folder…</option>
+        @for (key of availableBodyTargets(); track key) {
+          <option [value]="key">{{ key }}</option>
+        }
+      </select>
+    </section>
+
+    <!-- Responses -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faFloppyDisk" /></span>
+        <h3 class="flex-1 font-semibold">Responses</h3>
+      </div>
+      <label class="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          class="mt-1"
+          data-save-responses
+          [checked]="form.saveResponses"
+          (change)="setSaveResponses($event)"
+        />
+        <span class="flex flex-col gap-0.5">
+          Save whole responses
+          <span class="text-xs text-slate-500">
+            Writes the body of each logged request to <code>.dynpost/runs/responses/</code>, so it
+            can be opened from the run's requests (PDFs in the previewer).
+          </span>
+        </span>
+      </label>
+    </section>
+
+    <!-- Assertions -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faListCheck" /></span>
+        <h3 class="flex-1 font-semibold">Assertions</h3>
+        <span class="text-xs text-slate-500">A response that breaks one counts as failed</span>
+      </div>
+      @for (assertion of form.assertions; track assertion.key) {
+        <div class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+          <div class="flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate font-medium" [title]="assertion.key">
+              {{ assertion.key === allRequests ? 'All requests' : assertion.key }}
+            </span>
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Remove"
+              aria-label="Remove assertion"
+              (click)="removeAssertion(assertion.key)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <label [class]="label">
+              Status (e.g. 200-299, 201, 2xx)
+              <input
+                [class]="field"
+                [value]="assertion.status"
+                (change)="setAssertionStatus(assertion.key, $event)"
+              />
+            </label>
+            <label [class]="label">
+              Max time (e.g. 800ms)
+              <input
+                [class]="field"
+                [value]="assertion.maxTime"
+                (change)="set(['assert', assertion.key, 'maxTime'], $event)"
+              />
+            </label>
+            <label [class]="label">
+              Body contains
+              <input
+                [class]="field"
+                [value]="assertion.bodyContains"
+                (change)="set(['assert', assertion.key, 'bodyContains'], $event)"
+              />
+            </label>
+            <label [class]="label">
+              Body doesn't contain
+              <input
+                [class]="field"
+                [value]="assertion.bodyNotContains"
+                (change)="set(['assert', assertion.key, 'bodyNotContains'], $event)"
+              />
+            </label>
+          </div>
+        </div>
+      }
+      <select
+        #targetSelect
+        [class]="field"
+        aria-label="Add assertion"
+        [disabled]="availableTargets().length === 0"
+        (change)="addAssertion(targetSelect)"
+      >
+        <option value="">+ Add an assertion for…</option>
+        @for (key of availableTargets(); track key) {
+          <option [value]="key">{{ key === allRequests ? 'All requests' : key }}</option>
+        }
+      </select>
+    </section>
+
+    <!-- Thresholds -->
+    <section [class]="card">
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faFlagCheckered" /></span>
+        <h3 class="flex-1 font-semibold">Thresholds</h3>
+        <span class="text-xs text-slate-500">The run passes when all of them hold</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        @for (key of thresholdKeys; track key) {
+          <label
+            class="flex flex-col gap-1 rounded-md border p-2 text-xs"
+            [class]="form.thresholds[key] ? 'border-sky-600 bg-sky-50' : 'border-slate-200'"
+            [attr.data-threshold]="key"
+          >
+            <span class="flex items-baseline justify-between gap-2">
+              <span class="font-semibold text-slate-800">{{ thresholds[key].label }}</span>
+              <span class="truncate text-slate-500">{{ thresholds[key].bound }}</span>
+            </span>
+            <input
+              [class]="field"
+              [placeholder]="thresholds[key].example"
+              [value]="form.thresholds[key]"
+              (change)="set(['thresholds', key], $event)"
+            />
+          </label>
+        }
+      </div>
+    </section>
+  </div>
+} @else {
+  <p class="p-3 text-sm text-slate-500">
+    The plan isn't valid YAML, so it can't be shown as a form. Fix it in the YAML view.
+  </p>
+}

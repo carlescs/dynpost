@@ -14,7 +14,7 @@ updates:
         patterns: ['*']
 
   - package-ecosystem: npm
-    directory: /src/Dynypost.Client
+    directory: /src/Dynpost.Client
     schedule:
       interval: weekly
     groups:

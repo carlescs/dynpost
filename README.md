@@ -1,11 +1,11 @@
-# Dynypost
+# Dynpost
 
-Dynypost is a lightweight, cross-platform desktop HTTP client — a simplified take
+Dynpost is a lightweight, cross-platform desktop HTTP client — a simplified take
 on Postman. Its difference: your collections are plain YAML files in a folder
-you choose, and Dynypost can commit, pull and push that folder with git directly
+you choose, and Dynpost can commit, pull and push that folder with git directly
 from the app. No account, no cloud workspace, no proprietary export format.
 
-With Dynypost you can:
+With Dynpost you can:
 
 - **Build and send requests** — method, URL, query parameters, headers, auth
   (Basic, Bearer, API key, OAuth 2.0) and bodies (JSON, text, form-data,
@@ -26,7 +26,7 @@ With Dynypost you can:
   [AI assistants (MCP)](#ai-assistants-mcp)).
 
 Secrets, cookies, tokens and other local state stay in a git-ignored
-`.dynypost/` folder and never end up in the repository.
+`.dynpost/` folder and never end up in the repository.
 
 > **Status:** early development — usable day to day, but the file format and
 > features may still change. See [Planned features](#planned-features) for
@@ -39,11 +39,11 @@ Download the file for your system from the
 
 | System | File | How to install |
 |---|---|---|
-| Windows (x64) | `Dynypost-win-Setup.exe` | Run it. Dynypost installs for your user (no admin rights) and adds Start menu and desktop shortcuts; uninstall it from *Installed apps*. |
-| macOS (Apple silicon) | `Dynypost-osx-Setup.pkg` | Open it and follow the installer. |
-| Linux (x64) | `Dynypost.AppImage` | Make it executable (`chmod +x Dynypost.AppImage`) and run it; keep it wherever you like. |
+| Windows (x64) | `Dynpost-win-Setup.exe` | Run it. Dynpost installs for your user (no admin rights) and adds Start menu and desktop shortcuts; uninstall it from *Installed apps*. |
+| macOS (Apple silicon) | `Dynpost-osx-Setup.pkg` | Open it and follow the installer. |
+| Linux (x64) | `Dynpost.AppImage` | Make it executable (`chmod +x Dynpost.AppImage`) and run it; keep it wherever you like. |
 
-Dynypost checks for a new version at startup and downloads it in the background;
+Dynpost checks for a new version at startup and downloads it in the background;
 when one is ready, a **Restart to update** button appears in the header. Nothing
 is installed until you click it. Builds run from source don't update
 themselves.
@@ -53,7 +53,7 @@ shown in your operating system's regional format, including formats you
 customized in its settings. On Linux the format follows the `LC_ALL`, `LC_TIME`
 or `LANG` locale.
 
-Dynypost needs [git](https://git-scm.com/downloads) for workspace sync, plus the
+Dynpost needs [git](https://git-scm.com/downloads) for workspace sync, plus the
 system webview: Windows 10 and 11 normally include the Microsoft Edge WebView2
 Runtime, macOS includes WebKit, and Linux needs GTK 3, WebKitGTK 4.1 and
 libnotify (on Ubuntu 24.04:
@@ -63,12 +63,12 @@ The builds are not code-signed yet, so Windows SmartScreen may warn about an
 unrecognized app (*More info* → *Run anyway*), and macOS may refuse to open it
 until you allow it in *System Settings* → *Privacy & Security*.
 
-## Why Dynypost
+## Why Dynpost
 
 - **Files first.** A collection is just a folder. Each request is one readable
   YAML file you can open, grep, review and edit with any tool.
 - **Git native.** Share and version collections the same way you share code:
-  commit, pull and push from inside Dynypost, using your existing git setup.
+  commit, pull and push from inside Dynpost, using your existing git setup.
 - **Local and private.** Secrets and response history stay on your machine and
   never end up in the repository.
 
@@ -113,7 +113,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 
 ### Non-goals
 
-Dynypost deliberately stays small. Out of scope for now: pre-request/test
+Dynpost deliberately stays small. Out of scope for now: pre-request/test
 scripting, functional collection runners, mock servers, cloud accounts and hosted team
 workspaces (git is the collaboration layer).
 
@@ -123,7 +123,7 @@ A workspace is a folder, usually a git repository:
 
 ```text
 my-api/
-├── dynypost.yaml            # workspace metadata: the layout version (`layout: 2`)
+├── dynpost.yaml            # workspace metadata: the layout version (`layout: 2`)
 ├── environments/
 │   ├── dev.yaml
 │   └── prod.yaml
@@ -138,19 +138,19 @@ my-api/
 │       └── checkout-smoke.run.yaml
 ├── uploads/                # anything else is yours: body files, data files, notes
 │   └── report.pdf
-└── .dynypost/               # local only, git-ignored: secrets, cookies, captured values, OAuth 2.0 tokens, history, UI state
+└── .dynpost/               # local only, git-ignored: secrets, cookies, captured values, OAuth 2.0 tokens, history, UI state
 ```
 
 Requests and their collection folders live in `requests/`, run plans in
 `plans/` and environments in `environments/`. Paths in files and in the app are
 always relative to the workspace folder (`requests/users/get-user.yaml`), so a
 run plan refers to a request as `requests/users/get-user.yaml` and a body file as
-`uploads/report.pdf`. Dynypost leaves every other file and folder alone.
+`uploads/report.pdf`. Dynpost leaves every other file and folder alone.
 
 ### Moving from the old layout
 
 Workspaces made by earlier versions kept requests, collection folders and run
-plans anywhere in the workspace folder. The first time Dynypost opens such a
+plans anywhere in the workspace folder. The first time Dynpost opens such a
 workspace it reorganizes it, and says what it did:
 
 - Request files and `_folder.yaml` files move into `requests/`, keeping their
@@ -167,26 +167,26 @@ workspace it reorganizes it, and says what it did:
   runs and local-only settings follow the moved files.
 - Nothing is overwritten: a file whose new place is already taken stays where
   it is and is listed.
-- `dynypost.yaml` gets `layout: 2`, so it happens only once, and Dynypost also
+- `dynpost.yaml` gets `layout: 2`, so it happens only once, and Dynpost also
   records it there for a workspace that had nothing to move. Nothing is
   committed: the moves show up in **Source control**, ready to review and
-  commit. Teammates on an older version of Dynypost should update before they
+  commit. Teammates on an older version of Dynpost should update before they
   pull that commit.
 
 ### Moving from Missive
 
-Dynypost was called Missive before. Opening a workspace made under that name
-renames its files: `missive.yaml` becomes `dynypost.yaml`, the local
-`.missive/` folder becomes `.dynypost/` (secrets, cookies, history and other
+Dynpost was called Missive before. Opening a workspace made under that name
+renames its files: `missive.yaml` becomes `dynpost.yaml`, the local
+`.missive/` folder becomes `.dynpost/` (secrets, cookies, history and other
 local state come along), and the `.gitignore` line for `.missive/` is changed to
-`.dynypost/`. A file or folder is left alone when its new name already exists. The
+`.dynpost/`. A file or folder is left alone when its new name already exists. The
 rename of `missive.yaml` and the `.gitignore` change show up in **Source
-control**, ready to commit. Until Dynypost first saves its own settings, it
+control**, ready to commit. Until Dynpost first saves its own settings, it
 reads the ones Missive kept, such as recent workspaces and the MCP server's
 settings.
 
-Dynypost is packaged as a new app, so an installed Missive isn't replaced by an
-update: install Dynypost from the
+Dynpost is packaged as a new app, so an installed Missive isn't replaced by an
+update: install Dynpost from the
 [latest release](https://github.com/carlescs/missive/releases/latest), then
 uninstall Missive.
 
@@ -289,7 +289,7 @@ rows under the same name) and each file row shows the file's name and size, or a
 warning when it is missing, outside the workspace or an absolute path. **Bulk
 edit** switches to the text form (`name=value` per line, `~` before a disabled
 field, `name=@path;type=…;filename=…` for files) and back. The editor also shows
-the `Content-Type` the body is sent with: Dynypost generates
+the `Content-Type` the body is sent with: Dynpost generates
 `multipart/form-data; boundary=…` for `form` bodies and replaces a
 `Content-Type` header you set, which it points out.
 
@@ -326,7 +326,7 @@ request renames its file too, unless the file name was chosen by hand. The
 explorer lists every `.yaml`/`.yml` file in `requests/` except `_folder.yaml`,
 `*.run.yaml` plans and hidden files and folders; files that can't be read are
 shown with an error instead of being hidden. Saving a request whose
-content didn't change leaves its file untouched. Comments and keys Dynypost
+content didn't change leaves its file untouched. Comments and keys Dynpost
 doesn't know are not preserved when a request is saved with changes.
 
 Folders are collections and can be nested. From the explorer you can create,
@@ -343,7 +343,7 @@ names are kept as typed, but must work on Windows, macOS and Linux (no
 removes the requests in it and only goes ahead when the folder holds nothing
 else — request files, `_folder.yaml`, `.gitkeep` and OS files such as
 `.DS_Store` — so other files you keep there are never deleted. Links, and
-names Dynypost can't handle as workspace paths (such as `notes:2026.txt` or a
+names Dynpost can't handle as workspace paths (such as `notes:2026.txt` or a
 name with a backslash on Linux and macOS), also block the delete. Git doesn't
 track empty folders, so a new folder appears in commits once it contains a
 request.
@@ -417,19 +417,19 @@ Keys are written in the order `name`, `cookieJar`, `variables`, `secrets`, and
 empty sections and defaults (`cookieJar: false`) are left out. Variable names can't contain spaces or braces, and a
 value can use other variables (`{{host}}` above); variables that refer to each
 other in a loop are refused. `secrets` lists only the *names* of secret
-variables: their values stay on each computer, in `.dynypost/secrets.yaml`, so
+variables: their values stay on each computer, in `.dynpost/secrets.yaml`, so
 they are never committed. After cloning or pulling, each person enters their own
-secret values in Dynypost:
+secret values in Dynpost:
 
 ```yaml
-# .dynypost/secrets.yaml — local only
+# .dynpost/secrets.yaml — local only
 dev.yaml:
   apiToken: s3cr3t
 ```
 
 `cookieJar: true` makes requests sent with the environment keep cookies between
 them (see [Sending requests](#sending-requests)); the cookies themselves are
-local too, in `.dynypost/cookies.json`:
+local too, in `.dynpost/cookies.json`:
 
 ```json
 {
@@ -440,16 +440,16 @@ local too, in `.dynypost/cookies.json`:
 ```
 
 Values that requests capture from responses are local as well, in
-`.dynypost/captures.yaml`, with the same layout as `secrets.yaml`.
+`.dynpost/captures.yaml`, with the same layout as `secrets.yaml`.
 
 A `domain` with a leading dot (`.example.com`) is a cookie set with a `Domain`
 attribute, sent to that domain and its subdomains; one without (`localhost`
 above) was set without one and is sent to that host only.
 
-The selected environment is remembered per workspace in `.dynypost/state.yaml`.
-Whenever Dynypost writes to `.dynypost/`, it makes sure the workspace's
-`.gitignore` contains `.dynypost/` (creating the file if needed), and git
-operations skip `.dynypost/` regardless. Files are written with stable key order
+The selected environment is remembered per workspace in `.dynpost/state.yaml`.
+Whenever Dynpost writes to `.dynpost/`, it makes sure the workspace's
+`.gitignore` contains `.dynpost/` (creating the file if needed), and git
+operations skip `.dynpost/` regardless. Files are written with stable key order
 and minimal noise so diffs stay small and merges stay easy. The format is still
 evolving.
 
@@ -495,7 +495,7 @@ the settings menu, lists them in the app.
 | Ctrl+B | Show or hide the sidebar |
 | Ctrl+1 … Ctrl+4 | Explorer, Environments, Load runs, Source control |
 | F1 | Keyboard shortcuts |
-| Ctrl+Q | Quit Dynypost (asking first if tabs have unsaved changes or load runs are running; desktop app only) |
+| Ctrl+Q | Quit Dynpost (asking first if tabs have unsaved changes or load runs are running; desktop app only) |
 
 Shortcuts don't apply while a dialog is open.
 
@@ -526,7 +526,7 @@ rules such as CORS don't apply. When sending:
   multipart `form` bodies always get `multipart/form-data` with the boundary. A
   `form` body whose file field has no file, or whose file is outside the
   workspace, is not sent.
-- A `User-Agent: Dynypost` header is added unless you set one. Compressed
+- A `User-Agent: Dynpost` header is added unless you set one. Compressed
   responses (gzip, deflate, Brotli and Zstandard) are decompressed. No cookies are kept between requests unless the
   environment's cookie jar is on. A request times out after 60 seconds.
 - Up to 20 redirects are followed, never from `https` to `http`. A 303, or a
@@ -550,7 +550,7 @@ body size and these tabs:
   new connection was needed.
 - **Request**: the request as it went on the wire after redirects: the resolved
   URL and the final headers, with `{{variables}}` substituted and including
-  those Dynypost and the connection add (`Host`, `User-Agent`,
+  those Dynpost and the connection add (`Host`, `User-Agent`,
   `Accept-Encoding`, `Content-Type`, `Content-Length`, `Cookie`, auth), one
   line per header as sent. The tab shows how many headers were sent. When the
   request was redirected, every request is listed in order: `Authorization`
@@ -574,16 +574,16 @@ responses (up to 64 MB in all) are kept by the backend so they can be saved.
 
 ## OAuth 2.0
 
-Pick **OAuth 2.0** on a request's **Auth** tab to have Dynypost get the access
+Pick **OAuth 2.0** on a request's **Auth** tab to have Dynpost get the access
 token for you and send it as a Bearer token — the "get a token first" step
 other clients need a script for. Two grants are supported:
 
 - **Client credentials**: the app signs in as itself with its client id and
-  secret. Dynypost asks the token endpoint for a token the first time you send,
+  secret. Dynpost asks the token endpoint for a token the first time you send,
   and again whenever it has expired.
 - **Authorization code (PKCE)**: a user signs in. **Get new token** opens the
   sign-in page in your system browser and waits (up to 5 minutes, or until you
-  click **Cancel**) for the authorization server to redirect back to Dynypost on
+  click **Cancel**) for the authorization server to redirect back to Dynpost on
   a loopback address — `http://127.0.0.1:<free port>/callback`, or the
   **Redirect URL** you set if the client only allows a registered one (it must
   be an `http` URL on `127.0.0.1`, `localhost` or `[::1]`). PKCE (`S256`) and a
@@ -597,7 +597,7 @@ auth:
   authUrl: https://auth.example.com/authorize
   tokenUrl: https://auth.example.com/oauth/token
   redirectUri: http://127.0.0.1:8765/callback   # optional
-  clientId: dynypost
+  clientId: dynpost
   clientSecret: "{{clientSecret}}"
   scope: openid profile
   audience: https://api.example.com             # optional, for Auth0 and similar
@@ -611,7 +611,7 @@ value can use `{{variables}}`: keep the client secret in a **secret** variable
 of the environment so it never reaches the request file or git.
 
 Tokens are kept on this computer only, per environment, in
-`.dynypost/oauth2-tokens.json` (with their refresh tokens and expiry), and are
+`.dynpost/oauth2-tokens.json` (with their refresh tokens and expiry), and are
 shared by every request with the same token URL, authorization URL, client id,
 scope and audience. They follow a renamed environment and are deleted with it.
 The Auth tab shows whether there is a token and when it expires; **Clear**
@@ -637,7 +637,7 @@ they are, numbers and booleans as written, and objects and arrays as compact
 JSON; a `null` or missing value captures nothing.
 
 After a successful (2xx) response, the captured values are stored for the
-selected environment, on this computer only (`.dynypost/captures.yaml`), never in
+selected environment, on this computer only (`.dynpost/captures.yaml`), never in
 tracked files. They take precedence over the environment's own values of the
 same variables, so the next requests use `{{token}}` straight away; hovering a
 reference says when its value was captured, and a captured value of a secret
@@ -653,7 +653,7 @@ Captures are not imported or exported: other tools express them as scripts.
 ## Response history
 
 Every response to a saved request is kept on this computer, in the workspace's
-git-ignored `.dynypost/history/` folder. The **History** button in the response
+git-ignored `.dynpost/history/` folder. The **History** button in the response
 panel lists the responses kept for the request, newest first, with their
 status, time, duration and size. Select one to see its body (pretty-printed
 when it is JSON) or its status line and headers, and tick **Compare with
@@ -663,7 +663,7 @@ Requests that have never been saved have no history.
 
 The history follows its request when the request is renamed (with its file),
 moved, or its folder is renamed or moved, and is deleted with the request or the
-folder. It is kept per request file, so a file renamed or moved outside Dynypost
+folder. It is kept per request file, so a file renamed or moved outside Dynpost
 starts a new history.
 
 What is written to disk is the response as shown, with the request as sent
@@ -673,9 +673,9 @@ too. **Response history…** in the settings menu turns the history off, and set
 how many responses are kept per request (20 by default) and the largest body
 kept (1 MB by default): longer text bodies are cut off and larger binary bodies
 are left out. When a workspace's history passes 256 MB, its oldest responses
-are dropped. These settings are per user, in Dynypost's own settings file.
+are dropped. These settings are per user, in Dynpost's own settings file.
 
-`.dynypost/history/index.json` lists the entries of each request file; each
+`.dynpost/history/index.json` lists the entries of each request file; each
 response is a JSON file next to it, named after its entry id:
 
 ```json
@@ -707,7 +707,7 @@ editor tab, next to the open requests and environments, and edit it with a
 visual form or as YAML text; the form keeps comments and unknown keys). Each open
 plan follows its own run, so several plans can run at once; a running plan's tab
 can't be closed until it stops. Results
-are saved locally under `.dynypost/runs/` and never committed. Runs use the
+are saved locally under `.dynpost/runs/` and never committed. Runs use the
 selected environment and send no cookies. Like requests, a plan whose file is
 named after it (`checkout-smoke.run.yaml` for "Checkout smoke") is renamed
 along with it, and its earlier runs follow; files with hand-picked names keep
@@ -745,12 +745,12 @@ latency and result. Click a row for its data row, body file, failure and a previ
 response, and filter to the failed requests. The table scrolls through the whole
 log: only the rows in view are rendered, and the log is read 100 requests at a
 time as you scroll to them. It follows a live run too. The first 10,000 requests of a run are kept, in
-`.dynypost/runs/samples/<run id>.json`.
+`.dynpost/runs/samples/<run id>.json`.
 
 The response preview keeps only the start of each body. To keep whole responses,
 turn on **Save whole responses** in the plan (`saveResponses: true`): the body
 of each logged request is written to
-`.dynypost/runs/responses/<run id>/<n>.<ext>` (named by its number in the run,
+`.dynpost/runs/responses/<run id>/<n>.<ext>` (named by its number in the run,
 with an extension for its media type, such as `12.json`), and its row shows
 where. A saved PDF response opens in the PDF previewer from its row; the
 previewer, here and in the response viewer, has a maximize button that makes it
@@ -788,7 +788,7 @@ bodies:              # per request: send a file of a folder as its body
     onEof: recycle     # recycle (default) or stop
   mode: perThread    # or shared
   onEof: wrap        # or stop
-saveResponses: true  # keep each logged response body in .dynypost/runs/responses/
+saveResponses: true  # keep each logged response body in .dynpost/runs/responses/
 assert:
   "*":
     status: 200-299
@@ -839,7 +839,7 @@ override in the plan and folder bodies for multipart `form` requests.
 
 ## Import and export
 
-Dynypost doesn't need its own exchange format — the workspace *is* plain files —
+Dynpost doesn't need its own exchange format — the workspace *is* plain files —
 but you can bring requests in from other tools and take them out again.
 
 **Import** (the import button in the explorer header, or on a folder row to
@@ -849,13 +849,13 @@ content, in JSON or YAML:
 | Format | What is imported |
 | --- | --- |
 | Postman collection v2.0 / v2.1 | Folders, requests, auth (inherited from folders and the collection, OAuth 2.0 included), bodies; collection variables become an environment. Path variables (`/users/:id`) become their value, or `{{id}}` if they have none. |
-| Postman environment | An environment; `secret` variables stay secret (their values go to `.dynypost/secrets.yaml`). |
+| Postman environment | An environment; `secret` variables stay secret (their values go to `.dynpost/secrets.yaml`). |
 | Insomnia export v4 | Folders, requests (with their auth, OAuth 2.0 included) and environments: each sub-environment becomes an environment that includes the base environment's variables. `{{ _.name }}` references become `{{name}}`. |
 | HAR 1.2 (browser dev tools) | One request per entry, in a folder per host, without connection headers such as `Host`. |
 | OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer, API key or OAuth 2.0 auth using secret `{{username}}`/`{{password}}`, `{{token}}`, `{{apiKey}}` or `{{clientId}}`/`{{clientSecret}}` variables, which you fill in (OAuth 2.0 schemes use their client credentials or authorization code flow and the scopes the operation requires; others get a Bearer `{{token}}`). Path parameters without an example become `{{variables}}`. |
 
 OAuth 2.0 settings whose redirect URL is a web page (such as Postman's own
-callback) get Dynypost's automatic loopback redirect instead, which the OAuth
+callback) get Dynpost's automatic loopback redirect instead, which the OAuth
 client may need to allow; this is listed after the import.
 
 Request descriptions are imported from Postman and Insomnia, and from an
@@ -870,7 +870,7 @@ fields back, file fields as files.
 Imported requests are saved as ordinary request files in a new folder named
 after the collection (`Shop`, or `Shop 2` if that name is taken), and
 environments as new environment files; nothing that already exists is changed.
-What Dynypost can't represent is skipped and listed after the import: other auth
+What Dynpost can't represent is skipped and listed after the import: other auth
 types (digest, OAuth 1, the OAuth 2 implicit and password grants, …), file uploads, scripts, and HTTP methods other than
 `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` and `OPTIONS`. Repeated query
 parameters or headers keep their first value. GraphQL bodies are kept as a
@@ -897,26 +897,26 @@ exports diff cleanly.
 
 ## Git sync
 
-When the workspace folder is a git repository, Dynypost shows which request and
+When the workspace folder is a git repository, Dynpost shows which request and
 environment files changed, lets you commit them with a message, pulls and
-pushes the current branch, and switches, creates, merges and deletes branches (local or on the remote). It uses your existing git credentials. Dynypost never
+pushes the current branch, and switches, creates, merges and deletes branches (local or on the remote). It uses your existing git credentials. Dynpost never
 force-pushes and never resolves conflicts automatically: conflicting files are
-reported so you can resolve them (in Dynypost's editor or your own tools).
+reported so you can resolve them (in Dynpost's editor or your own tools).
 
-Dynypost runs your installed `git` command-line client, so your git
+Dynpost runs your installed `git` command-line client, so your git
 configuration, hooks and credential helpers apply as usual. In detail:
 
 - **Initialize**: if the workspace folder is not inside a git repository, the
   Source control view offers to create one there (`git init`, using your
-  default branch name) and adds `.dynypost/` to the folder's `.gitignore`,
+  default branch name) and adds `.dynpost/` to the folder's `.gitignore`,
   creating the file if needed. Add a remote (see **Remotes** below) to push it.
 - **Status** lists changed files inside the workspace folder only (the
   workspace can be a subfolder of a larger repository), plus the branch, its
   upstream and how many commits it is ahead of or behind it. It updates by
-  itself as files change — saved in Dynypost, edited in another program, or
+  itself as files change — saved in Dynpost, edited in another program, or
   committed, staged or checked out with other git tools (including a workspace
   inside a larger repository or a linked worktree) — and again when you come
-  back to the window; changes under `.dynypost/` don't count. An open diff
+  back to the window; changes under `.dynpost/` don't count. An open diff
   follows the file as it changes. An upstream branch that was deleted on the
   remote is shown as such.
 - **Fetch** (the cloud button) checks the remotes for new commits without
@@ -930,7 +930,7 @@ configuration, hooks and credential helpers apply as usual. In detail:
   text; binary files are not shown. Viewing a diff never stages anything.
 - **Commit** stages and commits every change in the workspace, or only the files
   you tick in the changes list, and never touches files outside the workspace.
-  Files in `.dynypost/` are never committed, even if they are not git-ignored.
+  Files in `.dynpost/` are never committed, even if they are not git-ignored.
   Git only sees saved files, so the view warns when open tabs have unsaved
   changes and offers **Save all**.
 - **Local-only files** are left out of git; see below.
@@ -946,9 +946,9 @@ configuration, hooks and credential helpers apply as usual. In detail:
   unavailable during a merge.
 - **Pull** merges the upstream branch into yours; it never rebases. If the merge
   conflicts, nothing is resolved for you: the conflicted files are listed and
-  Dynypost walks you through them (see below). A branch with no upstream yet
+  Dynpost walks you through them (see below). A branch with no upstream yet
   pulls from the branch of the same name on `origin` (or the only remote) and
-  tracks it from then on — so a repository you initialized in Dynypost can be
+  tracks it from then on — so a repository you initialized in Dynpost can be
   joined with an existing remote one, even though their histories are
   unrelated. A pull that would overwrite uncommitted changes is refused and
   names the files to commit or discard first.
@@ -957,12 +957,12 @@ configuration, hooks and credential helpers apply as usual. In detail:
   configured a separate push remote. A branch with no upstream yet is published
   to `origin` (or the only remote) and tracks it from then on; it needs at
   least one commit. If the remote has commits you don't have, the push is
-  rejected, Dynypost fetches them so you can see what to pull, and asks you to
+  rejected, Dynpost fetches them so you can see what to pull, and asks you to
   pull first.
 - **Errors** are explained in plain terms: failed sign-ins (with a hint to set
   up a credential helper or SSH key), an unreachable remote, a repository locked
-  by another git program (Dynypost waits briefly and tries again first), or a
-  repository git refuses to trust. Dynypost never shows a git prompt: git runs
+  by another git program (Dynpost waits briefly and tries again first), or a
+  repository git refuses to trust. Dynpost never shows a git prompt: git runs
   with terminal prompts disabled, though GUI credential helpers still work.
 - **History**: the **History** tab lists the commits on the current branch that
   changed files in the workspace, newest first, 50 at a time (**Load more** for
@@ -978,7 +978,7 @@ configuration, hooks and credential helpers apply as usual. In detail:
     It is refused while there are uncommitted changes in the workspace — the
     files are named, as for a pull — or a merge is in progress, so a switch
     never carries changes over or loses them. If open tabs have unsaved edits,
-    Dynypost asks first: they stay in their tabs. After a switch the explorer,
+    Dynpost asks first: they stay in their tabs. After a switch the explorer,
     open tabs and environments are reloaded from disk.
   - **Create** (the + button) makes a branch at the current commit, without an
     upstream (**Publish** pushes it), and switches to it unless you untick
@@ -1001,7 +1001,7 @@ configuration, hooks and credential helpers apply as usual. In detail:
     remote branch uses its commits as of the last fetch.
   - **Delete** removes a local branch after a confirmation; the current branch
     can't be deleted. If the branch has commits that aren't merged into its
-    upstream or the current branch, git keeps it and Dynypost asks a second
+    upstream or the current branch, git keeps it and Dynpost asks a second
     time, saying the commits will be lost, before deleting it anyway
     (`git branch -D`). Nothing is deleted on the remote.
   - **Delete on the remote** (the trash button on a remote branch) deletes that
@@ -1027,16 +1027,16 @@ environment or run plan (it shows when you hover the row). Local-only items are
 marked with an amber laptop icon; choose **Share through git** or click the
 icon again to share them.
 
-Dynypost records the choice where git itself sees it: one anchored line per file
+Dynpost records the choice where git itself sees it: one anchored line per file
 in the workspace's `.gitignore`, so any git tool leaves the file out too:
 
 ```gitignore
-.dynypost/
+.dynpost/
 /environments/local.yaml
 /requests/users/scratch.yaml
 ```
 
-If the file was already committed, Dynypost also stops tracking it
+If the file was already committed, Dynpost also stops tracking it
 (`git rm --cached`; the file stays on disk), so the Source control view lists it
 as deleted. Your next commit removes it from the repository; teammates who pull
 that commit lose their copy, so tell them first if they still need it. Sharing
@@ -1059,7 +1059,7 @@ choose:
 - **Keep this version** — take your side or the incoming side as-is (or keep a
   deletion, if that side deleted the file);
 - **Mark as resolved** — after editing the file yourself in any editor to
-  combine both sides. Dynypost refuses while the file still has
+  combine both sides. Dynpost refuses while the file still has
   `<<<<<<<` / `=======` / `>>>>>>>` conflict markers.
 
 Once every file is resolved, **Commit all** completes the merge; the commit
@@ -1067,16 +1067,16 @@ message is pre-filled with git's merge message. **Abort merge** abandons the
 merge instead (`git merge --abort`) and puts your branch back as it was before
 the pull or merge, after asking you to confirm.
 
-Dynypost reopens the last workspace at the next launch, if its folder still
+Dynpost reopens the last workspace at the next launch, if its folder still
 exists. It also keeps the ten most recently opened workspaces, listed on the
 welcome screen and in the header next to **Open folder**; folders that no longer
 exist are dropped from the list. Both are stored per user, outside any
-workspace, in `settings.json` in the app data folder (`%APPDATA%\Dynypost` on
-Windows, `~/.config/Dynypost` on Linux and macOS).
+workspace, in `settings.json` in the app data folder (`%APPDATA%\Dynpost` on
+Windows, `~/.config/Dynpost` on Linux and macOS).
 
 ## AI assistants (MCP)
 
-Dynypost has a built-in [Model Context Protocol](https://modelcontextprotocol.io)
+Dynpost has a built-in [Model Context Protocol](https://modelcontextprotocol.io)
 server, so an AI assistant such as Claude Code or Claude Desktop can work with
 the workspace open in the app. It is **off by default**: turn it on in
 *Settings* (the gear) → *AI assistants (MCP)…*.
@@ -1088,10 +1088,10 @@ can reach it, and they must send the token shown in the dialog as
 makes a new token, disconnecting clients that have the old one. The setting,
 port and token are kept in your user settings, never in a workspace.
 
-The dialog shows the command that adds Dynypost to Claude Code:
+The dialog shows the command that adds Dynpost to Claude Code:
 
 ```sh
-claude mcp add --transport http dynypost http://localhost:47823/mcp --header "Authorization: Bearer <token>"
+claude mcp add --transport http dynpost http://localhost:47823/mcp --header "Authorization: Bearer <token>"
 ```
 
 and the JSON entry for other clients:
@@ -1099,7 +1099,7 @@ and the JSON entry for other clients:
 ```json
 {
   "mcpServers": {
-    "dynypost": {
+    "dynpost": {
       "type": "http",
       "url": "http://localhost:47823/mcp",
       "headers": { "Authorization": "Bearer <token>" }
@@ -1143,21 +1143,21 @@ subject to browser CORS rules and can use any headers.
 The backend follows **clean architecture**. Dependencies point inward only:
 
 ```text
-Dynypost.Desktop ──► Dynypost.Infrastructure ──► Dynypost.Application ──► Dynypost.Domain
+Dynpost.Desktop ──► Dynpost.Infrastructure ──► Dynpost.Application ──► Dynpost.Domain
 ```
 
-(`Dynypost.Desktop` also references `Dynypost.Application` directly to invoke use
+(`Dynpost.Desktop` also references `Dynpost.Application` directly to invoke use
 cases.)
 
 | Project | Responsibility | May reference |
 | --- | --- | --- |
-| `Dynypost.Domain` | Entities and value objects (`Workspace`, `Collection`, `HttpRequestDefinition`, `Environment`, `Auth`), variable resolution and other pure rules. No I/O, no framework dependencies. | — |
-| `Dynypost.Application` | Use cases (open workspace, save request, send request, resolve environment, commit/pull/push) and the ports they need, e.g. `IWorkspaceRepository`, `IHttpSender`, `IGitService`, `ISecretStore`, `IHistoryStore`. | Domain |
-| `Dynypost.Infrastructure` | Adapters implementing the ports: YAML file storage, `HttpClient` sender, git, `.dynypost/` secrets, cookies and history. | Application, Domain |
-| `Dynypost.Desktop` | Composition root and presentation adapters: Photino window, bridge message dispatch to use cases, the MCP server's tools, dependency injection wiring. | All of the above |
+| `Dynpost.Domain` | Entities and value objects (`Workspace`, `Collection`, `HttpRequestDefinition`, `Environment`, `Auth`), variable resolution and other pure rules. No I/O, no framework dependencies. | — |
+| `Dynpost.Application` | Use cases (open workspace, save request, send request, resolve environment, commit/pull/push) and the ports they need, e.g. `IWorkspaceRepository`, `IHttpSender`, `IGitService`, `ISecretStore`, `IHistoryStore`. | Domain |
+| `Dynpost.Infrastructure` | Adapters implementing the ports: YAML file storage, `HttpClient` sender, git, `.dynpost/` secrets, cookies and history. | Application, Domain |
+| `Dynpost.Desktop` | Composition root and presentation adapters: Photino window, bridge message dispatch to use cases, the MCP server's tools, dependency injection wiring. | All of the above |
 
 The Angular client is a separate presentation layer that only talks to
-`Dynypost.Desktop` through bridge messages.
+`Dynpost.Desktop` through bridge messages.
 
 ## Prerequisites
 
@@ -1177,7 +1177,7 @@ system/architecture on which the app will run.
 From the repository root:
 
 ```sh
-dotnet run --project src/Dynypost.Desktop
+dotnet run --project src/Dynpost.Desktop
 ```
 
 The .NET build runs `npm ci` and the Angular production build, then copies the
@@ -1190,7 +1190,7 @@ WebView2 won't run the Angular build's module scripts from `file://`.
 ## Frontend development
 
 ```sh
-cd src/Dynypost.Client
+cd src/Dynpost.Client
 npm ci
 npm start
 ```
@@ -1203,35 +1203,35 @@ loads the bundled frontend; rebuild/restart it to see frontend changes. Routing 
 ## Build and publish
 
 ```sh
-dotnet build Dynypost.sln
-dotnet publish src/Dynypost.Desktop -c Release -o artifacts/publish
+dotnet build Dynpost.sln
+dotnet publish src/Dynpost.Desktop -c Release -o artifacts/publish
 ```
 
-Run the `Dynypost` executable (`Dynypost.exe` on Windows) in
+Run the `Dynpost` executable (`Dynpost.exe` on Windows) in
 `artifacts/publish`. Keep its `wwwroot` and `Assets` directories and native
 libraries alongside it. This is a framework-dependent publish: the target machine needs the .NET 11
 runtime and the platform webview prerequisites above, but not Node.js.
 
 ## Repository layout
 
-- `src/Dynypost.Desktop`: Photino window, bridge, composition root, and
+- `src/Dynpost.Desktop`: Photino window, bridge, composition root, and
   build/publish integration.
-- `src/Dynypost.Client`: standalone Angular app with SCSS styles, Tailwind
+- `src/Dynpost.Client`: standalone Angular app with SCSS styles, Tailwind
   CSS, Font Awesome icons, Angular CDK drag and drop and the Monaco editor.
-- `src/Dynypost.Domain`, `src/Dynypost.Application`, `src/Dynypost.Infrastructure`:
+- `src/Dynpost.Domain`, `src/Dynpost.Application`, `src/Dynpost.Infrastructure`:
   backend layers (see [Architecture](#architecture)).
-- `tests/Dynypost.Domain.Tests`, `tests/Dynypost.Application.Tests`: fast unit
+- `tests/Dynpost.Domain.Tests`, `tests/Dynpost.Application.Tests`: fast unit
   tests with no I/O.
-- `tests/Dynypost.Infrastructure.Tests`: integration tests against temporary
+- `tests/Dynpost.Infrastructure.Tests`: integration tests against temporary
   folders and git repositories.
 
 Run the backend tests (xUnit, with NSubstitute for mocking) with:
 
 ```sh
-dotnet test Dynypost.sln
+dotnet test Dynpost.sln
 ```
 
-Run the client unit tests (Vitest, through `ng test`) from `src/Dynypost.Client`;
+Run the client unit tests (Vitest, through `ng test`) from `src/Dynpost.Client`;
 `npm test` watches for changes, and this runs them once:
 
 ```sh
@@ -1239,7 +1239,7 @@ npm test -- --watch=false
 ```
 
 Format the client with Prettier (`npm run format`, or `npm run format:check`
-to verify) from `src/Dynypost.Client`. No other linter is configured yet.
+to verify) from `src/Dynpost.Client`. No other linter is configured yet.
 
 ## CI and releases
 
@@ -1269,16 +1269,16 @@ git push origin v0.1.0
 
 Each OS builds a self-contained publish (no .NET runtime needed on the target
 machine) and packages it with [Velopack](https://velopack.io) (`vpk pack`) into
-an installer, a portable copy and an update feed: `Dynypost-win-Setup.exe` and
-`Dynypost-win-Portable.zip` for `win-x64`, `Dynypost.AppImage` for `linux-x64`,
-and `Dynypost-osx-Setup.pkg` and `Dynypost-osx-Portable.zip` for `osx-arm64`.
-The GitHub release for the tag gets only the installers (`Dynypost-win-Setup.exe`,
-`Dynypost.AppImage`, `Dynypost-osx-Setup.pkg`), together with the `.nupkg`
+an installer, a portable copy and an update feed: `Dynpost-win-Setup.exe` and
+`Dynpost-win-Portable.zip` for `win-x64`, `Dynpost.AppImage` for `linux-x64`,
+and `Dynpost-osx-Setup.pkg` and `Dynpost-osx-Portable.zip` for `osx-arm64`.
+The GitHub release for the tag gets only the installers (`Dynpost-win-Setup.exe`,
+`Dynpost.AppImage`, `Dynpost-osx-Setup.pkg`), together with the `.nupkg`
 packages and `releases.<channel>.json` feeds (channels `win`, `linux`, `osx`)
 that installed copies read to update themselves; the portable copies are kept
 in the workflow artifacts only. Tags with a suffix such as
 `v0.2.0-beta.1` are marked as pre-releases; only pre-release builds update to
 pre-releases. Running the workflow manually produces the same files as workflow
 artifacts without creating a release. Keep the `vpk` version in the workflow
-equal to the `Velopack` package version in `Dynypost.Infrastructure`. The builds
+equal to the `Velopack` package version in `Dynpost.Infrastructure`. The builds
 are not code-signed or notarized yet.
