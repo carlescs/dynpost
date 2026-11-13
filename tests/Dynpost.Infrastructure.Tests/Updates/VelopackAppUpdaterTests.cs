@@ -6,7 +6,7 @@ namespace Dynpost.Infrastructure.Tests.Updates;
 /// <summary>The test host is not an installed copy, so it must not try to update itself.</summary>
 public class VelopackAppUpdaterTests
 {
-    private readonly VelopackAppUpdater _updater = new("https://github.com/carlescs/missive");
+    private readonly VelopackAppUpdater _updater = new("https://github.com/carlescs/dynpost");
 
     [Fact]
     public void AnUninstalledCopy_IsNotSupported() => Assert.False(_updater.IsSupported);

@@ -43,7 +43,7 @@ namespace Dynpost.Desktop;
 internal static class Program
 {
     /// <summary>The GitHub repository whose releases the app updates itself from.</summary>
-    private const string ReleasesRepository = "https://github.com/carlescs/missive";
+    private const string ReleasesRepository = "https://github.com/carlescs/dynpost";
 
     [STAThread]
     private static void Main()

@@ -235,7 +235,7 @@ Desktop → Application
   if the layout changes again. The app was called Missive before: the same use case first renames
   `missive.yaml` and `.missive/` (and their `.gitignore` line) through
   `IWorkspaceLayoutStore.RenameLegacyFilesAsync`, and `JsonAppSettingsStore` reads the old
-  `Missive` settings file until the new one exists. The GitHub repository is still `carlescs/missive`.
+  `Missive` settings file until the new one exists. The GitHub repository was renamed to `carlescs/dynpost` (GitHub redirects the old URLs).
 - YAML, 2-space indent, LF line endings, trailing newline.
 - Stable, documented key order; omit empty or default-valued fields.
 - File names are slugs of the request name (`create-user.yaml`); renaming a

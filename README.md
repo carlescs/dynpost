@@ -35,7 +35,7 @@ Secrets, cookies, tokens and other local state stay in a git-ignored
 ## Install
 
 Download the file for your system from the
-[latest release](https://github.com/carlescs/missive/releases/latest):
+[latest release](https://github.com/carlescs/dynpost/releases/latest):
 
 | System | File | How to install |
 |---|---|---|
@@ -187,7 +187,7 @@ settings.
 
 Dynpost is packaged as a new app, so an installed Missive isn't replaced by an
 update: install Dynpost from the
-[latest release](https://github.com/carlescs/missive/releases/latest), then
+[latest release](https://github.com/carlescs/dynpost/releases/latest), then
 uninstall Missive.
 
 A request file:
