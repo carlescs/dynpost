@@ -1,0 +1,83 @@
+<form
+  class="adaptive relative w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-300 bg-white p-5 text-sm text-slate-800 shadow-xl"
+  (submit)="$event.preventDefault(); save()"
+>
+  <button
+    type="button"
+    class="absolute top-2 right-2 flex size-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+    title="Close"
+    aria-label="Close"
+    (click)="ref.close()"
+  >
+    <fa-icon [icon]="faXmark" />
+  </button>
+  <h2 id="history-settings-title" class="mb-1 text-base font-semibold">Response history</h2>
+  <p class="mb-4 text-xs text-slate-500">
+    The responses of saved requests are kept in the workspace's <code>.dynypost/history</code>
+    folder, on this computer only. Cookie values and secret values are hidden.
+  </p>
+  @if (loaded()) {
+    <div class="flex flex-col gap-3">
+      <label class="flex items-center gap-2">
+        <input
+          type="checkbox"
+          name="enabled"
+          [checked]="enabled()"
+          (change)="enabled.set($any($event.target).checked)"
+        />
+        Keep the responses of requests
+      </label>
+      <label class="flex items-center gap-2" [class.opacity-50]="!enabled()">
+        <span class="flex-1">Responses kept per request</span>
+        <input
+          type="number"
+          name="maxEntries"
+          class="w-24 rounded border border-slate-300 px-2 py-0.5 text-right"
+          min="1"
+          [max]="maxEntriesLimit"
+          [disabled]="!enabled()"
+          [value]="maxEntries()"
+          (input)="maxEntries.set($any($event.target).valueAsNumber)"
+        />
+      </label>
+      <label class="flex items-center gap-2" [class.opacity-50]="!enabled()">
+        <span class="flex-1">Largest body kept (KB)</span>
+        <input
+          type="number"
+          name="maxBodyKb"
+          class="w-24 rounded border border-slate-300 px-2 py-0.5 text-right"
+          min="0"
+          [max]="maxBodyKbLimit"
+          [disabled]="!enabled()"
+          [value]="maxBodyKb()"
+          (input)="maxBodyKb.set($any($event.target).valueAsNumber)"
+        />
+      </label>
+      <p class="text-xs text-slate-500">
+        Larger text bodies are cut off; larger binary bodies are not kept. The oldest responses of a
+        workspace are dropped when its history passes 256 MB.
+      </p>
+    </div>
+  } @else if (!error()) {
+    <p class="text-slate-500">Loading…</p>
+  }
+  @if (error(); as text) {
+    <p class="mt-3 text-rose-700" role="alert">{{ text }}</p>
+  }
+  <div class="mt-5 flex justify-end gap-2">
+    <button
+      type="button"
+      class="rounded border border-slate-300 px-3 py-1 hover:bg-slate-100"
+      (click)="ref.close()"
+    >
+      Cancel
+    </button>
+    <button
+      type="submit"
+      class="rounded bg-sky-600 px-3 py-1 text-white hover:bg-sky-500 disabled:opacity-50"
+      [disabled]="!loaded() || saving()"
+    >
+      Save
+    </button>
+  </div>
+</form>

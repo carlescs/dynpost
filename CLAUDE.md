@@ -2,26 +2,26 @@
 
 Guidance for AI agents working in this repository.
 
-## What Missive is
+## What Dynypost is
 
 A simplified, Postman-like desktop HTTP client. Its defining features:
 
 1. **Files are the source of truth.** A workspace is a user-chosen folder; each
    request is one YAML file, folders are collections. There is no hidden
    database — the app must always reflect what is on disk.
-2. **Git-friendly by design.** Missive can commit, pull and push the workspace
+2. **Git-friendly by design.** Dynypost can commit, pull and push the workspace
    from the app. Everything it writes must produce small, predictable diffs.
 
 Initial scope: request editor, response viewer, collections, environments with
 `{{variable}}` substitution, auth helpers (Basic, Bearer, API key), local
 response history, git sync, a load runner (`Domain/Runs`, `Application/Runs`,
 `Infrastructure/Runs`, client `modules/runs`; plans are `*.run.yaml` files in
-`plans/`, results go to `.missive/runs/`). Out of scope: scripting/tests, functional
+`plans/`, results go to `.dynypost/runs/`). Out of scope: scripting/tests, functional
 runners, mock servers, cloud accounts. See `README.md` for the planned workspace format.
 
 ## Stack and layout
 
-- `src/Missive.Client` — Angular 22 standalone app (no NgModules), Prettier
+- `src/Dynypost.Client` — Angular 22 standalone app (no NgModules), Prettier
   configured (`.prettierrc`: 100 cols, single quotes). Styles are SCSS
   (`inlineStyleLanguage: scss`, global `src/styles.scss`). Tailwind CSS v4 runs
   through PostCSS (`.postcssrc.json`) from its own entry, `src/tailwind.css`. Icons with Font Awesome
@@ -44,7 +44,7 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   `components/pdf-viewer/pdf-viewer.ts`; like Monaco it is lazy-loaded
   (`components/pdf-viewer/pdf-loader.ts`) with its worker bundled from a local entry point, and
   `angular.json` copies its data files (cmaps, fonts, ICC profiles, wasm) to `pdfjs/`.
-- Client code layout (`src/Missive.Client/src/app`), following the Angular style
+- Client code layout (`src/Dynypost.Client/src/app`), following the Angular style
   guide (kebab-case file named after its class, no `.component`/`.service`
   suffixes, one folder per component). A component's template and styles are
   separate files next to it — `<name>.html` (`templateUrl`) and, when it needs
@@ -65,14 +65,14 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
     import from the top-level folders, but not from each other — move shared
     code up instead.
 - Backend (.NET 11), clean architecture — see "Backend architecture" below:
-  - `src/Missive.Domain` — entities, value objects, pure rules.
-  - `src/Missive.Application` — use cases and port interfaces.
-  - `src/Missive.Infrastructure` — adapters (YAML files, HTTP, git, secrets,
+  - `src/Dynypost.Domain` — entities, value objects, pure rules.
+  - `src/Dynypost.Application` — use cases and port interfaces.
+  - `src/Dynypost.Infrastructure` — adapters (YAML files, HTTP, git, secrets,
     history).
-  - `src/Missive.Desktop` — Photino.NET 4 window, bridge, composition root. Its
+  - `src/Dynypost.Desktop` — Photino.NET 4 window, bridge, composition root. Its
     csproj runs `npm ci` + `npm run build` for the client and copies
-    `dist/missive-client/browser` into `wwwroot`.
-  - `tests/Missive.<Layer>.Tests` — one test project per backend layer
+    `dist/dynypost-client/browser` into `wwwroot`.
+  - `tests/Dynypost.<Layer>.Tests` — one test project per backend layer
     (Desktop tests drive the bridge router with real use cases and mocked ports).
 - Import/export of other tools' formats: the interchange model, ports and use
   cases are in `Application/Interchange`; each format (Postman, Insomnia, HAR,
@@ -88,10 +88,10 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   the send that opened it (passed in the request's `Options`); it follows redirects and keeps cookies itself
   (the handler's `AllowAutoRedirect` and `UseCookies` stay off) so every hop
   can be reported. Per-environment cookie jars (`Application/Cookies`) live in
-  `.missive/cookies.json`; raw response bodies are kept in memory by
+  `.dynypost/cookies.json`; raw response bodies are kept in memory by
   `ResponseBodies` for `SaveResponseBody`. The response to a saved request is
   recorded by `Application/History/ResponseHistory.cs` (cookie values and secrets
-  hidden) through the `IHistoryStore` port into `.missive/history/`
+  hidden) through the `IHistoryStore` port into `.dynypost/history/`
   (`Infrastructure/History/JsonHistoryStore.cs`, keyed by request path); use
   cases that rename, move or delete requests or folders keep it in step, and
   its limits are per-user `AppSettings.History`.
@@ -121,22 +121,22 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   with the operating system's regional patterns read by the host
   (`Application/Locale`, `Infrastructure/Locale/SystemRegionalSettings.cs`, message
   `locale.dateFormat`) through `models/date-format.ts`.
-- All projects are in `Missive.sln` (solution folders `src` and `tests`). The
+- All projects are in `Dynypost.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
-  (`src/Missive.Client/Missive.Client.esproj`) so it shows up in Visual
+  (`src/Dynypost.Client/Dynypost.Client.esproj`) so it shows up in Visual
   Studio; it is not built by the solution and has npm install/build disabled —
   the Desktop csproj builds it.
 
 ## Commands
 
 ```sh
-dotnet build Missive.sln                      # builds all projects + Angular client
-dotnet test Missive.sln                       # runs xUnit tests
-dotnet run --project src/Missive.Desktop      # run the desktop app (needs a GUI)
-cd src/Missive.Client && npm ci && npm run build   # client only
-cd src/Missive.Client && npm start            # browser dev server on :4200
-cd src/Missive.Client && npm test             # client unit tests (Vitest; --watch=false to run once)
-cd src/Missive.Client && npm run format:check # Prettier check (CI enforces it)
+dotnet build Dynypost.sln                      # builds all projects + Angular client
+dotnet test Dynypost.sln                       # runs xUnit tests
+dotnet run --project src/Dynypost.Desktop      # run the desktop app (needs a GUI)
+cd src/Dynypost.Client && npm ci && npm run build   # client only
+cd src/Dynypost.Client && npm start            # browser dev server on :4200
+cd src/Dynypost.Client && npm test             # client unit tests (Vitest; --watch=false to run once)
+cd src/Dynypost.Client && npm run format:check # Prettier check (CI enforces it)
 ```
 
 Test projects use xUnit with NSubstitute for mocking; there is no linter beyond
@@ -145,8 +145,8 @@ Prettier. Client unit tests run on Vitest with jsdom through Angular's
 `<name>.spec.ts` sits next to the file it tests, uses `TestBed` for components
 and services, and fakes the `Bridge` with `vi.fn()` rather than talking to the
 `MockBackend`. Helpers shared by client specs live in `src/app/testing/` (e.g.
-`useTestDateFormat()` to check dates are shown in the system format). Before finishing, run `dotnet build Missive.sln` and
-`dotnet test Missive.sln` (or `npm run build` for client-only changes), and
+`useTestDateFormat()` to check dates are shown in the system format). Before finishing, run `dotnet build Dynypost.sln` and
+`dotnet test Dynypost.sln` (or `npm run build` for client-only changes), and
 `npm test -- --watch=false` and `npm run format:check` when you touch the client.
 
 CI (`.github/workflows/ci.yml`) runs the Prettier check, the client unit tests and build, and
@@ -208,12 +208,12 @@ Desktop → Application
   request/response envelope with a correlation id and an explicit error shape;
   keep message types defined in one place on each side and keep them in sync (host-initiated
   events, which carry `event` instead of an id, are `BridgeEventTypes` / `BridgeEvents`):
-  `src/Missive.Desktop/Bridge/BridgeMessages.cs` (handlers in
-  `BridgeHandlers.cs`) and `src/Missive.Client/src/app/models/messages.ts`.
+  `src/Dynypost.Desktop/Bridge/BridgeMessages.cs` (handlers in
+  `BridgeHandlers.cs`) and `src/Dynypost.Client/src/app/models/messages.ts`.
   Outside the desktop host the client's `Bridge` falls back to an in-memory
   `MockBackend` (`services/mock-backend.ts`) so `npm start` works; keep it
   roughly in step with new message types.
-- The bundled frontend is served by `Missive.Desktop/Hosting/BundledAssets.cs`
+- The bundled frontend is served by `Dynypost.Desktop/Hosting/BundledAssets.cs`
   through a Photino custom scheme: `app://localhost/` on Linux/macOS and an
   intercepted `http://localhost/` on Windows (WebView2 can't navigate to custom
   schemes via Photino). Never load it from `file://`: WebView2 blocks the
@@ -227,20 +227,23 @@ Desktop → Application
   folders live in `requests/`, run plans in `plans/`, environments in
   `environments/`; every other file is the user's. Paths are always
   workspace-relative (`requests/users/get-user.yaml`), in the bridge, in plan
-  files, in `.missive/` and in `.gitignore`. The client trees show `requests`
+  files, in `.dynypost/` and in `.gitignore`. The client trees show `requests`
   and `plans` as their top level (`TreeState.root`). Workspaces in the old
   layout (everything at the root) are moved on open by
   `Application/Workspaces/LayoutMigration.cs`, which then records `layout: 2`
-  in `missive.yaml`; bump `WorkspaceLayout.CurrentLayoutVersion` and extend it
-  if the layout changes again.
+  in `dynypost.yaml`; bump `WorkspaceLayout.CurrentLayoutVersion` and extend it
+  if the layout changes again. The app was called Missive before: the same use case first renames
+  `missive.yaml` and `.missive/` (and their `.gitignore` line) through
+  `IWorkspaceLayoutStore.RenameLegacyFilesAsync`, and `JsonAppSettingsStore` reads the old
+  `Missive` settings file until the new one exists. The GitHub repository is still `carlescs/missive`.
 - YAML, 2-space indent, LF line endings, trailing newline.
 - Stable, documented key order; omit empty or default-valued fields.
 - File names are slugs of the request name (`create-user.yaml`); renaming a
   request may rename its file, but never touch unrelated files.
 - Only rewrite a file when its content actually changed — no reformatting on
   load/save round-trips.
-- Secrets, response history and UI state go in `.missive/` (git-ignored),
-  never in tracked files. Ensure `.missive/` is in the workspace `.gitignore`.
+- Secrets, response history and UI state go in `.dynypost/` (git-ignored),
+  never in tracked files. Ensure `.dynypost/` is in the workspace `.gitignore`.
   App-wide, per-user settings (such as the last opened workspace) go through
   `IAppSettingsStore` into `settings.json` in the user's app data folder, never
   into a workspace or the webview's storage.
@@ -255,12 +258,12 @@ Desktop → Application
 - The status stays current on its own: `Application/Git/WatchWorkingTree` follows the open
   workspace through the `IWorkingTreeWatcher` port (`Infrastructure/Git/FileSystemWorkingTreeWatcher.cs`:
   `FileSystemWatcher`s on the workspace and, when elsewhere, its git folder; only `HEAD`, `index`,
-  refs and merge state count there; `.missive/` is ignored; bursts are debounced) and the host
+  refs and merge state count there; `.dynypost/` is ignored; bursts are debounced) and the host
   sends a `git.changed` event, on which the client's `GitStore.refreshInBackground` re-reads the
   status without a busy state, queueing behind a running operation rather than dropping the read.
   Git reads run with `GIT_OPTIONAL_LOCKS=0` so they don't write `.git/index` and re-trigger it.
 - Pull always merges (`--no-rebase`); conflicts are left in the working tree and
-  reported. Files under `.missive/` are excluded from status and commits even
+  reported. Files under `.dynypost/` are excluded from status and commits even
   if the `.gitignore` entry is missing.
 - Local-only requests, environments and run plans (`Application/Sharing`) are
   anchored lines in the workspace `.gitignore`

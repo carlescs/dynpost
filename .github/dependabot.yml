@@ -14,7 +14,7 @@ updates:
         patterns: ['*']
 
   - package-ecosystem: npm
-    directory: /src/Missive.Client
+    directory: /src/Dynypost.Client
     schedule:
       interval: weekly
     groups:

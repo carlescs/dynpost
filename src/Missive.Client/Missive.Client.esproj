@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.7204101">
-  <PropertyGroup>
-    <StartupCommand>npm start</StartupCommand>
-    <!-- Missive.Desktop runs npm ci + npm run build for the client; don't do it twice. -->
-    <ShouldRunNpmInstall>false</ShouldRunNpmInstall>
-    <ShouldRunBuildScript>false</ShouldRunBuildScript>
-    <BuildOutputFolder>$(MSBuildProjectDirectory)/dist/missive-client/browser/</BuildOutputFolder>
-  </PropertyGroup>
-</Project>

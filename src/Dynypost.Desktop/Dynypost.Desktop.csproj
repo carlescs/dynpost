@@ -1,0 +1,58 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinExe: no console window on Windows (no effect on Linux/macOS). -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- The executable is "Dynypost"; the project and namespaces keep their names. -->
+    <AssemblyName>Dynypost</AssemblyName>
+    <RootNamespace>Dynypost.Desktop</RootNamespace>
+    <Product>Dynypost</Product>
+    <AssemblyTitle>Dynypost</AssemblyTitle>
+    <Description>A simple, git-friendly HTTP client.</Description>
+    <ApplicationIcon>Assets/dynypost.ico</ApplicationIcon>
+    <ClientRoot>$(MSBuildProjectDirectory)/../Dynypost.Client/</ClientRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Window icon at runtime (the embedded ApplicationIcon only covers the Windows .exe). -->
+    <Content Include="Assets/dynypost.ico;Assets/dynypost.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+    <PackageReference Include="Photino.NET" Version="4.0.16" />
+    <!-- Only for VelopackApp.Build().Run() in Main; updating lives in Infrastructure. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Dynypost.Desktop.Tests" />
+    <!-- Lets NSubstitute (Castle DynamicProxy) mock internal interfaces in tests. -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dynypost.Application\Dynypost.Application.csproj" />
+    <ProjectReference Include="..\Dynypost.Infrastructure\Dynypost.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <Target Name="BuildAngular" BeforeTargets="AssignTargetPaths" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec WorkingDirectory="$(ClientRoot)" Command="npm ci --no-audit --no-fund" />
+    <Exec WorkingDirectory="$(ClientRoot)" Command="npm run build" />
+    <ItemGroup>
+      <AngularAssets Include="$(ClientRoot)dist/dynypost-client/browser/**/*" />
+      <Content Include="@(AngularAssets)">
+        <Link>wwwroot/%(AngularAssets.RecursiveDir)%(AngularAssets.Filename)%(AngularAssets.Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
+</Project>
