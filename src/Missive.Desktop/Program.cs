@@ -185,6 +185,7 @@ internal static class Program
             .AddTransient<SelectEnvironment>()
             .AddTransient<ListRunPlans>()
             .AddTransient<OpenRunPlan>()
+            .AddTransient<CreateRunPlan>()
             .AddTransient<SaveRunPlan>()
             .AddTransient<DeleteRunPlan>()
             .AddTransient<MoveRunPlan>()

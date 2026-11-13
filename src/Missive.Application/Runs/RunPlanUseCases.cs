@@ -18,6 +18,13 @@ internal static class RunPlanPaths
 
         return parsed;
     }
+
+    /// <summary>The text a plan file is saved with: LF line endings and a trailing newline.</summary>
+    public static string Normalize(string yaml)
+    {
+        var text = yaml.Replace("\r\n", "\n");
+        return text.Length > 0 && !text.EndsWith('\n') ? text + "\n" : text;
+    }
 }
 
 /// <summary>Lists the run plans of the workspace with their names, or why a file can't be used.</summary>
@@ -101,12 +108,7 @@ public sealed class SaveRunPlan(
             return root.IsSuccess ? parsed.Error! : root.Error!;
         }
 
-        var text = yaml.Replace("\r\n", "\n");
-        if (text.Length > 0 && !text.EndsWith('\n'))
-        {
-            text += "\n";
-        }
-
+        var text = RunPlanPaths.Normalize(yaml);
         var plan = format.Parse(text);
         var target = await RenameTargetAsync(root.Value, parsed.Value, plan, cancellationToken);
 
@@ -178,6 +180,53 @@ public sealed class SaveRunPlan(
         }
 
         return null;
+    }
+}
+
+/// <summary>
+/// Saves a new run plan in a folder of the open workspace's <c>plans/</c> folder, as a file named
+/// after the plan (<c>checkout-smoke.run.yaml</c>, or <c>checkout-smoke-2.run.yaml</c> if that name
+/// is taken), so it never replaces another plan. The YAML must be readable; a plan that can't be
+/// run yet (for example, it lists no requests) is saved anyway, with the reason.
+/// </summary>
+public sealed class CreateRunPlan(IRunPlanStore store, IRunPlanFormat format, CurrentWorkspace current)
+{
+    private const int MaxAttempts = 1000;
+
+    public async Task<Result<RunPlanDocumentDto>> ExecuteAsync(string folder, string yaml, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        if (!WorkspacePath.TryParse(folder, out var folderPath) || !WorkspaceLayout.IsAreaFolder(WorkspaceLayout.PlansRoot, folderPath))
+        {
+            return new Error(ErrorCodes.InvalidPath, $"'{folder}' is not a folder of '{WorkspaceLayout.PlansFolder}/'.");
+        }
+
+        var text = RunPlanPaths.Normalize(yaml);
+        var plan = format.Parse(text);
+        if (!plan.IsSuccess)
+        {
+            return plan.Error!;
+        }
+
+        var name = string.IsNullOrWhiteSpace(plan.Value.Name) ? "plan" : plan.Value.Name;
+        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+        {
+            var path = folderPath.Combine(WorkspaceLayout.RunPlanFileName(name, attempt));
+            if (store.Exists(root.Value, path))
+            {
+                continue;
+            }
+
+            var written = await store.WriteAsync(root.Value, path, text, cancellationToken);
+            return written.IsSuccess ? new RunPlanDocumentDto(path.Value, text, RunPlanChecks.Problem(plan)) : written.Error!;
+        }
+
+        return new Error(ErrorCodes.Io, $"Could not find a free file name for '{name}'.");
     }
 }
 

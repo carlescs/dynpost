@@ -1046,7 +1046,7 @@ The assistant can use these tools, always on the workspace open in the app:
 | `create_folder` | Creates a folder in `requests/` or `plans/`. |
 | `send_request` | Sends a saved request (keeping the response in its history) or an unsaved one, with the selected environment, and returns the response. Long bodies are cut off at 64 KB of text and binary bodies are left out. |
 | `list_environments`, `read_environment`, `create_environment`, `select_environment` | Work with environments. Secret values are never shown to the assistant. |
-| `list_run_plans`, `read_run_plan`, `save_run_plan`, `move_run_plan`, `delete_run_plan` | Read, write and organize [load run](#load-runs) plans. |
+| `list_run_plans`, `read_run_plan`, `create_run_plan`, `save_run_plan`, `move_run_plan`, `delete_run_plan` | Read, create, change and organize [load run](#load-runs) plans. New plans, like new requests, are named after themselves and never replace an existing file. |
 | `start_run`, `get_run`, `cancel_run` | Start a load run of a saved plan (a run of more than 200 threads needs confirming), follow it — `get_run` can wait up to 50 seconds for it to finish — and stop it. A run the assistant starts opens in the plan's tab, where you can follow and cancel it. Only the last 120 seconds of a run's timeline are shown to the assistant. |
 | `list_runs`, `get_run_samples`, `delete_runs` | A plan's earlier runs, a run's request log (up to 100 requests at a time), and deleting saved runs. |
 | `git_status` | Shows the branch and changed files. |

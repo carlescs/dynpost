@@ -149,9 +149,15 @@ internal static class McpTools
                 "Reads a run plan's YAML, and why it can't be run yet, if it can't. " + RunPlanShape,
                 (p, ct) => Use<OpenRunPlan>().ExecuteAsync(p.Path, ct),
                 readOnly: true)
+            .Add<CreateRunPlanArguments, RunPlanDocumentDto>(
+                "create_run_plan", "Create run plan",
+                "Saves a new run plan in a folder of plans/ (plans itself for the top level); the file is named after the plan and never replaces another one. "
+                + "Returns its path and why it can't be run yet, if it can't. " + RunPlanShape,
+                (p, ct) => Use<CreateRunPlan>().ExecuteAsync(p.Folder, p.Yaml, ct),
+                changed: (_, saved) => [saved.Path])
             .Add<SaveRunPlanArguments, RunPlanDocumentDto>(
                 "save_run_plan", "Save run plan",
-                "Creates a run plan, or replaces an existing one's YAML; a plan whose file is named after it is renamed with it. "
+                "Replaces an existing run plan's YAML (use create_run_plan for a new plan); a plan whose file is named after it is renamed with it. "
                 + "Returns its (possibly new) path and why it can't be run yet, if it can't. Read an existing plan first and keep what you don't mean to change. "
                 + RunPlanShape,
                 (p, ct) => Use<SaveRunPlan>().ExecuteAsync(p.Path, p.Yaml, ct),
@@ -408,8 +414,12 @@ internal sealed record CreateEnvironmentArguments(EnvironmentDto Environment);
 internal sealed record PlanPathArguments(
     [property: Description("The plan's workspace path, such as plans/perf/checkout-smoke.run.yaml.")] string Path);
 
+internal sealed record CreateRunPlanArguments(
+    [property: Description("The folder to save it in: plans, or a folder in it such as plans/perf.")] string Folder,
+    [property: Description("The plan's whole YAML text.")] string Yaml);
+
 internal sealed record SaveRunPlanArguments(
-    [property: Description("The plan's workspace path: an existing plan's, or a new one in plans/ ending in .run.yaml.")] string Path,
+    [property: Description("The plan's workspace path, such as plans/perf/checkout-smoke.run.yaml.")] string Path,
     [property: Description("The plan's whole YAML text.")] string Yaml);
 
 internal sealed record MoveRunPlanArguments(
