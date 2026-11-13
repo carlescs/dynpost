@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { ResponseDto } from '../../../../models/messages';
 import { RequestDocument } from '../../../../models/workspace';
 import { WorkspaceStore } from '../../../../services/workspace-store';
-import { copyText, ResponseViewer, sentHops, timingPhases } from './response-viewer';
+import { copyText } from '../../../../models/clipboard';
+import { ResponseViewer, sentHops, timingPhases } from './response-viewer';
 
 const response = (patch: Partial<ResponseDto> = {}): ResponseDto => ({
   status: 200,
