@@ -10,7 +10,7 @@ public class HttpRequestDefinitionTests
         var request = new HttpRequestDefinition("Health", RequestMethod.Get, "https://example.com/health");
 
         Assert.Empty(request.Validate());
-        Assert.Same(RequestAuth.None, request.Auth);
+        Assert.Same(RequestAuth.Inherit, request.Auth);
         Assert.Same(RequestBody.None, request.Body);
     }
 

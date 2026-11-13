@@ -41,6 +41,15 @@ export class WorkspaceStore {
   readonly capturesStored = signal(0);
   /** Incremented whenever a file was made local-only or shared again, so git status can be re-read. */
   readonly sharingChanged = signal(0);
+  /** The last request or folder renamed or moved, so the editors of folders inside it can follow it. */
+  readonly moved = signal<{ from: string; to: string } | null>(null);
+  /** The last folder deleted, so the editors of folders inside it can close. */
+  readonly folderDeleted = signal<{ path: string } | null>(null);
+  /**
+   * Set whenever open files are re-read from disk after git or an AI assistant changed them: the
+   * paths that changed, or all files when `paths` is missing.
+   */
+  readonly reloaded = signal<{ paths?: string[] } | null>(null);
 
   readonly sidebarOpen = signal(true);
   /** Sidebar width in pixels; kept here so it survives closing and reopening the sidebar. */
@@ -163,6 +172,7 @@ export class WorkspaceStore {
    * files are detached from their open drafts.
    */
   async reloadFromDisk(paths?: string[]): Promise<void> {
+    this.reloaded.set({ paths });
     const targets = this.documents().filter(
       (d) => d.path && !d.dirty && (!paths || paths.includes(d.path)),
     );
@@ -321,6 +331,8 @@ export class WorkspaceStore {
         request: toRequestDto(doc),
         // A saved request's responses are kept in its history.
         path: doc.path,
+        // An unsaved one inherits the headers and auth of the folder it will be saved in.
+        folder: doc.path ? null : doc.folder,
       });
       response = { kind: 'response', response: result, sendId };
       if (result.captures?.some((c) => c.value != null)) this.capturesStored.update((n) => n + 1);
@@ -528,6 +540,7 @@ export class WorkspaceStore {
 
     try {
       await this.bridge.send('folder.delete', { path });
+      this.folderDeleted.set({ path });
       const closed = new Set(open.map((d) => d.key));
       this.documents.update((docs) => docs.filter((d) => !closed.has(d.key)));
       this.removeTabs([...closed]);
@@ -619,6 +632,7 @@ export class WorkspaceStore {
    */
   private async relocated(from: string, to: string): Promise<void> {
     const move = (p: string) => (isWithin(p, from) ? to + p.slice(from.length) : p);
+    this.moved.set({ from, to });
     this.documents.update((docs) =>
       docs.map((d) => {
         if (!d.path) return { ...d, folder: move(d.folder) };

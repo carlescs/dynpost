@@ -201,6 +201,7 @@ internal static partial class InterchangeText
                     Audience = map(oauth.Audience),
                 },
                 NoAuth none => none,
+                InheritAuth inherit => inherit,
             },
             Body = request.Body with
             {

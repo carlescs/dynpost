@@ -14,7 +14,7 @@ public sealed class SendRequestFile(LoadRequest load, SendRequest send)
     {
         var request = await load.ExecuteAsync(path, cancellationToken);
         return request.IsSuccess
-            ? await send.ExecuteAsync(id, request.Value, path, cancellationToken)
+            ? await send.ExecuteAsync(id, request.Value, path, cancellationToken: cancellationToken)
             : request.Error!;
     }
 }

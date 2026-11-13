@@ -143,7 +143,8 @@ public static class RequestMapper
 
     private static KeyValueDto ToDto(KeyValueEntry entry) => new(entry.Key, entry.Value, entry.Enabled);
 
-    private static AuthDto ToDto(RequestAuth auth) => auth switch
+    /// <summary>The DTO of an auth setting.</summary>
+    public static AuthDto ToDto(RequestAuth auth) => auth switch
     {
         BasicAuth basic => new AuthDto("basic", Username: basic.Username, Password: basic.Password),
         BearerAuth bearer => new AuthDto("bearer", Token: bearer.Token),
@@ -160,6 +161,7 @@ public static class RequestMapper
             Audience: oauth.Audience,
             Credentials: oauth.Credentials == OAuth2ClientAuthentication.Body ? "body" : "header"),
         NoAuth => new AuthDto("none"),
+        InheritAuth => new AuthDto("inherit"),
     };
 
     /// <summary>The name of a grant in request files and DTOs.</summary>
@@ -188,7 +190,8 @@ public static class RequestMapper
     /// <summary>Builds the domain auth from its DTO.</summary>
     public static Result<RequestAuth> ToDomain(AuthDto? auth) => auth?.Type?.ToLowerInvariant() switch
     {
-        null or "" or "none" => RequestAuth.None,
+        null or "" or "inherit" => RequestAuth.Inherit,
+        "none" => RequestAuth.None,
         "basic" => new BasicAuth(auth.Username ?? string.Empty, auth.Password ?? string.Empty),
         "bearer" => new BearerAuth(auth.Token ?? string.Empty),
         "apikey" => auth.In?.ToLowerInvariant() switch
@@ -233,7 +236,7 @@ public static class RequestMapper
             credentials.Value);
     }
 
-    private static List<KeyValueEntry> ToEntries(IReadOnlyList<KeyValueDto>? rows) =>
+    internal static List<KeyValueEntry> ToEntries(IReadOnlyList<KeyValueDto>? rows) =>
         (rows ?? [])
             .Where(row => !string.IsNullOrEmpty(row.Key) || !string.IsNullOrEmpty(row.Value))
             .Select(row => new KeyValueEntry((row.Key ?? string.Empty).Trim(), row.Value ?? string.Empty, row.Enabled))

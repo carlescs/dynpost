@@ -10,6 +10,8 @@ import {
   DateFormat,
   ERROR_CODES,
   EnvironmentDto,
+  FolderSettingsDto,
+  InheritedSettingsDto,
   HistoryEntryDetailsDto,
   HistorySettingsDto,
   McpStatusDto,
@@ -26,6 +28,8 @@ import {
 } from '../models/messages';
 import { VARIABLE_PATTERN } from '../models/variables';
 import { PLANS_FOLDER, REQUESTS_FOLDER } from '../models/workspace';
+
+const EMPTY_FOLDER_SETTINGS: FolderSettingsDto = { headers: [], auth: { type: 'inherit' } };
 
 const US_MONTHS = [
   'January',
@@ -85,7 +89,7 @@ const sample = (
   url,
   params: [],
   headers: [{ key: 'Accept', value: 'application/json', enabled: true }],
-  auth: { type: 'none' },
+  auth: { type: 'inherit' },
   body: { type: 'none', content: '' },
   ...extra,
 });
@@ -167,6 +171,16 @@ export class MockBackend {
   private activeEnvironment: string | null = 'dev.yaml';
   /** Files kept on this computer only (git-ignored), by workspace path. */
   private readonly localOnly = new Set<string>();
+  /** The headers and auth folders set (their `_folder.yaml`), by folder path. */
+  private readonly folderSettings = new Map<string, FolderSettingsDto>([
+    [
+      'requests/users',
+      {
+        headers: [{ key: 'Accept', value: 'application/json', enabled: true }],
+        auth: { type: 'inherit' },
+      },
+    ],
+  ]);
   private open = false;
   private theme: Theme = 'light';
   private activityOrder: string[] = [];
@@ -244,6 +258,7 @@ export class MockBackend {
         payload?.['id'] as string,
         payload?.['request'] as RequestDto,
         (payload?.['path'] as string | null | undefined) ?? null,
+        (payload?.['folder'] as string | null | undefined) ?? null,
       );
     }
     if (request.type === 'request.pickFile') return ok(null);
@@ -664,8 +679,37 @@ export class MockBackend {
         else this.history.delete(path);
         return ok(left.map((h) => h.entry));
       }
+      case 'folder.settings.load': {
+        const path = payload?.['path'] as string;
+        if (path !== REQUESTS_FOLDER && !this.folders.has(path))
+          return fail(ERROR_CODES.notFound, `The folder '${path}' does not exist.`);
+        return ok(structuredClone(this.folderSettings.get(path) ?? EMPTY_FOLDER_SETTINGS));
+      }
+      case 'folder.settings.save': {
+        const path = payload?.['path'] as string;
+        if (path !== REQUESTS_FOLDER && !this.folders.has(path))
+          return fail(ERROR_CODES.notFound, `The folder '${path}' does not exist.`);
+        const given = payload?.['settings'] as FolderSettingsDto;
+        const settings: FolderSettingsDto = {
+          headers: given.headers
+            .filter((h) => h.key || h.value)
+            .map((h) => ({ ...h, key: h.key.trim() })),
+          auth: given.auth,
+        };
+        const names = settings.headers.map((h) => h.key.toLowerCase());
+        if (names.some((name, i) => names.indexOf(name) !== i))
+          return fail(ERROR_CODES.invalidRequest, 'A header is defined more than once.');
+        if (!settings.headers.length && settings.auth.type === 'inherit')
+          this.folderSettings.delete(path);
+        else this.folderSettings.set(path, structuredClone(settings));
+        return ok(settings);
+      }
+      case 'folder.settings.inherited':
+        return ok(this.inherited(payload?.['path'] as string));
       case 'folder.delete': {
         const path = payload?.['path'] as string;
+        for (const folder of [...this.folderSettings.keys()])
+          if (isWithin(folder, path)) this.folderSettings.delete(folder);
         for (const folder of [...this.folders])
           if (isWithin(folder, path)) this.folders.delete(folder);
         for (const file of [...this.files.keys()])
@@ -719,12 +763,29 @@ export class MockBackend {
     id: string,
     dto: RequestDto,
     path: string | null,
+    folder: string | null,
   ): Promise<BridgeResponseEnvelope> {
     const fail = (code: string, message: string): BridgeResponseEnvelope => ({
       id: envelopeId,
       ok: false,
       error: { code, message },
     });
+    // Like the host: the folders' headers come first unless the request sets them, and their
+    // auth replaces `inherit`.
+    const inherited = this.inherited(path ? parentOf(path) : (folder ?? ''));
+    const ownHeaders = new Set(
+      dto.headers.filter((h) => h.enabled).map((h) => h.key.toLowerCase()),
+    );
+    dto = {
+      ...dto,
+      headers: [
+        ...inherited.headers
+          .filter((h) => !ownHeaders.has(h.key.toLowerCase()))
+          .map((h) => ({ key: h.key, value: h.value, enabled: true })),
+        ...dto.headers,
+      ],
+      auth: dto.auth.type === 'inherit' ? inherited.auth : dto.auth,
+    };
 
     const variables = this.variables();
     const resolve = (text: string | null | undefined) =>
@@ -1047,8 +1108,35 @@ export class MockBackend {
     }
   }
 
+  /** What everything directly inside `folder` inherits from it and the folders above. */
+  private inherited(folder: string): InheritedSettingsDto {
+    const result: InheritedSettingsDto = { headers: [], auth: { type: 'none' }, authFolder: null };
+    if (!isWithin(folder, REQUESTS_FOLDER)) return result;
+    const segments = folder.split('/');
+    for (let i = 1; i <= segments.length; i++) {
+      const path = segments.slice(0, i).join('/');
+      const settings = this.folderSettings.get(path);
+      if (!settings) continue;
+      for (const header of settings.headers.filter((h) => h.enabled && h.key)) {
+        result.headers = result.headers.filter(
+          (h) => h.key.toLowerCase() !== header.key.toLowerCase(),
+        );
+        result.headers.push({ key: header.key, value: header.value, folder: path });
+      }
+      if (settings.auth.type !== 'inherit') {
+        result.auth = structuredClone(settings.auth);
+        result.authFolder = path;
+      }
+    }
+    return result;
+  }
+
   private relocateFolder(path: string, target: string): void {
     const move = (p: string) => target + p.slice(path.length);
+    for (const [folder, settings] of [...this.folderSettings].filter(([f]) => isWithin(f, path))) {
+      this.folderSettings.delete(folder);
+      this.folderSettings.set(move(folder), settings);
+    }
     this.moveHistory(path, target);
     for (const folder of [...this.folders].filter((f) => isWithin(f, path))) {
       this.folders.delete(folder);

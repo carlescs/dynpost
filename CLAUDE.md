@@ -95,6 +95,14 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   (`Infrastructure/History/JsonHistoryStore.cs`, keyed by request path); use
   cases that rename, move or delete requests or folders keep it in step, and
   its limits are per-user `AppSettings.History`.
+- Folder settings: a collection folder's `_folder.yaml` sets headers and auth for everything in it
+  (`Domain/Requests/FolderDefaults.cs`, read and written through the `IFolderDefaultsStore` port by
+  `Infrastructure/Workspaces/YamlFolderDefaultsStore.cs`). `Application/Folders/FolderInheritance`
+  combines them from `requests/` down (closer levels win; a request's own headers and auth win
+  over all; `RequestAuth.Inherit`, a request file without `auth`, takes the folders' auth) and
+  every use case that sends or exports requests applies it (`SendRequest`, `StartRun`,
+  `ExportWorkspace`). The client edits them in a folder tab (`services/folder-settings-store.ts`,
+  explorer `folder-editor`, shared `auth-editor`).
 - MCP server (AI assistants control the app): off by default, toggled in the header's settings
   menu (`components/mcp-settings-dialog`). Its settings (enabled, port, token) are per-user
   `AppSettings.Mcp`, changed by the use cases in `Application/Mcp` through the `IMcpServer` port.

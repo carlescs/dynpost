@@ -93,7 +93,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       out of git)
 - [x] Keep chosen requests, environments and run plans on this computer only,
       out of git (see [Local-only files](#local-only-files))
-- [ ] Collections as folders, with optional folder-level defaults
+- [x] Collections as folders, with folder-level headers and auth that apply to
+      everything inside (see [Folder settings](#folder-settings))
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token, API key and OAuth 2.0 (client
       credentials, and authorization code with PKCE in the system browser)
@@ -204,7 +205,9 @@ params:
   ~debug: "true"     # disabled
 ```
 
-Auth types are `basic` (`username`, `password`), `bearer` (`token`),
+A request without `auth` inherits the auth of its folders (see
+[Folder settings](#folder-settings)); `auth: { type: none }` sends no auth even
+when a folder sets one. The other auth types are `basic` (`username`, `password`), `bearer` (`token`),
 `apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
 instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form`, `urlencoded`, `graphql` and `binary`.
 `graphql` bodies store a GraphQL `query` and JSON `variables` separately and are sent as JSON POSTs.
@@ -337,6 +340,50 @@ links, or names that can't be used on every system (such as `a:b.txt` on
 Linux), is not copied, so a copy is never silently incomplete. Duplicating only
 writes new files and never changes existing ones.
 
+### Folder settings
+
+A collection folder can set headers and auth for every request and folder inside
+it, in an optional `_folder.yaml` (and `requests/_folder.yaml` sets them for the
+whole workspace). It uses the same `headers` and `auth` keys as a request file,
+in that order; a folder that sets nothing has no file:
+
+```yaml
+# requests/users/_folder.yaml
+headers:
+  Accept: application/json
+  X-Team: core
+auth:
+  type: bearer
+  token: "{{apiToken}}"
+```
+
+The more specific level always wins:
+
+- **Headers** add up from `requests/` down to the request's folder. A sub-folder's
+  header replaces a parent's header of the same name (ignoring case), and a
+  request's own header replaces both. Inherited headers are sent before the
+  request's own. Disabled headers (`~Name`) are not sent, so they don't replace
+  anything either.
+- **Auth** comes from the closest level that sets one: the request's own auth,
+  else its folder's, else that folder's parent's, and so on. A folder or request
+  with `auth: { type: none }` stops it there: it and everything below that
+  inherits it is sent without auth. When no level sets auth, the request is sent
+  without.
+
+Folder settings apply wherever a request is sent: from the editor (an unsaved
+request uses the folder it will be saved in), by load runs, and through the MCP
+server. Exports write each request with what it inherits, since other tools'
+formats don't have folder headers.
+
+Open a folder's settings with the sliders button on its row, **Folder settings**
+in its right-click menu, or **Settings for all requests** in the explorer's
+"More actions" menu (for `requests/` itself). They open in a tab with a
+**Headers** and an **Auth** tab, which also list what the folder itself inherits
+from the folders above. In the request editor, the **Headers** tab lists the
+headers inherited from folders below the request's own, struck through when the
+request replaces them, and **Inherit from folder** (the default for new requests)
+on the **Auth** tab shows which auth applies and which folder sets it.
+
 An environment file (`environments/dev.yaml`):
 
 ```yaml
@@ -453,8 +500,10 @@ rules such as CORS don't apply. When sending:
   resolved first with the selected environment. A request that uses a variable
   the environment doesn't define (or a secret with no value on this computer)
   is not sent; the undefined names are listed with a hint on where to set them.
+- The headers and auth of the request's folders are applied (see
+  [Folder settings](#folder-settings)).
 - Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
-  query parameter; a header you set yourself takes precedence. OAuth 2.0 first
+  query parameter; a header you set yourself (or a folder sets) takes precedence. OAuth 2.0 first
   gets a token if it needs one (see [OAuth 2.0](#oauth-20)). JSON, text and
   `urlencoded` bodies get a matching `Content-Type` unless you set one;
   multipart `form` bodies always get `multipart/form-data` with the boundary. A
@@ -821,7 +870,8 @@ workspace to a file you choose:
 - **Insomnia v4** (`.insomnia.json`), a single file with the requests and the
   environments, using Insomnia's `{{ _.name }}` references.
 
-Request descriptions are exported too. Untick **Include environments** to
+Each request is exported with the headers and auth it inherits from its folders
+(see [Folder settings](#folder-settings)). Request descriptions are exported too. Untick **Include environments** to
 export only the requests. Secret values are
 never exported: secret variables are exported with empty values (as `secret`
 variables in Postman). Request files that can't be read are skipped and
@@ -1044,6 +1094,8 @@ The assistant can use these tools, always on the workspace open in the app:
 | `get_workspace` | Lists the requests and collection folders. |
 | `read_request`, `create_request`, `save_request`, `move_request`, `delete_request` | Read and change request files. |
 | `create_folder` | Creates a folder in `requests/` or `plans/`. |
+| `get_folder_settings` | Reads the headers and auth a folder of `requests/` (or `requests/` itself) sets for everything in it. |
+| `save_folder_settings` | Replaces the headers and auth a folder of `requests/` sets (its `_folder.yaml`, removed when it sets nothing). |
 | `list_history`, `get_history_entry` | Read the responses kept in a saved request's [history](#response-history) (cookie and secret values are hidden there already), to compare responses or find when something changed. |
 | `open_in_app` | Opens a request, run plan or environment in a tab, so the assistant can show you what it made or changed. |
 | `send_request` | Sends a saved request (keeping the response in its history) or an unsaved one, with the selected environment, and returns the response. Long bodies are cut off at 64 KB of text and binary bodies are left out. |

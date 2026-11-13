@@ -110,6 +110,7 @@ export const AUTH_FIELDS: Record<
   RequestAuth['type'],
   { field: keyof RequestAuth; label: string }[]
 > = {
+  inherit: [],
   none: [],
   basic: [
     { field: 'username', label: 'Username' },

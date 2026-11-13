@@ -24,6 +24,9 @@
         } @else if (tab.kind === 'environment') {
           <fa-icon class="text-xs text-emerald-600" [icon]="faLayerGroup" />
           <span class="truncate" [class.italic]="!tab.draft.id">{{ name }}</span>
+        } @else if (tab.kind === 'folder') {
+          <fa-icon class="text-xs text-amber-500" [icon]="faSliders" />
+          <span class="truncate">{{ name }}</span>
         } @else {
           <fa-icon
             class="text-xs text-violet-600"

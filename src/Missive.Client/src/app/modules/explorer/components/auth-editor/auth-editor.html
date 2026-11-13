@@ -1,0 +1,125 @@
+@let a = auth();
+<label class="flex items-center gap-2 text-sm">
+  Type
+  <select
+    class="rounded border border-slate-300 px-2 py-1"
+    [value]="a.type"
+    (change)="patch({ type: $any($event.target).value })"
+  >
+    @for (type of authTypes; track type) {
+      <option [value]="type" [selected]="type === a.type">{{ authLabels[type] }}</option>
+    }
+  </select>
+</label>
+@switch (a.type) {
+  @case ('inherit') {
+    <div class="mt-3 text-sm text-slate-500">
+      @if (inherited(); as inherited) {
+        @if (inherited.authFolder; as folder) {
+          <p>
+            Uses <span class="font-medium text-slate-700">{{ inheritedLabel(inherited) }}</span>
+            auth from
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded px-1 font-mono text-sky-700 hover:bg-sky-50"
+              title="Open the folder's settings"
+              (click)="folders.open(folder)"
+            >
+              <fa-icon [icon]="faFolderOpen" />{{ folder }}
+            </button>
+          </p>
+        } @else {
+          <p>No folder above sets auth, so it is sent without authorization.</p>
+        }
+      } @else {
+        <p>Uses the auth of the closest folder above that sets one.</p>
+      }
+    </div>
+  }
+  @case ('none') {
+    <p class="mt-3 text-sm text-slate-500">
+      @if (subject() === 'folder') {
+        The requests in this folder are sent without authorization, whatever the folders above set.
+      } @else {
+        This request does not use authorization, whatever its folders set.
+      }
+    </p>
+  }
+  @case ('basic') {
+    <div class="mt-3 grid max-w-lg grid-cols-[auto_1fr] items-center gap-2 text-sm">
+      <label for="auth-username">Username</label>
+      <input
+        id="auth-username"
+        [class]="fieldClass"
+        spellcheck="false"
+        [value]="a.username"
+        (input)="patch({ username: $any($event.target).value })"
+      />
+      <label for="auth-password">Password</label>
+      <input
+        id="auth-password"
+        [class]="fieldClass"
+        spellcheck="false"
+        [value]="a.password"
+        (input)="patch({ password: $any($event.target).value })"
+      />
+    </div>
+  }
+  @case ('bearer') {
+    <div class="mt-3 grid max-w-lg grid-cols-[auto_1fr] items-center gap-2 text-sm">
+      <label for="auth-token">Token</label>
+      <input
+        id="auth-token"
+        [class]="fieldClass"
+        spellcheck="false"
+        [value]="a.token"
+        (input)="patch({ token: $any($event.target).value })"
+      />
+    </div>
+  }
+  @case ('apiKey') {
+    <div class="mt-3 grid max-w-lg grid-cols-[auto_1fr] items-center gap-2 text-sm">
+      <label for="auth-key">Key</label>
+      <input
+        id="auth-key"
+        [class]="fieldClass"
+        spellcheck="false"
+        placeholder="X-API-Key"
+        [value]="a.key"
+        (input)="patch({ key: $any($event.target).value })"
+      />
+      <label for="auth-value">Value</label>
+      <input
+        id="auth-value"
+        [class]="fieldClass"
+        spellcheck="false"
+        [value]="a.value"
+        (input)="patch({ value: $any($event.target).value })"
+      />
+      <label for="auth-in">Add to</label>
+      <select
+        id="auth-in"
+        class="justify-self-start rounded border border-slate-300 px-2 py-1"
+        [value]="a.in"
+        (change)="patch({ in: $any($event.target).value })"
+      >
+        <option value="header" [selected]="a.in === 'header'">Header</option>
+        <option value="query" [selected]="a.in === 'query'">Query parameters</option>
+      </select>
+    </div>
+  }
+  @case ('oauth2') {
+    <app-oauth2-auth [auth]="a" [sent]="sent()" (authChange)="patch($event)" />
+  }
+}
+@if (a.type !== 'none' && a.type !== 'inherit' && a.type !== 'oauth2') {
+  <p class="mt-3 text-xs text-slate-500">
+    These values are saved in the {{ subject() === 'folder' ? 'folder settings' : 'request' }} file.
+    Use a variable such as <code>{{ secretExample }}</code> to keep secrets out of it.
+  </p>
+}
+@if (subject() === 'folder' && a.type !== 'inherit') {
+  <p class="mt-2 text-xs text-slate-500">
+    Requests and sub-folders inside this folder use this auth when they inherit it.
+  </p>
+}

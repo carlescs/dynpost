@@ -2,12 +2,14 @@ using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
+using Missive.Application.Folders;
 using Missive.Application.History;
 using Missive.Application.OAuth2;
 using Missive.Application.Requests;
 using Missive.Application.Workspaces;
 using Missive.Domain.Http;
 using Missive.Domain.Requests;
+using Missive.Domain.Workspaces;
 
 namespace Missive.Application.Http;
 
@@ -20,7 +22,8 @@ namespace Missive.Application.Http;
 /// <see cref="ICapturedValueStore"/>. The raw body is kept in <see cref="ResponseBodies"/> under
 /// the same id, for <see cref="SaveResponseBody"/>. A request with OAuth 2.0 auth gets its token
 /// from <see cref="OAuth2Tokens"/> (cached, refreshed or newly obtained) before it is sent. The
-/// response to a saved request is kept in its history by <see cref="ResponseHistory"/>.
+/// response to a saved request is kept in its history by <see cref="ResponseHistory"/>. The request
+/// gets the headers and auth of the folders it is in (see <see cref="FolderInheritance"/>).
 /// </summary>
 public sealed class SendRequest(
     IHttpSender sender,
@@ -32,17 +35,23 @@ public sealed class SendRequest(
     CurrentWorkspace current,
     TimeProvider time,
     OAuth2Tokens tokens,
-    ResponseHistory history)
+    ResponseHistory history,
+    FolderInheritance inheritance)
 {
     /// <param name="id">An id chosen by the caller, used to cancel the request.</param>
     /// <param name="path">
     /// The workspace path of the request file the request in the editor belongs to; its response is
     /// kept in that file's history. <c>null</c> for a request that hasn't been saved.
     /// </param>
+    /// <param name="folder">
+    /// The folder an unsaved request will be saved in, whose headers and auth it inherits; a saved
+    /// request inherits those of the folder its file is in.
+    /// </param>
     public async Task<Result<ResponseDto>> ExecuteAsync(
         string id,
         RequestDto request,
         string? path = null,
+        string? folder = null,
         CancellationToken cancellationToken = default)
     {
         // The name doesn't matter for sending; an unnamed request can still be tried out.
@@ -55,6 +64,15 @@ public sealed class SendRequest(
 
         // The workspace can change while the request is in flight; cookies belong to the one it was sent from.
         var root = current.Root;
+        if (root is not null && InheritsFrom(path, folder) is { } parent)
+        {
+            definition = await inheritance.ApplyAsync(root, parent, definition.Value, cancellationToken);
+            if (definition.IsFailure)
+            {
+                return definition.Error!;
+            }
+        }
+
         var variables = await environment.LoadAsync(cancellationToken);
         if (!variables.IsSuccess)
         {
@@ -163,6 +181,17 @@ public sealed class SendRequest(
         {
             inFlight.Finish(id);
         }
+    }
+
+    /// <summary>The folder a request inherits headers and auth from: its file's, or the one it will be saved in.</summary>
+    private static WorkspacePath? InheritsFrom(string? path, string? folder)
+    {
+        if (path is not null)
+        {
+            return WorkspacePath.TryParse(path, out var file) && WorkspaceLayout.IsRequestPath(file) ? file.Parent : null;
+        }
+
+        return WorkspacePath.TryParse(folder, out var parsed) ? parsed : null;
     }
 
     /// <summary>

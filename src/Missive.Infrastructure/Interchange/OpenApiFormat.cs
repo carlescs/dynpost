@@ -514,7 +514,8 @@ internal static partial class OpenApiFormat
             }
         }
 
-        return RequestAuth.None;
+        // No security at all: inherit what the folder it is imported into sets; an empty or unusable one sends none.
+        return requirements is null ? RequestAuth.Inherit : RequestAuth.None;
     }
 
     /// <summary>The description being read, with what the import has found so far.</summary>

@@ -2,6 +2,7 @@ using System.Text;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
+using Missive.Application.Folders;
 using Missive.Application.Http;
 using Missive.Application.OAuth2;
 using Missive.Application.Runs;
@@ -27,11 +28,13 @@ public class StartRunTests
     private readonly IHttpSender _sender = Substitute.For<IHttpSender>();
     private readonly IRunStore _runs = Substitute.For<IRunStore>();
     private readonly RunRegistry _registry = new();
+    private readonly IFolderDefaultsStore _folders = Substitute.For<IFolderDefaultsStore>();
     private readonly CurrentWorkspace _current = new();
 
     public StartRunTests()
     {
         _current.Open(Root);
+        _folders.ReadAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>()).Returns(FolderDefaults.Empty);
         _plans.ReadAsync(Root, WorkspacePath.Parse(PlanFile), Arg.Any<CancellationToken>()).Returns("plan");
         _repository.FileExists(Root, Arg.Any<WorkspacePath>()).Returns(true);
         _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
@@ -62,7 +65,8 @@ public class StartRunTests
             _runs,
             _registry,
             _current,
-            time);
+            time,
+            new FolderInheritance(_folders));
     }
 
     private void UsePlan(RunPlan plan) => _format.Parse("plan").Returns(plan);
@@ -118,6 +122,28 @@ public class StartRunTests
         Assert.Equal(12, run.Requests.Single().Stats.Samples);
         Assert.True(run.Passed);
         await _runs.Received(1).SaveAsync(Root, Arg.Is<RunResultDto>(r => r.RunId == started.Value.RunId), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_SendsRequestsWithTheHeadersAndAuthOfTheirFolders()
+    {
+        UsePlan(Plan(threads: 1, iterations: 1, requests: ["requests/users/get.yaml"]));
+        _folders.ReadAsync(Root, WorkspacePath.Parse("requests/users"), Arg.Any<CancellationToken>())
+            .Returns(new FolderDefaults([new KeyValueEntry("Accept", "application/json")], new BearerAuth("folder-token")));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/users"));
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        await RunToEndAsync(started.Value.RunId);
+
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r => r.Headers.SequenceEqual(new[]
+            {
+                KeyValuePair.Create("Accept", "application/json"),
+                KeyValuePair.Create("Authorization", "Bearer folder-token"),
+            })),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

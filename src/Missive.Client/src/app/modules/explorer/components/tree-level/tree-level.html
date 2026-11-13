@@ -107,6 +107,15 @@
                 <button
                   type="button"
                   [class]="rowButton"
+                  [title]="'Headers and auth for the requests in ' + node.name"
+                  [attr.aria-label]="'Settings of ' + node.name"
+                  (click)="folders.open(node.path)"
+                >
+                  <fa-icon [icon]="faSliders" />
+                </button>
+                <button
+                  type="button"
+                  [class]="rowButton"
                   [title]="'Rename ' + node.name + ' (F2)'"
                   [attr.aria-label]="'Rename ' + node.name"
                   (click)="state.startRename(node)"

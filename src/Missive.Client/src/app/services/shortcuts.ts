@@ -5,6 +5,7 @@ import { ShortcutsDialog } from '../components/shortcuts-dialog/shortcuts-dialog
 import { Bridge } from './bridge';
 import { DISCARD, Dialogs } from './dialogs';
 import { EnvironmentStore } from './environment-store';
+import { FolderSettingsStore } from './folder-settings-store';
 import { GitHistoryStore } from './git-history-store';
 import { GitStore } from './git-store';
 import { RunStore, isRunPlanDirty, isRunPlanRunning } from './run-store';
@@ -21,6 +22,7 @@ export class Shortcuts {
   private readonly workspace = inject(WorkspaceStore);
   private readonly environments = inject(EnvironmentStore);
   private readonly runs = inject(RunStore);
+  private readonly folders = inject(FolderSettingsStore);
   private readonly git = inject(GitStore);
   private readonly history = inject(GitHistoryStore);
   private quitting = false;
@@ -84,9 +86,11 @@ export class Shortcuts {
   private async save(): Promise<void> {
     const draft = this.environments.draft();
     const plan = this.runs.draft();
+    const folder = this.folders.draft();
     const editing = !this.git.conflict() && !this.git.diff();
     if (draft && editing) await this.environments.save(draft.key);
     else if (plan && editing) await this.runs.save(plan.key);
+    else if (folder && editing) await this.folders.save(folder.key);
     else await this.workspace.saveActive();
   }
 
@@ -101,6 +105,7 @@ export class Shortcuts {
     if (doc) await this.workspace.close(doc.id);
     else if (this.environments.drafts().some((d) => d.key === key))
       await this.environments.close(key);
+    else if (this.folders.drafts().some((d) => d.key === key)) await this.folders.close(key);
     else await this.runs.close(key);
   }
 
@@ -120,6 +125,7 @@ export class Shortcuts {
       const unsaved =
         this.workspace.documents().filter((d) => d.dirty).length +
         this.environments.drafts().filter((d) => d.dirty).length +
+        this.folders.drafts().filter((d) => d.dirty).length +
         this.runs.drafts().filter(isRunPlanDirty).length;
       const running = this.runs.drafts().filter(isRunPlanRunning).length;
       const notes = [

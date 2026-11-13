@@ -39,6 +39,7 @@ public sealed class SendBridgeTests : IDisposable
     public SendBridgeTests()
     {
         _services = new ServiceCollection()
+            .AddEmptyFolderDefaults()
             .AddSingleton(_sender)
             .AddSingleton<InFlightRequests>()
             .AddSingleton<ResponseBodies>()

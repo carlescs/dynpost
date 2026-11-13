@@ -30,7 +30,10 @@ describe('request mapping', () => {
           auth: { ...content.auth, type: 'apiKey', key: 'X-Key', value: 'v', in: 'query' },
         }).auth,
       ).toEqual({ type: 'apiKey', key: 'X-Key', value: 'v', in: 'query' });
-      expect(toRequestDto({ ...content, auth: EMPTY_AUTH }).auth).toEqual({ type: 'none' });
+      expect(toRequestDto({ ...content, auth: EMPTY_AUTH }).auth).toEqual({ type: 'inherit' });
+      expect(toRequestDto({ ...content, auth: { ...content.auth, type: 'none' } }).auth).toEqual({
+        type: 'none',
+      });
     });
 
     it('sends the OAuth 2.0 fields the grant uses', () => {
@@ -171,7 +174,7 @@ describe('request mapping', () => {
       } as unknown as RequestDto;
       const result = fromRequestDto(dto);
       expect(result.method).toBe('PATCH');
-      expect(result.auth).toEqual(EMPTY_AUTH);
+      expect(result.auth).toEqual({ ...EMPTY_AUTH, type: 'none' });
       expect(result.bodyType).toBe('none');
       expect(result.description).toBe('');
       expect(result.captures).toEqual([]);

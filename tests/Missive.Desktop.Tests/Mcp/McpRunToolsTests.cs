@@ -51,6 +51,7 @@ public sealed class McpRunToolsTests : IDisposable
         _runs.DeletePlanAsync(Root, Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
 
         _services = new ServiceCollection()
+            .AddEmptyFolderDefaults()
             .AddSingleton(_plans)
             .AddSingleton(_format)
             .AddSingleton(Substitute.For<IRunDataReader>())

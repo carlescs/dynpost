@@ -46,6 +46,7 @@ public sealed class InterchangeBridgeTests : IDisposable
                 new Dictionary<string, IReadOnlyDictionary<string, string>>()));
 
         _services = new ServiceCollection()
+            .AddEmptyFolderDefaults()
             .AddSingleton(current)
             .AddSingleton(_repository)
             .AddSingleton(_environments)

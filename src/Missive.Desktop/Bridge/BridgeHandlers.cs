@@ -109,7 +109,7 @@ internal static class BridgeHandlers
             .Register<MoveRequestPayload, MovedRequestDto>(BridgeMessageTypes.RequestMove,
                 (p, _) => Task.FromResult(Use<MoveRequest>().Execute(p.Path, p.Folder)))
             .Register<SendRequestPayload, ResponseDto>(BridgeMessageTypes.RequestSend,
-                (p, ct) => Use<SendRequest>().ExecuteAsync(p.Id, p.Request, p.Path, ct))
+                (p, ct) => Use<SendRequest>().ExecuteAsync(p.Id, p.Request, p.Path, p.Folder, ct))
             .Register<HistoryPathPayload, IReadOnlyList<HistoryEntryDto>>(BridgeMessageTypes.HistoryList,
                 (p, ct) => Use<ListResponseHistory>().ExecuteAsync(p.Path, ct))
             .Register<HistoryEntryPayload, HistoryEntryDetailsDto>(BridgeMessageTypes.HistoryGet,
@@ -204,6 +204,12 @@ internal static class BridgeHandlers
                 (p, ct) => Use<SetLocalOnly>().ExecuteAsync(p.Path, p.LocalOnly, ct))
             .Register<DeleteFolderPayload, Unit?>(BridgeMessageTypes.FolderDelete,
                 (p, _) => Task.FromResult(NoValue(Use<DeleteFolder>().Execute(p.Path))))
+            .Register<FolderSettingsPathPayload, FolderSettingsDto>(BridgeMessageTypes.FolderSettingsLoad,
+                (p, ct) => Use<LoadFolderSettings>().ExecuteAsync(p.Path, ct))
+            .Register<SaveFolderSettingsPayload, FolderSettingsDto>(BridgeMessageTypes.FolderSettingsSave,
+                (p, ct) => Use<SaveFolderSettings>().ExecuteAsync(p.Path, p.Settings, ct))
+            .Register<FolderSettingsPathPayload, InheritedSettingsDto>(BridgeMessageTypes.FolderSettingsInherited,
+                (p, ct) => Use<GetInheritedSettings>().ExecuteAsync(p.Path, ct))
             .Register(BridgeMessageTypes.EnvironmentList,
                 ct => Use<ListEnvironments>().ExecuteAsync(ct))
             .Register<EnvironmentIdPayload, EnvironmentDto>(BridgeMessageTypes.EnvironmentLoad,

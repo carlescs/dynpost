@@ -1,0 +1,72 @@
+@let d = draft();
+
+<div class="flex items-center gap-2 px-4 pt-3">
+  <fa-icon class="text-slate-400" [icon]="faFolder" />
+  <h2 class="min-w-0 flex-1 truncate text-lg font-semibold">
+    {{ store.nameOf(d.path) }} <span class="font-normal text-slate-500">settings</span>
+  </h2>
+  <span class="truncate text-xs text-slate-400" [title]="d.path + '/_folder.yaml'">
+    {{ d.path }}/_folder.yaml
+  </span>
+  <button
+    type="button"
+    class="flex items-center gap-2 rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100 disabled:opacity-50"
+    title="Save folder settings (Ctrl+S)"
+    [disabled]="!d.dirty || d.saving"
+    (click)="save()"
+  >
+    <fa-icon
+      [icon]="d.saving ? faSpinner : faFloppyDisk"
+      [animation]="d.saving ? 'spin' : undefined"
+    />
+    Save
+  </button>
+</div>
+<p class="px-4 pt-1 pb-3 text-sm text-slate-500">
+  Every request and folder inside
+  {{ d.path === 'requests' ? 'the workspace' : 'this folder' }} gets these headers and auth, unless
+  it sets them itself.
+</p>
+
+<div class="flex gap-4 border-b border-slate-200 px-4 text-sm" role="tablist">
+  @for (tab of tabs; track tab.id) {
+    <button
+      type="button"
+      role="tab"
+      class="-mb-px border-b-2 py-1.5 text-slate-500 hover:text-slate-800"
+      [class.border-sky-500]="activeTab() === tab.id"
+      [class.text-slate-900]="activeTab() === tab.id"
+      [class.border-transparent]="activeTab() !== tab.id"
+      [attr.aria-selected]="activeTab() === tab.id"
+      (click)="activeTab.set(tab.id)"
+    >
+      {{ tab.label }}
+      @if (count(d, tab.id); as n) {
+        <span class="text-xs text-sky-600">({{ n }})</span>
+      } @else if (tab.id === 'auth' && d.auth.type !== 'inherit') {
+        <span class="text-xs text-sky-600" aria-label="(sets auth)">•</span>
+      }
+    </button>
+  }
+</div>
+
+<section class="flex min-h-32 flex-1 flex-col overflow-y-auto px-4 py-2">
+  @switch (activeTab()) {
+    @case ('headers') {
+      <app-key-value-table
+        keyLabel="Header"
+        [rows]="d.headers"
+        (rowsChange)="patchHeaders($event)"
+      />
+      <app-inherited-headers [headers]="inherited()?.headers ?? []" [own]="d.headers" />
+    }
+    @case ('auth') {
+      <app-auth-editor
+        subject="folder"
+        [auth]="d.auth"
+        [inherited]="inherited()"
+        (authChange)="patchAuth($event)"
+      />
+    }
+  }
+</section>

@@ -1,5 +1,6 @@
 using Missive.Application.Common;
 using Missive.Application.Environments;
+using Missive.Application.Folders;
 using Missive.Application.Interchange;
 using Missive.Application.Workspaces;
 using Missive.Domain.Environments;
@@ -18,10 +19,12 @@ public class ExportWorkspaceTests
     private readonly IExternalFiles _files = Substitute.For<IExternalFiles>();
     private readonly ICollectionExporter _exporter = Substitute.For<ICollectionExporter>();
     private readonly CurrentWorkspace _current = new();
+    private readonly IFolderDefaultsStore _folders = Substitute.For<IFolderDefaultsStore>();
     private RequestCollection? _exported;
 
     public ExportWorkspaceTests()
     {
+        _folders.ReadAsync(Arg.Any<string>(), Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>()).Returns(FolderDefaults.Empty);
         _current.Open(Root);
         _exporter.Id.Returns("test");
         _exporter.Name.Returns("Test format");
@@ -47,7 +50,7 @@ public class ExportWorkspaceTests
         ]));
     }
 
-    private ExportWorkspace UseCase() => new(_repository, _environments, _files, [_exporter], _current);
+    private ExportWorkspace UseCase() => new(_repository, _environments, _files, [_exporter], _current, new FolderInheritance(_folders));
 
     private static WorkspacePath P(string path) => WorkspacePath.Parse(path);
 
