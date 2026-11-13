@@ -3,15 +3,18 @@ import { BridgeEvents } from '../models/messages';
 import { Bridge } from './bridge';
 import { EnvironmentStore } from './environment-store';
 import { GitStore } from './git-store';
+import { RunStore } from './run-store';
 import { WorkspaceStore } from './workspace-store';
 import { WorkspaceSync } from './workspace-sync';
 
 describe('WorkspaceSync', () => {
   function setup(open = true) {
-    let emit: (payload: BridgeEvents['workspace.changed']) => void = () => undefined;
+    const listeners = new Map<string, (payload: unknown) => void>();
+    const emit = <K extends keyof BridgeEvents>(type: K, payload: BridgeEvents[K]) =>
+      listeners.get(type)?.(payload);
     const stop = vi.fn();
-    const on = vi.fn((_: string, listener: typeof emit) => {
-      emit = listener;
+    const on = vi.fn((type: string, listener: (payload: unknown) => void) => {
+      listeners.set(type, listener);
       return stop;
     });
     const workspace = {
@@ -21,25 +24,30 @@ describe('WorkspaceSync', () => {
     };
     const environments = { refresh: vi.fn().mockResolvedValue(undefined) };
     const git = { available: true, refresh: vi.fn().mockResolvedValue(undefined) };
+    const runs = {
+      reloadFromDisk: vi.fn().mockResolvedValue(undefined),
+      followStarted: vi.fn().mockResolvedValue(undefined),
+    };
     TestBed.configureTestingModule({
       providers: [
         { provide: Bridge, useValue: { isDesktop: true, on } },
         { provide: WorkspaceStore, useValue: workspace },
         { provide: EnvironmentStore, useValue: environments },
         { provide: GitStore, useValue: git },
+        { provide: RunStore, useValue: runs },
       ],
     });
     TestBed.inject(WorkspaceSync);
     // The listener's work only awaits resolved mocks: it is done by the next macrotask.
     const changed = async (paths: string[]) => {
-      emit({ paths });
+      emit('workspace.changed', { paths });
       await new Promise((resolve) => setTimeout(resolve));
     };
-    return { on, stop, workspace, environments, git, changed };
+    return { on, stop, emit, workspace, environments, git, runs, changed };
   }
 
-  it('re-reads the tree, the changed files, the environments and the git status', async () => {
-    const { on, workspace, environments, git, changed } = setup();
+  it('re-reads the tree, the changed files, the environments, the run plans and the git status', async () => {
+    const { on, workspace, environments, git, runs, changed } = setup();
     expect(on).toHaveBeenCalledWith('workspace.changed', expect.any(Function));
 
     await changed(['requests/get-user.yaml']);
@@ -47,6 +55,7 @@ describe('WorkspaceSync', () => {
     expect(workspace.refresh).toHaveBeenCalled();
     expect(workspace.reloadFromDisk).toHaveBeenCalledWith(['requests/get-user.yaml']);
     expect(environments.refresh).toHaveBeenCalledWith(['requests/get-user.yaml']);
+    expect(runs.reloadFromDisk).toHaveBeenCalledWith(['requests/get-user.yaml']);
     expect(git.refresh).toHaveBeenCalled();
   });
 
@@ -67,11 +76,27 @@ describe('WorkspaceSync', () => {
     expect(workspace.refresh).not.toHaveBeenCalled();
   });
 
+  it('follows load runs started outside the UI', () => {
+    const { emit, runs } = setup();
+
+    emit('run.started', { path: 'plans/smoke.run.yaml', runId: 'r1' });
+
+    expect(runs.followStarted).toHaveBeenCalledWith('plans/smoke.run.yaml', 'r1');
+  });
+
+  it('ignores load runs started without an open workspace', () => {
+    const { emit, runs } = setup(false);
+
+    emit('run.started', { path: 'plans/smoke.run.yaml', runId: 'r1' });
+
+    expect(runs.followStarted).not.toHaveBeenCalled();
+  });
+
   it('stops listening when the app is destroyed', () => {
     const { stop } = setup();
 
     TestBed.resetTestingModule();
 
-    expect(stop).toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledTimes(2);
   });
 });

@@ -159,6 +159,50 @@ export class RunStore {
     }
   }
 
+  /**
+   * Re-reads open plans changed outside the UI (by an AI assistant): those at `paths` without
+   * unsaved edits, closing those whose file is gone, and the earlier runs of every open plan,
+   * which runs deleted outside the UI change.
+   */
+  async reloadFromDisk(paths: string[]): Promise<void> {
+    for (const draft of this.drafts()) {
+      if (paths.includes(draft.path) && !isRunPlanDirty(draft)) {
+        const { key, path } = draft;
+        try {
+          const document = await this.bridge.send('runPlan.open', { path });
+          this.patch(key, (d) =>
+            d.path === path && !isRunPlanDirty(d)
+              ? { ...d, yaml: document.yaml, savedYaml: document.yaml, error: document.error }
+              : d,
+          );
+        } catch (error) {
+          if (error instanceof BridgeError && error.code === ERROR_CODES.notFound) {
+            const current = this.find(key);
+            if (current?.path === path && !isRunPlanRunning(current)) this.remove(key);
+          } else {
+            this.report(error, key);
+          }
+          continue;
+        }
+      }
+      if (this.find(draft.key) && !isRunPlanRunning(this.find(draft.key)!)) {
+        await this.loadHistory(draft.key);
+      }
+    }
+  }
+
+  /**
+   * Shows a run started outside the UI (by an AI assistant): opens its plan's tab, unless open
+   * already, and follows the run there, unless the tab is following another run.
+   */
+  async followStarted(path: string, runId: string): Promise<void> {
+    if (!this.drafts().some((d) => d.path === path)) await this.open(path);
+    const draft = this.drafts().find((d) => d.path === path);
+    if (!draft || isRunPlanRunning(draft)) return;
+    this.workspace.activateTab(draft.key);
+    await this.follow(draft.key, runId);
+  }
+
   /** Creates a plan file with a starting template in `folder` (by default the top of `plans`) and opens it. */
   async create(folder = PLANS_FOLDER): Promise<void> {
     const taken = new Set(this.plans().map((plan) => plan.path.toLowerCase()));

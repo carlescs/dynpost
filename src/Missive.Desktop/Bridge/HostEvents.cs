@@ -20,6 +20,10 @@ internal sealed class HostEvents
     public Task WorkspaceChangedAsync(IReadOnlyList<string> paths) =>
         SendAsync(BridgeEventTypes.WorkspaceChanged, new WorkspaceChangedEvent(paths));
 
+    /// <summary>A run of the plan at <paramref name="planPath"/> started outside the UI, so the UI can follow it.</summary>
+    public Task RunStartedAsync(string planPath, string runId) =>
+        SendAsync(BridgeEventTypes.RunStarted, new RunStartedEvent(planPath, runId));
+
     private async Task SendAsync(string type, object payload)
     {
         if (Volatile.Read(ref _send) is not { } send)

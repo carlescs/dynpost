@@ -1060,6 +1060,8 @@ export interface BridgeEvents {
    * environment.
    */
   'workspace.changed': { paths: string[] };
+  /** A load run of the plan at `path` started outside the UI (an AI assistant, through the MCP server). */
+  'run.started': { path: string; runId: string };
 }
 
 export type BridgeEventType = keyof BridgeEvents;

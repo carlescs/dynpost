@@ -409,6 +409,9 @@ internal static class BridgeEventTypes
 {
     /// <summary>Something changed the open workspace outside the UI (the MCP server). Payload: <see cref="WorkspaceChangedEvent"/>.</summary>
     public const string WorkspaceChanged = "workspace.changed";
+
+    /// <summary>A load run started outside the UI (the MCP server). Payload: <see cref="RunStartedEvent"/>.</summary>
+    public const string RunStarted = "run.started";
 }
 
 /// <summary>A message from the host the UI didn't ask for; unlike a <see cref="BridgeResponse"/> it has no id.</summary>
@@ -416,6 +419,9 @@ internal sealed record BridgeEvent(string Event, object Payload);
 
 /// <param name="Paths">The workspace paths of the files and folders that changed; empty when only other state (such as the selected environment) did.</param>
 internal sealed record WorkspaceChangedEvent(IReadOnlyList<string> Paths);
+
+/// <param name="Path">The workspace path of the plan being run.</param>
+internal sealed record RunStartedEvent(string Path, string RunId);
 
 /// <summary>A message from the UI. <see cref="Id"/> correlates the response.</summary>
 internal sealed record BridgeRequest(string Id, string Type, JsonElement? Payload);
