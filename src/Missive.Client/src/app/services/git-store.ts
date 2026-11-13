@@ -108,11 +108,19 @@ export class GitStore {
 
   private readonly root = computed(() => this.workspace.workspace()?.root ?? null);
 
+  /** Whether a background status read is in flight. */
+  private backgroundRead = false;
+  /** Whether a background read was asked for while another read or operation ran. */
+  private backgroundQueued = false;
+
   constructor() {
     if (this.available) {
-      // Pick up commits and edits made in other tools when the user comes back to the window.
+      // The host reports changes as they happen; coming back to the window also picks up any it
+      // couldn't see (a folder it can't watch) and remotes changed with other git tools.
       window.addEventListener('focus', () => {
-        if (this.root()) void this.refresh();
+        if (!this.root()) return;
+        void this.refreshInBackground();
+        void this.loadRemotes();
       });
     }
 
@@ -127,6 +135,7 @@ export class GitStore {
         this.remotes.set(null);
         this.branches.set(null);
         this.identity.set(null);
+        this.backgroundQueued = false;
         if (root && this.available) void this.refresh();
       });
     });
@@ -148,7 +157,7 @@ export class GitStore {
     effect(() => {
       if (this.workspace.sharingChanged() === 0) return;
       untracked(() => {
-        if (this.root() && this.available) void this.refresh();
+        if (this.available) void this.refreshInBackground();
       });
     });
 
@@ -170,6 +179,49 @@ export class GitStore {
         void this.loadIdentity();
       },
     );
+  }
+
+  /**
+   * Reads the status again without showing it as an operation: for changes the user didn't ask the
+   * view about (files saved or edited, other git tools). Asked while another operation or read
+   * runs, it waits for it and then reads once, so a change made meanwhile is never missed. A read
+   * that an operation overtakes is dropped, since the operation brings its own status.
+   */
+  async refreshInBackground(): Promise<void> {
+    const root = this.root();
+    if (!root || !this.available) return;
+    if (this.busy() || this.backgroundRead) {
+      this.backgroundQueued = true;
+      return;
+    }
+
+    this.backgroundRead = true;
+    this.backgroundQueued = false;
+    const before = this.status();
+    const overtaken = () =>
+      this.root() !== root || this.busy() !== null || this.status() !== before;
+    try {
+      const status = await this.bridge.send('git.status');
+      if (overtaken()) return;
+      this.status.set(status);
+      // A failed read's error is out of date now, but other operations' errors stay.
+      if (this.failedOperation() === 'refresh') this.dismissError();
+      // Other git tools may have created, deleted or moved branches.
+      this.reloadBranchesIfShown();
+    } catch (error) {
+      if (overtaken()) return;
+      this.reportError('refresh', error);
+      this.status.set(null);
+    } finally {
+      this.backgroundRead = false;
+      this.runQueuedRead();
+    }
+  }
+
+  private runQueuedRead(): void {
+    if (this.backgroundQueued && !this.busy() && !this.backgroundRead) {
+      void this.refreshInBackground();
+    }
   }
 
   /** Downloads the remotes' latest commits, so the status shows what a pull would bring in. */
@@ -336,6 +388,7 @@ export class GitStore {
         // Keep the rejection; a pull fetches anyway.
       } finally {
         this.busy.set(null);
+        this.runQueuedRead();
       }
     }
   }
@@ -657,6 +710,7 @@ export class GitStore {
       return false;
     } finally {
       this.busy.set(null);
+      this.runQueuedRead();
     }
   }
 }
