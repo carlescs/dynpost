@@ -11,11 +11,12 @@ using YamlDotNet.RepresentationModel;
 namespace Dynpost.Infrastructure.Runs;
 
 /// <summary>
-/// Reads run plan files. Keys, in order: <c>name</c>, <c>environment</c> (the environment file
-/// the run uses instead of the selected one), <c>requests</c>, <c>disabled</c> (request
+/// Reads run plan files. Keys, in order: <c>name</c>, <c>requests</c>, <c>disabled</c> (request
 /// paths kept in the list but not sent), <c>order</c>
 /// (<c>sequential</c>, <c>shuffle</c>, <c>random</c> or <c>roundRobin</c>), <c>weights</c> (per
-/// request path), <c>load</c>
+/// request path), <c>environments</c> (environment files the run uses instead of the selected
+/// one), <c>environmentOrder</c> (like <c>order</c>), <c>environmentWeights</c> (per environment
+/// path), <c>load</c>
 /// (<c>threads</c>, <c>iterations</c> or <c>duration</c>, <c>rampUp</c>, <c>thinkTime</c>,
 /// <c>maxRps</c>), <c>data</c> (<c>file</c>, <c>mode</c>, <c>onEof</c>), <c>bodies</c> (per
 /// request path: <c>folder</c>, <c>pattern</c>, <c>mode</c>, <c>onEof</c>), <c>saveResponses</c>
@@ -126,19 +127,25 @@ public sealed partial class YamlRunPlanFormat : IRunPlanFormat
             ParseDisabled(root),
             ParseBodies(YamlNodes.OptionalMapping(root, "bodies")),
             YamlNodes.OptionalBoolean(root, "saveResponses"),
-            ParseEnvironment(YamlNodes.OptionalString(root, "environment")));
+            ParseEnvironments(root),
+            ParseOrder(YamlNodes.OptionalString(root, "environmentOrder"), "environmentOrder"),
+            ParseWeights(YamlNodes.OptionalMapping(root, "environmentWeights"), "environmentWeights"));
     }
 
-    private static WorkspacePath? ParseEnvironment(string? text)
+    private static List<WorkspacePath> ParseEnvironments(YamlMappingNode root)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        var environments = new List<WorkspacePath>();
+        foreach (var item in YamlNodes.StringList(root, "environments"))
         {
-            return null;
+            if (!WorkspacePath.TryParse(item.Trim(), out var path) || path.IsRoot)
+            {
+                throw new WorkspaceFileFormatException($"'{item}' in 'environments' is not a valid workspace path.");
+            }
+
+            environments.Add(path);
         }
 
-        return WorkspacePath.TryParse(text.Trim(), out var path) && !path.IsRoot
-            ? path
-            : throw new WorkspaceFileFormatException($"'environment' must be the workspace path of an environment file, such as {WorkspaceLayout.EnvironmentsFolder}/dev.yaml.");
+        return environments;
     }
 
     private static List<string> ParseDisabled(YamlMappingNode root) =>
@@ -202,16 +209,16 @@ public sealed partial class YamlRunPlanFormat : IRunPlanFormat
         var other => throw new WorkspaceFileFormatException($"'{where}' must be recycle or stop, not '{other}'."),
     };
 
-    private static RequestOrder ParseOrder(string? text) => text switch
+    private static RequestOrder ParseOrder(string? text, string where = "order") => text switch
     {
         null or "sequential" => RequestOrder.Sequential,
         "shuffle" => RequestOrder.Shuffle,
         "random" => RequestOrder.Random,
         "roundRobin" => RequestOrder.RoundRobin,
-        var other => throw new WorkspaceFileFormatException($"'order' must be sequential, shuffle, random or roundRobin, not '{other}'."),
+        var other => throw new WorkspaceFileFormatException($"'{where}' must be sequential, shuffle, random or roundRobin, not '{other}'."),
     };
 
-    private static Dictionary<string, double> ParseWeights(YamlMappingNode? weights)
+    private static Dictionary<string, double> ParseWeights(YamlMappingNode? weights, string where = "weights")
     {
         var result = new Dictionary<string, double>(StringComparer.Ordinal);
         if (weights is null)
@@ -221,9 +228,9 @@ public sealed partial class YamlRunPlanFormat : IRunPlanFormat
 
         foreach (var (keyNode, _) in weights.Children)
         {
-            var key = YamlNodes.ScalarText(keyNode, "weights");
+            var key = YamlNodes.ScalarText(keyNode, where);
             var path = WorkspacePath.TryParse(key, out var parsed) ? parsed.Value : key;
-            result[path] = Number(weights, key, $"weights.{key}") ?? throw new WorkspaceFileFormatException($"'weights.{key}' must be a number.");
+            result[path] = Number(weights, key, $"{where}.{key}") ?? throw new WorkspaceFileFormatException($"'{where}.{key}' must be a number.");
         }
 
         return result;

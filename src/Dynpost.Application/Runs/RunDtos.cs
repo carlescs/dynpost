@@ -40,6 +40,9 @@ public sealed record ThresholdDto(string Name, string Limit, string Actual, bool
 /// The name of the file the whole response body was saved to, when the plan saves responses
 /// (<see cref="Domain.Runs.RunPlan.SaveResponses"/>); read it with <see cref="GetRunResponse"/>.
 /// </param>
+/// <param name="Environment">
+/// The name of the environment the request was sent with, when the plan lists its environments.
+/// </param>
 public sealed record SampleDto(
     string Request,
     int Thread,
@@ -54,7 +57,8 @@ public sealed record SampleDto(
     string? ResponsePreview,
     string? BodyFile = null,
     string? ContentType = null,
-    string? ResponseFile = null);
+    string? ResponseFile = null,
+    string? Environment = null);
 
 /// <summary>A response body saved by a run, as base64.</summary>
 public sealed record RunResponseDto(string Body);

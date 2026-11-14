@@ -96,9 +96,16 @@ public sealed record RunThresholds(
 /// Whether the whole body of each logged response is saved to a file, so it can be opened later
 /// (PDFs in the previewer).
 /// </param>
-/// <param name="Environment">
-/// The environment file the run sends its requests with (<c>environments/dev.yaml</c>);
+/// <param name="Environments">
+/// The environment files the run sends its requests with (<c>environments/dev.yaml</c>); empty or
 /// <c>null</c> to use the environment selected in the app.
+/// </param>
+/// <param name="EnvironmentOrder">
+/// How each virtual user takes the environments in an iteration, like <see cref="Order"/> does
+/// with requests: each environment taken sends the iteration's requests.
+/// </param>
+/// <param name="EnvironmentWeights">
+/// Relative chance of each environment path with <see cref="RequestOrder.Random"/>; unlisted ones weigh 1.
 /// </param>
 public sealed record RunPlan(
     string Name,
@@ -112,7 +119,9 @@ public sealed record RunPlan(
     IReadOnlyList<string>? Disabled = null,
     IReadOnlyDictionary<string, RunBodySource>? Bodies = null,
     bool SaveResponses = false,
-    WorkspacePath? Environment = null)
+    IReadOnlyList<WorkspacePath>? Environments = null,
+    RequestOrder EnvironmentOrder = RequestOrder.Sequential,
+    IReadOnlyDictionary<string, double>? EnvironmentWeights = null)
 {
     public const string AllRequests = "*";
 
@@ -157,8 +166,23 @@ public sealed record RunPlan(
 
     private static readonly IReadOnlyDictionary<string, RunBodySource> NoBodies = new Dictionary<string, RunBodySource>(StringComparer.Ordinal);
 
+    /// <summary>The environments listed in the plan; empty when the run uses the selected one.</summary>
+    public IReadOnlyList<WorkspacePath> EnvironmentList => Environments ?? [];
+
+    /// <summary>The weight of each environment path; empty when none is set.</summary>
+    public IReadOnlyDictionary<string, double> EnvironmentWeightsByPath => EnvironmentWeights ?? NoWeights;
+
+    /// <summary>The relative chance of an environment with <see cref="RequestOrder.Random"/>.</summary>
+    public double EnvironmentWeightOf(WorkspacePath environment) =>
+        EnvironmentWeightsByPath.TryGetValue(environment.Value, out var weight) ? weight : 1;
+
+    /// <summary>How many environments a virtual user sends the requests of one iteration with.</summary>
+    public int EnvironmentsPerIteration =>
+        EnvironmentList.Count == 0 || EnvironmentOrder is RequestOrder.Random or RequestOrder.RoundRobin ? 1 : EnvironmentList.Count;
+
     /// <summary>How many requests a virtual user sends in one iteration.</summary>
-    public int RequestsPerIteration => Order is RequestOrder.Sequential or RequestOrder.Shuffle ? EnabledRequests.Count : Math.Min(1, EnabledRequests.Count);
+    public int RequestsPerIteration =>
+        (Order is RequestOrder.Sequential or RequestOrder.Shuffle ? EnabledRequests.Count : Math.Min(1, EnabledRequests.Count)) * EnvironmentsPerIteration;
 
     /// <summary>
     /// The most threads a run may use. Threads are async tasks and each keeps one pooled
@@ -182,9 +206,29 @@ public sealed record RunPlan(
             errors.Add("The plan needs a name.");
         }
 
-        if (Environment is { } environment && !WorkspaceLayout.IsEnvironmentPath(environment))
+        foreach (var environment in EnvironmentList)
         {
-            errors.Add($"'environment' must be an environment file such as {WorkspaceLayout.EnvironmentsFolder}/dev.yaml, not '{environment}'.");
+            if (!WorkspaceLayout.IsEnvironmentPath(environment))
+            {
+                errors.Add($"'environments' must list environment files such as {WorkspaceLayout.EnvironmentsFolder}/dev.yaml, not '{environment}'.");
+            }
+        }
+
+        foreach (var (key, weight) in EnvironmentWeightsByPath)
+        {
+            if (!EnvironmentList.Any(environment => environment.Value == key))
+            {
+                errors.Add($"'environmentWeights' refers to '{key}', which is not in the environment list.");
+            }
+            else if (!double.IsFinite(weight) || weight < 0)
+            {
+                errors.Add($"The weight of '{key}' must be zero or more.");
+            }
+        }
+
+        if (EnvironmentOrder == RequestOrder.Random && EnvironmentList.Count > 0 && EnvironmentList.All(environment => EnvironmentWeightOf(environment) <= 0))
+        {
+            errors.Add("At least one environment needs a weight greater than zero.");
         }
 
         if (Requests.Count == 0)

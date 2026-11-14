@@ -178,12 +178,67 @@ public class RunDomainTests
     [InlineData("environments/nested/load.yaml", false)]
     [InlineData("requests/load.yaml", false)]
     [InlineData("environments/load.txt", false)]
-    public void Validate_ChecksTheEnvironmentIsAnEnvironmentFile(string environment, bool valid)
+    public void Validate_ChecksTheEnvironmentsAreEnvironmentFiles(string environment, bool valid)
     {
-        var errors = (Plan() with { Environment = WorkspacePath.Parse(environment) }).Validate();
+        var errors = (Plan() with { Environments = [WorkspacePath.Parse("environments/dev.yaml"), WorkspacePath.Parse(environment)] }).Validate();
 
         Assert.Equal(valid, errors.Count == 0);
-        Assert.All(errors, error => Assert.Contains("'environment'", error));
+        Assert.All(errors, error => Assert.Contains("'environments'", error));
+    }
+
+    private static RunPlan EnvironmentPlan(RequestOrder order, Dictionary<string, double>? weights = null) => OrderPlan(RequestOrder.Sequential) with
+    {
+        Environments = new[] { "environments/dev.yaml", "environments/qa.yaml", "environments/load.yaml" }.Select(WorkspacePath.Parse).ToList(),
+        EnvironmentOrder = order,
+        EnvironmentWeights = weights,
+    };
+
+    [Fact]
+    public void EnvironmentPicker_FollowsTheEnvironmentOrder()
+    {
+        var random = new Random(1);
+
+        Assert.Equal(
+            ["environments/dev.yaml", "environments/qa.yaml", "environments/load.yaml"],
+            Names(new EnvironmentPicker(EnvironmentPlan(RequestOrder.Sequential)).ForIteration(0, 0, random)));
+        var roundRobin = new EnvironmentPicker(EnvironmentPlan(RequestOrder.RoundRobin));
+        Assert.Equal("environments/qa.yaml", Assert.Single(roundRobin.ForIteration(0, 1, random)).Value);
+        Assert.Equal("environments/load.yaml", Assert.Single(roundRobin.ForIteration(1, 1, random)).Value);
+        Assert.Empty(new EnvironmentPicker(OrderPlan(RequestOrder.Sequential)).ForIteration(0, 0, random));
+    }
+
+    [Fact]
+    public void EnvironmentPicker_Random_FollowsTheWeights()
+    {
+        var picker = new EnvironmentPicker(EnvironmentPlan(RequestOrder.Random, new() { ["environments/dev.yaml"] = 0, ["environments/load.yaml"] = 3 }));
+        var random = new Random(7);
+        var counts = new Dictionary<string, int>();
+        for (var i = 0; i < 4000; i++)
+        {
+            var name = Assert.Single(picker.ForIteration(0, i, random)).Value;
+            counts[name] = counts.GetValueOrDefault(name) + 1;
+        }
+
+        Assert.False(counts.ContainsKey("environments/dev.yaml"));
+        Assert.InRange(counts["environments/load.yaml"] / (double)counts["environments/qa.yaml"], 2.5, 3.5);
+    }
+
+    [Fact]
+    public void RequestsPerIteration_CountsEachEnvironmentOfTheIteration()
+    {
+        Assert.Equal(9, EnvironmentPlan(RequestOrder.Sequential).RequestsPerIteration);
+        Assert.Equal(9, EnvironmentPlan(RequestOrder.Shuffle).RequestsPerIteration);
+        Assert.Equal(3, EnvironmentPlan(RequestOrder.Random).RequestsPerIteration);
+        Assert.Equal(3, EnvironmentPlan(RequestOrder.RoundRobin).RequestsPerIteration);
+    }
+
+    [Fact]
+    public void Validate_RejectsBadEnvironmentWeights()
+    {
+        Assert.Contains("environments/gone.yaml", Assert.Single(EnvironmentPlan(RequestOrder.Random, new() { ["environments/gone.yaml"] = 1 }).Validate()));
+        Assert.Contains("zero or more", Assert.Single(EnvironmentPlan(RequestOrder.Random, new() { ["environments/dev.yaml"] = -1 }).Validate()));
+        var allZero = EnvironmentPlan(RequestOrder.Random, new() { ["environments/dev.yaml"] = 0, ["environments/qa.yaml"] = 0, ["environments/load.yaml"] = 0 });
+        Assert.Contains("environment needs a weight", Assert.Single(allZero.Validate()));
     }
 
     [Fact]

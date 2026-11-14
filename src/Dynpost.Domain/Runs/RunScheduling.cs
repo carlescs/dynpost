@@ -112,44 +112,75 @@ public sealed class DataCursor(int count, SelectionMode mode, EndBehavior onEof,
 /// <see cref="RunPlan.Order"/>. Holds no mutable state, so threads can share it as long as each
 /// passes its own <see cref="Random"/>.
 /// </summary>
-public sealed class RequestPicker
+public sealed class RequestPicker(RunPlan plan)
 {
-    private readonly RunPlan _plan;
+    private readonly OrderPicker<WorkspacePath> _picker = new(plan.Requests, plan.Order, plan.WeightOf);
+
+    /// <summary>The requests to send, in order, in iteration <paramref name="iteration"/> of a thread.</summary>
+    public IReadOnlyList<WorkspacePath> ForIteration(int thread, int iteration, Random random) =>
+        _picker.ForIteration(thread, iteration, random);
+}
+
+/// <summary>
+/// Picks the environments a virtual user sends an iteration's requests with, following the plan's
+/// <see cref="RunPlan.EnvironmentOrder"/>, like <see cref="RequestPicker"/> picks requests.
+/// </summary>
+public sealed class EnvironmentPicker(RunPlan plan)
+{
+    private readonly OrderPicker<WorkspacePath> _picker = new(plan.EnvironmentList, plan.EnvironmentOrder, plan.EnvironmentWeightOf);
+
+    /// <summary>
+    /// The environments of iteration <paramref name="iteration"/> of a thread, in order; empty
+    /// when the plan lists none (the selected environment is used).
+    /// </summary>
+    public IReadOnlyList<WorkspacePath> ForIteration(int thread, int iteration, Random random) =>
+        _picker.ForIteration(thread, iteration, random);
+}
+
+/// <summary>
+/// Picks items for one iteration with a <see cref="RequestOrder"/>: all in order, all shuffled,
+/// one at random by weight, or the next one (round robin, each thread starting at a different one).
+/// Holds no mutable state.
+/// </summary>
+public sealed class OrderPicker<T>
+{
+    private readonly IReadOnlyList<T> _items;
+    private readonly RequestOrder _order;
     private readonly double[] _cumulative;
 
-    public RequestPicker(RunPlan plan)
+    public OrderPicker(IReadOnlyList<T> items, RequestOrder order, Func<T, double> weight)
     {
-        _plan = plan;
-        _cumulative = new double[plan.Requests.Count];
+        _items = items;
+        _order = order;
+        _cumulative = new double[items.Count];
         var total = 0d;
-        for (var i = 0; i < plan.Requests.Count; i++)
+        for (var i = 0; i < items.Count; i++)
         {
-            total += Math.Max(0, plan.WeightOf(plan.Requests[i]));
+            total += Math.Max(0, weight(items[i]));
             _cumulative[i] = total;
         }
     }
 
-    /// <summary>The requests to send, in order, in iteration <paramref name="iteration"/> of a thread.</summary>
-    public IReadOnlyList<WorkspacePath> ForIteration(int thread, int iteration, Random random)
+    /// <summary>The items of iteration <paramref name="iteration"/> of a thread, in order.</summary>
+    public IReadOnlyList<T> ForIteration(int thread, int iteration, Random random)
     {
-        var requests = _plan.Requests;
-        if (requests.Count == 0)
+        if (_items.Count == 0)
         {
             return [];
         }
 
-        switch (_plan.Order)
+        switch (_order)
         {
             case RequestOrder.Shuffle:
-                var shuffled = requests.ToArray();
+                var shuffled = _items.ToArray();
                 random.Shuffle(shuffled);
                 return shuffled;
             case RequestOrder.Random:
-                return [requests[PickWeighted(random)]];
+                return [_items[PickWeighted(random)]];
             case RequestOrder.RoundRobin:
-                return [requests[(int)(((long)thread + iteration) % requests.Count)]];
+                return [_items[(int)(((long)thread + iteration) % _items.Count)]];
             default:
-                return requests;
+                return _items;
         }
     }
 
@@ -170,7 +201,7 @@ public sealed class RequestPicker
             }
         }
 
-        // Rounding can leave the target at the very end: take the last request that has a weight.
+        // Rounding can leave the target at the very end: take the last item that has a weight.
         return Array.FindIndex(_cumulative, value => value >= total);
     }
 }

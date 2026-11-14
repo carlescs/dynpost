@@ -31,6 +31,8 @@ import {
   removeAssertion,
   removeBody,
   setAssertionStatus,
+  setPlanEnvironmentOrder,
+  setPlanEnvironments,
   setPlanOrder,
   setPlanRequestEnabled,
   setPlanRequests,
@@ -81,6 +83,36 @@ const ORDERS: Record<RequestOrder, { label: string; hint: string }> = {
   },
 };
 
+/** How each environment order is offered in the form. */
+const ENVIRONMENT_ORDERS: Record<RequestOrder, { label: string; hint: string }> = {
+  sequential: {
+    label: 'In order',
+    hint: 'Each iteration, every user sends the requests with each environment in this order',
+  },
+  shuffle: {
+    label: 'Shuffled',
+    hint: 'Each iteration, every user sends the requests with each environment, in a new random order',
+  },
+  random: {
+    label: 'Random',
+    hint: 'Each iteration, every user sends the requests with one environment, picked at random by weight',
+  },
+  roundRobin: {
+    label: 'Round robin',
+    hint: 'Each iteration, every user sends the requests with the next environment; users start at different ones',
+  },
+};
+
+/** Each item's share of the picks with the `random` order, as whole percentages. */
+function sharesOf(weights: (string | undefined)[]): number[] {
+  const values = weights.map((weight) => {
+    const value = weight === undefined || weight === '' ? 1 : Number(weight);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  });
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return values.map((value) => (total > 0 ? Math.round((value / total) * 100) : 0));
+}
+
 /** The most users the slider goes up to; the number field next to it takes more. */
 const SLIDER_MAX = 200;
 
@@ -103,6 +135,7 @@ export class RunPlanForm {
   protected readonly thresholds = THRESHOLDS;
   protected readonly orders = REQUEST_ORDERS;
   protected readonly orderInfo = ORDERS;
+  protected readonly environmentOrderInfo = ENVIRONMENT_ORDERS;
   protected readonly allRequests = ASSERT_ALL;
   protected readonly sliderMax = SLIDER_MAX;
   protected readonly methodColors = METHOD_COLORS;
@@ -169,22 +202,41 @@ export class RunPlanForm {
     return form.requests.filter((path) => !disabled.has(path)).length;
   });
 
-  /** The workspace's environments a plan can run with, by workspace path. */
-  protected readonly environments = computed(() =>
-    this.environmentStore
-      .environments()
-      .map((env) => ({ path: environmentPath(env.id), name: env.name })),
+  /** The workspace's environments, by workspace path. */
+  private readonly workspaceEnvironments = computed(
+    () =>
+      new Map(
+        this.environmentStore.environments().map((env) => [environmentPath(env.id), env.name]),
+      ),
   );
 
-  /** The environment selected in the app, which runs use when the plan names none. */
+  /** The environment selected in the app, which runs use when the plan lists none. */
   protected readonly selectedEnvironment = computed(
     () => this.environmentStore.active()?.name ?? null,
   );
 
-  /** Whether the plan names an environment that isn't in the workspace. */
-  protected readonly environmentMissing = computed(() => {
-    const environment = this.form()?.environment;
-    return !!environment && !this.environments().some((env) => env.path === environment);
+  /** The plan's environments in order, with their names, flagging those not in the workspace. */
+  protected readonly environmentSteps = computed(() => {
+    const known = this.workspaceEnvironments();
+    return (this.form()?.environments ?? []).map((path) => ({
+      path,
+      name: known.get(path) ?? path,
+      missing: !known.has(path),
+    }));
+  });
+
+  /** Environments that can still be added to the plan. */
+  protected readonly availableEnvironments = computed(() => {
+    const used = new Set(this.form()?.environments ?? []);
+    return [...this.workspaceEnvironments()]
+      .filter(([path]) => !used.has(path))
+      .map(([path, name]) => ({ path, name }));
+  });
+
+  /** Each environment's share of the picks with the `random` environment order. */
+  protected readonly environmentShares = computed(() => {
+    const form = this.form();
+    return form ? sharesOf(form.environments.map((path) => form.environmentWeights[path])) : [];
   });
 
   /** Requests that can still be added to the plan. */
@@ -203,13 +255,18 @@ export class RunPlanForm {
     const requests = picksOneRequest(form.order)
       ? Math.min(1, this.enabledCount())
       : this.enabledCount();
+    const environments =
+      form.environments.length === 0 || picksOneRequest(this.environmentOrder(form))
+        ? 1
+        : form.environments.length;
     return {
       threads,
       iterations,
       timed,
       oneEach: picksOneRequest(form.order),
       requests,
-      total: threads * iterations * requests,
+      environments,
+      total: threads * iterations * requests * environments,
       rampUpMs: parseDuration(form.rampUp) ?? 0,
       durationMs: timed ? parseDuration(form.duration) : null,
     };
@@ -245,20 +302,55 @@ export class RunPlanForm {
   protected readonly shares = computed(() => {
     const form = this.form();
     if (!form) return [];
-    const weights = form.requests.map((path) => {
-      if (form.disabled.includes(path)) return 0;
-      const weight = form.weights[path];
-      const value = weight === undefined || weight === '' ? 1 : Number(weight);
-      return Number.isFinite(value) && value > 0 ? value : 0;
-    });
-    const total = weights.reduce((sum, weight) => sum + weight, 0);
-    return weights.map((weight) => (total > 0 ? Math.round((weight / total) * 100) : 0));
+    return sharesOf(
+      form.requests.map((path) => (form.disabled.includes(path) ? '0' : form.weights[path])),
+    );
   });
 
-  protected setEnvironment(event: Event): void {
+  /** The plan's environment order, `sequential` when it isn't set or isn't one the form knows. */
+  protected environmentOrder(form: PlanForm): RequestOrder {
+    return (REQUEST_ORDERS as readonly string[]).includes(form.environmentOrder)
+      ? (form.environmentOrder as RequestOrder)
+      : 'sequential';
+  }
+
+  protected setEnvironmentOrder(event: Event): void {
+    this.emit(setPlanEnvironmentOrder(this.yaml(), (event.target as HTMLSelectElement).value));
+  }
+
+  protected setEnvironmentWeight(path: string, event: Event): void {
+    const value = (event.target as HTMLInputElement).value.trim();
+    this.emit(setPlanValue(this.yaml(), ['environmentWeights', path], value === '1' ? '' : value));
+  }
+
+  protected addEnvironment(select: HTMLSelectElement, form: PlanForm): void {
+    if (!select.value) return;
+    this.emit(setPlanEnvironments(this.yaml(), [...form.environments, select.value]));
+    select.value = '';
+  }
+
+  protected removeEnvironment(form: PlanForm, index: number): void {
     this.emit(
-      setPlanValue(this.yaml(), ['environment'], (event.target as HTMLSelectElement).value),
+      setPlanEnvironments(
+        this.yaml(),
+        form.environments.filter((_, i) => i !== index),
+      ),
     );
+  }
+
+  protected moveEnvironment(form: PlanForm, index: number, by: -1 | 1): void {
+    const environments = [...form.environments];
+    [environments[index], environments[index + by]] = [
+      environments[index + by],
+      environments[index],
+    ];
+    this.emit(setPlanEnvironments(this.yaml(), environments));
+  }
+
+  protected dropEnvironment(form: PlanForm, event: CdkDragDrop<unknown>): void {
+    const environments = [...form.environments];
+    environments.splice(event.currentIndex, 0, ...environments.splice(event.previousIndex, 1));
+    this.emit(setPlanEnvironments(this.yaml(), environments));
   }
 
   protected setOrder(event: Event): void {

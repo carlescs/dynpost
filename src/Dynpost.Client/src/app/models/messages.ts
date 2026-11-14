@@ -726,6 +726,8 @@ export interface RunSampleDto {
    * with `run.response`.
    */
   responseFile?: string | null;
+  /** The environment the request was sent with, when the plan lists its environments. */
+  environment?: string | null;
 }
 
 export type RunState = 'running' | 'completed' | 'cancelled' | 'failed';

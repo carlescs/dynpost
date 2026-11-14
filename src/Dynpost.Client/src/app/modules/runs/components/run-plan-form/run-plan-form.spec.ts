@@ -42,8 +42,7 @@ describe('RunPlanForm', () => {
     expect(steps[1]).toContain('Not found in the workspace');
   });
 
-  it('offers the workspace environments, defaulting to the selected one', () => {
-    const { fixture, element, emitted } = create(PLAN);
+  function useEnvironments(fixture: { detectChanges(): void }) {
     const environments = TestBed.inject(EnvironmentStore);
     environments.environments.set([
       { id: 'dev.yaml', name: 'Dev' },
@@ -51,31 +50,76 @@ describe('RunPlanForm', () => {
     ]);
     environments.activeId.set('dev.yaml');
     fixture.detectChanges();
-    const select = element.querySelector<HTMLSelectElement>('select[aria-label="Environment"]')!;
-    const options = [...select.options].map((option) => option.textContent!.trim());
-    expect(options).toEqual(['Selected environment (Dev)', 'Dev', 'Load']);
-    expect(select.value).toBe('');
+  }
 
-    select.value = 'environments/load.yaml';
-    select.dispatchEvent(new Event('change'));
+  const ENV_PLAN = PLAN.replace(
+    'load:',
+    'environments:\n  - environments/dev.yaml\n  - environments/gone.yaml\nload:',
+  );
+
+  it('uses the selected environment until environments are added from the workspace', () => {
+    const { fixture, element, emitted } = create(PLAN);
+    useEnvironments(fixture);
+    expect(element.querySelector('[data-environment-hint]')!.textContent).toContain(
+      'selected in the app (Dev)',
+    );
+    expect(element.querySelector('select[aria-label="Environment order"]')).toBeNull();
+    const add = element.querySelector<HTMLSelectElement>('select[aria-label="Add environment"]')!;
+    expect([...add.options].map((option) => option.textContent!.trim())).toEqual([
+      '+ Add an environment…',
+      'Dev',
+      'Load',
+    ]);
+
+    add.value = 'environments/load.yaml';
+    add.dispatchEvent(new Event('change'));
     expect(emitted).toEqual([
-      PLAN.replace('name: Smoke\n', 'name: Smoke\nenvironment: environments/load.yaml\n'),
+      PLAN.replace('load:', 'environments:\n  - environments/load.yaml\nload:'),
     ]);
   });
 
-  it('clears the environment and flags one that is not in the workspace', () => {
-    const plan = PLAN.replace(
-      'name: Smoke\n',
-      'name: Smoke\nenvironment: environments/gone.yaml\n',
-    );
-    const { element, emitted } = create(plan);
-    const select = element.querySelector<HTMLSelectElement>('select[aria-label="Environment"]')!;
-    expect(select.value).toBe('environments/gone.yaml');
-    expect(element.querySelector('[data-environment-missing]')).not.toBeNull();
+  it('lists the environments in order, flagging missing ones and offering the rest', () => {
+    const { fixture, element, emitted } = create(ENV_PLAN);
+    useEnvironments(fixture);
+    const steps = [...element.querySelectorAll('[data-environment]')].map((s) => s.textContent);
+    expect(steps[0]).toContain('Dev');
+    expect(steps[1]).toContain('Not found in the workspace');
+    const add = element.querySelector<HTMLSelectElement>('select[aria-label="Add environment"]')!;
+    expect([...add.options].map((option) => option.value)).toEqual(['', 'environments/load.yaml']);
 
-    select.value = '';
-    select.dispatchEvent(new Event('change'));
-    expect(emitted).toEqual([PLAN]);
+    element.querySelector<HTMLButtonElement>('[aria-label="Move environment down"]')!.click();
+    expect(emitted).toEqual([
+      ENV_PLAN.replace(
+        '  - environments/dev.yaml\n  - environments/gone.yaml',
+        '  - environments/gone.yaml\n  - environments/dev.yaml',
+      ),
+    ]);
+  });
+
+  it('picks environments at random by weight and counts them in the load summary', () => {
+    const plan = PLAN.replace(
+      'load:',
+      'environments:\n  - environments/dev.yaml\n  - environments/load.yaml\nenvironmentOrder: random\nenvironmentWeights:\n  environments/load.yaml: 3\nload:',
+    );
+    const { fixture, element, emitted } = create(plan);
+    useEnvironments(fixture);
+    const shares = [...element.querySelectorAll('[data-environment-share]')].map((s) =>
+      s.textContent!.trim(),
+    );
+    expect(shares).toEqual(['25%', '75%']);
+    const summary = () =>
+      element.querySelector('[data-summary]')!.textContent!.replace(/\s+/g, ' ');
+    expect(summary()).toContain('5 users × 10 iterations × 1 request = 50 requests');
+
+    const order = element.querySelector<HTMLSelectElement>(
+      'select[aria-label="Environment order"]',
+    )!;
+    order.value = 'sequential';
+    order.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([plan.replace('environmentOrder: random\n', '')]);
+    fixture.componentRef.setInput('yaml', emitted[0]);
+    fixture.detectChanges();
+    expect(summary()).toContain('× 1 request × 2 environments = 100 requests');
   });
 
   it('sums up the load of the plan', () => {

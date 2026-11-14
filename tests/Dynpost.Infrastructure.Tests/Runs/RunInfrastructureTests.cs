@@ -196,13 +196,21 @@ public sealed class RunInfrastructureTests : IDisposable
     }
 
     [Fact]
-    public void Parse_ReadsTheEnvironment()
+    public void Parse_ReadsTheEnvironmentsWithTheirOrderAndWeights()
     {
         var format = new YamlRunPlanFormat();
+        var plan = format.Parse(
+            "name: x\nrequests: [a.yaml]\nenvironments:\n  - environments/dev.yaml\n  - environments/load.yaml\n"
+            + "environmentOrder: random\nenvironmentWeights:\n  environments/load.yaml: 3\nload: {threads: 1, iterations: 1}\n");
 
-        Assert.Equal("environments/load.yaml", format.Parse("name: x\nenvironment: environments/load.yaml\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.Environment?.Value);
-        Assert.Null(format.Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.Environment);
-        Assert.Null(format.Parse("name: x\nenvironment: ''\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.Environment);
+        Assert.True(plan.IsSuccess, plan.Error?.Message);
+        Assert.Equal(["environments/dev.yaml", "environments/load.yaml"], plan.Value.EnvironmentList.Select(e => e.Value));
+        Assert.Equal(RequestOrder.Random, plan.Value.EnvironmentOrder);
+        Assert.Equal(3, plan.Value.EnvironmentWeightsByPath["environments/load.yaml"]);
+
+        var none = format.Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value;
+        Assert.Empty(none.EnvironmentList);
+        Assert.Equal(RequestOrder.Sequential, none.EnvironmentOrder);
     }
 
     [Theory]
@@ -214,7 +222,10 @@ public sealed class RunInfrastructureTests : IDisposable
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nassert:\n  '*':\n    status: 20\n", "status")]
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\ndata:\n  file: a.csv\n  mode: shuffle\n", "data.mode")]
     [InlineData("name: x\nrequests: [../a.yaml]\nload: {threads: 1, iterations: 1}\n", "not a valid workspace path")]
-    [InlineData("name: x\nenvironment: ../dev.yaml\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n", "'environment'")]
+    [InlineData("name: x\nenvironments: [../dev.yaml]\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n", "'environments'")]
+    [InlineData("name: x\nenvironments: environments/dev.yaml\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n", "'environments' must be a list")]
+    [InlineData("name: x\nrequests: [a.yaml]\nenvironmentOrder: backwards\nload: {threads: 1, iterations: 1}\n", "'environmentOrder'")]
+    [InlineData("name: x\nrequests: [a.yaml]\nenvironmentWeights: {environments/dev.yaml: lots}\nload: {threads: 1, iterations: 1}\n", "environmentWeights.environments/dev.yaml")]
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1, maxRps: Infinity}\n", "load.maxRps")]
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nthresholds: {throughput: NaN}\n", "thresholds.throughput")]
     public void Parse_ReportsProblems(string yaml, string expected)

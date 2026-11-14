@@ -5,6 +5,8 @@ import {
   removeAssertion,
   removeBody,
   setAssertionStatus,
+  setPlanEnvironmentOrder,
+  setPlanEnvironments,
   setPlanOrder,
   setPlanRequestEnabled,
   setPlanRequests,
@@ -43,14 +45,30 @@ describe('run plan form', () => {
     expect(setPlanOrder(next, 'sequential')).not.toContain('order:');
   });
 
-  it('sets and clears the environment, right after the name', () => {
-    expect(readPlanForm(PLAN)!.environment).toBe('');
-    const set = setPlanValue(PLAN, ['environment'], 'environments/load.yaml');
-    expect(set).toBe(
-      PLAN.replace('name: Smoke\n', 'name: Smoke\nenvironment: environments/load.yaml\n'),
+  it('reads and writes the environments, their order and weights', () => {
+    expect(readPlanForm(PLAN)!.environments).toEqual([]);
+    let next = setPlanEnvironments(PLAN, ['environments/dev.yaml', 'environments/load.yaml']);
+    expect(next).toContain(
+      'requests:\n  - a.yaml\nenvironments:\n  - environments/dev.yaml\n  - environments/load.yaml\nload:',
     );
-    expect(readPlanForm(set)!.environment).toBe('environments/load.yaml');
-    expect(setPlanValue(set, ['environment'], '')).toBe(PLAN);
+    next = setPlanEnvironmentOrder(next, 'random');
+    next = setPlanValue(next, ['environmentWeights', 'environments/load.yaml'], '3');
+    const form = readPlanForm(next)!;
+    expect(form.environments).toEqual(['environments/dev.yaml', 'environments/load.yaml']);
+    expect(form.environmentOrder).toBe('random');
+    expect(form.environmentWeights).toEqual({ 'environments/load.yaml': '3' });
+    expect(next.indexOf('environmentWeights:')).toBeLessThan(next.indexOf('load:'));
+    expect(setPlanEnvironmentOrder(next, 'sequential')).not.toContain('environmentOrder');
+  });
+
+  it('drops the weights of removed environments, and the order with the last one', () => {
+    let plan = setPlanEnvironments(PLAN, ['environments/dev.yaml', 'environments/load.yaml']);
+    plan = setPlanEnvironmentOrder(plan, 'random');
+    plan = setPlanValue(plan, ['environmentWeights', 'environments/load.yaml'], '2');
+    const one = setPlanEnvironments(plan, ['environments/dev.yaml']);
+    expect(one).not.toContain('environmentWeights');
+    expect(one).toContain('environmentOrder: random');
+    expect(setPlanEnvironments(one, [])).toBe(PLAN);
   });
 
   it('turns saving responses on and off', () => {
