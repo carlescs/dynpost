@@ -119,6 +119,13 @@ export class CodeEditor {
       fontSize: 12,
       lineNumbersMinChars: 3,
       minimap: { enabled: false },
+      scrollbar: {
+        useShadows: false,
+        verticalScrollbarSize: 8,
+        horizontalScrollbarSize: 8,
+        verticalSliderSize: 4,
+        horizontalSliderSize: 4,
+      },
       scrollBeyondLastLine: false,
       renderLineHighlight: this.readOnly() ? 'none' : 'line',
       tabSize: 2,
