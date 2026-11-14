@@ -115,4 +115,82 @@ public class InheritedDefaultsTests
 
         Assert.Equal(["The header 'accept' is defined more than once.", "Every header needs a name."], defaults.Validate());
     }
+
+    [Fact]
+    public void From_LetsCloserFoldersReplaceVariablesOfTheSameName()
+    {
+        var inherited = InheritedDefaults.From([
+            (Requests, new FolderDefaults(variables: [new KeyValueEntry("page", "1"), new KeyValueEntry("size", "10"), new KeyValueEntry("Page", "x")])),
+            (Users, new FolderDefaults(variables: [new KeyValueEntry("page", "2"), new KeyValueEntry("size", "50", Enabled: false)])),
+        ]);
+
+        Assert.Equal(
+            [new InheritedVariable("size", "10", Requests), new InheritedVariable("Page", "x", Requests), new InheritedVariable("page", "2", Users)],
+            inherited.Variables);
+    }
+
+    [Fact]
+    public void ResolveVariables_AddsFolderVariablesTheEnvironmentLacks_TheEnvironmentWinning()
+    {
+        var inherited = InheritedDefaults.From([
+            (Requests, new FolderDefaults(variables: [new KeyValueEntry("host", "folder.test"), new KeyValueEntry("usersUrl", "{{baseUrl}}/users")])),
+            (Users, new FolderDefaults(variables: [new KeyValueEntry("adminUrl", "{{usersUrl}}/admin")])),
+        ]);
+
+        var resolved = inherited.ResolveVariables(new Dictionary<string, string> { ["host"] = "env.test", ["baseUrl"] = "https://env.test" });
+
+        Assert.Empty(resolved.Cycle);
+        Assert.Equal("env.test", resolved.Values["host"]);
+        Assert.Equal("https://env.test/users", resolved.Values["usersUrl"]);
+        Assert.Equal("https://env.test/users/admin", resolved.Values["adminUrl"]);
+    }
+
+    [Fact]
+    public void ResolveVariables_DoesNotExpandEnvironmentValuesAgain()
+    {
+        var inherited = InheritedDefaults.From([(Requests, new FolderDefaults(variables: [new KeyValueEntry("echo", "<{{captured}}>"), new KeyValueEntry("x", "folder")]))]);
+
+        var resolved = inherited.ResolveVariables(new Dictionary<string, string> { ["captured"] = "{{x}}" });
+
+        Assert.Equal("<{{x}}>", resolved.Values["echo"]);
+    }
+
+    [Fact]
+    public void ResolveVariables_LeavesUnknownReferencesAndReportsLoops()
+    {
+        var inherited = InheritedDefaults.From([
+            (Requests, new FolderDefaults(variables: [new KeyValueEntry("a", "{{b}}"), new KeyValueEntry("unknown", "{{nope}}")])),
+            (Users, new FolderDefaults(variables: [new KeyValueEntry("b", "{{a}}")])),
+        ]);
+
+        var resolved = inherited.ResolveVariables(new Dictionary<string, string>());
+
+        Assert.Equal(["a", "b"], resolved.Cycle);
+        Assert.Equal("{{nope}}", resolved.Values["unknown"]);
+        Assert.False(resolved.Values.ContainsKey("a"));
+        Assert.Equal([Requests, Users], inherited.FoldersOf(resolved.Cycle));
+    }
+
+    [Fact]
+    public void ResolveVariables_WithoutFolderVariables_ReturnsTheEnvironment()
+    {
+        var environment = new Dictionary<string, string> { ["a"] = "1" };
+
+        Assert.Same(environment, InheritedDefaults.None.ResolveVariables(environment).Values);
+    }
+
+    [Fact]
+    public void FolderDefaults_WithOnlyVariables_IsNotEmpty_AndValidatesTheirNames()
+    {
+        var defaults = new FolderDefaults(variables: [new KeyValueEntry("ok", "1"), new KeyValueEntry("ok", "2"), new KeyValueEntry("bad name", "3"), new KeyValueEntry("", "4")]);
+
+        Assert.False(defaults.IsEmpty);
+        Assert.Equal(
+            [
+                "The variable 'ok' is defined more than once.",
+                "'bad name' is not a valid variable name: it can't contain spaces or braces.",
+                "Every variable needs a name.",
+            ],
+            defaults.Validate());
+    }
 }

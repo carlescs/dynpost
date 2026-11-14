@@ -592,11 +592,12 @@ export class WorkspaceStore {
     this.tabs.set(tabs.filter((k) => !removed.has(k)));
   }
 
-  /** Closes a request document's tab, after asking if it has unsaved changes. */
-  async close(id: string): Promise<void> {
+  /** Closes a request document's tab, after asking (unless `ask` is false) if it has unsaved changes. */
+  async close(id: string, ask = true): Promise<void> {
     const doc = this.documents().find((d) => d.id === id);
     if (!doc) return;
     if (
+      ask &&
       doc.dirty &&
       !(await this.dialogs.confirm(`Discard unsaved changes to "${doc.name}"?`, DISCARD))
     ) {

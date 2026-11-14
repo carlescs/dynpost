@@ -173,10 +173,10 @@ internal static class BridgeMessageTypes
     /// <summary>Deletes a folder with its requests. Payload: <see cref="DeleteFolderPayload"/>. Result: none.</summary>
     public const string FolderDelete = "folder.delete";
 
-    /// <summary>Reads the headers and auth a folder sets (its <c>_folder.yaml</c>). Payload: <see cref="FolderSettingsPathPayload"/>. Result: folder settings.</summary>
+    /// <summary>Reads the headers, auth and variables a folder sets (its <c>_folder.yaml</c>). Payload: <see cref="FolderSettingsPathPayload"/>. Result: folder settings.</summary>
     public const string FolderSettingsLoad = "folder.settings.load";
 
-    /// <summary>Saves the headers and auth a folder sets. Payload: <see cref="SaveFolderSettingsPayload"/>. Result: folder settings as saved.</summary>
+    /// <summary>Saves the headers, auth and variables a folder sets. Payload: <see cref="SaveFolderSettingsPayload"/>. Result: folder settings as saved.</summary>
     public const string FolderSettingsSave = "folder.settings.save";
 
     /// <summary>

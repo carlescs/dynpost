@@ -66,7 +66,8 @@ internal static class McpTools
         "A request is { name, method, url, params: [{ key, value, enabled }], headers: [{ key, value, enabled }], "
         + "auth: { type: inherit|none|basic|bearer|apiKey|oauth2, ... } (inherit, the default, uses the auth of the closest folder that sets one), body: { type: none|json|text|form|urlencoded|graphql|binary, content }, "
         + "description?, captures?: [{ variable, expression }] }. Values may use {{variable}} references, resolved with the selected environment when sent. "
-        + "A request is sent with the headers its folders set too (see get_folder_settings), unless it sets the same header itself.";
+        + "A request is sent with the headers its folders set too (see get_folder_settings), unless it sets the same header itself, "
+        + "and can use the variables its folders set, which the selected environment's variables override.";
 
     public static IReadOnlyList<McpTool> Create(IServiceProvider services, HostEvents events)
     {
@@ -115,13 +116,14 @@ internal static class McpTools
                 changed: (_, folder) => [folder.Path])
             .Add<FolderSettingsArguments, FolderSettingsDto>(
                 "get_folder_settings", "Get folder settings",
-                "Reads the headers and auth a folder of requests/ (or requests itself) sets for every request and folder in it, from its _folder.yaml. "
-                + "Closer levels win: a sub-folder's header or auth over its parent's, a request's own over all of them. Auth type inherit passes on the parent's.",
+                "Reads the headers, auth and variables a folder of requests/ (or requests itself) sets for every request and folder in it, from its _folder.yaml. "
+                + "Closer levels win: a sub-folder's header, auth or variable over its parent's, a request's own header or auth over all of them. Auth type inherit passes on the parent's. "
+                + "Folder variables are defaults: the selected environment's variables win over them.",
                 (p, ct) => Use<LoadFolderSettings>().ExecuteAsync(p.Path, ct),
                 readOnly: true)
             .Add<SaveFolderSettingsArguments, FolderSettingsDto>(
                 "save_folder_settings", "Save folder settings",
-                "Replaces the headers ([{ key, value, enabled }]) and auth ({ type: inherit|none|basic|bearer|apiKey|oauth2, ... }) a folder of requests/ "
+                "Replaces the headers ([{ key, value, enabled }]), auth ({ type: inherit|none|basic|bearer|apiKey|oauth2, ... }) and variables ([{ key, value, enabled }]) a folder of requests/ "
                 + "(or requests itself) sets for everything in it. Read them first with get_folder_settings and send them back whole, changed.",
                 (p, ct) => Use<SaveFolderSettings>().ExecuteAsync(p.Path, p.Settings, ct),
                 changed: (p, _) => [$"{p.Path.TrimEnd('/')}/{WorkspaceLayout.FolderDefaultsFile}"],
@@ -476,14 +478,14 @@ internal sealed record CreateFolderArguments(
 internal sealed record SendArguments(
     [property: Description("The workspace path of a saved request to send, or, with request, the saved request it is a changed copy of (for its history).")] string? Path = null,
     [property: Description("A request to send as given, instead of a saved one.")] RequestDto? Request = null,
-    [property: Description("With request and no path: the folder of requests/ whose headers and auth it inherits.")] string? Folder = null);
+    [property: Description("With request and no path: the folder of requests/ whose headers, auth and variables it inherits.")] string? Folder = null);
 
 internal sealed record FolderSettingsArguments(
     [property: Description("The folder: requests, or a folder in it.")] string Path);
 
 internal sealed record SaveFolderSettingsArguments(
     [property: Description("The folder: requests, or a folder in it.")] string Path,
-    [property: Description("The folder's headers and auth.")] FolderSettingsDto Settings);
+    [property: Description("The folder's headers, auth and variables.")] FolderSettingsDto Settings);
 
 internal sealed record EnvironmentArguments(
     [property: Description("The environment's id, from list_environments.")] string Id);

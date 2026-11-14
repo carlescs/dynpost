@@ -24,16 +24,42 @@ export function splitVariables(text: string): TextSegment[] {
   return segments;
 }
 
-/** What the editors know about a variable of the selected environment. */
+/** What the editors know about a variable of the selected environment or of a folder. */
 export interface VariableInfo {
   value: string;
   secret: boolean;
   /** Whether the value was captured from a response (and overrides the environment's). */
   captured?: boolean;
+  /** The folder that sets it, for a folder variable (its value as written, not resolved). */
+  folder?: string;
 }
 
-/** The selected environment's variables by name; secrets without a local value are left out. */
+/** The variables a request can use by name; secrets without a local value are left out. */
 export type VariableLookup = ReadonlyMap<string, VariableInfo>;
+
+/** A variable a folder sets, as `InheritedVariableDto` carries it. */
+export interface FolderVariable {
+  name: string;
+  value: string;
+  /** The folder that sets it. */
+  folder: string;
+}
+
+/**
+ * The variables a request in a folder can use: the selected environment's, plus the folders'
+ * variables it doesn't define (the environment's win, as when the host sends).
+ */
+export function withFolderVariables(
+  environment: VariableLookup,
+  folders: readonly FolderVariable[],
+): VariableLookup {
+  const missing = folders.filter((v) => !environment.has(v.name));
+  if (!missing.length) return environment;
+  const combined = new Map(environment);
+  for (const v of missing)
+    combined.set(v.name, { value: v.value, secret: false, folder: v.folder });
+  return combined;
+}
 
 /** The CSS class for a `{{name}}` reference: undefined ones stand out when `variables` is known. */
 export function variableClass(name: string, variables: VariableLookup | null): string {
@@ -45,7 +71,11 @@ export function describeVariable(name: string, variables: VariableLookup | null)
   if (!variables) return `Variable ${name}`;
   const variable = variables.get(name);
   if (!variable) return `${name} is not defined in the selected environment`;
-  const source = variable.captured ? ' (captured)' : '';
+  const source = variable.captured
+    ? ' (captured)'
+    : variable.folder
+      ? ` (set by the folder ${variable.folder})`
+      : '';
   return variable.secret
     ? `${name}: secret value${source}`
     : `${name} = ${variable.value}${source}`;

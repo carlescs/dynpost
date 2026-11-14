@@ -6,7 +6,7 @@ import { EMPTY_AUTH, fromAuthDto, toAuthDto } from '../models/request-mapping';
 import { WorkspaceStore } from './workspace-store';
 import { DISCARD, Dialogs } from './dialogs';
 
-/** The file holding the headers and auth a folder sets. */
+/** The file holding the headers, auth and variables a folder sets. */
 export const FOLDER_SETTINGS_FILE = '_folder.yaml';
 
 /** The settings of a folder open in an editor tab. */
@@ -19,6 +19,8 @@ export interface FolderDraft {
   headers: KeyValue[];
   /** The auth of the requests below that inherit it; `inherit` passes on the parent's. */
   auth: RequestAuth;
+  /** Variables for the requests below; the selected environment's win over them. */
+  variables: KeyValue[];
   dirty: boolean;
   saving: boolean;
   /** Incremented on every edit, so a save can tell whether the draft changed meanwhile. */
@@ -26,7 +28,7 @@ export interface FolderDraft {
 }
 
 /**
- * The headers and auth collection folders set for the requests and folders in them (their
+ * The headers, auth and variables collection folders set for the requests and folders in them (their
  * `_folder.yaml`), open in editor tabs next to the requests. Files are read and written by the
  * .NET host, which applies them when sending.
  */
@@ -105,7 +107,7 @@ export class FolderSettingsStore {
     }
   }
 
-  update(key: string, patch: Partial<Pick<FolderDraft, 'headers' | 'auth'>>): void {
+  update(key: string, patch: Partial<Pick<FolderDraft, 'headers' | 'auth' | 'variables'>>): void {
     this.patchDraft(key, (d) => ({ ...d, ...patch, dirty: true, revision: d.revision + 1 }));
   }
 
@@ -116,7 +118,11 @@ export class FolderSettingsStore {
     try {
       const saved = await this.bridge.send('folder.settings.save', {
         path: draft.path,
-        settings: { headers: draft.headers.map((h) => ({ ...h })), auth: toAuthDto(draft.auth) },
+        settings: {
+          headers: draft.headers.map((h) => ({ ...h })),
+          auth: toAuthDto(draft.auth),
+          variables: draft.variables.map((v) => ({ ...v })),
+        },
       });
       this.patchDraft(key, (d) =>
         // Keep edits typed while the save was in flight; they still need saving.
@@ -132,11 +138,12 @@ export class FolderSettingsStore {
     }
   }
 
-  /** Closes a draft's tab, after asking if it has unsaved changes. */
-  async close(key: string): Promise<void> {
+  /** Closes a draft's tab, after asking (unless `ask` is false) if it has unsaved changes. */
+  async close(key: string, ask = true): Promise<void> {
     const draft = this.drafts().find((d) => d.key === key);
     if (!draft) return;
     if (
+      ask &&
       draft.dirty &&
       !(await this.dialogs.confirm(
         `Discard unsaved changes to the settings of "${this.nameOf(draft.path)}"?`,
@@ -206,10 +213,13 @@ export class FolderSettingsStore {
   }
 }
 
-function fromSettingsDto(dto: FolderSettingsDto): Pick<FolderDraft, 'headers' | 'auth'> {
+function fromSettingsDto(
+  dto: FolderSettingsDto,
+): Pick<FolderDraft, 'headers' | 'auth' | 'variables'> {
   return {
     headers: dto.headers.map((h) => ({ ...h })),
     auth: dto.auth ? fromAuthDto(dto.auth) : { ...EMPTY_AUTH },
+    variables: (dto.variables ?? []).map((v) => ({ ...v })),
   };
 }
 

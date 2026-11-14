@@ -29,7 +29,11 @@ import {
 import { VARIABLE_PATTERN } from '../models/variables';
 import { PLANS_FOLDER, REQUESTS_FOLDER } from '../models/workspace';
 
-const EMPTY_FOLDER_SETTINGS: FolderSettingsDto = { headers: [], auth: { type: 'inherit' } };
+const EMPTY_FOLDER_SETTINGS: FolderSettingsDto = {
+  headers: [],
+  auth: { type: 'inherit' },
+  variables: [],
+};
 
 const US_MONTHS = [
   'January',
@@ -695,11 +699,26 @@ export class MockBackend {
             .filter((h) => h.key || h.value)
             .map((h) => ({ ...h, key: h.key.trim() })),
           auth: given.auth,
+          variables: (given.variables ?? [])
+            .filter((v) => v.key || v.value)
+            .map((v) => ({ ...v, key: v.key.trim() })),
         };
         const names = settings.headers.map((h) => h.key.toLowerCase());
         if (names.some((name, i) => names.indexOf(name) !== i))
           return fail(ERROR_CODES.invalidRequest, 'A header is defined more than once.');
-        if (!settings.headers.length && settings.auth.type === 'inherit')
+        const variableNames = settings.variables!.map((v) => v.key);
+        if (variableNames.some((name) => !/^[^{}\s]+$/.test(name)))
+          return fail(
+            ERROR_CODES.invalidRequest,
+            'Every variable needs a name without spaces or braces.',
+          );
+        if (variableNames.some((name, i) => variableNames.indexOf(name) !== i))
+          return fail(ERROR_CODES.invalidRequest, 'A variable is defined more than once.');
+        if (
+          !settings.headers.length &&
+          settings.auth.type === 'inherit' &&
+          !settings.variables!.length
+        )
           this.folderSettings.delete(path);
         else this.folderSettings.set(path, structuredClone(settings));
         return ok(settings);
@@ -788,6 +807,14 @@ export class MockBackend {
     };
 
     const variables = this.variables();
+    // Folder variables are defaults: the environment's win. Roughly like the host, they may use
+    // environment variables and folder variables listed before them.
+    for (const v of inherited.variables.filter((v) => !variables.has(v.name))) {
+      variables.set(
+        v.name,
+        v.value.replace(VARIABLE_PATTERN, (match, name: string) => variables.get(name) ?? match),
+      );
+    }
     const resolve = (text: string | null | undefined) =>
       (text ?? '').replace(VARIABLE_PATTERN, (match, name: string) => variables.get(name) ?? match);
     dto = {
@@ -1110,7 +1137,12 @@ export class MockBackend {
 
   /** What everything directly inside `folder` inherits from it and the folders above. */
   private inherited(folder: string): InheritedSettingsDto {
-    const result: InheritedSettingsDto = { headers: [], auth: { type: 'none' }, authFolder: null };
+    const result: InheritedSettingsDto = {
+      headers: [],
+      auth: { type: 'none' },
+      authFolder: null,
+      variables: [],
+    };
     if (!isWithin(folder, REQUESTS_FOLDER)) return result;
     const segments = folder.split('/');
     for (let i = 1; i <= segments.length; i++) {
@@ -1126,6 +1158,10 @@ export class MockBackend {
       if (settings.auth.type !== 'inherit') {
         result.auth = structuredClone(settings.auth);
         result.authFolder = path;
+      }
+      for (const variable of (settings.variables ?? []).filter((v) => v.enabled && v.key)) {
+        result.variables = result.variables.filter((v) => v.name !== variable.key);
+        result.variables.push({ name: variable.key, value: variable.value, folder: path });
       }
     }
     return result;

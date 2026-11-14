@@ -443,8 +443,8 @@ export class RunStore {
     await this.loadHistory(key);
   }
 
-  /** Closes a plan's tab, after asking if it has unsaved changes; a running plan stays open. */
-  async close(key: string): Promise<void> {
+  /** Closes a plan's tab, after asking (unless `ask` is false) if it has unsaved changes; a running plan stays open. */
+  async close(key: string, ask = true): Promise<void> {
     const draft = this.find(key);
     if (!draft) return;
     if (isRunPlanRunning(draft)) {
@@ -453,6 +453,7 @@ export class RunStore {
       return;
     }
     if (
+      ask &&
       isRunPlanDirty(draft) &&
       !(await this.dialogs.confirm(
         `Discard unsaved changes to the run plan "${this.nameOf(draft.path)}"?`,

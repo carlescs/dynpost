@@ -30,6 +30,7 @@ describe('AuthEditor', () => {
       headers: [],
       auth: { type: 'bearer', token: '{{token}}' },
       authFolder: 'requests/users',
+      variables: [],
     });
 
     expect(text()).toContain('Uses Bearer token auth from');
@@ -42,7 +43,12 @@ describe('AuthEditor', () => {
   });
 
   it('says when no folder sets auth', () => {
-    const { text } = render(EMPTY_AUTH, { headers: [], auth: { type: 'none' }, authFolder: null });
+    const { text } = render(EMPTY_AUTH, {
+      headers: [],
+      auth: { type: 'none' },
+      authFolder: null,
+      variables: [],
+    });
     expect(text()).toContain('No folder above sets auth');
   });
 

@@ -75,6 +75,18 @@ public class ExportWorkspaceTests
     }
 
     [Fact]
+    public async Task SaysFolderVariablesAreNotExported()
+    {
+        _folders.ReadAsync(Root, WorkspacePath.Parse("requests"), Arg.Any<CancellationToken>())
+            .Returns(new FolderDefaults(variables: [new KeyValueEntry("page", "1")]));
+
+        var result = await UseCase().ExecuteAsync(new ExportWorkspaceRequest("test", "/out/api.test.json"));
+
+        Assert.Contains("1 folder sets variables; folder variables are not exported, so its requests keep their {{references}}.", result.Value.Warnings);
+        Assert.Equal("{{baseUrl}}/users/1", Assert.Single(Assert.Single(_exported!.Root.Folders).Requests).Url);
+    }
+
+    [Fact]
     public async Task WritesCompanionFilesUnderFreeNames()
     {
         // Companions go in the destination's folder, in the platform's path form.

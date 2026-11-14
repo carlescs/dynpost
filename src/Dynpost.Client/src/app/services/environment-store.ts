@@ -287,11 +287,12 @@ export class EnvironmentStore {
     }
   }
 
-  /** Closes a draft's tab, after asking if it has unsaved changes. */
-  async close(key: string): Promise<void> {
+  /** Closes a draft's tab, after asking (unless `ask` is false) if it has unsaved changes. */
+  async close(key: string, ask = true): Promise<void> {
     const draft = this.drafts().find((d) => d.key === key);
     if (!draft) return;
     if (
+      ask &&
       draft.dirty &&
       !(await this.dialogs.confirm(
         `Discard unsaved changes to the environment "${draft.name || 'Untitled'}"?`,
