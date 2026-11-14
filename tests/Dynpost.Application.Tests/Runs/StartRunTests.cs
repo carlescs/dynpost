@@ -147,6 +147,43 @@ public class StartRunTests
     }
 
     [Fact]
+    public async Task Execute_UsesFolderVariables_UnderTheCsvRow()
+    {
+        UsePlan(Plan(1, 1, new RunDataSource(WorkspacePath.Parse("perf/users.csv"), SelectionMode.Sequential, EndBehavior.Recycle))
+            with { Requests = [WorkspacePath.Parse("requests/users/get.yaml")] });
+        _data.ReadCsvAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<IReadOnlyDictionary<string, string>>>.Success([new Dictionary<string, string> { ["id"] = "7" }]));
+        _folders.ReadAsync(Root, WorkspacePath.Parse("requests/users"), Arg.Any<CancellationToken>())
+            .Returns(new FolderDefaults(variables: [new KeyValueEntry("id", "1"), new KeyValueEntry("base", "https://folder.test/users")]));
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "{{base}}/{{id}}"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        Assert.True(started.IsSuccess, started.Error?.Message);
+        await RunToEndAsync(started.Value.RunId);
+
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r => r.Url.AbsoluteUri == "https://folder.test/users/7"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_RefusesFolderVariablesThatLoop()
+    {
+        UsePlan(Plan(threads: 1, iterations: 1, requests: ["requests/users/get.yaml"]));
+        _folders.ReadAsync(Root, WorkspacePath.Parse("requests/users"), Arg.Any<CancellationToken>())
+            .Returns(new FolderDefaults(variables: [new KeyValueEntry("a", "{{a}}")]));
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://api.test/{{a}}"));
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, started.Error?.Code);
+        await _sender.DidNotReceive().SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Execute_LogsEveryRequestWithItsResponseAndSavesTheLog()
     {
         UsePlan(Plan(threads: 2, iterations: 3));

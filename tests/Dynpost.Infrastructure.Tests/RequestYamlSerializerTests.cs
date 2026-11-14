@@ -419,6 +419,33 @@ public class RequestYamlSerializerTests
         Assert.Equal(defaults.Auth, parsed.Auth);
     }
 
+    [Fact]
+    public void FolderDefaults_WritesVariablesAfterAuth()
+    {
+        var defaults = new FolderDefaults(
+            [new KeyValueEntry("Accept", "*/*")],
+            new BearerAuth("{{apiToken}}"),
+            [new KeyValueEntry("usersUrl", "{{baseUrl}}/users"), new KeyValueEntry("page", "1", Enabled: false)]);
+
+        var yaml = RequestYamlSerializer.SerializeFolder(defaults);
+
+        Assert.Equal(
+            """
+            headers:
+              Accept: "*/*"
+            auth:
+              type: bearer
+              token: "{{apiToken}}"
+            variables:
+              usersUrl: "{{baseUrl}}/users"
+              ~page: "1"
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal(defaults.Variables, RequestYamlSerializer.DeserializeFolder(yaml).Variables);
+        Assert.False(RequestYamlSerializer.DeserializeFolder("variables:\n  a: b\n").IsEmpty);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("# nothing yet\n")]

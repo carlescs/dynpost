@@ -60,7 +60,8 @@ public sealed class ExportWorkspace(
         }
 
         var name = WorkspaceTreeBuilder.WorkspaceName(root.Value);
-        var folder = await ToFolderAsync(root.Value, name, WorkspaceLayout.RequestsRoot, entries.Value, warnings, cancellationToken);
+        var foldersWithVariables = new List<WorkspacePath>();
+        var folder = await ToFolderAsync(root.Value, name, WorkspaceLayout.RequestsRoot, entries.Value, warnings, foldersWithVariables, cancellationToken);
 
         var exported = new List<EnvironmentDefinition>();
         if (request.IncludeEnvironments)
@@ -92,6 +93,14 @@ public sealed class ExportWorkspace(
 
         var output = exporter.Export(new RequestCollection(folder, exported));
         warnings.AddRange(output.Warnings);
+        var withVariables = foldersWithVariables.Count;
+        if (withVariables > 0)
+        {
+            warnings.Add(withVariables == 1
+                ? "1 folder sets variables; folder variables are not exported, so its requests keep their {{references}}."
+                : $"{withVariables} folders set variables; folder variables are not exported, so their requests keep their {{{{references}}}}.");
+        }
+
         var capturing = CountCapturing(folder);
         if (capturing > 0)
         {
@@ -139,9 +148,15 @@ public sealed class ExportWorkspace(
         WorkspacePath path,
         IReadOnlyList<WorkspaceEntry> entries,
         List<string> warnings,
+        List<WorkspacePath> withVariables,
         CancellationToken cancellationToken)
     {
         var inherited = await inheritance.ForFolderAsync(root, path, cancellationToken);
+        if (inherited.IsSuccess && inherited.Value.Variables.Any(variable => variable.Folder == path))
+        {
+            withVariables.Add(path);
+        }
+
         if (!inherited.IsSuccess)
         {
             warnings.Add($"The requests in '{path}' were exported without their folder defaults: {inherited.Error!.Message}");
@@ -155,7 +170,7 @@ public sealed class ExportWorkspace(
             switch (entry)
             {
                 case FolderEntry folder:
-                    folders.Add(await ToFolderAsync(root, folder.Path.FileName, folder.Path, folder.Children, warnings, cancellationToken));
+                    folders.Add(await ToFolderAsync(root, folder.Path.FileName, folder.Path, folder.Children, warnings, withVariables, cancellationToken));
                     break;
                 case RequestFileEntry { Request.IsSuccess: true } file:
                     requests.Add(defaults.Apply(file.Request.Value));

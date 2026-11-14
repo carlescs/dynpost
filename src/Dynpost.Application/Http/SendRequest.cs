@@ -23,7 +23,8 @@ namespace Dynpost.Application.Http;
 /// the same id, for <see cref="SaveResponseBody"/>. A request with OAuth 2.0 auth gets its token
 /// from <see cref="OAuth2Tokens"/> (cached, refreshed or newly obtained) before it is sent. The
 /// response to a saved request is kept in its history by <see cref="ResponseHistory"/>. The request
-/// gets the headers and auth of the folders it is in (see <see cref="FolderInheritance"/>).
+/// gets the headers, auth and variables of the folders it is in (see <see cref="FolderInheritance"/>);
+/// the environment's variables win over the folders'.
 /// </summary>
 public sealed class SendRequest(
     IHttpSender sender,
@@ -64,16 +65,25 @@ public sealed class SendRequest(
 
         // The workspace can change while the request is in flight; cookies belong to the one it was sent from.
         var root = current.Root;
+        var inherited = InheritedDefaults.None;
         if (root is not null && InheritsFrom(path, folder) is { } parent)
         {
-            definition = await inheritance.ApplyAsync(root, parent, definition.Value, cancellationToken);
-            if (definition.IsFailure)
+            var read = await inheritance.ForFolderAsync(root, parent, cancellationToken);
+            if (!read.IsSuccess)
             {
-                return definition.Error!;
+                return read.Error!;
             }
+
+            inherited = read.Value;
+            definition = inherited.Apply(definition.Value);
         }
 
         var variables = await environment.LoadAsync(cancellationToken);
+        if (variables.IsSuccess)
+        {
+            variables = FolderInheritance.WithVariables(inherited, variables.Value);
+        }
+
         if (!variables.IsSuccess)
         {
             return variables.Error!;

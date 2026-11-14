@@ -46,7 +46,7 @@
       class="flex-1"
       ariaLabel="URL"
       [placeholder]="urlPlaceholder"
-      [variables]="environments.variables()"
+      [variables]="variables()"
       [value]="doc.url"
       (valueChange)="patch({ url: $event })"
     />
@@ -146,7 +146,7 @@
           [value]="doc.body"
           language="graphql"
           [highlightVariables]="true"
-          [variables]="environments.variables()"
+          [variables]="variables()"
           (valueChange)="patch({ body: $event })"
           (submit)="send()"
         />
@@ -157,7 +157,7 @@
           [value]="doc.bodyVariables"
           language="json"
           [highlightVariables]="true"
-          [variables]="environments.variables()"
+          [variables]="variables()"
           (valueChange)="patch({ bodyVariables: $event })"
           (submit)="send()"
         />
@@ -168,7 +168,7 @@
             [fields]="bodyFields()"
             [type]="doc.bodyType"
             [headers]="doc.headers"
-            [variables]="environments.variables()"
+            [variables]="variables()"
             (fieldsChange)="patch({ bodyFields: $event })"
             (failed)="showError($event)"
             (submit)="send()"
@@ -204,7 +204,7 @@
             [value]="doc.body"
             [language]="doc.bodyType === 'json' ? 'json' : 'plaintext'"
             [highlightVariables]="true"
-            [variables]="environments.variables()"
+            [variables]="variables()"
             (valueChange)="patch({ body: $event })"
             (submit)="send()"
           />

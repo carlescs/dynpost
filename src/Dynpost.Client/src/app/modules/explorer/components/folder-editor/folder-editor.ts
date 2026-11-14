@@ -7,23 +7,26 @@ import { FolderDraft, FolderSettingsStore } from '../../../../services/folder-se
 import { KeyValueTable } from '../../../../components/key-value-table/key-value-table';
 import { AuthEditor } from '../auth-editor/auth-editor';
 import { InheritedHeaders } from '../inherited-headers/inherited-headers';
+import { InheritedVariables } from '../inherited-variables/inherited-variables';
 
-type FolderTab = 'headers' | 'auth';
+type FolderTab = 'headers' | 'auth' | 'variables';
 
 /** Nothing inherited: what the top `requests` folder gets. */
 const NOTHING_INHERITED: InheritedSettingsDto = {
   headers: [],
   auth: { type: 'none' },
   authFolder: null,
+  variables: [],
 };
 
 /**
- * The headers and auth a collection folder sets for every request and sub-folder in it (its
- * `_folder.yaml`). Closer levels win: a sub-folder over its parent, a request over its folders.
+ * The headers, auth and variables a collection folder sets for every request and sub-folder in it
+ * (its `_folder.yaml`). Closer levels win: a sub-folder over its parent, a request over its
+ * folders. Folder variables are defaults: the selected environment's variables win over them.
  */
 @Component({
   selector: 'app-folder-editor',
-  imports: [FaIconComponent, KeyValueTable, AuthEditor, InheritedHeaders],
+  imports: [FaIconComponent, KeyValueTable, AuthEditor, InheritedHeaders, InheritedVariables],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './folder-editor.html',
 })
@@ -35,6 +38,7 @@ export class FolderEditor {
   protected readonly tabs: { id: FolderTab; label: string }[] = [
     { id: 'headers', label: 'Headers' },
     { id: 'auth', label: 'Auth' },
+    { id: 'variables', label: 'Variables' },
   ];
   protected readonly faFloppyDisk = faFloppyDisk;
   protected readonly faSpinner = faSpinner;
@@ -67,6 +71,10 @@ export class FolderEditor {
     this.store.update(this.draft().key, { headers });
   }
 
+  protected patchVariables(variables: KeyValue[]): void {
+    this.store.update(this.draft().key, { variables });
+  }
+
   protected patchAuth(patch: Partial<RequestAuth>): void {
     this.store.update(this.draft().key, { auth: { ...this.draft().auth, ...patch } });
   }
@@ -76,6 +84,7 @@ export class FolderEditor {
   }
 
   protected count(draft: FolderDraft, tab: FolderTab): number {
-    return tab === 'headers' ? draft.headers.filter((h) => h.enabled && h.key).length : 0;
+    const rows = tab === 'headers' ? draft.headers : tab === 'variables' ? draft.variables : [];
+    return rows.filter((r) => r.enabled && r.key).length;
   }
 }

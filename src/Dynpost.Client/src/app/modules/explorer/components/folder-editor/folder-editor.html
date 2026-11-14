@@ -24,8 +24,9 @@
 </div>
 <p class="px-4 pt-1 pb-3 text-sm text-slate-500">
   Every request and folder inside
-  {{ d.path === 'requests' ? 'the workspace' : 'this folder' }} gets these headers and auth, unless
-  it sets them itself.
+  {{ d.path === 'requests' ? 'the workspace' : 'this folder' }} gets these headers, auth and
+  variables, unless it sets them itself. The selected environment's variables win over folder
+  variables.
 </p>
 
 <div class="flex gap-4 border-b border-slate-200 px-4 text-sm" role="tablist">
@@ -59,6 +60,14 @@
         (rowsChange)="patchHeaders($event)"
       />
       <app-inherited-headers [headers]="inherited()?.headers ?? []" [own]="d.headers" />
+    }
+    @case ('variables') {
+      <app-key-value-table
+        keyLabel="Variable"
+        [rows]="d.variables"
+        (rowsChange)="patchVariables($event)"
+      />
+      <app-inherited-variables [variables]="inherited()?.variables ?? []" [own]="d.variables" />
     }
     @case ('auth') {
       <app-auth-editor

@@ -92,7 +92,7 @@ public sealed class RunRegistry
 /// Starts a load run of a plan and returns at once; the run goes on in the background and is
 /// followed with <see cref="GetRunProgress"/>. Each request is prepared and sent exactly like
 /// <see cref="SendRequest"/> does (folder defaults, environment variables, auth, OAuth 2.0 tokens), with the CSV
-/// row of the iteration laid over the environment's variables and, for requests with a body folder,
+/// row of the iteration laid over the environment's variables (which are laid over the folders') and, for requests with a body folder,
 /// the body taken from the next file of that folder. Runs don't use cookies: every
 /// virtual user starts clean and nothing is written to the environment's cookie jar or captures.
 /// Runs of more than <see cref="RunPlan.WarnThreads"/> threads need <paramref name="confirmLarge"/>.
@@ -157,6 +157,7 @@ public sealed class StartRun(
         }
 
         var definitions = new Dictionary<string, HttpRequestDefinition>(StringComparer.Ordinal);
+        var inherited = new Dictionary<string, InheritedDefaults>(StringComparer.Ordinal);
         var broken = new List<string>();
         foreach (var request in plan.Requests.DistinctBy(r => r.Value))
         {
@@ -167,15 +168,26 @@ public sealed class StartRun(
             }
 
             var read = await repository.ReadRequestAsync(root.Value, request, cancellationToken);
+            var defaults = InheritedDefaults.None;
             if (read.IsSuccess)
             {
-                // Sent as from the editor: with the headers and auth of the folders it is in.
-                read = await inheritance.ApplyAsync(root.Value, request.Parent, read.Value, cancellationToken);
+                // Sent as from the editor: with the headers, auth and variables of the folders it is in.
+                var found = await inheritance.ForFolderAsync(root.Value, request.Parent, cancellationToken);
+                if (found.IsSuccess)
+                {
+                    defaults = found.Value;
+                    read = defaults.Apply(read.Value);
+                }
+                else
+                {
+                    read = found.Error!;
+                }
             }
 
             if (read.IsSuccess)
             {
                 definitions[request.Value] = read.Value;
+                inherited[request.Value] = defaults;
             }
             else
             {
@@ -229,17 +241,28 @@ public sealed class StartRun(
             return variables.Error!;
         }
 
+        // Folder variables in a loop are reported before the run starts rather than on every sample.
+        foreach (var defaults in inherited.Values.Distinct())
+        {
+            var checkedVariables = FolderInheritance.WithVariables(defaults, variables.Value);
+            if (!checkedVariables.IsSuccess)
+            {
+                return checkedVariables.Error!;
+            }
+        }
+
         var startedAt = time.GetUtcNow();
         var runId = $"{startedAt:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
         var run = new ActiveRun(runId, root.Value, planPath.Value.Value, plan, startedAt);
         registry.Add(run);
-        _ = Task.Run(() => ExecuteRunAsync(run, definitions, bodies, rows, variables.Value), CancellationToken.None);
+        _ = Task.Run(() => ExecuteRunAsync(run, definitions, inherited, bodies, rows, variables.Value), CancellationToken.None);
         return new StartedRunDto(runId);
     }
 
     private async Task ExecuteRunAsync(
         ActiveRun run,
         Dictionary<string, HttpRequestDefinition> definitions,
+        Dictionary<string, InheritedDefaults> inherited,
         Dictionary<string, BodyFeed> bodies,
         IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
         ActiveVariables variables)
@@ -248,7 +271,7 @@ public sealed class StartRun(
         var token = run.Cancellation.Token;
         var cursor = plan.Data is { } data ? new DataCursor(rows.Count, data.Mode, data.OnEof, plan.Load.Threads) : null;
         var limiter = plan.Load.MaxRps is { } rps ? new RateLimiter(rps) : null;
-        var context = new ThreadContext(run, definitions, bodies, rows, variables, cursor, limiter, new RequestPicker(plan));
+        var context = new ThreadContext(run, definitions, inherited, bodies, rows, variables, cursor, limiter, new RequestPicker(plan));
 
         try
         {
@@ -284,6 +307,7 @@ public sealed class StartRun(
     private sealed record ThreadContext(
         ActiveRun Run,
         Dictionary<string, HttpRequestDefinition> Definitions,
+        Dictionary<string, InheritedDefaults> Inherited,
         Dictionary<string, BodyFeed> Bodies,
         IReadOnlyList<IReadOnlyDictionary<string, string>> Rows,
         ActiveVariables Variables,
@@ -421,6 +445,8 @@ public sealed class StartRun(
         var run = context.Run;
         var token = run.Cancellation.Token;
         var definition = context.Definitions[path.Value];
+        // The folders' variables are defaults: the environment's and the CSV row's win over them.
+        values = context.Inherited[path.Value].ResolveVariables(values).Values;
         if (bodyFile is not null)
         {
             definition = definition with { Body = RunBodies.Replace(definition.Body, bodyFile) };

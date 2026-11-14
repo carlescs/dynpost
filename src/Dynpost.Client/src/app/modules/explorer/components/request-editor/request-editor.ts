@@ -33,6 +33,7 @@ import { AuthEditor } from '../auth-editor/auth-editor';
 import { InheritedHeaders } from '../inherited-headers/inherited-headers';
 import { FolderSettingsStore } from '../../../../services/folder-settings-store';
 import { InheritedSettingsDto } from '../../../../models/messages';
+import { withFolderVariables } from '../../../../models/variables';
 import { FormFieldsEditor } from '../form-fields-editor/form-fields-editor';
 import { fieldsOf, isAbsolutePath } from '../../../../models/form-fields';
 import { Bridge } from '../../../../services/bridge';
@@ -69,6 +70,13 @@ export class RequestEditor {
    */
   protected readonly inherited = signal<InheritedSettingsDto | null>(null);
   private readonly folder = computed(() => this.document().folder);
+  /**
+   * The variables the request can use, for highlighting and hovers: the selected environment's,
+   * plus those of its folders the environment doesn't define.
+   */
+  protected readonly variables = computed(() =>
+    withFolderVariables(this.environments.variables(), this.inherited()?.variables ?? []),
+  );
   private inheritedLoad = 0;
 
   constructor() {
