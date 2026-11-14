@@ -38,3 +38,71 @@
   background-color: #0f172a; // slate-900
   color: #e2e8f0; // slate-200
 }
+
+// Scrollbars match the document tabs' overlay thumb: no track, a thin rounded slate thumb that
+// darkens while the pointer is over the scrolling area and darker still over the thumb itself.
+// WebView2 (Chromium) and WebKit use the ::-webkit-scrollbar pseudo-elements; the standard
+// properties are only applied where those don't exist, because Chromium ignores the
+// pseudo-elements once `scrollbar-width` or `scrollbar-color` is set.
+:root {
+  --scrollbar-thumb: color-mix(in oklab, var(--color-slate-400) 40%, transparent);
+  --scrollbar-thumb-area-hover: color-mix(in oklab, var(--color-slate-500) 70%, transparent);
+  --scrollbar-thumb-hover: var(--color-slate-600);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  // The transparent border insets the 4px-wide thumb inside the 8px gutter, like the tabs' thumb.
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+  background-color: var(--scrollbar-thumb);
+}
+
+:hover::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-area-hover);
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+}
+
+// Monaco draws its own scrollbars (options in code-editor.ts and code-diff-editor.ts); give their
+// sliders the same rounded thumb and colors.
+.monaco-editor .monaco-scrollable-element {
+  > .scrollbar > .slider {
+    border-radius: 9999px;
+    background: var(--scrollbar-thumb);
+  }
+
+  &:hover > .scrollbar > .slider {
+    background: var(--scrollbar-thumb-area-hover);
+  }
+
+  > .scrollbar > .slider:hover,
+  > .scrollbar > .slider.active {
+    background: var(--scrollbar-thumb-hover);
+  }
+}
