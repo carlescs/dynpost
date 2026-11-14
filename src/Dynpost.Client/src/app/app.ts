@@ -51,6 +51,9 @@ import { WorkspaceSync } from './services/workspace-sync';
   host: {
     class: 'flex h-screen flex-col overflow-hidden bg-white font-sans text-slate-800',
     '(document:keydown)': 'onKeydown($event)',
+    // The webview's own menu (reload, inspect, ...) never fits a desktop app; menus the app
+    // shows itself (trees, tabs, Monaco) call preventDefault too and still open.
+    '(document:contextmenu)': '$event.preventDefault()',
   },
   templateUrl: './app.html',
 })
