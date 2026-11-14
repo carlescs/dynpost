@@ -37,6 +37,18 @@ const THRESHOLD_NAMES: Record<string, string> = {
   throughput: 'Throughput',
 };
 
+/** Rows of statistics, each with its latency spread on one shared scale, in percent. */
+function spreads(rows: { key: string; label: string; stats: RunStatsDto }[]) {
+  const scale = Math.max(1, ...rows.map((r) => r.stats.max));
+  const percent = (value: number) => (value / scale) * 100;
+  return rows.map((row) => ({
+    ...row,
+    range: { left: percent(row.stats.min), width: percent(row.stats.max - row.stats.min) },
+    typical: { left: percent(row.stats.median), width: percent(row.stats.p95 - row.stats.median) },
+    average: percent(row.stats.average),
+  }));
+}
+
 /** The dashboard of a run, live or finished: headline numbers, charts and the samples kept. */
 @Component({
   selector: 'app-run-results',
@@ -101,18 +113,22 @@ export class RunResults {
    * Each request's latency spread on one shared scale, in percent: the whole range (min to max)
    * and, inside it, where most requests fall (median to p95).
    */
-  protected readonly requests = computed(() => {
-    const requests = this.run().requests;
-    const scale = Math.max(1, ...requests.map((r) => r.stats.max));
-    const percent = (value: number) => (value / scale) * 100;
-    return requests.map(({ request, stats }) => ({
-      request,
-      stats,
-      range: { left: percent(stats.min), width: percent(stats.max - stats.min) },
-      typical: { left: percent(stats.median), width: percent(stats.p95 - stats.median) },
-      average: percent(stats.average),
-    }));
-  });
+  protected readonly requests = computed(() =>
+    spreads(
+      this.run().requests.map(({ request, stats }) => ({ key: request, label: request, stats })),
+    ),
+  );
+
+  /** Each environment's latency spread, like {@link requests}; empty when the plan lists none. */
+  protected readonly environments = computed(() =>
+    spreads(
+      (this.run().environments ?? []).map(({ environment, name, stats }) => ({
+        key: environment,
+        label: name,
+        stats,
+      })),
+    ),
+  );
 
   protected readonly statusCodes = computed(() => this.shares(this.run().total.statusCodes));
   protected readonly errorReasons = computed(() =>

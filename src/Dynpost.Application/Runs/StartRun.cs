@@ -254,7 +254,10 @@ public sealed class StartRun(
 
         var startedAt = time.GetUtcNow();
         var runId = $"{startedAt:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
-        var run = new ActiveRun(runId, root.Value, planPath.Value.Value, plan, startedAt);
+        var environmentNames = environments
+            .Select(pair => KeyValuePair.Create(pair.Key, pair.Value.EnvironmentName ?? pair.Key))
+            .ToList();
+        var run = new ActiveRun(runId, root.Value, planPath.Value.Value, plan, startedAt, environmentNames);
         registry.Add(run);
         _ = Task.Run(() => ExecuteRunAsync(run, definitions, bodies, rows, environments, selected), CancellationToken.None);
         return new StartedRunDto(runId);
@@ -318,11 +321,14 @@ public sealed class StartRun(
         RequestPicker Picker,
         EnvironmentPicker EnvironmentPicker)
     {
-        /// <summary>The variables of each environment an iteration sends its requests with, in order.</summary>
-        public IReadOnlyList<ActiveVariables> EnvironmentsFor(int thread, int iteration, Random random) =>
+        /// <summary>
+        /// Each environment an iteration sends its requests with, in order: its path (<c>null</c>
+        /// for the selected environment) and its variables.
+        /// </summary>
+        public IReadOnlyList<(string? Path, ActiveVariables Variables)> EnvironmentsFor(int thread, int iteration, Random random) =>
             Environments.Count == 0
-                ? [Selected]
-                : EnvironmentPicker.ForIteration(thread, iteration, random).Select(path => Environments[path.Value]).ToList();
+                ? [(null, Selected)]
+                : EnvironmentPicker.ForIteration(thread, iteration, random).Select(path => ((string?)path.Value, Environments[path.Value])).ToList();
     }
 
     private async Task RunThreadAsync(ThreadContext context, int thread)
@@ -361,7 +367,7 @@ public sealed class StartRun(
 
                 // Each environment of the iteration sends the iteration's requests, in turn.
                 var requests = context.Picker.ForIteration(thread, iteration, random);
-                foreach (var variables in context.EnvironmentsFor(thread, iteration, random))
+                foreach (var (environmentPath, variables) in context.EnvironmentsFor(thread, iteration, random))
                 {
                     var values = row is null
                         ? variables.Values
@@ -410,7 +416,7 @@ public sealed class StartRun(
                             bodyFile = feed.Files[index];
                         }
 
-                        await SampleAsync(context, variables, request, thread, iteration, values, row, bodyFile);
+                        await SampleAsync(context, environmentPath, variables, request, thread, iteration, values, row, bodyFile);
                     }
                 }
             }
@@ -450,6 +456,7 @@ public sealed class StartRun(
 
     private async Task SampleAsync(
         ThreadContext context,
+        string? environmentPath,
         ActiveVariables variables,
         WorkspacePath path,
         int thread,
@@ -479,7 +486,7 @@ public sealed class StartRun(
         var prepared = RequestPreparation.Prepare(definition, values, oauth is null ? null : "token", run.Root);
         if (!prepared.IsValid)
         {
-            run.Add(path, Failure(variables.Explain(prepared.Errors, prepared.MissingVariables)), 0, 0);
+            run.Add(path, Failure(variables.Explain(prepared.Errors, prepared.MissingVariables)), 0, 0, environmentPath);
             return;
         }
 
@@ -489,7 +496,7 @@ public sealed class StartRun(
             var resolution = OAuth2Flow.Resolve(oauth, values);
             if (!resolution.IsValid)
             {
-                run.Add(path, Failure(variables.Explain(resolution.Errors, resolution.MissingVariables)), 0, 0);
+                run.Add(path, Failure(variables.Explain(resolution.Errors, resolution.MissingVariables)), 0, 0, environmentPath);
                 return;
             }
 
@@ -501,7 +508,7 @@ public sealed class StartRun(
                     return;
                 }
 
-                run.Add(path, Failure(accessToken.Error!.Message), 0, 0);
+                run.Add(path, Failure(accessToken.Error!.Message), 0, 0, environmentPath);
                 return;
             }
 
@@ -532,7 +539,7 @@ public sealed class StartRun(
         var latency = watch.Elapsed.TotalMilliseconds;
         if (!response.IsSuccess)
         {
-            run.Add(path, Failure(response.Error!.Message, latency, url: url), sent, 0);
+            run.Add(path, Failure(response.Error!.Message, latency, url: url), sent, 0, environmentPath);
             return;
         }
 
@@ -573,7 +580,7 @@ public sealed class StartRun(
             mediaType,
             file,
             environmentName);
-        run.Add(path, sample, data.BytesSent > 0 ? data.BytesSent : sent, data.Body.LongLength);
+        run.Add(path, sample, data.BytesSent > 0 ? data.BytesSent : sent, data.Body.LongLength, environmentPath);
     }
 
     /// <summary>

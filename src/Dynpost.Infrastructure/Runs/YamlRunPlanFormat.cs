@@ -15,7 +15,8 @@ namespace Dynpost.Infrastructure.Runs;
 /// paths kept in the list but not sent), <c>order</c>
 /// (<c>sequential</c>, <c>shuffle</c>, <c>random</c> or <c>roundRobin</c>), <c>weights</c> (per
 /// request path), <c>environments</c> (environment files the run uses instead of the selected
-/// one), <c>environmentOrder</c> (like <c>order</c>), <c>environmentWeights</c> (per environment
+/// one), <c>disabledEnvironments</c> (environment paths kept in the list but not used),
+/// <c>environmentOrder</c> (like <c>order</c>), <c>environmentWeights</c> (per environment
 /// path), <c>load</c>
 /// (<c>threads</c>, <c>iterations</c> or <c>duration</c>, <c>rampUp</c>, <c>thinkTime</c>,
 /// <c>maxRps</c>), <c>data</c> (<c>file</c>, <c>mode</c>, <c>onEof</c>), <c>bodies</c> (per
@@ -129,7 +130,8 @@ public sealed partial class YamlRunPlanFormat : IRunPlanFormat
             YamlNodes.OptionalBoolean(root, "saveResponses"),
             ParseEnvironments(root),
             ParseOrder(YamlNodes.OptionalString(root, "environmentOrder"), "environmentOrder"),
-            ParseWeights(YamlNodes.OptionalMapping(root, "environmentWeights"), "environmentWeights"));
+            ParseWeights(YamlNodes.OptionalMapping(root, "environmentWeights"), "environmentWeights"),
+            ParseDisabled(root, "disabledEnvironments"));
     }
 
     private static List<WorkspacePath> ParseEnvironments(YamlMappingNode root)
@@ -148,8 +150,8 @@ public sealed partial class YamlRunPlanFormat : IRunPlanFormat
         return environments;
     }
 
-    private static List<string> ParseDisabled(YamlMappingNode root) =>
-        YamlNodes.StringList(root, "disabled")
+    private static List<string> ParseDisabled(YamlMappingNode root, string key = "disabled") =>
+        YamlNodes.StringList(root, key)
             .Select(item => WorkspacePath.TryParse(item, out var path) ? path.Value : item)
             .Distinct(StringComparer.Ordinal)
             .ToList();

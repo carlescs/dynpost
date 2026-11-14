@@ -201,12 +201,13 @@ public sealed class RunInfrastructureTests : IDisposable
         var format = new YamlRunPlanFormat();
         var plan = format.Parse(
             "name: x\nrequests: [a.yaml]\nenvironments:\n  - environments/dev.yaml\n  - environments/load.yaml\n"
-            + "environmentOrder: random\nenvironmentWeights:\n  environments/load.yaml: 3\nload: {threads: 1, iterations: 1}\n");
+            + "disabledEnvironments: [environments/dev.yaml]\nenvironmentOrder: random\nenvironmentWeights:\n  environments/load.yaml: 3\nload: {threads: 1, iterations: 1}\n");
 
         Assert.True(plan.IsSuccess, plan.Error?.Message);
         Assert.Equal(["environments/dev.yaml", "environments/load.yaml"], plan.Value.EnvironmentList.Select(e => e.Value));
         Assert.Equal(RequestOrder.Random, plan.Value.EnvironmentOrder);
         Assert.Equal(3, plan.Value.EnvironmentWeightsByPath["environments/load.yaml"]);
+        Assert.Equal(["environments/dev.yaml"], plan.Value.DisabledEnvironmentList);
 
         var none = format.Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value;
         Assert.Empty(none.EnvironmentList);

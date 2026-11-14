@@ -774,6 +774,8 @@ weights:             # with random: relative chance of each request (default 1)
 environments:        # optional: run with these, not the environment selected in the app
   - environments/staging.yaml
   - environments/load.yaml
+disabledEnvironments:  # listed environments that are not used (kept for later)
+  - environments/staging.yaml
 environmentOrder: random  # like order: sequential (default), shuffle, random or roundRobin
 environmentWeights:  # with random: relative chance of each environment (default 1)
   environments/load.yaml: 3
@@ -826,10 +828,17 @@ at a different one. So with `sequential` or `shuffle`, an iteration sends its
 requests once per environment, and the load summary counts them. In the visual
 form, the **Environments** card lists them like the request steps (add one from
 the workspace, drag to reorder, pick the order, set weights for a random pick).
-Each request in the run's log shows the environment it was sent with. A plan
-that lists an environment which no longer exists can't start (the form flags
-it); like request paths, the references aren't updated when an environment file
-is renamed. Statistics per request combine every environment.
+`disabledEnvironments` switches environments off like `disabled` does requests:
+they keep their place and weight, but runs don't use them (their files don't
+even need to exist), and at least one must stay enabled (remove them all to use
+the selected environment instead). In the visual form, each environment has a
+switch to turn it on or off. Each request in the run's log shows the
+environment it was sent with, and the dashboard shows the statistics of each
+environment (requests, requests per second, failures and latency spread) above
+those of each request, which combine every environment. A plan that lists an
+enabled environment which no longer exists can't start (the form flags it);
+like request paths, the references aren't updated when an environment file is
+renamed.
 
 `disabled` turns requests off without taking them out of the plan: they keep
 their place, assertions and weight, but runs skip them (their files don't even

@@ -31,6 +31,7 @@ import {
   removeAssertion,
   removeBody,
   setAssertionStatus,
+  setPlanEnvironmentEnabled,
   setPlanEnvironmentOrder,
   setPlanEnvironments,
   setPlanOrder,
@@ -218,12 +219,19 @@ export class RunPlanForm {
   /** The plan's environments in order, with their names, flagging those not in the workspace. */
   protected readonly environmentSteps = computed(() => {
     const known = this.workspaceEnvironments();
+    const disabled = new Set(this.form()?.disabledEnvironments ?? []);
     return (this.form()?.environments ?? []).map((path) => ({
       path,
       name: known.get(path) ?? path,
       missing: !known.has(path),
+      enabled: !disabled.has(path),
     }));
   });
+
+  /** How many of the plan's environments are used. */
+  protected readonly enabledEnvironmentCount = computed(
+    () => this.environmentSteps().filter((env) => env.enabled).length,
+  );
 
   /** Environments that can still be added to the plan. */
   protected readonly availableEnvironments = computed(() => {
@@ -236,7 +244,12 @@ export class RunPlanForm {
   /** Each environment's share of the picks with the `random` environment order. */
   protected readonly environmentShares = computed(() => {
     const form = this.form();
-    return form ? sharesOf(form.environments.map((path) => form.environmentWeights[path])) : [];
+    if (!form) return [];
+    return sharesOf(
+      form.environments.map((path) =>
+        form.disabledEnvironments.includes(path) ? '0' : form.environmentWeights[path],
+      ),
+    );
   });
 
   /** Requests that can still be added to the plan. */
@@ -256,9 +269,9 @@ export class RunPlanForm {
       ? Math.min(1, this.enabledCount())
       : this.enabledCount();
     const environments =
-      form.environments.length === 0 || picksOneRequest(this.environmentOrder(form))
+      this.enabledEnvironmentCount() === 0 || picksOneRequest(this.environmentOrder(form))
         ? 1
-        : form.environments.length;
+        : this.enabledEnvironmentCount();
     return {
       threads,
       iterations,
@@ -316,6 +329,12 @@ export class RunPlanForm {
 
   protected setEnvironmentOrder(event: Event): void {
     this.emit(setPlanEnvironmentOrder(this.yaml(), (event.target as HTMLSelectElement).value));
+  }
+
+  protected setEnvironmentEnabled(path: string, event: Event): void {
+    this.emit(
+      setPlanEnvironmentEnabled(this.yaml(), path, (event.target as HTMLInputElement).checked),
+    );
   }
 
   protected setEnvironmentWeight(path: string, event: Event): void {

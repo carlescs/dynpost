@@ -751,6 +751,16 @@ export interface RunResultDto {
   failedSamples: RunSampleDto[];
   slowestSamples: RunSampleDto[];
   message: string | null;
+  /** The statistics by environment when the plan lists environments (absent otherwise). */
+  environments?: RunEnvironmentStatsDto[] | null;
+}
+
+/** The statistics of the requests a run sent with one of its plan's environments. */
+export interface RunEnvironmentStatsDto {
+  /** The environment's workspace path, such as `environments/dev.yaml`. */
+  environment: string;
+  name: string;
+  stats: RunStatsDto;
 }
 
 /** A page of the request log of a run, in the order the requests finished. */

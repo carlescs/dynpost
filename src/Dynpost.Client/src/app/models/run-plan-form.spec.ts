@@ -5,6 +5,7 @@ import {
   removeAssertion,
   removeBody,
   setAssertionStatus,
+  setPlanEnvironmentEnabled,
   setPlanEnvironmentOrder,
   setPlanEnvironments,
   setPlanOrder,
@@ -69,6 +70,22 @@ describe('run plan form', () => {
     expect(one).not.toContain('environmentWeights');
     expect(one).toContain('environmentOrder: random');
     expect(setPlanEnvironments(one, [])).toBe(PLAN);
+  });
+
+  it('turns environments off and on, forgetting removed ones', () => {
+    let plan = setPlanEnvironments(PLAN, ['environments/dev.yaml', 'environments/load.yaml']);
+    plan = setPlanEnvironmentEnabled(plan, 'environments/load.yaml', false);
+    expect(plan).toContain(
+      '  - environments/load.yaml\ndisabledEnvironments:\n  - environments/load.yaml\nload:',
+    );
+    expect(readPlanForm(plan)!.disabledEnvironments).toEqual(['environments/load.yaml']);
+    expect(setPlanEnvironmentEnabled(plan, 'environments/load.yaml', true)).not.toContain(
+      'disabledEnvironments',
+    );
+    expect(setPlanEnvironments(plan, ['environments/dev.yaml'])).not.toContain(
+      'disabledEnvironments',
+    );
+    expect(setPlanEnvironments(plan, [])).toBe(PLAN);
   });
 
   it('turns saving responses on and off', () => {

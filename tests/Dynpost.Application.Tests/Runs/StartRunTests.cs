@@ -182,6 +182,57 @@ public class StartRunTests
     }
 
     [Fact]
+    public async Task Execute_KeepsStatisticsByEnvironment()
+    {
+        ExistingEnvironment("dev.yaml", "dev.test");
+        ExistingEnvironment("load.yaml", "load.test");
+        UsePlan(Plan(threads: 1, iterations: 3) with { Environments = Environments("dev.yaml", "load.yaml") });
+        UseHostRequest();
+        _sender.SendAsync(Arg.Is<OutgoingRequest>(r => r.Url.Host == "load.test"), Arg.Any<CancellationToken>()).Returns(Response(500));
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        Assert.NotNull(run.Environments);
+        Assert.Equal(["environments/dev.yaml", "environments/load.yaml"], run.Environments.Select(e => e.Environment));
+        Assert.Equal(["dev.yaml", "load.yaml"], run.Environments.Select(e => e.Name));
+        Assert.Equal([3L, 3L], run.Environments.Select(e => e.Stats.Samples));
+        Assert.Equal([0L, 3L], run.Environments.Select(e => e.Stats.Errors));
+    }
+
+    [Fact]
+    public async Task Execute_HasNoStatisticsByEnvironmentWithTheSelectedOne()
+    {
+        UsePlan(Plan(threads: 1, iterations: 1));
+        UseHostRequest();
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        Assert.Null(run.Environments);
+    }
+
+    [Fact]
+    public async Task Execute_SkipsDisabledEnvironments_WhichNeedNotExist()
+    {
+        ExistingEnvironment("load.yaml", "load.test");
+        UsePlan(Plan(threads: 1, iterations: 2) with
+        {
+            Environments = Environments("gone.yaml", "load.yaml"),
+            DisabledEnvironments = ["environments/gone.yaml"],
+        });
+        UseHostRequest();
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        Assert.True(started.IsSuccess, started.Error?.Message);
+        var run = await RunToEndAsync(started.Value.RunId);
+
+        Assert.Equal(2, run.Total.Samples);
+        Assert.Equal(["environments/load.yaml"], run.Environments!.Select(e => e.Environment));
+        await _sender.Received(2).SendAsync(Arg.Is<OutgoingRequest>(r => r.Url.Host == "load.test"), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Execute_TakesOneEnvironmentPerIterationInRoundRobin()
     {
         ExistingEnvironment("dev.yaml", "dev.test");

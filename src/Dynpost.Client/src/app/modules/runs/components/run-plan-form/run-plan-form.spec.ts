@@ -96,6 +96,33 @@ describe('RunPlanForm', () => {
     ]);
   });
 
+  it('switches an environment off, leaving it out of the shares and the load', () => {
+    const plan = PLAN.replace(
+      'load:',
+      'environments:\n  - environments/dev.yaml\n  - environments/load.yaml\nload:',
+    );
+    const { fixture, element, emitted } = create(plan);
+    useEnvironments(fixture);
+    const summary = () =>
+      element.querySelector('[data-summary]')!.textContent!.replace(/\s+/g, ' ');
+    expect(summary()).toContain('× 2 environments = 100 requests');
+
+    const toggle = element.querySelector<HTMLInputElement>('[aria-label="Disable Load"]')!;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([
+      plan.replace('load:', 'disabledEnvironments:\n  - environments/load.yaml\nload:'),
+    ]);
+
+    fixture.componentRef.setInput('yaml', emitted[0]);
+    fixture.detectChanges();
+    const load = element.querySelectorAll('[data-environment]')[1];
+    expect(load.hasAttribute('data-disabled')).toBe(true);
+    expect(load.textContent).toContain('Disabled: not used');
+    expect(summary()).toContain('5 users × 10 iterations × 1 request = 50 requests');
+    expect(element.querySelector('[data-no-environment-enabled]')).toBeNull();
+  });
+
   it('picks environments at random by weight and counts them in the load summary', () => {
     const plan = PLAN.replace(
       'load:',

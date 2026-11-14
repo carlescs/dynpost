@@ -107,6 +107,9 @@ public sealed record RunThresholds(
 /// <param name="EnvironmentWeights">
 /// Relative chance of each environment path with <see cref="RequestOrder.Random"/>; unlisted ones weigh 1.
 /// </param>
+/// <param name="DisabledEnvironments">
+/// Environment paths that stay in the list but are not used; see <see cref="WithoutDisabledRequests"/>.
+/// </param>
 public sealed record RunPlan(
     string Name,
     IReadOnlyList<WorkspacePath> Requests,
@@ -121,7 +124,8 @@ public sealed record RunPlan(
     bool SaveResponses = false,
     IReadOnlyList<WorkspacePath>? Environments = null,
     RequestOrder EnvironmentOrder = RequestOrder.Sequential,
-    IReadOnlyDictionary<string, double>? EnvironmentWeights = null)
+    IReadOnlyDictionary<string, double>? EnvironmentWeights = null,
+    IReadOnlyList<string>? DisabledEnvironments = null)
 {
     public const string AllRequests = "*";
 
@@ -136,17 +140,29 @@ public sealed record RunPlan(
 
     /// <summary>
     /// The plan as it runs: only the enabled requests, with the assertions, weights and body
-    /// folders of disabled ones dropped.
+    /// folders of disabled ones dropped, and only the enabled environments, with their weights.
     /// </summary>
     public RunPlan WithoutDisabledRequests()
     {
+        var plan = this;
+        if (DisabledEnvironmentList.Count > 0)
+        {
+            var off = DisabledEnvironmentList.ToHashSet(StringComparer.Ordinal);
+            plan = plan with
+            {
+                Environments = EnabledEnvironments,
+                EnvironmentWeights = EnvironmentWeightsByPath.Where(pair => !off.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal),
+                DisabledEnvironments = null,
+            };
+        }
+
         if (DisabledRequests.Count == 0)
         {
-            return this;
+            return plan;
         }
 
         var disabled = DisabledRequests.ToHashSet(StringComparer.Ordinal);
-        return this with
+        return plan with
         {
             Requests = EnabledRequests,
             Assertions = Assertions.Where(pair => !disabled.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal),
@@ -169,6 +185,17 @@ public sealed record RunPlan(
     /// <summary>The environments listed in the plan; empty when the run uses the selected one.</summary>
     public IReadOnlyList<WorkspacePath> EnvironmentList => Environments ?? [];
 
+    /// <summary>The environment paths that are listed but not used; empty when every one is used.</summary>
+    public IReadOnlyList<string> DisabledEnvironmentList => DisabledEnvironments ?? [];
+
+    /// <summary>Whether the environment is in the list but not used.</summary>
+    public bool IsEnvironmentDisabled(WorkspacePath environment) =>
+        DisabledEnvironmentList.Contains(environment.Value, StringComparer.Ordinal);
+
+    /// <summary>The environments that are used, in the listed order.</summary>
+    public IReadOnlyList<WorkspacePath> EnabledEnvironments =>
+        DisabledEnvironmentList.Count == 0 ? EnvironmentList : EnvironmentList.Where(environment => !IsEnvironmentDisabled(environment)).ToList();
+
     /// <summary>The weight of each environment path; empty when none is set.</summary>
     public IReadOnlyDictionary<string, double> EnvironmentWeightsByPath => EnvironmentWeights ?? NoWeights;
 
@@ -178,7 +205,7 @@ public sealed record RunPlan(
 
     /// <summary>How many environments a virtual user sends the requests of one iteration with.</summary>
     public int EnvironmentsPerIteration =>
-        EnvironmentList.Count == 0 || EnvironmentOrder is RequestOrder.Random or RequestOrder.RoundRobin ? 1 : EnvironmentList.Count;
+        EnabledEnvironments.Count == 0 || EnvironmentOrder is RequestOrder.Random or RequestOrder.RoundRobin ? 1 : EnabledEnvironments.Count;
 
     /// <summary>How many requests a virtual user sends in one iteration.</summary>
     public int RequestsPerIteration =>
@@ -226,7 +253,20 @@ public sealed record RunPlan(
             }
         }
 
-        if (EnvironmentOrder == RequestOrder.Random && EnvironmentList.Count > 0 && EnvironmentList.All(environment => EnvironmentWeightOf(environment) <= 0))
+        foreach (var path in DisabledEnvironmentList)
+        {
+            if (!EnvironmentList.Any(environment => environment.Value == path))
+            {
+                errors.Add($"'disabledEnvironments' refers to '{path}', which is not in the environment list.");
+            }
+        }
+
+        if (EnvironmentList.Count > 0 && EnabledEnvironments.Count == 0)
+        {
+            errors.Add("Enable at least one environment, or remove them all to use the selected one.");
+        }
+
+        if (EnvironmentOrder == RequestOrder.Random && EnabledEnvironments.Count > 0 && EnabledEnvironments.All(environment => EnvironmentWeightOf(environment) <= 0))
         {
             errors.Add("At least one environment needs a weight greater than zero.");
         }

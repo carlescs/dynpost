@@ -127,7 +127,7 @@ public sealed class RequestPicker(RunPlan plan)
 /// </summary>
 public sealed class EnvironmentPicker(RunPlan plan)
 {
-    private readonly OrderPicker<WorkspacePath> _picker = new(plan.EnvironmentList, plan.EnvironmentOrder, plan.EnvironmentWeightOf);
+    private readonly OrderPicker<WorkspacePath> _picker = new(plan.EnabledEnvironments, plan.EnvironmentOrder, plan.EnvironmentWeightOf);
 
     /// <summary>
     /// The environments of iteration <paramref name="iteration"/> of a thread, in order; empty

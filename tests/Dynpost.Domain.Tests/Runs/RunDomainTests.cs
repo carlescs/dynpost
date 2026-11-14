@@ -233,6 +233,38 @@ public class RunDomainTests
     }
 
     [Fact]
+    public void DisabledEnvironments_AreLeftOutOfTheRun()
+    {
+        var plan = EnvironmentPlan(RequestOrder.Random, new() { ["environments/qa.yaml"] = 2, ["environments/load.yaml"] = 3 }) with
+        {
+            DisabledEnvironments = ["environments/qa.yaml"],
+        };
+
+        Assert.Empty(plan.Validate());
+        Assert.True(plan.IsEnvironmentDisabled(WorkspacePath.Parse("environments/qa.yaml")));
+        Assert.Equal(["environments/dev.yaml", "environments/load.yaml"], Names(plan.EnabledEnvironments));
+        var running = plan.WithoutDisabledRequests();
+        Assert.Equal(["environments/dev.yaml", "environments/load.yaml"], Names(running.EnvironmentList));
+        Assert.Equal(["environments/load.yaml"], running.EnvironmentWeightsByPath.Keys);
+        Assert.Empty(running.DisabledEnvironmentList);
+        Assert.Equal(6, (EnvironmentPlan(RequestOrder.Sequential) with { DisabledEnvironments = ["environments/qa.yaml"] }).RequestsPerIteration);
+        var picked = new EnvironmentPicker(EnvironmentPlan(RequestOrder.Sequential) with { DisabledEnvironments = ["environments/qa.yaml"] });
+        Assert.Equal(["environments/dev.yaml", "environments/load.yaml"], Names(picked.ForIteration(0, 0, new Random(1))));
+    }
+
+    [Fact]
+    public void Validate_RejectsDisablingEveryEnvironmentOrUnlistedOnes()
+    {
+        var all = EnvironmentPlan(RequestOrder.Sequential) with
+        {
+            DisabledEnvironments = ["environments/dev.yaml", "environments/qa.yaml", "environments/load.yaml"],
+        };
+        Assert.Contains("Enable at least one environment", Assert.Single(all.Validate()));
+        var unlisted = EnvironmentPlan(RequestOrder.Sequential) with { DisabledEnvironments = ["environments/gone.yaml"] };
+        Assert.Contains("'disabledEnvironments'", Assert.Single(unlisted.Validate()));
+    }
+
+    [Fact]
     public void Validate_RejectsBadEnvironmentWeights()
     {
         Assert.Contains("environments/gone.yaml", Assert.Single(EnvironmentPlan(RequestOrder.Random, new() { ["environments/gone.yaml"] = 1 }).Validate()));

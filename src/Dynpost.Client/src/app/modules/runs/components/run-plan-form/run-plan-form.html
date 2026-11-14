@@ -199,6 +199,11 @@
         <p class="-mt-1 text-xs text-slate-500" data-environment-hint>
           {{ environmentOrderInfo[environmentOrder(form)].hint }}
         </p>
+        @if (enabledEnvironmentCount() === 0) {
+          <p class="text-xs text-amber-700" data-no-environment-enabled>
+            Enable at least one environment, or remove them all to use the selected one.
+          </p>
+        }
       }
       <ol
         class="flex flex-col gap-1.5"
@@ -207,10 +212,14 @@
       >
         @for (env of environmentSteps(); track $index) {
           <li
-            class="flex items-center gap-2 rounded-md border bg-white py-1.5 pr-1.5 pl-1"
-            [class]="env.missing ? 'border-amber-200' : 'border-slate-200'"
+            class="flex items-center gap-2 rounded-md border py-1.5 pr-1.5 pl-1"
+            [class]="
+              (env.missing && env.enabled ? 'border-amber-200' : 'border-slate-200') +
+              (env.enabled ? ' bg-white' : ' bg-slate-50')
+            "
             cdkDrag
             data-environment
+            [attr.data-disabled]="env.enabled ? null : ''"
           >
             <span
               class="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-xs text-slate-400 hover:text-slate-600"
@@ -219,21 +228,37 @@
             >
               <fa-icon [icon]="faGripVertical" />
             </span>
+            <input
+              type="checkbox"
+              class="size-3.5 shrink-0 accent-sky-600"
+              [checked]="env.enabled"
+              [title]="
+                env.enabled
+                  ? 'Used in runs: uncheck to skip it'
+                  : 'Skipped in runs: check to use it'
+              "
+              [attr.aria-label]="(env.enabled ? 'Disable ' : 'Enable ') + env.name"
+              (change)="setEnvironmentEnabled(env.path, $event)"
+            />
             <span
               class="flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700"
             >
               {{ $index + 1 }}
             </span>
-            @if (env.missing) {
+            @if (env.missing && env.enabled) {
               <fa-icon
                 class="shrink-0 text-amber-600"
                 [icon]="faTriangleExclamation"
                 title="This environment isn't in the workspace"
               />
             }
-            <span class="min-w-0 flex-1" [title]="env.path">
-              <span class="block truncate font-medium">{{ env.name }}</span>
-              @if (env.missing) {
+            <span class="min-w-0 flex-1" [class.opacity-50]="!env.enabled" [title]="env.path">
+              <span class="block truncate font-medium" [class.line-through]="!env.enabled">{{
+                env.name
+              }}</span>
+              @if (!env.enabled) {
+                <span class="block truncate text-xs text-slate-500">Disabled: not used</span>
+              } @else if (env.missing) {
                 <span class="block truncate text-xs text-amber-700" data-environment-missing
                   >Not found in the workspace: the plan can't run</span
                 >

@@ -32,6 +32,8 @@ export interface PlanForm {
   weights: Record<string, string>;
   /** The environment files the run uses (`environments/dev.yaml`); empty for the selected one. */
   environments: string[];
+  /** The environment paths that stay in the list but are not used. */
+  disabledEnvironments: string[];
   /** How users take the environments, like `order` for requests. */
   environmentOrder: string;
   /** The weight of each environment path that has one (used with the `random` order). */
@@ -85,6 +87,7 @@ const ORDER: Record<string, string[]> = {
     'order',
     'weights',
     'environments',
+    'disabledEnvironments',
     'environmentOrder',
     'environmentWeights',
     'load',
@@ -153,6 +156,7 @@ export function readPlanForm(yaml: string): PlanForm | null {
     order: text(['order']),
     weights: weights('weights'),
     environments: list('environments'),
+    disabledEnvironments: list('disabledEnvironments'),
     environmentOrder: text(['environmentOrder']),
     environmentWeights: weights('environmentWeights'),
     threads: text(['load', 'threads']),
@@ -233,22 +237,50 @@ export function setPlanRequests(yaml: string, requests: string[]): string {
   });
 }
 
-/** Replaces the environment list, dropping the weights of environments no longer in it. */
+/**
+ * Replaces the environment list, dropping the weights and disabled marks of environments no
+ * longer in it.
+ */
 export function setPlanEnvironments(yaml: string, environments: string[]): string {
   return edit(yaml, (doc) => {
     if (environments.length === 0) {
-      doc.deleteIn(['environments']);
-      doc.deleteIn(['environmentOrder']);
-      doc.deleteIn(['environmentWeights']);
+      for (const key of [
+        'environments',
+        'disabledEnvironments',
+        'environmentOrder',
+        'environmentWeights',
+      ])
+        doc.deleteIn([key]);
       return;
     }
     doc.setIn(['environments'], doc.createNode(environments));
+    const disabled = readList(doc, 'disabledEnvironments');
+    if (disabled.some((path) => !environments.includes(path))) {
+      writeList(
+        doc,
+        'disabledEnvironments',
+        disabled.filter((path) => environments.includes(path)),
+      );
+    }
     const map = doc.getIn(['environmentWeights'], true);
     if (!isMap(map)) return;
     for (const pair of [...map.items]) {
       const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
       if (!environments.includes(key)) prune(doc, ['environmentWeights', key]);
     }
+  });
+}
+
+/** Turns an environment of the plan on or off; disabled ones stay listed but are not used. */
+export function setPlanEnvironmentEnabled(yaml: string, path: string, enabled: boolean): string {
+  return edit(yaml, (doc) => {
+    const disabled = readList(doc, 'disabledEnvironments');
+    if (enabled === !disabled.includes(path)) return;
+    writeList(
+      doc,
+      'disabledEnvironments',
+      enabled ? disabled.filter((p) => p !== path) : [...disabled, path],
+    );
   });
 }
 
@@ -334,13 +366,21 @@ export function removeAssertion(yaml: string, key: string): string {
 }
 
 function readDisabled(doc: Document): string[] {
-  const node = doc.getIn(['disabled'], true);
-  return isSeq(node) ? node.items.map((item) => String(isScalar(item) ? item.value : '')) : [];
+  return readList(doc, 'disabled');
 }
 
 function writeDisabled(doc: Document, disabled: string[]): void {
-  if (disabled.length === 0) doc.deleteIn(['disabled']);
-  else doc.setIn(['disabled'], doc.createNode(disabled));
+  writeList(doc, 'disabled', disabled);
+}
+
+function readList(doc: Document, key: string): string[] {
+  const node = doc.getIn([key], true);
+  return isSeq(node) ? node.items.map((item) => String(isScalar(item) ? item.value : '')) : [];
+}
+
+function writeList(doc: Document, key: string, items: string[]): void {
+  if (items.length === 0) doc.deleteIn([key]);
+  else doc.setIn([key], doc.createNode(items));
 }
 
 /** Applies a change to the parsed text; text that isn't a YAML mapping is returned untouched. */
