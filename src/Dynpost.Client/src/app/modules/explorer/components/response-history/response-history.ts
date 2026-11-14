@@ -3,6 +3,7 @@ import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { faTrash } from '@fortawesome/free-solid-svg-icons';
 import { HistoryEntryDetailsDto, HistoryEntryDto, ResponseDto } from '../../../../models/messages';
 import { formatSize } from '../../../../models/format-size';
+import { httpStatusTooltip } from '../../../../models/http-status';
 import { Bridge, BridgeError } from '../../../../services/bridge';
 import { Dialogs } from '../../../../services/dialogs';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
@@ -151,6 +152,8 @@ export class ResponseHistory {
   protected formatDuration(ms: number): string {
     return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`;
   }
+
+  protected readonly statusTooltip = httpStatusTooltip;
 
   protected statusClass(status: number): string {
     if (status >= 500) return 'bg-rose-100 text-rose-700';

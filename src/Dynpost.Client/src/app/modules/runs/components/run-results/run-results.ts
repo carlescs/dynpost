@@ -13,6 +13,7 @@ import {
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import { RunResultDto, RunSampleDto, RunState, RunStatsDto } from '../../../../models/messages';
 import { HttpMethod, METHOD_COLORS } from '../../../../models/workspace';
+import { httpStatusTooltip } from '../../../../models/http-status';
 import {
   RUN_STATE_COLORS,
   RUN_STATE_LABELS,
@@ -74,6 +75,7 @@ export class RunResults {
   protected readonly formatElapsed = formatElapsed;
   protected readonly formatBytes = formatBytes;
   protected readonly statusFill = statusFill;
+  protected readonly statusTooltip = httpStatusTooltip;
 
   protected readonly heading = 'text-xs font-semibold tracking-wide text-slate-500 uppercase';
   protected readonly card = 'rounded-lg border border-slate-200 bg-white';

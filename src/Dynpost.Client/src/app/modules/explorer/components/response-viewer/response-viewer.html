@@ -72,8 +72,8 @@
       <span
         class="rounded px-1.5 py-0.5 font-mono font-bold"
         [class]="statusClass(r.status)"
-        title="Status"
-        >{{ r.status }} {{ r.statusText }}</span
+        [title]="statusTooltip(r.status)"
+        >{{ r.status }} {{ r.statusText || statusName(r.status) }}</span
       >
       <button
         type="button"
@@ -323,7 +323,7 @@
                   <span
                     class="rounded px-1.5 py-0.5 font-bold"
                     [class]="statusClass(hop.status)"
-                    [title]="hop.statusText"
+                    [title]="statusTooltip(hop.status)"
                     >{{ hop.status }}</span
                   >
                   <span class="text-slate-500">{{ hop.method }}</span>
@@ -361,6 +361,7 @@
                     <span
                       class="ml-1 rounded px-1.5 py-0.5 font-mono font-bold normal-case"
                       [class]="statusClass(hop.status)"
+                      [title]="statusTooltip(hop.status)"
                       >{{ hop.status }}</span
                     >
                   }

@@ -86,8 +86,9 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`, GraphQL), saved as YAML files
 - [x] Sending requests
-- [x] Response viewer: status, time, size, headers and a pretty-printed body,
-      with HTML and PDF previews; copy or save the body, cookies set, a timing
+- [x] Response viewer: status (hover any status code for its name and a short
+      explanation), time, size, headers and a pretty-printed body, with HTML and
+      PDF previews; copy or save the body, cookies set, a timing
       breakdown with redirects, and the request as sent
 - [x] Optional cookie jar per environment (kept out of git)
 - [x] Capture values from responses into variables (JSONPath or header, kept

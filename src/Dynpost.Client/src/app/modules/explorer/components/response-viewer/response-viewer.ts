@@ -22,6 +22,7 @@ import {
 import { ERROR_CODES, ResponseDto } from '../../../../models/messages';
 import { RequestDocument } from '../../../../models/workspace';
 import { formatSize } from '../../../../models/format-size';
+import { httpStatusName, httpStatusTooltip } from '../../../../models/http-status';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
 import { languageForMediaType } from '../../../../components/code-editor/monaco-loader';
@@ -236,6 +237,9 @@ export class ResponseViewer {
     clearTimeout(this.noteTimer);
     this.noteTimer = setTimeout(() => this.note.set(null), 4000);
   }
+
+  protected readonly statusName = httpStatusName;
+  protected readonly statusTooltip = httpStatusTooltip;
 
   protected statusClass(status: number): string {
     if (status >= 500) return 'bg-rose-100 text-rose-700';
