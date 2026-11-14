@@ -155,4 +155,37 @@ public class FolderSettingsTests
         Assert.Equal("none", result.Value.Auth.Type);
         Assert.Null(result.Value.AuthFolder);
     }
+
+    [Fact]
+    public async Task Save_WritesVariables_AndRejectsInvalidNames()
+    {
+        var save = new SaveFolderSettings(_repository, _store, _current);
+        var settings = new FolderSettingsDto([], new AuthDto("inherit"), [new KeyValueDto(" page ", "1"), new KeyValueDto("", "")]);
+
+        var result = await save.ExecuteAsync("requests/users", settings);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal([new KeyValueDto("page", "1")], result.Value.Variables);
+        await _store.Received(1).WriteAsync(
+            Root,
+            P("requests/users"),
+            Arg.Is<FolderDefaults>(d => d.Variables.SequenceEqual(new[] { new KeyValueEntry("page", "1") })),
+            Arg.Any<CancellationToken>());
+
+        var invalid = await save.ExecuteAsync("requests/users", settings with { Variables = [new KeyValueDto("bad name", "1")] });
+        Assert.Equal(ErrorCodes.InvalidRequest, invalid.Error?.Code);
+    }
+
+    [Fact]
+    public async Task Inherited_ListsTheFoldersVariables()
+    {
+        Given("requests", new FolderDefaults(variables: [new KeyValueEntry("page", "1"), new KeyValueEntry("size", "10")]));
+        Given("requests/users", new FolderDefaults(variables: [new KeyValueEntry("page", "2")]));
+
+        var result = await new GetInheritedSettings(_repository, new FolderInheritance(_store), _current).ExecuteAsync("requests/users");
+
+        Assert.Equal(
+            [new InheritedVariableDto("size", "10", "requests"), new InheritedVariableDto("page", "2", "requests/users")],
+            result.Value.Variables);
+    }
 }

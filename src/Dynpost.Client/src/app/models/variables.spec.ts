@@ -1,4 +1,10 @@
-import { VariableLookup, describeVariable, splitVariables, variableClass } from './variables';
+import {
+  VariableLookup,
+  describeVariable,
+  splitVariables,
+  variableClass,
+  withFolderVariables,
+} from './variables';
 
 describe('variables', () => {
   const lookup: VariableLookup = new Map([
@@ -47,6 +53,28 @@ describe('variables', () => {
       expect(describeVariable('missing', lookup)).toBe(
         'missing is not defined in the selected environment',
       );
+      const folder = new Map([['page', { value: '2', secret: false, folder: 'requests/users' }]]);
+      expect(describeVariable('page', folder)).toBe('page = 2 (set by the folder requests/users)');
+    });
+  });
+
+  describe('withFolderVariables', () => {
+    it('adds the folder variables the environment does not define', () => {
+      const combined = withFolderVariables(lookup, [
+        { name: 'host', value: 'folder.test', folder: 'requests' },
+        { name: 'page', value: '{{size}}', folder: 'requests/users' },
+      ]);
+      expect(combined.get('host')).toEqual({ value: 'example.com', secret: false });
+      expect(combined.get('page')).toEqual({
+        value: '{{size}}',
+        secret: false,
+        folder: 'requests/users',
+      });
+      expect(combined.get('token')?.secret).toBe(true);
+    });
+
+    it('returns the environment itself when no folder variable is added', () => {
+      expect(withFolderVariables(lookup, [])).toBe(lookup);
     });
   });
 });

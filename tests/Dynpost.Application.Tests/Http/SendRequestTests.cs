@@ -186,6 +186,35 @@ public class SendRequestTests
     }
 
     [Fact]
+    public async Task Execute_UsesTheVariablesOfItsFolders_TheEnvironmentWinning()
+    {
+        SelectEnvironment(new EnvironmentDefinition("Development", [new EnvironmentVariable("host", "env.test")]));
+        GivenFolder("requests", new FolderDefaults(variables: [new KeyValueEntry("host", "folder.test"), new KeyValueEntry("base", "https://{{host}}")]));
+        GivenFolder("requests/users", new FolderDefaults(variables: [new KeyValueEntry("page", "7")]));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}"));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request("{{base}}/users?p={{page}}"), "requests/users/list.yaml");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r => r.Url.AbsoluteUri == "https://env.test/users?p=7&page=2"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_RefusesFolderVariablesThatLoop()
+    {
+        _current.Open(Root);
+        GivenFolder("requests/users", new FolderDefaults(variables: [new KeyValueEntry("a", "{{b}}"), new KeyValueEntry("b", "{{a}}")]));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request("https://api.test/{{a}}"), "requests/users/list.yaml");
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error?.Code);
+        Assert.Contains("Fix the folder settings of 'requests/users'", result.Error!.Message);
+        await _sender.DidNotReceive().SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Execute_AnUnreadableFolderFile_IsReportedAndNothingIsSent()
     {
         _current.Open(Root);

@@ -31,16 +31,27 @@ export interface AuthDto {
   credentials?: 'header' | 'body' | null;
 }
 
-/** The headers and auth a folder sets for every request and folder in it. */
+/** The headers, auth and variables a folder sets for every request and folder in it. */
 export interface FolderSettingsDto {
   headers: KeyValueDto[];
   /** Type `inherit` passes on the auth of the folders above. */
   auth: AuthDto;
+  /** Variables for the requests below it; the selected environment's win over them. */
+  variables?: KeyValueDto[] | null;
 }
 
 /** A header inherited from a folder. */
 export interface InheritedHeaderDto {
   key: string;
+  value: string;
+  /** The folder that sets it. */
+  folder: string;
+}
+
+/** A variable inherited from a folder. */
+export interface InheritedVariableDto {
+  name: string;
+  /** Its value as written, possibly with `{{variable}}` references. */
   value: string;
   /** The folder that sets it. */
   folder: string;
@@ -53,6 +64,8 @@ export interface InheritedSettingsDto {
   auth: AuthDto;
   /** The folder the auth comes from; `null` when no folder sets one. */
   authFolder: string | null;
+  /** The inherited variables (the selected environment's win over them). */
+  variables: InheritedVariableDto[];
 }
 
 /** A cached OAuth 2.0 token, as far as the UI needs to know (the token itself stays in the host). */
@@ -968,9 +981,9 @@ export interface BridgeMessages {
   'folder.duplicate': { payload: { path: string }; result: FolderDto };
   /** Deletes a folder with its requests; refused if it holds other files. */
   'folder.delete': { payload: { path: string }; result: null };
-  /** The headers and auth a folder (`requests` or a folder in it) sets, from its `_folder.yaml`. */
+  /** The headers, auth and variables a folder (`requests` or a folder in it) sets, from its `_folder.yaml`. */
   'folder.settings.load': { payload: { path: string }; result: FolderSettingsDto };
-  /** Saves the headers and auth a folder sets; its `_folder.yaml` is removed when it sets nothing. */
+  /** Saves the headers, auth and variables a folder sets; its `_folder.yaml` is removed when it sets nothing. */
   'folder.settings.save': {
     payload: { path: string; settings: FolderSettingsDto };
     result: FolderSettingsDto;

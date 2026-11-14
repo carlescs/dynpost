@@ -93,7 +93,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
       out of git)
 - [x] Keep chosen requests, environments and run plans on this computer only,
       out of git (see [Local-only files](#local-only-files))
-- [x] Collections as folders, with folder-level headers and auth that apply to
+- [x] Collections as folders, with folder-level headers, auth and variables that apply to
       everything inside (see [Folder settings](#folder-settings))
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token, API key and OAuth 2.0 (client
@@ -130,7 +130,7 @@ my-api/
 ├── requests/               # every request; a folder in it is a collection
 │   ├── health.yaml
 │   └── users/
-│       ├── _folder.yaml    # optional folder-level defaults (headers, auth)
+│       ├── _folder.yaml    # optional folder-level defaults (headers, auth, variables)
 │       ├── get-user.yaml
 │       └── create-user.yaml
 ├── plans/                  # load run plans, organized in folders
@@ -359,10 +359,11 @@ writes new files and never changes existing ones.
 
 ### Folder settings
 
-A collection folder can set headers and auth for every request and folder inside
-it, in an optional `_folder.yaml` (and `requests/_folder.yaml` sets them for the
-whole workspace). It uses the same `headers` and `auth` keys as a request file,
-in that order; a folder that sets nothing has no file:
+A collection folder can set headers, auth and variables for every request and
+folder inside it, in an optional `_folder.yaml` (and `requests/_folder.yaml` sets
+them for the whole workspace). It uses the same `headers` and `auth` keys as a
+request file, in that order, followed by `variables`, written like `headers`; a
+folder that sets nothing has no file:
 
 ```yaml
 # requests/users/_folder.yaml
@@ -372,6 +373,9 @@ headers:
 auth:
   type: bearer
   token: "{{apiToken}}"
+variables:
+  usersUrl: "{{baseUrl}}/users"
+  pageSize: "20"
 ```
 
 The more specific level always wins:
@@ -386,17 +390,28 @@ The more specific level always wins:
   with `auth: { type: none }` stops it there: it and everything below that
   inherits it is sent without auth. When no level sets auth, the request is sent
   without.
+- **Variables** add up like headers (names are case-sensitive): a sub-folder's
+  variable replaces a parent's of the same name. They are defaults: the selected
+  environment's variables (and the values captured for it) win over them, and in
+  load runs the CSV row wins over both. A folder variable's value can use
+  environment variables and other folder variables (`{{baseUrl}}` above);
+  variables that refer to each other in a loop are refused when sending.
+  Disabled variables (`~name`) are not used, and folder variables can't be
+  secret: `_folder.yaml` is shared through git.
 
 Folder settings apply wherever a request is sent: from the editor (an unsaved
 request uses the folder it will be saved in), by load runs, and through the MCP
-server. Exports write each request with what it inherits, since other tools'
-formats don't have folder headers.
+server. Exports write each request with the headers and auth it inherits, since
+other tools' formats don't have folder headers; folder variables are not
+exported (the export says so), so their requests keep their `{{references}}`.
 
 Open a folder's settings with the sliders button on its row, **Folder settings**
 in its right-click menu, or **Settings for all requests** in the explorer's
 "More actions" menu (for `requests/` itself). They open in a tab with a
-**Headers** and an **Auth** tab, which also list what the folder itself inherits
-from the folders above. In the request editor, the **Headers** tab lists the
+**Headers**, an **Auth** and a **Variables** tab, which also list what the folder
+itself inherits from the folders above. In the request editor, `{{references}}`
+to its folders' variables are highlighted as defined, and their hover says which
+folder sets them. The **Headers** tab lists the
 headers inherited from folders below the request's own, struck through when the
 request replaces them, and **Inherit from folder** (the default for new requests)
 on the **Auth** tab shows which auth applies and which folder sets it.
@@ -893,7 +908,7 @@ workspace to a file you choose:
   environments, using Insomnia's `{{ _.name }}` references.
 
 Each request is exported with the headers and auth it inherits from its folders
-(see [Folder settings](#folder-settings)). Request descriptions are exported too. Untick **Include environments** to
+(see [Folder settings](#folder-settings)); folder variables are not exported. Request descriptions are exported too. Untick **Include environments** to
 export only the requests. Secret values are
 never exported: secret variables are exported with empty values (as `secret`
 variables in Postman). Request files that can't be read are skipped and
@@ -1120,8 +1135,8 @@ The assistant can use these tools, always on the workspace open in the app:
 | `get_workspace` | Lists the requests and collection folders. |
 | `read_request`, `create_request`, `save_request`, `move_request`, `delete_request` | Read and change request files. |
 | `create_folder` | Creates a folder in `requests/` or `plans/`. |
-| `get_folder_settings` | Reads the headers and auth a folder of `requests/` (or `requests/` itself) sets for everything in it. |
-| `save_folder_settings` | Replaces the headers and auth a folder of `requests/` sets (its `_folder.yaml`, removed when it sets nothing). |
+| `get_folder_settings` | Reads the headers, auth and variables a folder of `requests/` (or `requests/` itself) sets for everything in it. |
+| `save_folder_settings` | Replaces the headers, auth and variables a folder of `requests/` sets (its `_folder.yaml`, removed when it sets nothing). |
 | `list_history`, `get_history_entry` | Read the responses kept in a saved request's [history](#response-history) (cookie and secret values are hidden there already), to compare responses or find when something changed. |
 | `open_in_app` | Opens a request, run plan or environment in a tab, so the assistant can show you what it made or changed. |
 | `send_request` | Sends a saved request (keeping the response in its history) or an unsaved one, with the selected environment, and returns the response. Long bodies are cut off at 64 KB of text and binary bodies are left out. |

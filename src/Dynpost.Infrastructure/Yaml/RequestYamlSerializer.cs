@@ -11,7 +11,8 @@ namespace Dynpost.Infrastructure.Yaml;
 /// <c>body</c>, <c>capture</c>, <c>description</c>) and empty or default values are omitted. Disabled params and headers are written
 /// with a <c>~</c> prefix on their name. A request without <c>auth</c> inherits the auth of its
 /// folders; <c>type: none</c> sends none. Folder defaults (<c>_folder.yaml</c>) use the same
-/// <c>headers</c> and <c>auth</c> keys, in that order.
+/// <c>headers</c> and <c>auth</c> keys, in that order, followed by <c>variables</c> (written like
+/// <c>headers</c>).
 /// </summary>
 public static class RequestYamlSerializer
 {
@@ -75,12 +76,13 @@ public static class RequestYamlSerializer
         return writer.ToString();
     }
 
-    /// <summary>Writes the defaults of a folder (<c>_folder.yaml</c>): <c>headers</c>, then <c>auth</c>.</summary>
+    /// <summary>Writes the defaults of a folder (<c>_folder.yaml</c>): <c>headers</c>, <c>auth</c>, then <c>variables</c>.</summary>
     public static string SerializeFolder(FolderDefaults defaults)
     {
         var writer = new YamlWriter();
         WriteEntries(writer, "headers", defaults.Headers);
         WriteAuth(writer, defaults.Auth);
+        WriteEntries(writer, "variables", defaults.Variables);
         return writer.ToString();
     }
 
@@ -91,7 +93,7 @@ public static class RequestYamlSerializer
     public static FolderDefaults DeserializeFolder(string yaml)
     {
         var root = Load(yaml, allowEmpty: true);
-        return root is null ? FolderDefaults.Empty : new FolderDefaults(ReadEntries(root, "headers"), ReadAuth(root));
+        return root is null ? FolderDefaults.Empty : new FolderDefaults(ReadEntries(root, "headers"), ReadAuth(root), ReadEntries(root, "variables"));
     }
 
     /// <summary>

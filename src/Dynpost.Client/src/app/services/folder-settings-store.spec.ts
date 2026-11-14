@@ -76,10 +76,38 @@ describe('FolderSettingsStore', () => {
 
     expect(send).toHaveBeenCalledWith('folder.settings.save', {
       path: 'requests',
-      settings: { headers: [], auth: { type: 'apiKey', key: 'X-Key', value: 'k', in: 'header' } },
+      settings: {
+        headers: [],
+        auth: { type: 'apiKey', key: 'X-Key', value: 'k', in: 'header' },
+        variables: [],
+      },
     });
     expect(store.draft()!.dirty).toBe(false);
     expect(store.changed()).toBe(1);
+  });
+
+  it('loads and saves the variables a folder sets', async () => {
+    const variables = [{ key: 'page', value: '1', enabled: true }];
+    respond({
+      'folder.settings.load': () => ({ headers: [], auth: { type: 'inherit' }, variables }),
+      'folder.settings.save': ({ settings }) => settings,
+    });
+    await store.open('requests/users');
+    const key = store.draft()!.key;
+    expect(store.draft()!.variables).toEqual(variables);
+
+    store.update(key, { variables: [...variables, { key: 'size', value: '20', enabled: false }] });
+    await store.save(key);
+
+    expect(send).toHaveBeenCalledWith('folder.settings.save', {
+      path: 'requests/users',
+      settings: {
+        headers: [],
+        auth: { type: 'inherit' },
+        variables: [...variables, { key: 'size', value: '20', enabled: false }],
+      },
+    });
+    expect(store.draft()!.variables).toHaveLength(2);
   });
 
   it('reports a failed save and keeps the changes', async () => {
@@ -145,7 +173,7 @@ describe('FolderSettingsStore', () => {
   });
 
   it('reads what a folder passes on, or null when it cannot', async () => {
-    const inherited = { headers: [], auth: { type: 'none' }, authFolder: null };
+    const inherited = { headers: [], auth: { type: 'none' }, authFolder: null, variables: [] };
     respond({ 'folder.settings.inherited': () => inherited });
     expect(await store.inherited('requests/users')).toEqual(inherited);
     expect(send).toHaveBeenLastCalledWith('folder.settings.inherited', { path: 'requests/users' });

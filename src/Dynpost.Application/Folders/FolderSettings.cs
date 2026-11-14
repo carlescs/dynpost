@@ -1,6 +1,8 @@
 using Dynpost.Application.Common;
+using Dynpost.Application.Environments;
 using Dynpost.Application.Requests;
 using Dynpost.Application.Workspaces;
+using Dynpost.Domain.Environments;
 using Dynpost.Domain.Requests;
 using Dynpost.Domain.Workspaces;
 
@@ -22,18 +24,32 @@ public interface IFolderDefaultsStore
     Task<Result<bool>> WriteAsync(string root, WorkspacePath folder, FolderDefaults defaults, CancellationToken cancellationToken = default);
 }
 
-/// <summary>The headers and auth a folder sets for everything in it.</summary>
+/// <summary>The headers, auth and variables a folder sets for everything in it.</summary>
 /// <param name="Auth">Its auth; type <c>inherit</c> passes on the auth of the folders above.</param>
-public sealed record FolderSettingsDto(IReadOnlyList<KeyValueDto> Headers, AuthDto Auth);
+/// <param name="Variables">
+/// Variables for the requests below it; the selected environment's variables win over them.
+/// <c>null</c> (as sent by older callers) is the same as none.
+/// </param>
+public sealed record FolderSettingsDto(IReadOnlyList<KeyValueDto> Headers, AuthDto Auth, IReadOnlyList<KeyValueDto>? Variables = null);
 
 /// <summary>A header inherited from a folder.</summary>
 /// <param name="Folder">The folder that sets it.</param>
 public sealed record InheritedHeaderDto(string Key, string Value, string Folder);
 
+/// <summary>A variable inherited from a folder.</summary>
+/// <param name="Value">Its value as written, possibly with <c>{{variable}}</c> references.</param>
+/// <param name="Folder">The folder that sets it.</param>
+public sealed record InheritedVariableDto(string Name, string Value, string Folder);
+
 /// <summary>What the requests and folders directly inside a folder inherit from it and the folders above.</summary>
 /// <param name="Auth">The inherited auth; type <c>none</c> when no folder sets one.</param>
 /// <param name="AuthFolder">The folder the auth comes from; <c>null</c> when no folder sets one.</param>
-public sealed record InheritedSettingsDto(IReadOnlyList<InheritedHeaderDto> Headers, AuthDto Auth, string? AuthFolder);
+/// <param name="Variables">The inherited variables (the selected environment's win over them).</param>
+public sealed record InheritedSettingsDto(
+    IReadOnlyList<InheritedHeaderDto> Headers,
+    AuthDto Auth,
+    string? AuthFolder,
+    IReadOnlyList<InheritedVariableDto> Variables);
 
 /// <summary>
 /// Works out what requests inherit from the <c>_folder.yaml</c> files of the folders they are in:
@@ -83,9 +99,32 @@ public sealed class FolderInheritance(IFolderDefaultsStore store)
         var inherited = await ForFolderAsync(root, folder, cancellationToken);
         return inherited.Map(defaults => defaults.Apply(request));
     }
+
+    /// <summary>
+    /// The variables a request inheriting <paramref name="defaults"/> is sent with:
+    /// <paramref name="environment"/>'s, plus the folders' variables it doesn't set (see
+    /// <see cref="InheritedDefaults.ResolveVariables"/>). Folder variables that refer to each other
+    /// in a loop are an error.
+    /// </summary>
+    public static Result<ActiveVariables> WithVariables(InheritedDefaults defaults, ActiveVariables environment)
+    {
+        if (defaults.Variables.Count == 0)
+        {
+            return environment;
+        }
+
+        var resolved = defaults.ResolveVariables(environment.Values);
+        if (resolved.Cycle.Count > 0)
+        {
+            var folders = string.Join(", ", defaults.FoldersOf(resolved.Cycle).Select(folder => $"'{folder}'"));
+            return new Error(ErrorCodes.InvalidRequest, $"{VariableSet.CycleMessage(resolved.Cycle)} Fix the folder settings of {folders}.");
+        }
+
+        return environment with { Values = resolved.Values };
+    }
 }
 
-/// <summary>Reads the headers and auth a folder of the open workspace sets (its <c>_folder.yaml</c>).</summary>
+/// <summary>Reads the headers, auth and variables a folder of the open workspace sets (its <c>_folder.yaml</c>).</summary>
 public sealed class LoadFolderSettings(IWorkspaceRepository repository, IFolderDefaultsStore store, CurrentWorkspace current)
 {
     public async Task<Result<FolderSettingsDto>> ExecuteAsync(string path, CancellationToken cancellationToken = default)
@@ -107,7 +146,7 @@ public sealed class LoadFolderSettings(IWorkspaceRepository repository, IFolderD
 }
 
 /// <summary>
-/// Saves the headers and auth a folder sets in its <c>_folder.yaml</c>, which is removed when it
+/// Saves the headers, auth and variables a folder sets in its <c>_folder.yaml</c>, which is removed when it
 /// sets nothing. Returns them as saved.
 /// </summary>
 public sealed class SaveFolderSettings(IWorkspaceRepository repository, IFolderDefaultsStore store, CurrentWorkspace current)
@@ -165,7 +204,8 @@ public sealed class GetInheritedSettings(IWorkspaceRepository repository, Folder
         return inherited.Map(defaults => new InheritedSettingsDto(
             defaults.Headers.Select(header => new InheritedHeaderDto(header.Key, header.Value, header.Folder.Value)).ToList(),
             RequestMapper.ToDto(defaults.EffectiveAuth),
-            defaults.AuthFolder?.Value));
+            defaults.AuthFolder?.Value,
+            defaults.Variables.Select(variable => new InheritedVariableDto(variable.Name, variable.Value, variable.Folder.Value)).ToList()));
     }
 }
 
@@ -173,13 +213,14 @@ internal static class FolderSettingsMapper
 {
     public static FolderSettingsDto ToDto(FolderDefaults defaults) => new(
         defaults.Headers.Select(header => new KeyValueDto(header.Key, header.Value, header.Enabled)).ToList(),
-        RequestMapper.ToDto(defaults.Auth));
+        RequestMapper.ToDto(defaults.Auth),
+        defaults.Variables.Select(variable => new KeyValueDto(variable.Key, variable.Value, variable.Enabled)).ToList());
 
     public static Result<FolderDefaults> ToDomain(FolderSettingsDto settings)
     {
         var auth = RequestMapper.ToDomain(settings.Auth);
         return auth.IsSuccess
-            ? new FolderDefaults(RequestMapper.ToEntries(settings.Headers), auth.Value)
+            ? new FolderDefaults(RequestMapper.ToEntries(settings.Headers), auth.Value, RequestMapper.ToEntries(settings.Variables))
             : auth.Error!;
     }
 }
