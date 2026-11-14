@@ -99,7 +99,10 @@
             </td>
             <td class="px-2 py-1 whitespace-nowrap">
               @if (s.status !== null) {
-                <span class="flex items-center gap-1 font-semibold">
+                <span
+                  class="flex items-center gap-1 font-semibold"
+                  [title]="statusTooltip(s.status)"
+                >
                   <span class="size-2 rounded-sm" [class]="statusFill(s.status)"></span>
                   {{ s.status }}
                 </span>

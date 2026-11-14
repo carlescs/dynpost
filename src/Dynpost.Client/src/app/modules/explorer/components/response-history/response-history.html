@@ -21,9 +21,12 @@
           (click)="select(entry.id)"
         >
           <span class="flex items-center gap-2">
-            <span class="rounded px-1 font-mono font-bold" [class]="statusClass(entry.status)">{{
-              entry.status
-            }}</span>
+            <span
+              class="rounded px-1 font-mono font-bold"
+              [class]="statusClass(entry.status)"
+              [title]="statusTooltip(entry.status)"
+              >{{ entry.status }}</span
+            >
             <span class="truncate text-slate-700">{{ dates.dateTime(entry.sentAt) }}</span>
           </span>
           <span class="flex gap-2 text-slate-500">

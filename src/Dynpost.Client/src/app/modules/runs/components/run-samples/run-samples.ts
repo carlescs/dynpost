@@ -19,6 +19,7 @@ import { PdfViewer } from '../../../../components/pdf-viewer/pdf-viewer';
 import { decodeBase64 } from '../../../../models/base64';
 import { RunResultDto, RunSampleDto, RunSamplesPageDto } from '../../../../models/messages';
 import { HttpMethod, METHOD_COLORS } from '../../../../models/workspace';
+import { httpStatusTooltip } from '../../../../models/http-status';
 import { Bridge } from '../../../../services/bridge';
 import { formatElapsed, formatMs, statusFill } from '../../models/run-format';
 
@@ -76,6 +77,7 @@ export class RunSamples {
   protected readonly formatMs = formatMs;
   protected readonly formatElapsed = formatElapsed;
   protected readonly statusFill = statusFill;
+  protected readonly statusTooltip = httpStatusTooltip;
 
   protected readonly failedOnly = signal(false);
   /** The counts of the log from the latest page read; `null` until one is. */

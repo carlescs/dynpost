@@ -243,13 +243,13 @@
           class="min-w-1"
           [class]="statusFill(s.key)"
           [style.flex-grow]="s.count"
-          [title]="s.key + ': ' + s.count"
+          [title]="statusTooltip(s.key) + ' (' + s.count + ')'"
         ></div>
       }
     </div>
     <ul class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
       @for (s of statusCodes(); track s.key) {
-        <li class="flex items-center gap-1.5" data-status>
+        <li class="flex items-center gap-1.5" data-status [title]="statusTooltip(s.key)">
           <span class="size-2 rounded-sm" [class]="statusFill(s.key)"></span>
           <span class="font-semibold">{{ s.key }}</span>
           <span class="text-slate-500">
@@ -310,7 +310,10 @@
                   {{ s.url ?? s.request }}
                 </span>
                 @if (s.status !== null) {
-                  <span class="flex shrink-0 items-center gap-1 font-semibold">
+                  <span
+                    class="flex shrink-0 items-center gap-1 font-semibold"
+                    [title]="statusTooltip(s.status)"
+                  >
                     <span class="size-2 rounded-sm" [class]="statusFill(s.status)"></span>
                     {{ s.status }}
                   </span>

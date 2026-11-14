@@ -124,6 +124,14 @@ describe('ResponseViewer', () => {
     );
   });
 
+  it('explains the status code in a tooltip and names it when the server sent no reason', () => {
+    const fixture = render(response({ status: 404, statusText: '' }));
+    const badge = fixture.nativeElement.querySelector('[title^="404 "]') as HTMLElement;
+
+    expect(badge.textContent?.trim()).toBe('404 Not Found');
+    expect(badge.title).toBe('404 Not Found — The server cannot find the requested resource.');
+  });
+
   it('offers copying only for text bodies', () => {
     const fixture = render(response());
     const labels = [...fixture.nativeElement.querySelectorAll('button')].map((b: HTMLElement) =>
