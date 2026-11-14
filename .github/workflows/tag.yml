@@ -5,10 +5,28 @@ name: Create tag
 # last tag and pushes the new tag, then starts the Release workflow on it. A tag
 # pushed with GITHUB_TOKEN doesn't trigger other workflows, but a dispatch does,
 # so no personal token is needed.
+#
+# Run it manually with `bump` set to patch, minor or major (or with an explicit
+# `version`) to release `main` even when its commits wouldn't make semantic-release
+# do so. The tag it creates is an ordinary `vX.Y.Z` tag on `main`, so semantic-release
+# counts the next release from it.
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Version to release (auto lets semantic-release decide from the commits)
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+      version:
+        description: Exact version instead (e.g. 1.4.0 or 1.4.0-beta.1); overrides bump
+        type: string
+        required: false
+
+env:
+  MANUAL: ${{ github.event_name == 'workflow_dispatch' && (inputs.version != '' || inputs.bump != 'auto') }}
 
 permissions:
   contents: write
@@ -39,9 +57,50 @@ jobs:
         run: git tag --points-at HEAD --list 'v*' > "$RUNNER_TEMP/tags-before"
 
       - name: Semantic release
+        if: env.MANUAL != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npx semantic-release
+
+      # A manual version must be newer than every release tag reachable from main, so
+      # semantic-release (which counts from the highest one) never goes backwards.
+      # Pre-release versions are allowed; semantic-release ignores them on main.
+      - name: Manual version
+        if: env.MANUAL == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Manual versions are released from main only (got $GITHUB_REF)." >&2
+            exit 1
+          fi
+          version=$(git tag --merged HEAD --list 'v*' | node -e '
+            const semver = require("semver");
+            const [bump, wanted] = process.argv.slice(1);
+            const tags = require("fs").readFileSync(0, "utf8").split("\n")
+              .map((t) => semver.valid(t.replace(/^v/, "")))
+              .filter((v) => v && !semver.prerelease(v));
+            const last = semver.rsort(tags)[0] ?? "0.0.0";
+            const next = wanted ? semver.valid(wanted.replace(/^v/, "")) : semver.inc(last, bump);
+            if (!next) { console.error(`"${wanted}" is not a valid version.`); process.exit(1); }
+            if (!semver.gt(next, last)) { console.error(`${next} is not newer than ${last}.`); process.exit(1); }
+            console.log(next);
+          ' "$BUMP" "$VERSION")
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists." >&2
+            exit 1
+          fi
+          if git tag --points-at HEAD --list 'v*' | grep -qv -- '-'; then
+            echo "HEAD is already released as $(git tag --points-at HEAD --list 'v*' | tr '\n' ' ')." >&2
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$(git rev-parse HEAD)" >/dev/null
+          git tag "$tag"
+          echo "Created $tag."
 
       # semantic-release tags HEAD when it releases; start the Release workflow on a tag
       # created by this run only, so re-running on an already released commit does nothing.
