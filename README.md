@@ -331,7 +331,9 @@ content didn't change leaves its file untouched. Comments and keys Dynpost
 doesn't know are not preserved when a request is saved with changes.
 
 Folders are collections and can be nested. From the explorer you can create,
-rename (F2) and delete them. Drag a request or a folder onto another folder
+rename (F2) and delete them. Hovering a folder shows buttons for a new request
+and a new sub-folder in it; its "…" button (or a right-click) opens a menu with
+everything else: import into it, its settings, rename, duplicate and delete. Drag a request or a folder onto another folder
 (or onto the "Drop here to move to the top level" zone that appears at the
 bottom of the explorer, or its empty space) to move it there. While dragging, the
 destination folder is outlined and marked "Move here", the dragged chip says where
@@ -406,8 +408,8 @@ server. Exports write each request with the headers and auth it inherits, since
 other tools' formats don't have folder headers; folder variables are not
 exported (the export says so), so their requests keep their `{{references}}`.
 
-Open a folder's settings with the sliders button on its row, **Folder settings**
-in its right-click menu, or **Settings for all requests** in the explorer's
+Open a folder's settings with **Folder settings** in its menu (the "…" button on
+its row, or a right-click), or **Settings for all requests** in the explorer's
 "More actions" menu (for `requests/` itself). They open in a tab with a
 **Headers**, an **Auth** and a **Variables** tab, which also list what the folder
 itself inherits from the folders above. In the request editor, `{{references}}`
@@ -896,8 +898,8 @@ for multipart `form` requests.
 Dynpost doesn't need its own exchange format — the workspace *is* plain files —
 but you can bring requests in from other tools and take them out again.
 
-**Import** (the import button in the explorer header, or on a folder row to
-import into that folder) reads a file and recognizes its format from the
+**Import** (the import button in the explorer header, or **Import into this folder…** in a
+folder's menu) reads a file and recognizes its format from the
 content, in JSON or YAML:
 
 | Format | What is imported |
