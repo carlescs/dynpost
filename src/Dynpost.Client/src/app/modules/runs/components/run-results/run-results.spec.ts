@@ -107,24 +107,76 @@ describe('RunResults', () => {
     expect(requests[1]).toContain('b.yaml 100 requests 4 failed (2%)');
   });
 
-  it('lists each environment with its failures, only when the plan has environments', () => {
-    expect(create(run()).querySelector('[data-stats="environment"]')).toBeNull();
-    const element = create(
-      run({
-        environments: [
-          {
-            environment: 'environments/dev.yaml',
-            name: 'Dev',
-            stats: stats({ samples: 120, errors: 0, throughput: 24 }),
-          },
-          { environment: 'environments/load.yaml', name: 'Load', stats: stats({ samples: 80 }) },
-        ],
-      }),
-    );
+  const withEnvironments = () =>
+    run({
+      environments: [
+        {
+          environment: 'environments/dev.yaml',
+          name: 'Dev',
+          stats: stats({ samples: 120, errors: 0, throughput: 24 }),
+        },
+        { environment: 'environments/load.yaml', name: 'Load', stats: stats({ samples: 80 }) },
+      ],
+    });
+  const options = (element: HTMLElement) =>
+    [...element.querySelectorAll('[data-breakdown-option]')].map((option) => ({
+      label: text(option),
+      checked: option.getAttribute('aria-checked'),
+    }));
+  function pick(element: HTMLElement, breakdown: string) {
+    element.querySelector<HTMLElement>(`[data-breakdown-option="${breakdown}"]`)!.click();
+    TestBed.tick();
+  }
+
+  it('shows the statistics per request by default', () => {
+    const element = create(withEnvironments());
+    expect(element.querySelector('[data-stats]')?.getAttribute('data-stats')).toBe('request');
+    expect(element.querySelectorAll('[data-request]').length).toBe(2);
+    expect(element.querySelector('[data-environment-stats]')).toBeNull();
+  });
+
+  it('offers the breakdown per environment only when the plan has environments', () => {
+    expect(options(create(run()))).toEqual([
+      { label: 'Overall', checked: 'false' },
+      { label: 'Per request', checked: 'true' },
+    ]);
+    expect(options(create(withEnvironments()))).toEqual([
+      { label: 'Overall', checked: 'false' },
+      { label: 'Per environment', checked: 'false' },
+      { label: 'Per request', checked: 'true' },
+    ]);
+  });
+
+  it('switches to the statistics per environment', () => {
+    const element = create(withEnvironments());
+    pick(element, 'environment');
     const rows = [...element.querySelectorAll('[data-environment-stats]')].map(text);
     expect(rows[0]).toContain('Dev 120 requests · 24/s Average');
     expect(rows[1]).toContain('Load 80 requests · 40/s 4 failed (2%)');
+    expect(element.querySelector('[data-request]')).toBeNull();
+    expect(options(element)[1].checked).toBe('true');
+  });
+
+  it('switches to only the overall statistics', () => {
+    const element = create(withEnvironments());
+    pick(element, 'overall');
+    const rows = [...element.querySelectorAll('[data-overall-stats]')].map(text);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain('All requests 200 requests · 40/s 4 failed (2%)');
+    expect(element.querySelector('[data-request]')).toBeNull();
+    expect(element.querySelector('[data-environment-stats]')).toBeNull();
+  });
+
+  it('falls back to per request when the run shown has no environments', () => {
+    const fixture = TestBed.createComponent(RunResults);
+    fixture.componentRef.setInput('run', withEnvironments());
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    pick(element, 'environment');
+    fixture.componentRef.setInput('run', run());
+    fixture.detectChanges();
     expect(element.querySelectorAll('[data-request]').length).toBe(2);
+    expect(options(element)[1]).toEqual({ label: 'Per request', checked: 'true' });
   });
 
   it('breaks down status codes and error reasons', () => {
