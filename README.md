@@ -753,8 +753,9 @@ their order, with each request's weight and share for a random pick), sums up th
 load (users × iterations × requests) and sketches the users over time with the
 ramp-up. Next to it, the results dashboard follows the run live: headline
 numbers, requests per second and average latency over time (hover a second for
-its numbers), each threshold with its verdict, the latency spread of every
-request, status codes, error reasons, the failed and slowest requests (expand
+its numbers), each threshold with its verdict, latency statistics (a switch
+shows them per request, per environment when the plan lists environments, or
+only for the whole run), status codes, error reasons, the failed and slowest requests (expand
 one for its data row, body file and response) and the earlier runs of the plan.
 Hover an earlier run and press its trash button to delete it with its request
 log and saved responses, or press **Clear** above the list to delete them all. To delete several,

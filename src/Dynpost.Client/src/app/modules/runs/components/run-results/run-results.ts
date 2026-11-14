@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, computed, inject, input, output } from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faBan,
@@ -36,6 +36,9 @@ const THRESHOLD_NAMES: Record<string, string> = {
   errorRate: 'Error rate',
   throughput: 'Throughput',
 };
+
+/** What the statistics below the headline numbers are broken down by. */
+export type StatsBreakdown = 'overall' | 'environment' | 'request';
 
 /** Rows of statistics, each with its latency spread on one shared scale, in percent. */
 function spreads(rows: { key: string; label: string; stats: RunStatsDto }[]) {
@@ -129,6 +132,35 @@ export class RunResults {
       })),
     ),
   );
+
+  /** The breakdowns this run offers: by environment only when the plan lists environments. */
+  protected readonly breakdowns = computed(() => {
+    const options: { id: StatsBreakdown; label: string }[] = [{ id: 'overall', label: 'Overall' }];
+    if (this.environments().length) options.push({ id: 'environment', label: 'Per environment' });
+    options.push({ id: 'request', label: 'Per request' });
+    return options;
+  });
+
+  /** The breakdown picked with the switch; it stays when another run is shown. */
+  protected readonly selectedBreakdown = signal<StatsBreakdown>('request');
+
+  /** The breakdown shown: per request when the one picked is not available for this run. */
+  protected readonly breakdown = computed(() => {
+    const picked = this.selectedBreakdown();
+    return this.breakdowns().some((option) => option.id === picked) ? picked : 'request';
+  });
+
+  /** The rows of the breakdown shown: one for the whole run when only the overall is shown. */
+  protected readonly breakdownRows = computed(() => {
+    switch (this.breakdown()) {
+      case 'environment':
+        return this.environments();
+      case 'request':
+        return this.requests();
+      case 'overall':
+        return spreads([{ key: 'All requests', label: 'All requests', stats: this.run().total }]);
+    }
+  });
 
   protected readonly statusCodes = computed(() => this.shares(this.run().total.statusCodes));
   protected readonly errorReasons = computed(() =>
