@@ -4,6 +4,7 @@ Dynpost is a lightweight, cross-platform desktop HTTP client — a simplified ta
 on Postman. Its difference: your collections are plain YAML files in a folder
 you choose, and Dynpost can commit, pull and push that folder with git directly
 from the app. No account, no cloud workspace, no proprietary export format.
+Homepage: <https://carlescs.github.io/dynpost/>.
 
 With Dynpost you can:
 
@@ -1277,6 +1278,9 @@ runtime and the platform webview prerequisites above, but not Node.js.
   tests with no I/O.
 - `tests/Dynpost.Infrastructure.Tests`: integration tests against temporary
   folders and git repositories.
+- `site/`: the static homepage (`index.html` plus `assets/`), published to
+  GitHub Pages by `.github/workflows/pages.yml` on every push to `main` that
+  changes it. Its screenshot is the client's browser preview (`npm start`).
 
 Run the backend tests (xUnit, with NSubstitute for mocking) with:
 

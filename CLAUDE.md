@@ -121,6 +121,10 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   with the operating system's regional patterns read by the host
   (`Application/Locale`, `Infrastructure/Locale/SystemRegionalSettings.cs`, message
   `locale.dateFormat`) through `models/date-format.ts`.
+- `site/` is the static homepage (plain HTML/CSS, no build step, no external resources),
+  deployed to GitHub Pages (`https://carlescs.github.io/dynpost/`) by
+  `.github/workflows/pages.yml`. Keep its feature list and download file names in step with
+  `README.md` and `release.yml`.
 - All projects are in `Dynpost.sln` (solution folders `src` and `tests`). The
   Angular client is included as a JavaScript project
   (`src/Dynpost.Client/Dynpost.Client.esproj`) so it shows up in Visual
