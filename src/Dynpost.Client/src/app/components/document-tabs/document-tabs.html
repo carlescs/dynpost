@@ -1,56 +1,79 @@
-<div class="flex min-w-0 overflow-x-auto" role="tablist">
-  @for (tab of tabs(); track tab.key) {
-    @let active = tab.key === store.activeTab();
-    @let name = tabName(tab);
-    @let dirty = isDirty(tab);
+<div class="group/strip relative flex min-w-0">
+  <div
+    #strip
+    class="tab-strip flex min-w-0 overflow-x-auto"
+    role="tablist"
+    (scroll)="measure()"
+    (wheel)="wheel($event)"
+  >
+    @for (tab of tabs(); track tab.key) {
+      @let active = tab.key === store.activeTab();
+      @let name = tabName(tab);
+      @let dirty = isDirty(tab);
+      <div
+        [attr.data-tab-key]="tab.key"
+        class="group flex max-w-56 shrink-0 items-center gap-2 border-r border-slate-200 pr-1 pl-3 text-sm"
+        [class.bg-white]="active"
+        [class.text-slate-500]="!active"
+        (contextmenu)="openMenu($event, tab)"
+        (auxclick)="auxClick($event, tab)"
+      >
+        <button
+          type="button"
+          role="tab"
+          class="flex min-w-0 items-center gap-2"
+          [attr.aria-selected]="active"
+          [title]="tabTitle(tab)"
+          (click)="store.activateTab(tab.key)"
+        >
+          @if (tab.kind === 'request') {
+            <span class="font-mono text-[10px] font-bold" [class]="methodColors[tab.doc.method]">{{
+              tab.doc.method
+            }}</span>
+            <span class="truncate" [class.italic]="!tab.doc.path">{{ name }}</span>
+          } @else if (tab.kind === 'environment') {
+            <fa-icon class="text-xs text-emerald-600" [icon]="faLayerGroup" />
+            <span class="truncate" [class.italic]="!tab.draft.id">{{ name }}</span>
+          } @else if (tab.kind === 'folder') {
+            <fa-icon class="text-xs text-amber-500" [icon]="faSliders" />
+            <span class="truncate">{{ name }}</span>
+          } @else {
+            <fa-icon
+              class="text-xs text-violet-600"
+              [class.animate-pulse]="isRunning(tab.plan)"
+              [icon]="faGaugeHigh"
+            />
+            <span class="truncate">{{ name }}</span>
+          }
+        </button>
+        <button
+          type="button"
+          class="relative flex size-5 shrink-0 items-center justify-center rounded text-xs text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+          [attr.aria-label]="'Close ' + name"
+          [title]="'Close ' + name"
+          (click)="close(tab)"
+        >
+          @if (dirty) {
+            <span class="size-2 rounded-full bg-slate-400 group-hover:hidden"></span>
+            <fa-icon class="hidden group-hover:inline" [icon]="faXmark" />
+          } @else {
+            <fa-icon [icon]="faXmark" />
+          }
+        </button>
+      </div>
+    }
+  </div>
+  @if (thumb(); as thumb) {
     <div
-      class="group flex max-w-56 shrink-0 items-center gap-2 border-r border-slate-200 pr-1 pl-3 text-sm"
-      [class.bg-white]="active"
-      [class.text-slate-500]="!active"
-    >
-      <button
-        type="button"
-        role="tab"
-        class="flex min-w-0 items-center gap-2"
-        [attr.aria-selected]="active"
-        [title]="tabTitle(tab)"
-        (click)="store.activateTab(tab.key)"
-      >
-        @if (tab.kind === 'request') {
-          <span class="font-mono text-[10px] font-bold" [class]="methodColors[tab.doc.method]">{{
-            tab.doc.method
-          }}</span>
-          <span class="truncate" [class.italic]="!tab.doc.path">{{ name }}</span>
-        } @else if (tab.kind === 'environment') {
-          <fa-icon class="text-xs text-emerald-600" [icon]="faLayerGroup" />
-          <span class="truncate" [class.italic]="!tab.draft.id">{{ name }}</span>
-        } @else if (tab.kind === 'folder') {
-          <fa-icon class="text-xs text-amber-500" [icon]="faSliders" />
-          <span class="truncate">{{ name }}</span>
-        } @else {
-          <fa-icon
-            class="text-xs text-violet-600"
-            [class.animate-pulse]="isRunning(tab.plan)"
-            [icon]="faGaugeHigh"
-          />
-          <span class="truncate">{{ name }}</span>
-        }
-      </button>
-      <button
-        type="button"
-        class="relative flex size-5 shrink-0 items-center justify-center rounded text-xs text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-        [attr.aria-label]="'Close ' + name"
-        [title]="'Close ' + name"
-        (click)="close(tab)"
-      >
-        @if (dirty) {
-          <span class="size-2 rounded-full bg-slate-400 group-hover:hidden"></span>
-          <fa-icon class="hidden group-hover:inline" [icon]="faXmark" />
-        } @else {
-          <fa-icon [icon]="faXmark" />
-        }
-      </button>
-    </div>
+      class="absolute bottom-0 h-0.75 rounded-full bg-slate-400/40 transition-colors group-hover/strip:bg-slate-500/70 hover:bg-slate-600"
+      aria-hidden="true"
+      [style.left.px]="thumb.offset"
+      [style.width.px]="thumb.size"
+      (pointerdown)="startDrag($event)"
+      (pointermove)="moveDrag($event)"
+      (pointerup)="endDrag()"
+      (pointercancel)="endDrag()"
+    ></div>
   }
 </div>
 <button
@@ -62,3 +85,30 @@
 >
   <fa-icon [icon]="faPlus" />
 </button>
+
+@if (menu(); as menu) {
+  <div
+    role="menu"
+    aria-label="Tab actions"
+    class="fixed z-50 min-w-48 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
+    [style.left.px]="menu.x"
+    [style.top.px]="menu.y"
+    (click)="$event.stopPropagation()"
+    (contextmenu)="$event.preventDefault(); $event.stopPropagation()"
+  >
+    @for (item of menuItems; track item.scope) {
+      @if (item.separator) {
+        <div class="my-1 border-t border-slate-200" role="separator"></div>
+      }
+      <button
+        type="button"
+        role="menuitem"
+        class="flex w-full items-center px-3 py-1.5 text-left hover:bg-slate-100 disabled:text-slate-400 disabled:hover:bg-transparent"
+        [disabled]="!tabsToClose(menu.key, item.scope).length"
+        (click)="closeTabs(menu.key, item.scope)"
+      >
+        {{ item.label }}
+      </button>
+    }
+  </div>
+}

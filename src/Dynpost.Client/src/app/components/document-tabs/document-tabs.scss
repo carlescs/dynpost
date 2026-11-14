@@ -1,0 +1,9 @@
+// The strip hides the native scrollbar: a thin thumb is drawn over the tabs' bottom edge instead,
+// so a long row of tabs keeps its full height.
+.tab-strip {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
