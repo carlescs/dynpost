@@ -1312,6 +1312,16 @@ release build for it. Merge pull requests with a merge commit or by rebasing, no
 by squashing: semantic-release reads every commit, and a squash would fold a
 branch's `fix:` commits into one `feat:` and drop them from the release notes.
 
+To release when the commits wouldn't produce one (or to choose the bump yourself),
+run the **Create tag** workflow by hand on `main` (Actions → Create tag → Run
+workflow) and pick `patch`, `minor` or `major`, or type an exact `version` such
+as `1.4.0` or `1.4.0-beta.1`. Left on `auto`, it runs semantic-release as on a
+push. A manual version must be newer than the last release tag; the workflow
+pushes it as an ordinary `vX.Y.Z` tag and starts the release build, and
+semantic-release counts the next automatic release from that tag. Pre-release
+tags are ignored by semantic-release, so the next automatic release still
+counts from the last stable one.
+
 Pushing a version tag publishes desktop builds (`.github/workflows/release.yml`).
 semantic-release does this automatically; to do it by hand:
 
