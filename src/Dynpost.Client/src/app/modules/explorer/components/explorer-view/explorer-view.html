@@ -170,52 +170,100 @@
   </div>
   @if (state.menu(); as menu) {
     <div
+      #nodeMenu
       role="menu"
-      class="fixed z-50 min-w-40 rounded border border-slate-300 bg-white py-1 text-sm shadow-lg"
-      [style.left.px]="menu.x"
-      [style.top.px]="menu.y"
+      [attr.aria-label]="menu.node.name"
+      class="fixed z-50 w-60 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
+      [style.left.px]="menuPosition().x"
+      [style.top.px]="menuPosition().y"
       (click)="$event.stopPropagation()"
       (contextmenu)="$event.preventDefault()"
     >
-      <button
-        type="button"
-        role="menuitem"
-        class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
-        (click)="state.duplicateNode(menu.node)"
-      >
-        <fa-icon [icon]="faClone" />
-        Duplicate {{ menu.node.kind === 'folder' ? 'folder' : 'request' }}
-      </button>
       @if (menu.node.kind === 'folder') {
         <button
           type="button"
           role="menuitem"
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
-          (click)="openFolderSettings(menu.node.path)"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+          (click)="state.newRequestIn(menu.node)"
         >
-          <fa-icon [icon]="faSliders" />
-          Folder settings (headers, auth)
+          <fa-icon class="w-4 text-slate-500" [icon]="faPlus" />
+          New request
         </button>
-      }
-      @if (menu.node.kind === 'request') {
         <button
           type="button"
           role="menuitem"
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
-          (click)="state.toggleLocalOnly(menu.node)"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+          (click)="state.newFolderIn(menu.node)"
         >
-          <fa-icon [icon]="menu.node.localOnly ? faShareNodes : faLaptop" />
-          {{ menu.node.localOnly ? 'Share through git' : 'Keep on this computer only' }}
+          <fa-icon class="w-4 text-slate-500" [icon]="faFolderPlus" />
+          New folder
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+          title="Import from Postman, Insomnia, HAR or OpenAPI"
+          [disabled]="interchange.busy()"
+          (click)="importInto(menu.node.path)"
+        >
+          <fa-icon class="w-4 text-slate-500" [icon]="faFileImport" />
+          Import into this folder…
+        </button>
+        <div role="separator" class="my-1 border-t border-slate-200"></div>
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+          title="Headers, auth and variables for the requests in this folder"
+          (click)="openFolderSettings(menu.node.path)"
+        >
+          <fa-icon class="w-4 text-slate-500" [icon]="faSliders" />
+          Folder settings
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+          (click)="state.rename(menu.node)"
+        >
+          <fa-icon class="w-4 text-slate-500" [icon]="faPen" />
+          <span class="flex-1">Rename</span>
+          <kbd class="font-sans text-xs text-slate-400">F2</kbd>
         </button>
       }
       <button
         type="button"
         role="menuitem"
-        class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-700 hover:bg-slate-100"
+        class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+        (click)="state.duplicateNode(menu.node)"
+      >
+        <fa-icon class="w-4 text-slate-500" [icon]="faClone" />
+        Duplicate
+      </button>
+      @if (menu.node.kind === 'request') {
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+          (click)="state.toggleLocalOnly(menu.node)"
+        >
+          <fa-icon
+            class="w-4 text-slate-500"
+            [icon]="menu.node.localOnly ? faShareNodes : faLaptop"
+          />
+          {{ menu.node.localOnly ? 'Share through git' : 'Keep on this computer only' }}
+        </button>
+      }
+      <div role="separator" class="my-1 border-t border-slate-200"></div>
+      <button
+        type="button"
+        role="menuitem"
+        class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-700 hover:bg-rose-50"
         (click)="state.deleteNode(menu.node)"
       >
-        <fa-icon [icon]="faTrash" />
-        Delete {{ menu.node.kind === 'folder' ? 'folder' : 'request' }}
+        <fa-icon class="w-4" [icon]="faTrash" />
+        <span class="flex-1">Delete</span>
+        <kbd class="font-sans text-xs text-rose-400">Del</kbd>
       </button>
     </div>
   }

@@ -1,4 +1,13 @@
-import { Component, HostListener, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  afterRenderEffect,
+  inject,
+  linkedSignal,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
@@ -11,6 +20,7 @@ import {
   faFolderOpen,
   faFolderPlus,
   faLaptop,
+  faPen,
   faPlus,
   faShareNodes,
   faSliders,
@@ -50,6 +60,7 @@ export class ExplorerView {
   protected readonly faPlus = faPlus;
   protected readonly faClone = faClone;
   protected readonly faLaptop = faLaptop;
+  protected readonly faPen = faPen;
   protected readonly faShareNodes = faShareNodes;
   protected readonly faFileExport = faFileExport;
   protected readonly faFileImport = faFileImport;
@@ -60,6 +71,31 @@ export class ExplorerView {
   protected readonly faEllipsis = faEllipsis;
   protected readonly faArrowUpRightFromSquare = faArrowUpRightFromSquare;
   protected readonly revealLabel = revealLabel(navigator.userAgent);
+
+  private readonly nodeMenu = viewChild<ElementRef<HTMLElement>>('nodeMenu');
+  /** Where the entry menu is drawn: where it was opened, moved to stay inside the window. */
+  protected readonly menuPosition = linkedSignal(() => {
+    const menu = this.state.menu();
+    return { x: menu?.x ?? 0, y: menu?.y ?? 0 };
+  });
+
+  constructor() {
+    afterRenderEffect({
+      earlyRead: () => {
+        const menu = this.state.menu();
+        const element = this.nodeMenu()?.nativeElement;
+        if (!menu || !element) return null;
+        return placeMenu(menu, element.offsetWidth, element.offsetHeight, {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
+      },
+      write: (place) => {
+        const position = place();
+        if (position) this.menuPosition.set(position);
+      },
+    });
+  }
 
   @HostListener('document:click')
   @HostListener('document:contextmenu')
@@ -77,6 +113,11 @@ export class ExplorerView {
     this.moreOpen.update((open) => !open);
     this.exportOpen.set(false);
     this.state.closeMenu();
+  }
+
+  protected importInto(path: string): void {
+    this.closeMenu();
+    void this.interchange.importInto(path);
   }
 
   /** Opens the headers and auth a folder (or, for `requests`, the whole workspace) sets. */
@@ -99,4 +140,23 @@ export class ExplorerView {
     this.exportOpen.set(false);
     await this.interchange.export(this.selectedFormat(), this.includeEnvironments());
   }
+}
+
+const MENU_MARGIN = 4;
+
+/**
+ * Places a menu of the given size at `menu`'s point, opening it upwards from `menu.above` when it
+ * doesn't fit below and keeping it inside the window.
+ */
+export function placeMenu(
+  menu: { x: number; y: number; above: number },
+  width: number,
+  height: number,
+  viewport: { width: number; height: number },
+): { x: number; y: number } {
+  const fitsBelow = menu.y + height <= viewport.height - MENU_MARGIN;
+  const y = fitsBelow ? menu.y : menu.above - height;
+  const clamp = (value: number, size: number, max: number) =>
+    Math.max(MENU_MARGIN, Math.min(value, max - size - MENU_MARGIN));
+  return { x: clamp(menu.x, width, viewport.width), y: clamp(y, height, viewport.height) };
 }

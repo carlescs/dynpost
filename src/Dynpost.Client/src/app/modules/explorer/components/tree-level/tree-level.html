@@ -51,7 +51,11 @@
             />
           </div>
         } @else {
-          <div class="group flex items-center" [class.hover:bg-slate-200]="!state.dragged()">
+          <div
+            class="group flex items-center"
+            [class.hover:bg-slate-200]="!state.dragged()"
+            [class.bg-slate-200]="state.isMenuOpen(node)"
+          >
             <button
               type="button"
               class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 pr-2 text-left"
@@ -75,7 +79,11 @@
             </button>
             <!-- Hidden while dragging so the rows under the pointer stay readable. -->
             @if (!state.dragged()) {
-              <div class="mr-1 hidden shrink-0 gap-0.5 group-focus-within:flex group-hover:flex">
+              <div
+                class="mr-1 shrink-0 gap-0.5 group-focus-within:flex group-hover:flex"
+                [class.hidden]="!state.isMenuOpen(node)"
+                [class.flex]="state.isMenuOpen(node)"
+              >
                 <button
                   type="button"
                   [class]="rowButton"
@@ -97,39 +105,13 @@
                 <button
                   type="button"
                   [class]="rowButton"
-                  [title]="'Import into ' + node.name"
-                  [attr.aria-label]="'Import into ' + node.name"
-                  [disabled]="interchange.busy()"
-                  (click)="interchange.importInto(node.path)"
+                  [title]="'More actions for ' + node.name"
+                  [attr.aria-label]="'More actions for ' + node.name"
+                  aria-haspopup="menu"
+                  [attr.aria-expanded]="state.isMenuOpen(node)"
+                  (click)="state.toggleMenuFrom(node, $event)"
                 >
-                  <fa-icon [icon]="faFileImport" />
-                </button>
-                <button
-                  type="button"
-                  [class]="rowButton"
-                  [title]="'Headers and auth for the requests in ' + node.name"
-                  [attr.aria-label]="'Settings of ' + node.name"
-                  (click)="folders.open(node.path)"
-                >
-                  <fa-icon [icon]="faSliders" />
-                </button>
-                <button
-                  type="button"
-                  [class]="rowButton"
-                  [title]="'Rename ' + node.name + ' (F2)'"
-                  [attr.aria-label]="'Rename ' + node.name"
-                  (click)="state.startRename(node)"
-                >
-                  <fa-icon [icon]="faPen" />
-                </button>
-                <button
-                  type="button"
-                  [class]="rowButton + ' hover:text-rose-700'"
-                  [title]="'Delete ' + node.name + ' (Delete)'"
-                  [attr.aria-label]="'Delete ' + node.name"
-                  (click)="state.store.deleteFolder(node.path)"
-                >
-                  <fa-icon [icon]="faTrash" />
+                  <fa-icon [icon]="faEllipsis" />
                 </button>
               </div>
             }
