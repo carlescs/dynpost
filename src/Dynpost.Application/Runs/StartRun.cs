@@ -93,7 +93,9 @@ public sealed class RunRegistry
 /// followed with <see cref="GetRunProgress"/>. Each request is prepared and sent exactly like
 /// <see cref="SendRequest"/> does (folder defaults, environment variables, auth, OAuth 2.0 tokens), with the CSV
 /// row of the iteration laid over the environment's variables (which are laid over the folders') and, for requests with a body folder,
-/// the body taken from the next file of that folder. Runs don't use cookies: every
+/// the body taken from the next file of that folder. A plan that lists environments sends each
+/// iteration's requests with the environments its environment order picks; otherwise the
+/// environment selected in the app is used. Runs don't use cookies: every
 /// virtual user starts clean and nothing is written to the environment's cookie jar or captures.
 /// Runs of more than <see cref="RunPlan.WarnThreads"/> threads need <paramref name="confirmLarge"/>.
 /// </summary>
@@ -235,27 +237,54 @@ public sealed class StartRun(
             bodies[request] = new BodyFeed(files.Value, new DataCursor(files.Value.Count, source.Mode, source.OnEof, plan.Load.Threads));
         }
 
-        var variables = await environment.LoadAsync(cancellationToken);
-        if (!variables.IsSuccess)
+        // The plan's own environments, if it lists any, else the one selected in the app.
+        var environments = new Dictionary<string, ActiveVariables>(StringComparer.Ordinal);
+        foreach (var environmentPath in plan.EnvironmentList.DistinctBy(e => e.Value))
         {
-            return variables.Error!;
+            var loaded = await environment.LoadAsync(environmentPath.FileName, cancellationToken);
+            if (!loaded.IsSuccess)
+            {
+                return loaded.Error!.Code == ErrorCodes.NotFound
+                    ? new Error(ErrorCodes.InvalidFile, $"The plan's environment '{environmentPath}' does not exist.")
+                    : loaded.Error!;
+            }
+
+            environments[environmentPath.Value] = loaded.Value;
+        }
+
+        var selected = ActiveVariables.None;
+        if (environments.Count == 0)
+        {
+            var loaded = await environment.LoadAsync(cancellationToken);
+            if (!loaded.IsSuccess)
+            {
+                return loaded.Error!;
+            }
+
+            selected = loaded.Value;
         }
 
         // Folder variables in a loop are reported before the run starts rather than on every sample.
         foreach (var defaults in inherited.Values.Distinct())
         {
-            var checkedVariables = FolderInheritance.WithVariables(defaults, variables.Value);
-            if (!checkedVariables.IsSuccess)
+            foreach (var variables in environments.Count == 0 ? [selected] : environments.Values.ToList())
             {
-                return checkedVariables.Error!;
+                var checkedVariables = FolderInheritance.WithVariables(defaults, variables);
+                if (!checkedVariables.IsSuccess)
+                {
+                    return checkedVariables.Error!;
+                }
             }
         }
 
         var startedAt = time.GetUtcNow();
         var runId = $"{startedAt:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
-        var run = new ActiveRun(runId, root.Value, planPath.Value.Value, plan, startedAt);
+        var environmentNames = environments
+            .Select(pair => KeyValuePair.Create(pair.Key, pair.Value.EnvironmentName ?? pair.Key))
+            .ToList();
+        var run = new ActiveRun(runId, root.Value, planPath.Value.Value, plan, startedAt, environmentNames);
         registry.Add(run);
-        _ = Task.Run(() => ExecuteRunAsync(run, definitions, inherited, bodies, rows, variables.Value), CancellationToken.None);
+        _ = Task.Run(() => ExecuteRunAsync(run, definitions, inherited, bodies, rows, environments, selected), CancellationToken.None);
         return new StartedRunDto(runId);
     }
 
@@ -265,13 +294,15 @@ public sealed class StartRun(
         Dictionary<string, InheritedDefaults> inherited,
         Dictionary<string, BodyFeed> bodies,
         IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
-        ActiveVariables variables)
+        IReadOnlyDictionary<string, ActiveVariables> environments,
+        ActiveVariables selected)
     {
         var plan = run.Plan;
         var token = run.Cancellation.Token;
         var cursor = plan.Data is { } data ? new DataCursor(rows.Count, data.Mode, data.OnEof, plan.Load.Threads) : null;
         var limiter = plan.Load.MaxRps is { } rps ? new RateLimiter(rps) : null;
-        var context = new ThreadContext(run, definitions, inherited, bodies, rows, variables, cursor, limiter, new RequestPicker(plan));
+        var context = new ThreadContext(
+            run, definitions, inherited, bodies, rows, environments, selected, cursor, limiter, new RequestPicker(plan), new EnvironmentPicker(plan));
 
         try
         {
@@ -310,10 +341,22 @@ public sealed class StartRun(
         Dictionary<string, InheritedDefaults> Inherited,
         Dictionary<string, BodyFeed> Bodies,
         IReadOnlyList<IReadOnlyDictionary<string, string>> Rows,
-        ActiveVariables Variables,
+        IReadOnlyDictionary<string, ActiveVariables> Environments,
+        ActiveVariables Selected,
         DataCursor? Cursor,
         RateLimiter? Limiter,
-        RequestPicker Picker);
+        RequestPicker Picker,
+        EnvironmentPicker EnvironmentPicker)
+    {
+        /// <summary>
+        /// Each environment an iteration sends its requests with, in order: its path (<c>null</c>
+        /// for the selected environment) and its variables.
+        /// </summary>
+        public IReadOnlyList<(string? Path, ActiveVariables Variables)> EnvironmentsFor(int thread, int iteration, Random random) =>
+            Environments.Count == 0
+                ? [(null, Selected)]
+                : EnvironmentPicker.ForIteration(thread, iteration, random).Select(path => ((string?)path.Value, Environments[path.Value])).ToList();
+    }
 
     private async Task RunThreadAsync(ThreadContext context, int thread)
     {
@@ -349,54 +392,59 @@ public sealed class StartRun(
                     row = context.Rows[index];
                 }
 
-                var values = row is null
-                    ? context.Variables.Values
-                    : context.Variables.Values.Concat(row).GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.Last().Value, StringComparer.Ordinal);
-
-                foreach (var request in context.Picker.ForIteration(thread, iteration, random))
+                // Each environment of the iteration sends the iteration's requests, in turn.
+                var requests = context.Picker.ForIteration(thread, iteration, random);
+                foreach (var (environmentPath, variables) in context.EnvironmentsFor(thread, iteration, random))
                 {
-                    if (!first)
+                    var values = row is null
+                        ? variables.Values
+                        : variables.Values.Concat(row).GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.Last().Value, StringComparer.Ordinal);
+
+                    foreach (var request in requests)
                     {
-                        var think = RunScheduling.ThinkTime(load, random);
-                        if (think > TimeSpan.Zero && !await WaitWithinRunAsync(run, think, token))
+                        if (!first)
                         {
-                            return;
+                            var think = RunScheduling.ThinkTime(load, random);
+                            if (think > TimeSpan.Zero && !await WaitWithinRunAsync(run, think, token))
+                            {
+                                return;
+                            }
                         }
-                    }
 
-                    first = false;
-                    if (TimeUp(run))
-                    {
-                        return;
-                    }
-
-                    if (context.Limiter is { } limiter)
-                    {
-                        var wait = limiter.Reserve(run.Now.Ticks);
-                        if (wait > TimeSpan.Zero && !await WaitWithinRunAsync(run, wait, token))
-                        {
-                            return;
-                        }
-                    }
-
-                    if (TimeUp(run))
-                    {
-                        return;
-                    }
-
-                    RunBodyFile? bodyFile = null;
-                    if (context.Bodies.TryGetValue(request.Value, out var feed))
-                    {
-                        // A body folder that runs out with 'onEof: stop' ends the thread, like CSV data.
-                        if (feed.Cursor.Next(thread) is not { } index)
+                        first = false;
+                        if (TimeUp(run))
                         {
                             return;
                         }
 
-                        bodyFile = feed.Files[index];
-                    }
+                        if (context.Limiter is { } limiter)
+                        {
+                            var wait = limiter.Reserve(run.Now.Ticks);
+                            if (wait > TimeSpan.Zero && !await WaitWithinRunAsync(run, wait, token))
+                            {
+                                return;
+                            }
+                        }
 
-                    await SampleAsync(context, request, thread, iteration, values, row, bodyFile);
+                        if (TimeUp(run))
+                        {
+                            return;
+                        }
+
+                        RunBodyFile? bodyFile = null;
+                        if (context.Bodies.TryGetValue(request.Value, out var feed))
+                        {
+                            // A body folder that runs out with 'onEof: stop' ends the thread, like CSV data.
+                            if (feed.Cursor.Next(thread) is not { } index)
+                            {
+                                return;
+                            }
+
+                            bodyFile = feed.Files[index];
+                        }
+
+                        await SampleAsync(context, environmentPath, variables, request, thread, iteration, values, row, bodyFile);
+                    }
                 }
             }
         }
@@ -435,6 +483,8 @@ public sealed class StartRun(
 
     private async Task SampleAsync(
         ThreadContext context,
+        string? environmentPath,
+        ActiveVariables variables,
         WorkspacePath path,
         int thread,
         int iteration,
@@ -456,14 +506,16 @@ public sealed class StartRun(
         var method = definition.Body.Type == BodyType.Graphql ? "POST" : definition.Method.ToName();
         var at = run.Now;
 
+        var environmentName = context.Environments.Count == 0 ? null : variables.EnvironmentName;
+
         SampleDto Failure(string reason, double latency = 0, int? status = null, string? url = null, string? preview = null) =>
-            new(path.Value, thread, iteration, (long)at.TotalMilliseconds, Math.Round(latency, 1), status, reason, method, url, row, preview, bodyPath);
+            new(path.Value, thread, iteration, (long)at.TotalMilliseconds, Math.Round(latency, 1), status, reason, method, url, row, preview, bodyPath, Environment: environmentName);
 
         var oauth = definition.Auth as OAuth2Auth;
         var prepared = RequestPreparation.Prepare(definition, values, oauth is null ? null : "token", run.Root);
         if (!prepared.IsValid)
         {
-            run.Add(path, Failure(context.Variables.Explain(prepared.Errors, prepared.MissingVariables)), 0, 0);
+            run.Add(path, Failure(variables.Explain(prepared.Errors, prepared.MissingVariables)), 0, 0, environmentPath);
             return;
         }
 
@@ -473,11 +525,11 @@ public sealed class StartRun(
             var resolution = OAuth2Flow.Resolve(oauth, values);
             if (!resolution.IsValid)
             {
-                run.Add(path, Failure(context.Variables.Explain(resolution.Errors, resolution.MissingVariables)), 0, 0);
+                run.Add(path, Failure(variables.Explain(resolution.Errors, resolution.MissingVariables)), 0, 0, environmentPath);
                 return;
             }
 
-            var accessToken = await tokens.GetAsync(resolution.Settings!, run.Root, context.Variables.EnvironmentId, token);
+            var accessToken = await tokens.GetAsync(resolution.Settings!, run.Root, variables.EnvironmentId, token);
             if (!accessToken.IsSuccess)
             {
                 if (token.IsCancellationRequested)
@@ -485,7 +537,7 @@ public sealed class StartRun(
                     return;
                 }
 
-                run.Add(path, Failure(accessToken.Error!.Message), 0, 0);
+                run.Add(path, Failure(accessToken.Error!.Message), 0, 0, environmentPath);
                 return;
             }
 
@@ -495,7 +547,7 @@ public sealed class StartRun(
         IReadOnlyCollection<string> sensitiveParams = definition.Auth is ApiKeyAuth { In: ApiKeyLocation.Query } apiKey
             ? [VariableTemplate.Resolve(apiKey.Key, values, new SortedSet<string>(StringComparer.Ordinal)).Trim()]
             : [];
-        var url = SecretMasking.MaskUrl(outgoing.Url, sensitiveParams, context.Variables.SecretValues ?? []);
+        var url = SecretMasking.MaskUrl(outgoing.Url, sensitiveParams, variables.SecretValues ?? []);
         var sent = outgoing.Body is TextBody text ? Encoding.UTF8.GetByteCount(text.Content) : 0;
         if (TimeUp(run))
         {
@@ -516,7 +568,7 @@ public sealed class StartRun(
         var latency = watch.Elapsed.TotalMilliseconds;
         if (!response.IsSuccess)
         {
-            run.Add(path, Failure(response.Error!.Message, latency, url: url), sent, 0);
+            run.Add(path, Failure(response.Error!.Message, latency, url: url), sent, 0, environmentPath);
             return;
         }
 
@@ -555,8 +607,9 @@ public sealed class StartRun(
             kept && !pdf ? ActiveRun.Preview(data.Body) : null,
             bodyPath,
             mediaType,
-            file);
-        run.Add(path, sample, data.BytesSent > 0 ? data.BytesSent : sent, data.Body.LongLength);
+            file,
+            environmentName);
+        run.Add(path, sample, data.BytesSent > 0 ? data.BytesSent : sent, data.Body.LongLength, environmentPath);
     }
 
     /// <summary>

@@ -96,6 +96,20 @@ public sealed record RunThresholds(
 /// Whether the whole body of each logged response is saved to a file, so it can be opened later
 /// (PDFs in the previewer).
 /// </param>
+/// <param name="Environments">
+/// The environment files the run sends its requests with (<c>environments/dev.yaml</c>); empty or
+/// <c>null</c> to use the environment selected in the app.
+/// </param>
+/// <param name="EnvironmentOrder">
+/// How each virtual user takes the environments in an iteration, like <see cref="Order"/> does
+/// with requests: each environment taken sends the iteration's requests.
+/// </param>
+/// <param name="EnvironmentWeights">
+/// Relative chance of each environment path with <see cref="RequestOrder.Random"/>; unlisted ones weigh 1.
+/// </param>
+/// <param name="DisabledEnvironments">
+/// Environment paths that stay in the list but are not used; see <see cref="WithoutDisabledRequests"/>.
+/// </param>
 public sealed record RunPlan(
     string Name,
     IReadOnlyList<WorkspacePath> Requests,
@@ -107,7 +121,11 @@ public sealed record RunPlan(
     IReadOnlyDictionary<string, double>? Weights = null,
     IReadOnlyList<string>? Disabled = null,
     IReadOnlyDictionary<string, RunBodySource>? Bodies = null,
-    bool SaveResponses = false)
+    bool SaveResponses = false,
+    IReadOnlyList<WorkspacePath>? Environments = null,
+    RequestOrder EnvironmentOrder = RequestOrder.Sequential,
+    IReadOnlyDictionary<string, double>? EnvironmentWeights = null,
+    IReadOnlyList<string>? DisabledEnvironments = null)
 {
     public const string AllRequests = "*";
 
@@ -122,17 +140,29 @@ public sealed record RunPlan(
 
     /// <summary>
     /// The plan as it runs: only the enabled requests, with the assertions, weights and body
-    /// folders of disabled ones dropped.
+    /// folders of disabled ones dropped, and only the enabled environments, with their weights.
     /// </summary>
     public RunPlan WithoutDisabledRequests()
     {
+        var plan = this;
+        if (DisabledEnvironmentList.Count > 0)
+        {
+            var off = DisabledEnvironmentList.ToHashSet(StringComparer.Ordinal);
+            plan = plan with
+            {
+                Environments = EnabledEnvironments,
+                EnvironmentWeights = EnvironmentWeightsByPath.Where(pair => !off.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal),
+                DisabledEnvironments = null,
+            };
+        }
+
         if (DisabledRequests.Count == 0)
         {
-            return this;
+            return plan;
         }
 
         var disabled = DisabledRequests.ToHashSet(StringComparer.Ordinal);
-        return this with
+        return plan with
         {
             Requests = EnabledRequests,
             Assertions = Assertions.Where(pair => !disabled.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal),
@@ -152,8 +182,34 @@ public sealed record RunPlan(
 
     private static readonly IReadOnlyDictionary<string, RunBodySource> NoBodies = new Dictionary<string, RunBodySource>(StringComparer.Ordinal);
 
+    /// <summary>The environments listed in the plan; empty when the run uses the selected one.</summary>
+    public IReadOnlyList<WorkspacePath> EnvironmentList => Environments ?? [];
+
+    /// <summary>The environment paths that are listed but not used; empty when every one is used.</summary>
+    public IReadOnlyList<string> DisabledEnvironmentList => DisabledEnvironments ?? [];
+
+    /// <summary>Whether the environment is in the list but not used.</summary>
+    public bool IsEnvironmentDisabled(WorkspacePath environment) =>
+        DisabledEnvironmentList.Contains(environment.Value, StringComparer.Ordinal);
+
+    /// <summary>The environments that are used, in the listed order.</summary>
+    public IReadOnlyList<WorkspacePath> EnabledEnvironments =>
+        DisabledEnvironmentList.Count == 0 ? EnvironmentList : EnvironmentList.Where(environment => !IsEnvironmentDisabled(environment)).ToList();
+
+    /// <summary>The weight of each environment path; empty when none is set.</summary>
+    public IReadOnlyDictionary<string, double> EnvironmentWeightsByPath => EnvironmentWeights ?? NoWeights;
+
+    /// <summary>The relative chance of an environment with <see cref="RequestOrder.Random"/>.</summary>
+    public double EnvironmentWeightOf(WorkspacePath environment) =>
+        EnvironmentWeightsByPath.TryGetValue(environment.Value, out var weight) ? weight : 1;
+
+    /// <summary>How many environments a virtual user sends the requests of one iteration with.</summary>
+    public int EnvironmentsPerIteration =>
+        EnabledEnvironments.Count == 0 || EnvironmentOrder is RequestOrder.Random or RequestOrder.RoundRobin ? 1 : EnabledEnvironments.Count;
+
     /// <summary>How many requests a virtual user sends in one iteration.</summary>
-    public int RequestsPerIteration => Order is RequestOrder.Sequential or RequestOrder.Shuffle ? EnabledRequests.Count : Math.Min(1, EnabledRequests.Count);
+    public int RequestsPerIteration =>
+        (Order is RequestOrder.Sequential or RequestOrder.Shuffle ? EnabledRequests.Count : Math.Min(1, EnabledRequests.Count)) * EnvironmentsPerIteration;
 
     /// <summary>
     /// The most threads a run may use. Threads are async tasks and each keeps one pooled
@@ -175,6 +231,44 @@ public sealed record RunPlan(
         if (string.IsNullOrWhiteSpace(Name))
         {
             errors.Add("The plan needs a name.");
+        }
+
+        foreach (var environment in EnvironmentList)
+        {
+            if (!WorkspaceLayout.IsEnvironmentPath(environment))
+            {
+                errors.Add($"'environments' must list environment files such as {WorkspaceLayout.EnvironmentsFolder}/dev.yaml, not '{environment}'.");
+            }
+        }
+
+        foreach (var (key, weight) in EnvironmentWeightsByPath)
+        {
+            if (!EnvironmentList.Any(environment => environment.Value == key))
+            {
+                errors.Add($"'environmentWeights' refers to '{key}', which is not in the environment list.");
+            }
+            else if (!double.IsFinite(weight) || weight < 0)
+            {
+                errors.Add($"The weight of '{key}' must be zero or more.");
+            }
+        }
+
+        foreach (var path in DisabledEnvironmentList)
+        {
+            if (!EnvironmentList.Any(environment => environment.Value == path))
+            {
+                errors.Add($"'disabledEnvironments' refers to '{path}', which is not in the environment list.");
+            }
+        }
+
+        if (EnvironmentList.Count > 0 && EnabledEnvironments.Count == 0)
+        {
+            errors.Add("Enable at least one environment, or remove them all to use the selected one.");
+        }
+
+        if (EnvironmentOrder == RequestOrder.Random && EnabledEnvironments.Count > 0 && EnabledEnvironments.All(environment => EnvironmentWeightOf(environment) <= 0))
+        {
+            errors.Add("At least one environment needs a weight greater than zero.");
         }
 
         if (Requests.Count == 0)

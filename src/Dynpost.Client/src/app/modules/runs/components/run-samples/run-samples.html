@@ -132,6 +132,10 @@
                     <dt class="text-slate-500">Failure</dt>
                     <dd class="text-rose-700">{{ s.error }}</dd>
                   }
+                  @if (s.environment) {
+                    <dt class="text-slate-500">Environment</dt>
+                    <dd class="truncate" data-environment>{{ s.environment }}</dd>
+                  }
                   @if (s.bodyFile) {
                     <dt class="text-slate-500">Body file</dt>
                     <dd class="truncate font-mono" data-body-file>{{ s.bodyFile }}</dd>

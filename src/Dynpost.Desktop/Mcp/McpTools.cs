@@ -49,7 +49,8 @@ internal static class McpTools
 
     private const string RunPlanShape =
         "A plan is YAML: name; requests: [request paths such as requests/shop/list-products.yaml]; disabled?: [paths not sent]; "
-        + "order?: sequential|shuffle|random|roundRobin; weights?: { path: number }; load: { threads, iterations or duration (2m), rampUp?, thinkTime?, maxRps? }; "
+        + "order?: sequential|shuffle|random|roundRobin; weights?: { path: number }; environments?: [environment files such as environments/dev.yaml; default: the selected environment]; disabledEnvironments?: [paths not used]; "
+        + "environmentOrder?: sequential|shuffle|random|roundRobin; environmentWeights?: { path: number }; load: { threads, iterations or duration (2m), rampUp?, thinkTime?, maxRps? }; "
         + "data?: { file: a CSV whose columns become {{variables}}, mode?: sequential|random|perThread, onEof?: recycle|stop }; "
         + "bodies?: { requestPath: { folder, pattern?, mode?, onEof? } }; saveResponses?: bool; "
         + "assert?: { \"*\" or path: { status: 200-299, maxTime: 800ms } }; thresholds?: { p95: 500ms, errorRate: 1%, throughput: 50 }. "

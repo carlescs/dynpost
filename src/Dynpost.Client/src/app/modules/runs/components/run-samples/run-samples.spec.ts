@@ -45,6 +45,7 @@ describe('RunSamples', () => {
           method: 'POST',
           responsePreview: 'boom',
           bodyFile: 'bodies/create/002.json',
+          environment: 'Staging',
         }),
       ],
       ...patch,
@@ -100,6 +101,7 @@ describe('RunSamples', () => {
     expect(text(detail)).toContain('FailureHTTP 500');
     expect(text(detail)).toContain('user=ada');
     expect(text(detail.querySelector('[data-body-file]'))).toBe('bodies/create/002.json');
+    expect(text(detail.querySelector('[data-environment]'))).toBe('Staging');
     expect(text(detail.querySelector('[data-response]'))).toBe('boom');
   });
 

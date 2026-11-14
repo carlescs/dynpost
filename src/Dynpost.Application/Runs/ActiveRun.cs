@@ -7,7 +7,17 @@ using Dynpost.Domain.Workspaces;
 namespace Dynpost.Application.Runs;
 
 /// <summary>The in-memory state of a run while it executes. Safe to read from other threads.</summary>
-public sealed class ActiveRun(string runId, string root, string planPath, RunPlan plan, DateTimeOffset startedAt)
+/// <param name="environmentNames">
+/// The name of each environment path the run uses, in the plan's order, to keep statistics by
+/// environment; <c>null</c> or empty when it uses the selected environment.
+/// </param>
+public sealed class ActiveRun(
+    string runId,
+    string root,
+    string planPath,
+    RunPlan plan,
+    DateTimeOffset startedAt,
+    IReadOnlyList<KeyValuePair<string, string>>? environmentNames = null)
 {
     public const int MaxFailedSamples = 100;
     public const int MaxSlowestSamples = 50;
@@ -23,6 +33,10 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
         .Select(request => request.Value)
         .Distinct(StringComparer.Ordinal)
         .ToDictionary(path => path, _ => new StatsAccumulator(), StringComparer.Ordinal);
+    private readonly List<(string Path, string Name, StatsAccumulator Stats)> _environments = (environmentNames ?? [])
+        .DistinctBy(pair => pair.Key, StringComparer.Ordinal)
+        .Select(pair => (pair.Key, pair.Value, new StatsAccumulator()))
+        .ToList();
     private readonly Timeline _timeline = new();
     private readonly List<SampleDto> _failed = [];
     private readonly List<SampleDto> _slowest = [];
@@ -64,12 +78,18 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
 
     public void ThreadEnded() => Interlocked.Decrement(ref _activeThreads);
 
-    public void Add(WorkspacePath request, SampleDto sample, long bytesSent, long bytesReceived)
+    /// <param name="environment">The path of the environment the request was sent with, when the plan lists them.</param>
+    public void Add(WorkspacePath request, SampleDto sample, long bytesSent, long bytesReceived, string? environment = null)
     {
         var failed = sample.Error is not null;
         Interlocked.Increment(ref _sent);
         _total.Add(sample.LatencyMs, sample.Status, sample.Error, bytesSent, bytesReceived);
         _requests[request.Value].Add(sample.LatencyMs, sample.Status, sample.Error, bytesSent, bytesReceived);
+        if (environment is not null && _environments.Find(e => e.Path == environment).Stats is { } byEnvironment)
+        {
+            byEnvironment.Add(sample.LatencyMs, sample.Status, sample.Error, bytesSent, bytesReceived);
+        }
+
         _timeline.Add(TimeSpan.FromMilliseconds(sample.AtMs), sample.LatencyMs, failed);
 
         lock (_gate)
@@ -180,7 +200,10 @@ public sealed class ActiveRun(string runId, string root, string planPath, RunPla
             state == "completed" ? thresholds.All(t => t.Passed) : null,
             failed,
             slowest,
-            message);
+            message,
+            _environments.Count == 0
+                ? null
+                : _environments.Select(e => new EnvironmentStatsDto(e.Path, e.Name, ToDto(e.Stats.Snapshot(elapsed)))).ToList());
     }
 
     public static StatsDto ToDto(StatsSnapshot s) => new(

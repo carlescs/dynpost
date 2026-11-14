@@ -148,6 +148,15 @@ public static class WorkspaceLayout
         !fileName.StartsWith('.') && HasRequestExtension(fileName) && !fileName.Contains('/') && !fileName.Contains('\\');
 
     /// <summary>
+    /// Whether <paramref name="path"/> is an environment file: a file directly inside
+    /// <c>environments/</c>, such as <c>environments/dev.yaml</c>.
+    /// </summary>
+    public static bool IsEnvironmentPath(WorkspacePath path) =>
+        path.Segments.Count == 2
+        && path.Segments[0] == EnvironmentsFolder
+        && IsEnvironmentFile(path.FileName);
+
+    /// <summary>
     /// The file name to try for an environment named <paramref name="environmentName"/>, like
     /// <see cref="RequestFileName"/>: <c>staging.yaml</c>, then <c>staging-2.yaml</c>, …
     /// </summary>

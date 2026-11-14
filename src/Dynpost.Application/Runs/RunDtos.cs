@@ -25,6 +25,11 @@ public sealed record StatsDto(
 
 public sealed record RequestStatsDto(string Request, StatsDto Stats);
 
+/// <summary>The statistics of the requests sent with one of the plan's environments.</summary>
+/// <param name="Environment">The environment's workspace path, such as <c>environments/dev.yaml</c>.</param>
+/// <param name="Name">The environment's name.</param>
+public sealed record EnvironmentStatsDto(string Environment, string Name, StatsDto Stats);
+
 public sealed record TimelinePointDto(int Second, long Samples, long Errors, double AverageMs);
 
 public sealed record ThresholdDto(string Name, string Limit, string Actual, bool Passed);
@@ -40,6 +45,9 @@ public sealed record ThresholdDto(string Name, string Limit, string Actual, bool
 /// The name of the file the whole response body was saved to, when the plan saves responses
 /// (<see cref="Domain.Runs.RunPlan.SaveResponses"/>); read it with <see cref="GetRunResponse"/>.
 /// </param>
+/// <param name="Environment">
+/// The name of the environment the request was sent with, when the plan lists its environments.
+/// </param>
 public sealed record SampleDto(
     string Request,
     int Thread,
@@ -54,12 +62,17 @@ public sealed record SampleDto(
     string? ResponsePreview,
     string? BodyFile = null,
     string? ContentType = null,
-    string? ResponseFile = null);
+    string? ResponseFile = null,
+    string? Environment = null);
 
 /// <summary>A response body saved by a run, as base64.</summary>
 public sealed record RunResponseDto(string Body);
 
 /// <summary>The state of a run, live or finished. <see cref="State"/> is running, completed, cancelled or failed.</summary>
+/// <param name="Environments">
+/// The statistics by environment when the plan lists environments; <c>null</c> otherwise (and in
+/// older runs).
+/// </param>
 public sealed record RunResultDto(
     string RunId,
     string PlanPath,
@@ -76,7 +89,8 @@ public sealed record RunResultDto(
     bool? Passed,
     IReadOnlyList<SampleDto> FailedSamples,
     IReadOnlyList<SampleDto> SlowestSamples,
-    string? Message);
+    string? Message,
+    IReadOnlyList<EnvironmentStatsDto>? Environments = null);
 
 /// <summary>A page of the request log of a run.</summary>
 /// <param name="Offset">The position of the first sample of the page among the matching ones.</param>

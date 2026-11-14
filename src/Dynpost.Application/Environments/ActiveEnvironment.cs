@@ -84,6 +84,46 @@ public sealed class ActiveEnvironment(
                 : new Error(environment.Error.Code, $"The selected environment can't be used. {environment.Error.Message}");
         }
 
+        return await ResolveAsync(root, id, environment.Value, cancellationToken);
+    }
+
+    /// <summary>
+    /// The variables of the environment file <paramref name="id"/> (such as <c>dev.yaml</c>),
+    /// whichever environment is selected, resolved like <see cref="LoadAsync(CancellationToken)"/>.
+    /// Unlike the selected one, an environment asked for by name must exist.
+    /// </summary>
+    public async Task<Result<ActiveVariables>> LoadAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        if (!EnvironmentMapper.IsValidId(id))
+        {
+            return EnvironmentMapper.InvalidId(id);
+        }
+
+        if (!store.Exists(root.Value, id))
+        {
+            return EnvironmentMapper.NotFound(id);
+        }
+
+        var environment = await store.ReadAsync(root.Value, id, cancellationToken);
+        if (!environment.IsSuccess)
+        {
+            return environment.Error!.Code == ErrorCodes.NotFound
+                ? EnvironmentMapper.NotFound(id)
+                : new Error(environment.Error.Code, $"The environment '{id}' can't be used. {environment.Error.Message}");
+        }
+
+        return await ResolveAsync(root.Value, id, environment.Value, cancellationToken);
+    }
+
+    private async Task<Result<ActiveVariables>> ResolveAsync(string root, string id, EnvironmentDefinition environment, CancellationToken cancellationToken)
+    {
+
         var stored = await secrets.LoadAsync(root, cancellationToken);
         if (!stored.IsSuccess)
         {
@@ -93,7 +133,7 @@ public sealed class ActiveEnvironment(
         var secretValues = stored.Value.GetValueOrDefault(id);
         var unset = new SortedSet<string>(StringComparer.Ordinal);
         var variables = new List<EnvironmentVariable>();
-        foreach (var variable in environment.Value.Variables)
+        foreach (var variable in environment.Variables)
         {
             if (!variable.Secret)
             {
@@ -135,7 +175,7 @@ public sealed class ActiveEnvironment(
         {
             return new Error(
                 ErrorCodes.InvalidRequest,
-                $"{VariableSet.CycleMessage(resolved.Cycle)} Fix the environment '{environment.Value.Name}'.");
+                $"{VariableSet.CycleMessage(resolved.Cycle)} Fix the environment '{environment.Name}'.");
         }
 
         if (placeholders.Count > 0)
@@ -147,12 +187,12 @@ public sealed class ActiveEnvironment(
             resolved = resolved with { Values = values };
         }
 
-        var resolvedSecrets = environment.Value.Variables
+        var resolvedSecrets = environment.Variables
             .Where(v => v.Secret && resolved.Values.ContainsKey(v.Name))
             .Select(v => resolved.Values[v.Name])
             .Where(value => value.Length > 0)
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        return new ActiveVariables(environment.Value.Name, resolved.Values, unset, id, resolvedSecrets, environment.Value.CookieJar);
+        return new ActiveVariables(environment.Name, resolved.Values, unset, id, resolvedSecrets, environment.CookieJar);
     }
 }

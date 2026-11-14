@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { RunPlanForm } from './run-plan-form';
 
@@ -39,6 +40,113 @@ describe('RunPlanForm', () => {
     expect(steps[0]).toContain('GET');
     expect(steps[0]).toContain('Get A');
     expect(steps[1]).toContain('Not found in the workspace');
+  });
+
+  function useEnvironments(fixture: { detectChanges(): void }) {
+    const environments = TestBed.inject(EnvironmentStore);
+    environments.environments.set([
+      { id: 'dev.yaml', name: 'Dev' },
+      { id: 'load.yaml', name: 'Load' },
+    ]);
+    environments.activeId.set('dev.yaml');
+    fixture.detectChanges();
+  }
+
+  const ENV_PLAN = PLAN.replace(
+    'load:',
+    'environments:\n  - environments/dev.yaml\n  - environments/gone.yaml\nload:',
+  );
+
+  it('uses the selected environment until environments are added from the workspace', () => {
+    const { fixture, element, emitted } = create(PLAN);
+    useEnvironments(fixture);
+    expect(element.querySelector('[data-environment-hint]')!.textContent).toContain(
+      'selected in the app (Dev)',
+    );
+    expect(element.querySelector('select[aria-label="Environment order"]')).toBeNull();
+    const add = element.querySelector<HTMLSelectElement>('select[aria-label="Add environment"]')!;
+    expect([...add.options].map((option) => option.textContent!.trim())).toEqual([
+      '+ Add an environment…',
+      'Dev',
+      'Load',
+    ]);
+
+    add.value = 'environments/load.yaml';
+    add.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([
+      PLAN.replace('load:', 'environments:\n  - environments/load.yaml\nload:'),
+    ]);
+  });
+
+  it('lists the environments in order, flagging missing ones and offering the rest', () => {
+    const { fixture, element, emitted } = create(ENV_PLAN);
+    useEnvironments(fixture);
+    const steps = [...element.querySelectorAll('[data-environment]')].map((s) => s.textContent);
+    expect(steps[0]).toContain('Dev');
+    expect(steps[1]).toContain('Not found in the workspace');
+    const add = element.querySelector<HTMLSelectElement>('select[aria-label="Add environment"]')!;
+    expect([...add.options].map((option) => option.value)).toEqual(['', 'environments/load.yaml']);
+
+    element.querySelector<HTMLButtonElement>('[aria-label="Move environment down"]')!.click();
+    expect(emitted).toEqual([
+      ENV_PLAN.replace(
+        '  - environments/dev.yaml\n  - environments/gone.yaml',
+        '  - environments/gone.yaml\n  - environments/dev.yaml',
+      ),
+    ]);
+  });
+
+  it('switches an environment off, leaving it out of the shares and the load', () => {
+    const plan = PLAN.replace(
+      'load:',
+      'environments:\n  - environments/dev.yaml\n  - environments/load.yaml\nload:',
+    );
+    const { fixture, element, emitted } = create(plan);
+    useEnvironments(fixture);
+    const summary = () =>
+      element.querySelector('[data-summary]')!.textContent!.replace(/\s+/g, ' ');
+    expect(summary()).toContain('× 2 environments = 100 requests');
+
+    const toggle = element.querySelector<HTMLInputElement>('[aria-label="Disable Load"]')!;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([
+      plan.replace('load:', 'disabledEnvironments:\n  - environments/load.yaml\nload:'),
+    ]);
+
+    fixture.componentRef.setInput('yaml', emitted[0]);
+    fixture.detectChanges();
+    const load = element.querySelectorAll('[data-environment]')[1];
+    expect(load.hasAttribute('data-disabled')).toBe(true);
+    expect(load.textContent).toContain('Disabled: not used');
+    expect(summary()).toContain('5 users × 10 iterations × 1 request = 50 requests');
+    expect(element.querySelector('[data-no-environment-enabled]')).toBeNull();
+  });
+
+  it('picks environments at random by weight and counts them in the load summary', () => {
+    const plan = PLAN.replace(
+      'load:',
+      'environments:\n  - environments/dev.yaml\n  - environments/load.yaml\nenvironmentOrder: random\nenvironmentWeights:\n  environments/load.yaml: 3\nload:',
+    );
+    const { fixture, element, emitted } = create(plan);
+    useEnvironments(fixture);
+    const shares = [...element.querySelectorAll('[data-environment-share]')].map((s) =>
+      s.textContent!.trim(),
+    );
+    expect(shares).toEqual(['25%', '75%']);
+    const summary = () =>
+      element.querySelector('[data-summary]')!.textContent!.replace(/\s+/g, ' ');
+    expect(summary()).toContain('5 users × 10 iterations × 1 request = 50 requests');
+
+    const order = element.querySelector<HTMLSelectElement>(
+      'select[aria-label="Environment order"]',
+    )!;
+    order.value = 'sequential';
+    order.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([plan.replace('environmentOrder: random\n', '')]);
+    fixture.componentRef.setInput('yaml', emitted[0]);
+    fixture.detectChanges();
+    expect(summary()).toContain('× 1 request × 2 environments = 100 requests');
   });
 
   it('sums up the load of the plan', () => {

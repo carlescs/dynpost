@@ -5,6 +5,9 @@ import {
   removeAssertion,
   removeBody,
   setAssertionStatus,
+  setPlanEnvironmentEnabled,
+  setPlanEnvironmentOrder,
+  setPlanEnvironments,
   setPlanOrder,
   setPlanRequestEnabled,
   setPlanRequests,
@@ -41,6 +44,48 @@ describe('run plan form', () => {
     expect(form.weights).toEqual({ 'a.yaml': '3' });
     expect(next.indexOf('weights:')).toBeLessThan(next.indexOf('load:'));
     expect(setPlanOrder(next, 'sequential')).not.toContain('order:');
+  });
+
+  it('reads and writes the environments, their order and weights', () => {
+    expect(readPlanForm(PLAN)!.environments).toEqual([]);
+    let next = setPlanEnvironments(PLAN, ['environments/dev.yaml', 'environments/load.yaml']);
+    expect(next).toContain(
+      'requests:\n  - a.yaml\nenvironments:\n  - environments/dev.yaml\n  - environments/load.yaml\nload:',
+    );
+    next = setPlanEnvironmentOrder(next, 'random');
+    next = setPlanValue(next, ['environmentWeights', 'environments/load.yaml'], '3');
+    const form = readPlanForm(next)!;
+    expect(form.environments).toEqual(['environments/dev.yaml', 'environments/load.yaml']);
+    expect(form.environmentOrder).toBe('random');
+    expect(form.environmentWeights).toEqual({ 'environments/load.yaml': '3' });
+    expect(next.indexOf('environmentWeights:')).toBeLessThan(next.indexOf('load:'));
+    expect(setPlanEnvironmentOrder(next, 'sequential')).not.toContain('environmentOrder');
+  });
+
+  it('drops the weights of removed environments, and the order with the last one', () => {
+    let plan = setPlanEnvironments(PLAN, ['environments/dev.yaml', 'environments/load.yaml']);
+    plan = setPlanEnvironmentOrder(plan, 'random');
+    plan = setPlanValue(plan, ['environmentWeights', 'environments/load.yaml'], '2');
+    const one = setPlanEnvironments(plan, ['environments/dev.yaml']);
+    expect(one).not.toContain('environmentWeights');
+    expect(one).toContain('environmentOrder: random');
+    expect(setPlanEnvironments(one, [])).toBe(PLAN);
+  });
+
+  it('turns environments off and on, forgetting removed ones', () => {
+    let plan = setPlanEnvironments(PLAN, ['environments/dev.yaml', 'environments/load.yaml']);
+    plan = setPlanEnvironmentEnabled(plan, 'environments/load.yaml', false);
+    expect(plan).toContain(
+      '  - environments/load.yaml\ndisabledEnvironments:\n  - environments/load.yaml\nload:',
+    );
+    expect(readPlanForm(plan)!.disabledEnvironments).toEqual(['environments/load.yaml']);
+    expect(setPlanEnvironmentEnabled(plan, 'environments/load.yaml', true)).not.toContain(
+      'disabledEnvironments',
+    );
+    expect(setPlanEnvironments(plan, ['environments/dev.yaml'])).not.toContain(
+      'disabledEnvironments',
+    );
+    expect(setPlanEnvironments(plan, [])).toBe(PLAN);
   });
 
   it('turns saving responses on and off', () => {

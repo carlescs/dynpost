@@ -169,6 +169,168 @@
       </select>
     </section>
 
+    <!-- Environments -->
+    <section [class]="card" data-environments>
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faLayerGroup" /></span>
+        <h3 class="flex-1 font-semibold">Environments</h3>
+        @if (environmentSteps().length > 0) {
+          <select
+            class="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs focus:border-sky-500 focus:outline-none"
+            aria-label="Environment order"
+            [value]="environmentOrder(form)"
+            (change)="setEnvironmentOrder($event)"
+          >
+            @for (option of orders; track option) {
+              <option [value]="option" [selected]="option === environmentOrder(form)">
+                {{ environmentOrderInfo[option].label }}
+              </option>
+            }
+          </select>
+        }
+      </div>
+      @if (environmentSteps().length === 0) {
+        <p class="-mt-1 text-xs text-slate-500" data-environment-hint>
+          Runs use the environment selected in the app ({{
+            selectedEnvironment() ?? 'none selected'
+          }}). Add environments to run with them instead.
+        </p>
+      } @else {
+        <p class="-mt-1 text-xs text-slate-500" data-environment-hint>
+          {{ environmentOrderInfo[environmentOrder(form)].hint }}
+        </p>
+        @if (enabledEnvironmentCount() === 0) {
+          <p class="text-xs text-amber-700" data-no-environment-enabled>
+            Enable at least one environment, or remove them all to use the selected one.
+          </p>
+        }
+      }
+      <ol
+        class="flex flex-col gap-1.5"
+        cdkDropList
+        (cdkDropListDropped)="dropEnvironment(form, $event)"
+      >
+        @for (env of environmentSteps(); track $index) {
+          <li
+            class="flex items-center gap-2 rounded-md border py-1.5 pr-1.5 pl-1"
+            [class]="
+              (env.missing && env.enabled ? 'border-amber-200' : 'border-slate-200') +
+              (env.enabled ? ' bg-white' : ' bg-slate-50')
+            "
+            cdkDrag
+            data-environment
+            [attr.data-disabled]="env.enabled ? null : ''"
+          >
+            <span
+              class="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-xs text-slate-400 hover:text-slate-600"
+              cdkDragHandle
+              title="Drag to reorder"
+            >
+              <fa-icon [icon]="faGripVertical" />
+            </span>
+            <input
+              type="checkbox"
+              class="size-3.5 shrink-0 accent-sky-600"
+              [checked]="env.enabled"
+              [title]="
+                env.enabled
+                  ? 'Used in runs: uncheck to skip it'
+                  : 'Skipped in runs: check to use it'
+              "
+              [attr.aria-label]="(env.enabled ? 'Disable ' : 'Enable ') + env.name"
+              (change)="setEnvironmentEnabled(env.path, $event)"
+            />
+            <span
+              class="flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700"
+            >
+              {{ $index + 1 }}
+            </span>
+            @if (env.missing && env.enabled) {
+              <fa-icon
+                class="shrink-0 text-amber-600"
+                [icon]="faTriangleExclamation"
+                title="This environment isn't in the workspace"
+              />
+            }
+            <span class="min-w-0 flex-1" [class.opacity-50]="!env.enabled" [title]="env.path">
+              <span class="block truncate font-medium" [class.line-through]="!env.enabled">{{
+                env.name
+              }}</span>
+              @if (!env.enabled) {
+                <span class="block truncate text-xs text-slate-500">Disabled: not used</span>
+              } @else if (env.missing) {
+                <span class="block truncate text-xs text-amber-700" data-environment-missing
+                  >Not found in the workspace: the plan can't run</span
+                >
+              } @else {
+                <span class="block truncate text-xs text-slate-500">{{ env.path }}</span>
+              }
+            </span>
+            @if (environmentOrder(form) === 'random') {
+              <label
+                class="flex shrink-0 items-center gap-1 text-xs text-slate-500"
+                title="Relative chance of picking this environment"
+              >
+                <span class="w-8 text-right" data-environment-share
+                  >{{ environmentShares()[$index] }}%</span
+                >
+                <input
+                  type="number"
+                  min="0"
+                  class="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs focus:border-sky-500 focus:outline-none"
+                  aria-label="Environment weight"
+                  placeholder="1"
+                  [value]="form.environmentWeights[env.path] ?? ''"
+                  (change)="setEnvironmentWeight(env.path, $event)"
+                />
+              </label>
+            }
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Move up"
+              aria-label="Move environment up"
+              [disabled]="$first"
+              (click)="moveEnvironment(form, $index, -1)"
+            >
+              <fa-icon [icon]="faArrowUp" />
+            </button>
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Move down"
+              aria-label="Move environment down"
+              [disabled]="$last"
+              (click)="moveEnvironment(form, $index, 1)"
+            >
+              <fa-icon [icon]="faArrowDown" />
+            </button>
+            <button
+              type="button"
+              [class]="iconButton"
+              title="Remove"
+              aria-label="Remove environment"
+              (click)="removeEnvironment(form, $index)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          </li>
+        }
+      </ol>
+      <select
+        #environmentSelect
+        [class]="field"
+        aria-label="Add environment"
+        [disabled]="availableEnvironments().length === 0"
+        (change)="addEnvironment(environmentSelect, form)"
+      >
+        <option value="">+ Add an environment…</option>
+        @for (env of availableEnvironments(); track env.path) {
+          <option [value]="env.path">{{ env.name }}</option>
+        }
+      </select>
+    </section>
+
     <!-- Load -->
     <section [class]="card">
       <div class="flex items-center gap-2">
@@ -193,6 +355,10 @@
                   {{ load.requests }} {{ load.requests === 1 ? 'request' : 'requests' }}
                 </span>
               }
+              @if (load.environments > 1) {
+                in
+                <span [class]="chip">{{ load.environments }} environments</span>
+              }
               for
               <span [class]="chip">{{ form.duration || '…' }}</span>
             } @else {
@@ -204,6 +370,10 @@
               <span [class]="chip">
                 {{ load.requests }} {{ load.requests === 1 ? 'request' : 'requests' }}
               </span>
+              @if (load.environments > 1) {
+                ×
+                <span [class]="chip">{{ load.environments }} environments</span>
+              }
               =
               <span class="rounded-md bg-sky-600 px-2 py-0.5 font-semibold text-white">
                 {{ load.total.toLocaleString('en-US') }} requests

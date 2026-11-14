@@ -130,76 +130,93 @@
   </section>
 }
 
-<!-- Per request -->
-@if (requests().length) {
-  <section>
-    <div class="mb-1.5 flex items-center gap-3">
-      <h3 [class]="heading + ' flex-1'">Requests</h3>
-      <span class="flex items-center gap-1 text-[10px] text-slate-500">
-        <span class="h-1 w-3 rounded-full bg-slate-300"></span> min–max
-      </span>
-      <span class="flex items-center gap-1 text-[10px] text-slate-500">
-        <span class="h-2 w-3 rounded-full bg-sky-600"></span> median–p95
-      </span>
-      <span class="flex items-center gap-1 text-[10px] text-slate-500">
-        <span class="h-3 w-0.5 bg-slate-900"></span> average
-      </span>
-    </div>
-    <ul [class]="card + ' divide-y divide-slate-200'">
-      @for (r of requests(); track r.request) {
-        <li class="flex flex-col gap-1.5 px-3 py-2" data-request>
-          <div class="flex items-baseline gap-2">
-            <span class="min-w-0 flex-1 truncate font-medium" [title]="r.request">
-              {{ r.request }}
-            </span>
-            <span class="shrink-0 text-xs text-slate-500">
-              {{ r.stats.samples | number }} requests
-            </span>
-            @if (r.stats.errors > 0) {
-              <span
-                class="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-1.5 text-xs font-medium text-rose-700"
-              >
-                {{ r.stats.errors | number }} failed ({{ r.stats.errorPercent | number: '1.0-1' }}%)
+<!-- Per environment and per request -->
+@for (
+  group of [
+    { title: 'Environments', rows: environments(), attr: 'environment' },
+    { title: 'Requests', rows: requests(), attr: 'request' },
+  ];
+  track group.title
+) {
+  @if (group.rows.length) {
+    <section [attr.data-stats]="group.attr">
+      <div class="mb-1.5 flex items-center gap-3">
+        <h3 [class]="heading + ' flex-1'">{{ group.title }}</h3>
+        <span class="flex items-center gap-1 text-[10px] text-slate-500">
+          <span class="h-1 w-3 rounded-full bg-slate-300"></span> min–max
+        </span>
+        <span class="flex items-center gap-1 text-[10px] text-slate-500">
+          <span class="h-2 w-3 rounded-full bg-sky-600"></span> median–p95
+        </span>
+        <span class="flex items-center gap-1 text-[10px] text-slate-500">
+          <span class="h-3 w-0.5 bg-slate-900"></span> average
+        </span>
+      </div>
+      <ul [class]="card + ' divide-y divide-slate-200'">
+        @for (r of group.rows; track r.key) {
+          <li
+            class="flex flex-col gap-1.5 px-3 py-2"
+            [attr.data-request]="group.attr === 'request' ? '' : null"
+            [attr.data-environment-stats]="group.attr === 'environment' ? '' : null"
+          >
+            <div class="flex items-baseline gap-2">
+              <span class="min-w-0 flex-1 truncate font-medium" [title]="r.key">
+                {{ r.label }}
               </span>
-            }
-          </div>
-          <div class="relative h-3" [title]="spreadTitle(r.stats)">
-            <div class="absolute inset-x-0 top-1 h-1 rounded-full bg-slate-100"></div>
-            <div
-              class="absolute top-1 h-1 min-w-0.5 rounded-full bg-slate-300"
-              [style.left.%]="r.range.left"
-              [style.width.%]="r.range.width"
-            ></div>
-            <div
-              class="absolute top-0.5 h-2 min-w-0.5 rounded-full bg-sky-600"
-              [style.left.%]="r.typical.left"
-              [style.width.%]="r.typical.width"
-            ></div>
-            <div
-              class="absolute top-0 h-3 w-0.5 -translate-x-1/2 bg-slate-900 ring-1 ring-white"
-              [style.left.%]="r.average"
-            ></div>
-          </div>
-          <dl class="flex justify-between text-xs text-slate-500">
-            @for (
-              stat of [
-                ['Average', r.stats.average],
-                ['Median', r.stats.median],
-                ['p95', r.stats.p95],
-                ['Max', r.stats.max],
-              ];
-              track stat[0]
-            ) {
-              <div>
-                <dt class="mr-1 inline">{{ stat[0] }}</dt>
-                <dd class="inline font-medium text-slate-700">{{ formatMs($any(stat[1])) }}</dd>
-              </div>
-            }
-          </dl>
-        </li>
-      }
-    </ul>
-  </section>
+              <span class="shrink-0 text-xs text-slate-500">
+                {{ r.stats.samples | number }} requests
+                @if (group.attr === 'environment') {
+                  · {{ r.stats.throughput | number: '1.0-1' }}/s
+                }
+              </span>
+              @if (r.stats.errors > 0) {
+                <span
+                  class="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-1.5 text-xs font-medium text-rose-700"
+                >
+                  {{ r.stats.errors | number }} failed ({{
+                    r.stats.errorPercent | number: '1.0-1'
+                  }}%)
+                </span>
+              }
+            </div>
+            <div class="relative h-3" [title]="spreadTitle(r.stats)">
+              <div class="absolute inset-x-0 top-1 h-1 rounded-full bg-slate-100"></div>
+              <div
+                class="absolute top-1 h-1 min-w-0.5 rounded-full bg-slate-300"
+                [style.left.%]="r.range.left"
+                [style.width.%]="r.range.width"
+              ></div>
+              <div
+                class="absolute top-0.5 h-2 min-w-0.5 rounded-full bg-sky-600"
+                [style.left.%]="r.typical.left"
+                [style.width.%]="r.typical.width"
+              ></div>
+              <div
+                class="absolute top-0 h-3 w-0.5 -translate-x-1/2 bg-slate-900 ring-1 ring-white"
+                [style.left.%]="r.average"
+              ></div>
+            </div>
+            <dl class="flex justify-between text-xs text-slate-500">
+              @for (
+                stat of [
+                  ['Average', r.stats.average],
+                  ['Median', r.stats.median],
+                  ['p95', r.stats.p95],
+                  ['Max', r.stats.max],
+                ];
+                track stat[0]
+              ) {
+                <div>
+                  <dt class="mr-1 inline">{{ stat[0] }}</dt>
+                  <dd class="inline font-medium text-slate-700">{{ formatMs($any(stat[1])) }}</dd>
+                </div>
+              }
+            </dl>
+          </li>
+        }
+      </ul>
+    </section>
+  }
 }
 
 <!-- Status codes -->
@@ -307,6 +324,10 @@
                   @if (s.error) {
                     <dt class="text-slate-500">Failure</dt>
                     <dd class="text-rose-700">{{ s.error }}</dd>
+                  }
+                  @if (s.environment) {
+                    <dt class="text-slate-500">Environment</dt>
+                    <dd class="truncate" data-environment>{{ s.environment }}</dd>
                   }
                   @if (s.bodyFile) {
                     <dt class="text-slate-500">Body file</dt>

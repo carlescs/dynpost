@@ -728,7 +728,8 @@ visual form or as YAML text; the form keeps comments and unknown keys). Each ope
 plan follows its own run, so several plans can run at once; a running plan's tab
 can't be closed until it stops. Results
 are saved locally under `.dynpost/runs/` and never committed. Runs use the
-selected environment and send no cookies. Like requests, a plan whose file is
+environment selected in the app, or the plan's own `environments` when it lists
+some, and send no cookies. Like requests, a plan whose file is
 named after it (`checkout-smoke.run.yaml` for "Checkout smoke") is renamed
 along with it, and its earlier runs follow; files with hand-picked names keep
 them. Deleting a plan (the trash button next to it in the list or in its
@@ -790,6 +791,14 @@ disabled:            # listed requests that are not sent (kept for later)
 order: random        # sequential (default), shuffle, random or roundRobin
 weights:             # with random: relative chance of each request (default 1)
   requests/shop/list-products.yaml: 4
+environments:        # optional: run with these, not the environment selected in the app
+  - environments/staging.yaml
+  - environments/load.yaml
+disabledEnvironments:  # listed environments that are not used (kept for later)
+  - environments/staging.yaml
+environmentOrder: random  # like order: sequential (default), shuffle, random or roundRobin
+environmentWeights:  # with random: relative chance of each environment (default 1)
+  environments/load.yaml: 3
 load:
   threads: 10        # concurrent virtual users
   iterations: 50     # per thread; or `duration: 2m`
@@ -827,6 +836,30 @@ next request in the list, with each user starting at a different one so the
 requests are spread evenly. With `random` and `roundRobin` an iteration is one
 request, so `iterations` counts requests per user.
 
+`environments` lists the environments the plan runs with, whichever one is
+selected in the app; leave it out to use the selected one. `environmentOrder`
+takes them the way `order` takes requests, once per iteration of each virtual
+user, and each environment taken sends the iteration's requests (picked by
+`order`, with the same data row): `sequential` sends them with every environment
+in the listed order, `shuffle` with every environment in a new random order,
+`random` with one environment picked by its `environmentWeights` weight (0
+never picks it), and `roundRobin` with the next environment, each user starting
+at a different one. So with `sequential` or `shuffle`, an iteration sends its
+requests once per environment, and the load summary counts them. In the visual
+form, the **Environments** card lists them like the request steps (add one from
+the workspace, drag to reorder, pick the order, set weights for a random pick).
+`disabledEnvironments` switches environments off like `disabled` does requests:
+they keep their place and weight, but runs don't use them (their files don't
+even need to exist), and at least one must stay enabled (remove them all to use
+the selected environment instead). In the visual form, each environment has a
+switch to turn it on or off. Each request in the run's log shows the
+environment it was sent with, and the dashboard shows the statistics of each
+environment (requests, requests per second, failures and latency spread) above
+those of each request, which combine every environment. A plan that lists an
+enabled environment which no longer exists can't start (the form flags it);
+like request paths, the references aren't updated when an environment file is
+renamed.
+
 `disabled` turns requests off without taking them out of the plan: they keep
 their place, assertions and weight, but runs skip them (their files don't even
 need to exist), and at least one request must stay enabled. In the visual form,
@@ -854,8 +887,8 @@ file it sent.
 Without a `status` assertion, a response with status 400 or higher counts as an
 error. A plan can use up to 5000 threads (each keeps at most one connection busy
 at a time); a run over 200 threads needs confirmation. Not yet supported:
-CSV/JSON/HTML export, comparing runs, per-thread cookie jars, an environment
-override in the plan and folder bodies for multipart `form` requests.
+CSV/JSON/HTML export, comparing runs, per-thread cookie jars and folder bodies
+for multipart `form` requests.
 
 ## Import and export
 

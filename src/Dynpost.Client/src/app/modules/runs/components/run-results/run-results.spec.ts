@@ -107,6 +107,26 @@ describe('RunResults', () => {
     expect(requests[1]).toContain('b.yaml 100 requests 4 failed (2%)');
   });
 
+  it('lists each environment with its failures, only when the plan has environments', () => {
+    expect(create(run()).querySelector('[data-stats="environment"]')).toBeNull();
+    const element = create(
+      run({
+        environments: [
+          {
+            environment: 'environments/dev.yaml',
+            name: 'Dev',
+            stats: stats({ samples: 120, errors: 0, throughput: 24 }),
+          },
+          { environment: 'environments/load.yaml', name: 'Load', stats: stats({ samples: 80 }) },
+        ],
+      }),
+    );
+    const rows = [...element.querySelectorAll('[data-environment-stats]')].map(text);
+    expect(rows[0]).toContain('Dev 120 requests · 24/s Average');
+    expect(rows[1]).toContain('Load 80 requests · 40/s 4 failed (2%)');
+    expect(element.querySelectorAll('[data-request]').length).toBe(2);
+  });
+
   it('breaks down status codes and error reasons', () => {
     const element = create(run());
     expect([...element.querySelectorAll('[data-status]')].map(text)).toEqual([
