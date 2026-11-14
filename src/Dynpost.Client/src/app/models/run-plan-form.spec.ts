@@ -43,6 +43,16 @@ describe('run plan form', () => {
     expect(setPlanOrder(next, 'sequential')).not.toContain('order:');
   });
 
+  it('sets and clears the environment, right after the name', () => {
+    expect(readPlanForm(PLAN)!.environment).toBe('');
+    const set = setPlanValue(PLAN, ['environment'], 'environments/load.yaml');
+    expect(set).toBe(
+      PLAN.replace('name: Smoke\n', 'name: Smoke\nenvironment: environments/load.yaml\n'),
+    );
+    expect(readPlanForm(set)!.environment).toBe('environments/load.yaml');
+    expect(setPlanValue(set, ['environment'], '')).toBe(PLAN);
+  });
+
   it('turns saving responses on and off', () => {
     expect(readPlanForm(PLAN)!.saveResponses).toBe(false);
     const on = setPlanSaveResponses(PLAN, true);

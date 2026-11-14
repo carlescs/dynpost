@@ -11,7 +11,8 @@ using YamlDotNet.RepresentationModel;
 namespace Dynpost.Infrastructure.Runs;
 
 /// <summary>
-/// Reads run plan files. Keys, in order: <c>name</c>, <c>requests</c>, <c>disabled</c> (request
+/// Reads run plan files. Keys, in order: <c>name</c>, <c>environment</c> (the environment file
+/// the run uses instead of the selected one), <c>requests</c>, <c>disabled</c> (request
 /// paths kept in the list but not sent), <c>order</c>
 /// (<c>sequential</c>, <c>shuffle</c>, <c>random</c> or <c>roundRobin</c>), <c>weights</c> (per
 /// request path), <c>load</c>
@@ -124,7 +125,20 @@ public sealed partial class YamlRunPlanFormat : IRunPlanFormat
             ParseWeights(YamlNodes.OptionalMapping(root, "weights")),
             ParseDisabled(root),
             ParseBodies(YamlNodes.OptionalMapping(root, "bodies")),
-            YamlNodes.OptionalBoolean(root, "saveResponses"));
+            YamlNodes.OptionalBoolean(root, "saveResponses"),
+            ParseEnvironment(YamlNodes.OptionalString(root, "environment")));
+    }
+
+    private static WorkspacePath? ParseEnvironment(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        return WorkspacePath.TryParse(text.Trim(), out var path) && !path.IsRoot
+            ? path
+            : throw new WorkspaceFileFormatException($"'environment' must be the workspace path of an environment file, such as {WorkspaceLayout.EnvironmentsFolder}/dev.yaml.");
     }
 
     private static List<string> ParseDisabled(YamlMappingNode root) =>

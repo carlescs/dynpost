@@ -13,6 +13,7 @@ import {
   faListCheck,
   faListOl,
   faRepeat,
+  faLayerGroup,
   faTable,
   faTrash,
   faTriangleExclamation,
@@ -37,7 +38,9 @@ import {
   setPlanThinkTime,
   setPlanValue,
 } from '../../../../models/run-plan-form';
+import { environmentPath } from '../../../../models/messages';
 import { METHOD_COLORS, WorkspaceNode } from '../../../../models/workspace';
+import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { parseDuration } from '../../models/run-format';
 import { LoadProfile } from '../load-profile/load-profile';
@@ -90,6 +93,7 @@ const SLIDER_MAX = 200;
 })
 export class RunPlanForm {
   private readonly workspace = inject(WorkspaceStore);
+  private readonly environmentStore = inject(EnvironmentStore);
 
   readonly yaml = input.required<string>();
   readonly yamlChange = output<string>();
@@ -108,6 +112,7 @@ export class RunPlanForm {
   protected readonly faGripVertical = faGripVertical;
   protected readonly faTriangleExclamation = faTriangleExclamation;
   protected readonly faListOl = faListOl;
+  protected readonly faLayerGroup = faLayerGroup;
   protected readonly faGaugeHigh = faGaugeHigh;
   protected readonly faTable = faTable;
   protected readonly faListCheck = faListCheck;
@@ -162,6 +167,24 @@ export class RunPlanForm {
     if (!form) return 0;
     const disabled = new Set(form.disabled);
     return form.requests.filter((path) => !disabled.has(path)).length;
+  });
+
+  /** The workspace's environments a plan can run with, by workspace path. */
+  protected readonly environments = computed(() =>
+    this.environmentStore
+      .environments()
+      .map((env) => ({ path: environmentPath(env.id), name: env.name })),
+  );
+
+  /** The environment selected in the app, which runs use when the plan names none. */
+  protected readonly selectedEnvironment = computed(
+    () => this.environmentStore.active()?.name ?? null,
+  );
+
+  /** Whether the plan names an environment that isn't in the workspace. */
+  protected readonly environmentMissing = computed(() => {
+    const environment = this.form()?.environment;
+    return !!environment && !this.environments().some((env) => env.path === environment);
   });
 
   /** Requests that can still be added to the plan. */
@@ -231,6 +254,12 @@ export class RunPlanForm {
     const total = weights.reduce((sum, weight) => sum + weight, 0);
     return weights.map((weight) => (total > 0 ? Math.round((weight / total) * 100) : 0));
   });
+
+  protected setEnvironment(event: Event): void {
+    this.emit(
+      setPlanValue(this.yaml(), ['environment'], (event.target as HTMLSelectElement).value),
+    );
+  }
 
   protected setOrder(event: Event): void {
     this.emit(setPlanOrder(this.yaml(), (event.target as HTMLSelectElement).value));

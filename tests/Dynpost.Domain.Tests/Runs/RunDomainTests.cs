@@ -173,6 +173,19 @@ public class RunDomainTests
     [Fact]
     public void Validate_AcceptsAGoodPlan() => Assert.Empty(Plan().Validate());
 
+    [Theory]
+    [InlineData("environments/load.yaml", true)]
+    [InlineData("environments/nested/load.yaml", false)]
+    [InlineData("requests/load.yaml", false)]
+    [InlineData("environments/load.txt", false)]
+    public void Validate_ChecksTheEnvironmentIsAnEnvironmentFile(string environment, bool valid)
+    {
+        var errors = (Plan() with { Environment = WorkspacePath.Parse(environment) }).Validate();
+
+        Assert.Equal(valid, errors.Count == 0);
+        Assert.All(errors, error => Assert.Contains("'environment'", error));
+    }
+
     [Fact]
     public void Validate_RejectsIterationsAndDurationTogether()
     {

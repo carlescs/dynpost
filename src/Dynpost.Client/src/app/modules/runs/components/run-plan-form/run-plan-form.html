@@ -9,6 +9,46 @@
       />
     </label>
 
+    <!-- Environment -->
+    <section [class]="card" data-environment>
+      <div class="flex items-center gap-2">
+        <span [class]="cardIcon"><fa-icon [icon]="faLayerGroup" /></span>
+        <h3 class="flex-1 font-semibold">Environment</h3>
+      </div>
+      <select
+        [class]="field"
+        aria-label="Environment"
+        [value]="form.environment"
+        (change)="setEnvironment($event)"
+      >
+        <option value="" [selected]="form.environment === ''">
+          Selected environment ({{ selectedEnvironment() ?? 'none selected' }})
+        </option>
+        @for (env of environments(); track env.path) {
+          <option [value]="env.path" [selected]="env.path === form.environment">
+            {{ env.name }}
+          </option>
+        }
+        @if (environmentMissing()) {
+          <option [value]="form.environment" selected>{{ form.environment }} (not found)</option>
+        }
+      </select>
+      @if (environmentMissing()) {
+        <p class="-mt-1 text-xs text-amber-700" data-environment-missing>
+          <fa-icon [icon]="faTriangleExclamation" />
+          This environment isn't in the workspace, so the plan can't run.
+        </p>
+      } @else {
+        <p class="-mt-1 text-xs text-slate-500" data-environment-hint>
+          {{
+            form.environment
+              ? 'Runs use this environment, whichever one is selected in the app.'
+              : 'Runs use the environment selected in the app.'
+          }}
+        </p>
+      }
+    </section>
+
     <!-- Requests -->
     <section [class]="card">
       <div class="flex items-center gap-2">

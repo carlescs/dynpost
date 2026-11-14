@@ -195,6 +195,16 @@ public sealed class RunInfrastructureTests : IDisposable
         Assert.False(format.Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.SaveResponses);
     }
 
+    [Fact]
+    public void Parse_ReadsTheEnvironment()
+    {
+        var format = new YamlRunPlanFormat();
+
+        Assert.Equal("environments/load.yaml", format.Parse("name: x\nenvironment: environments/load.yaml\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.Environment?.Value);
+        Assert.Null(format.Parse("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.Environment);
+        Assert.Null(format.Parse("name: x\nenvironment: ''\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n").Value.Environment);
+    }
+
     [Theory]
     [InlineData("name: x\nrequests: [a.yaml]\norder: backwards\nload: {threads: 1, iterations: 1}\n", "'order'")]
     [InlineData("name: x\nrequests: [a.yaml]\nweights: {a.yaml: lots}\nload: {threads: 1, iterations: 1}\n", "weights.a.yaml")]
@@ -204,6 +214,7 @@ public sealed class RunInfrastructureTests : IDisposable
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nassert:\n  '*':\n    status: 20\n", "status")]
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\ndata:\n  file: a.csv\n  mode: shuffle\n", "data.mode")]
     [InlineData("name: x\nrequests: [../a.yaml]\nload: {threads: 1, iterations: 1}\n", "not a valid workspace path")]
+    [InlineData("name: x\nenvironment: ../dev.yaml\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\n", "'environment'")]
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1, maxRps: Infinity}\n", "load.maxRps")]
     [InlineData("name: x\nrequests: [a.yaml]\nload: {threads: 1, iterations: 1}\nthresholds: {throughput: NaN}\n", "thresholds.throughput")]
     public void Parse_ReportsProblems(string yaml, string expected)

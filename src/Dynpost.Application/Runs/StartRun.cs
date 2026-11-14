@@ -93,7 +93,8 @@ public sealed class RunRegistry
 /// followed with <see cref="GetRunProgress"/>. Each request is prepared and sent exactly like
 /// <see cref="SendRequest"/> does (folder defaults, environment variables, auth, OAuth 2.0 tokens), with the CSV
 /// row of the iteration laid over the environment's variables and, for requests with a body folder,
-/// the body taken from the next file of that folder. Runs don't use cookies: every
+/// the body taken from the next file of that folder. A plan that names an environment is sent
+/// with that one; otherwise the environment selected in the app is used. Runs don't use cookies: every
 /// virtual user starts clean and nothing is written to the environment's cookie jar or captures.
 /// Runs of more than <see cref="RunPlan.WarnThreads"/> threads need <paramref name="confirmLarge"/>.
 /// </summary>
@@ -223,10 +224,15 @@ public sealed class StartRun(
             bodies[request] = new BodyFeed(files.Value, new DataCursor(files.Value.Count, source.Mode, source.OnEof, plan.Load.Threads));
         }
 
-        var variables = await environment.LoadAsync(cancellationToken);
+        // The plan's own environment, if it names one, else the one selected in the app.
+        var variables = plan.Environment is { } planEnvironment
+            ? await environment.LoadAsync(planEnvironment.FileName, cancellationToken)
+            : await environment.LoadAsync(cancellationToken);
         if (!variables.IsSuccess)
         {
-            return variables.Error!;
+            return plan.Environment is { } named && variables.Error!.Code == ErrorCodes.NotFound
+                ? new Error(ErrorCodes.InvalidFile, $"The plan's environment '{named}' does not exist.")
+                : variables.Error!;
         }
 
         var startedAt = time.GetUtcNow();

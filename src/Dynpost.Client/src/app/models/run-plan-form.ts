@@ -23,6 +23,8 @@ export interface PlanBody {
 /** The fields of a run plan, as the strings shown in the visual editor. Empty means "not set". */
 export interface PlanForm {
   name: string;
+  /** The environment file the run uses (`environments/dev.yaml`); empty for the selected one. */
+  environment: string;
   requests: string[];
   /** The request paths that stay in the list but are not sent. */
   disabled: string[];
@@ -74,6 +76,7 @@ type Path = (string | number)[];
 const ORDER: Record<string, string[]> = {
   '': [
     'name',
+    'environment',
     'requests',
     'disabled',
     'order',
@@ -120,6 +123,7 @@ export function readPlanForm(yaml: string): PlanForm | null {
 
   return {
     name: text(['name']),
+    environment: text(['environment']),
     requests: isSeq(requests)
       ? requests.items.map((item) => String(isScalar(item) ? item.value : ''))
       : [],

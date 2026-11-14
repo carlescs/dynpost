@@ -708,7 +708,8 @@ visual form or as YAML text; the form keeps comments and unknown keys). Each ope
 plan follows its own run, so several plans can run at once; a running plan's tab
 can't be closed until it stops. Results
 are saved locally under `.dynpost/runs/` and never committed. Runs use the
-selected environment and send no cookies. Like requests, a plan whose file is
+environment selected in the app, or the plan's own `environment` when it names
+one, and send no cookies. Like requests, a plan whose file is
 named after it (`checkout-smoke.run.yaml` for "Checkout smoke") is renamed
 along with it, and its earlier runs follow; files with hand-picked names keep
 them. Deleting a plan (the trash button next to it in the list or in its
@@ -761,6 +762,7 @@ again to restore the side-by-side layout.
 
 ```yaml
 name: Checkout smoke
+environment: environments/load.yaml  # optional: run with this environment, not the selected one
 requests:
   - requests/shop/list-products.yaml
   - requests/shop/create-order.yaml
@@ -807,6 +809,13 @@ next request in the list, with each user starting at a different one so the
 requests are spread evenly. With `random` and `roundRobin` an iteration is one
 request, so `iterations` counts requests per user.
 
+`environment` picks the environment the plan runs with, whichever one is
+selected in the app; leave it out to use the selected one. In the visual form,
+the **Environment** card lists the workspace's environments, like the request
+picker lists its requests, with **Selected environment** as the default. A plan
+whose environment no longer exists can't start (the form flags it); like
+request paths, the reference isn't updated when the environment file is renamed.
+
 `disabled` turns requests off without taking them out of the plan: they keep
 their place, assertions and weight, but runs skip them (their files don't even
 need to exist), and at least one request must stay enabled. In the visual form,
@@ -834,8 +843,8 @@ file it sent.
 Without a `status` assertion, a response with status 400 or higher counts as an
 error. A plan can use up to 5000 threads (each keeps at most one connection busy
 at a time); a run over 200 threads needs confirmation. Not yet supported:
-CSV/JSON/HTML export, comparing runs, per-thread cookie jars, an environment
-override in the plan and folder bodies for multipart `form` requests.
+CSV/JSON/HTML export, comparing runs, per-thread cookie jars and folder bodies
+for multipart `form` requests.
 
 ## Import and export
 

@@ -96,6 +96,10 @@ public sealed record RunThresholds(
 /// Whether the whole body of each logged response is saved to a file, so it can be opened later
 /// (PDFs in the previewer).
 /// </param>
+/// <param name="Environment">
+/// The environment file the run sends its requests with (<c>environments/dev.yaml</c>);
+/// <c>null</c> to use the environment selected in the app.
+/// </param>
 public sealed record RunPlan(
     string Name,
     IReadOnlyList<WorkspacePath> Requests,
@@ -107,7 +111,8 @@ public sealed record RunPlan(
     IReadOnlyDictionary<string, double>? Weights = null,
     IReadOnlyList<string>? Disabled = null,
     IReadOnlyDictionary<string, RunBodySource>? Bodies = null,
-    bool SaveResponses = false)
+    bool SaveResponses = false,
+    WorkspacePath? Environment = null)
 {
     public const string AllRequests = "*";
 
@@ -175,6 +180,11 @@ public sealed record RunPlan(
         if (string.IsNullOrWhiteSpace(Name))
         {
             errors.Add("The plan needs a name.");
+        }
+
+        if (Environment is { } environment && !WorkspaceLayout.IsEnvironmentPath(environment))
+        {
+            errors.Add($"'environment' must be an environment file such as {WorkspaceLayout.EnvironmentsFolder}/dev.yaml, not '{environment}'.");
         }
 
         if (Requests.Count == 0)

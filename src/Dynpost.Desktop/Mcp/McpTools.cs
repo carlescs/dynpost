@@ -48,7 +48,7 @@ internal static class McpTools
     public const int MaxSamplesPage = 100;
 
     private const string RunPlanShape =
-        "A plan is YAML: name; requests: [request paths such as requests/shop/list-products.yaml]; disabled?: [paths not sent]; "
+        "A plan is YAML: name; environment?: an environment file such as environments/dev.yaml (default: the selected environment); requests: [request paths such as requests/shop/list-products.yaml]; disabled?: [paths not sent]; "
         + "order?: sequential|shuffle|random|roundRobin; weights?: { path: number }; load: { threads, iterations or duration (2m), rampUp?, thinkTime?, maxRps? }; "
         + "data?: { file: a CSV whose columns become {{variables}}, mode?: sequential|random|perThread, onEof?: recycle|stop }; "
         + "bodies?: { requestPath: { folder, pattern?, mode?, onEof? } }; saveResponses?: bool; "

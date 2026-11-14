@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { RunPlanForm } from './run-plan-form';
 
@@ -39,6 +40,42 @@ describe('RunPlanForm', () => {
     expect(steps[0]).toContain('GET');
     expect(steps[0]).toContain('Get A');
     expect(steps[1]).toContain('Not found in the workspace');
+  });
+
+  it('offers the workspace environments, defaulting to the selected one', () => {
+    const { fixture, element, emitted } = create(PLAN);
+    const environments = TestBed.inject(EnvironmentStore);
+    environments.environments.set([
+      { id: 'dev.yaml', name: 'Dev' },
+      { id: 'load.yaml', name: 'Load' },
+    ]);
+    environments.activeId.set('dev.yaml');
+    fixture.detectChanges();
+    const select = element.querySelector<HTMLSelectElement>('select[aria-label="Environment"]')!;
+    const options = [...select.options].map((option) => option.textContent!.trim());
+    expect(options).toEqual(['Selected environment (Dev)', 'Dev', 'Load']);
+    expect(select.value).toBe('');
+
+    select.value = 'environments/load.yaml';
+    select.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([
+      PLAN.replace('name: Smoke\n', 'name: Smoke\nenvironment: environments/load.yaml\n'),
+    ]);
+  });
+
+  it('clears the environment and flags one that is not in the workspace', () => {
+    const plan = PLAN.replace(
+      'name: Smoke\n',
+      'name: Smoke\nenvironment: environments/gone.yaml\n',
+    );
+    const { element, emitted } = create(plan);
+    const select = element.querySelector<HTMLSelectElement>('select[aria-label="Environment"]')!;
+    expect(select.value).toBe('environments/gone.yaml');
+    expect(element.querySelector('[data-environment-missing]')).not.toBeNull();
+
+    select.value = '';
+    select.dispatchEvent(new Event('change'));
+    expect(emitted).toEqual([PLAN]);
   });
 
   it('sums up the load of the plan', () => {

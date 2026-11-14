@@ -7,6 +7,7 @@ using Dynpost.Application.Http;
 using Dynpost.Application.OAuth2;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Workspaces;
+using Dynpost.Domain.Environments;
 using Dynpost.Domain.Http;
 using Dynpost.Domain.Requests;
 using Dynpost.Domain.Runs;
@@ -30,10 +31,19 @@ public class StartRunTests
     private readonly RunRegistry _registry = new();
     private readonly IFolderDefaultsStore _folders = Substitute.For<IFolderDefaultsStore>();
     private readonly CurrentWorkspace _current = new();
+    private readonly IEnvironmentStore _environments = Substitute.For<IEnvironmentStore>();
+    private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
+    private readonly ICapturedValueStore _captures = Substitute.For<ICapturedValueStore>();
+    private readonly IWorkspaceStateStore _state = Substitute.For<IWorkspaceStateStore>();
 
     public StartRunTests()
     {
         _current.Open(Root);
+        _state.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(WorkspaceState.Default);
+        _secrets.LoadAsync(Root, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(new Dictionary<string, IReadOnlyDictionary<string, string>>()));
+        _captures.LoadAsync(Root, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(new Dictionary<string, IReadOnlyDictionary<string, string>>()));
         _folders.ReadAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>()).Returns(FolderDefaults.Empty);
         _plans.ReadAsync(Root, WorkspacePath.Parse(PlanFile), Arg.Any<CancellationToken>()).Returns("plan");
         _repository.FileExists(Root, Arg.Any<WorkspacePath>()).Returns(true);
@@ -45,8 +55,6 @@ public class StartRunTests
 
     private StartRun Create()
     {
-        var state = Substitute.For<IWorkspaceStateStore>();
-        state.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(WorkspaceState.Default);
         var time = TimeProvider.System;
         return new StartRun(
             _plans,
@@ -55,12 +63,7 @@ public class StartRunTests
             _bodies,
             _repository,
             _sender,
-            new ActiveEnvironment(
-                Substitute.For<IEnvironmentStore>(),
-                Substitute.For<ISecretStore>(),
-                Substitute.For<ICapturedValueStore>(),
-                state,
-                _current),
+            new ActiveEnvironment(_environments, _secrets, _captures, _state, _current),
             new OAuth2Tokens(_sender, Substitute.For<IOAuth2TokenStore>(), Substitute.For<IAuthorizationBrowser>(), time),
             _runs,
             _registry,
@@ -122,6 +125,59 @@ public class StartRunTests
         Assert.Equal(12, run.Requests.Single().Stats.Samples);
         Assert.True(run.Passed);
         await _runs.Received(1).SaveAsync(Root, Arg.Is<RunResultDto>(r => r.RunId == started.Value.RunId), Arg.Any<CancellationToken>());
+    }
+
+    private void ExistingEnvironment(string id, string host)
+    {
+        _environments.Exists(Root, id).Returns(true);
+        _environments.ReadAsync(Root, id, Arg.Any<CancellationToken>())
+            .Returns(new EnvironmentDefinition(id, [new EnvironmentVariable("host", host)]));
+    }
+
+    [Fact]
+    public async Task Execute_UsesTheEnvironmentOfThePlanOverTheSelectedOne()
+    {
+        ExistingEnvironment("dev.yaml", "dev.test");
+        ExistingEnvironment("load.yaml", "load.test");
+        _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("dev.yaml"));
+        UsePlan(Plan(threads: 1, iterations: 1) with { Environment = WorkspacePath.Parse("environments/load.yaml") });
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://{{host}}/users"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        await RunToEndAsync(started.Value.RunId);
+
+        await _sender.Received(1).SendAsync(Arg.Is<OutgoingRequest>(r => r.Url.Host == "load.test"), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_UsesTheSelectedEnvironmentWhenThePlanNamesNone()
+    {
+        ExistingEnvironment("dev.yaml", "dev.test");
+        _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("dev.yaml"));
+        UsePlan(Plan(threads: 1, iterations: 1));
+        _repository.ReadRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(new HttpRequestDefinition("Get", RequestMethod.Get, "https://{{host}}/users"));
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response());
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+        await RunToEndAsync(started.Value.RunId);
+
+        await _sender.Received(1).SendAsync(Arg.Is<OutgoingRequest>(r => r.Url.Host == "dev.test"), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_FailsWhenThePlansEnvironmentDoesNotExist()
+    {
+        UsePlan(Plan() with { Environment = WorkspacePath.Parse("environments/gone.yaml") });
+
+        var started = await Create().ExecuteAsync(PlanFile, false);
+
+        Assert.False(started.IsSuccess);
+        Assert.Equal(ErrorCodes.InvalidFile, started.Error!.Code);
+        Assert.Contains("environments/gone.yaml", started.Error.Message);
+        await _sender.DidNotReceive().SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
