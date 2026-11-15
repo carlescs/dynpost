@@ -1,5 +1,7 @@
 import { DestroyRef, Injectable, inject } from '@angular/core';
 import { BridgeEvents } from '../models/messages';
+import { touchesArea } from '../models/disk-changes';
+import { PLANS_FOLDER, REQUESTS_FOLDER } from '../models/workspace';
 import { Bridge } from './bridge';
 import { EnvironmentStore } from './environment-store';
 import { GitStore } from './git-store';
@@ -7,12 +9,13 @@ import { RunStore } from './run-store';
 import { WorkspaceStore } from './workspace-store';
 
 /**
- * Shows changes made to the open workspace outside the UI — by an AI assistant through the MCP
- * server — as the host reports them: re-reads the tree, the open requests and environments that
- * changed (keeping unsaved edits), run plans and their runs, and the git status; and follows the
- * load runs it starts, and opens the files it asks to show. It also re-reads the git status
- * whenever the host sees the workspace's files or git state change, whoever changed them. The app
- * shell injects it to start it.
+ * Keeps the UI in step with the open workspace on disk, whoever changes it. The host watches the
+ * workspace and reports files that changed (edited in another program, changed by git in a
+ * terminal, or saved by the app itself), changes an AI assistant made through the MCP server, and
+ * changes to the git state. This re-reads what changed: the tree, the open requests, environments,
+ * folder settings and run plans (reloading those without unsaved edits, and asking about those
+ * with), the plans and their runs, and the git status; it also follows the load runs an assistant
+ * starts and opens the files it asks to show. The app shell injects it to start it.
  */
 @Injectable({ providedIn: 'root' })
 export class WorkspaceSync {
@@ -25,6 +28,7 @@ export class WorkspaceSync {
   constructor() {
     const stops = [
       this.bridge.on('workspace.changed', ({ paths }) => void this.apply(paths)),
+      this.bridge.on('workspace.filesChanged', ({ paths }) => void this.reload(paths ?? undefined)),
       this.bridge.on('run.started', ({ path, runId }) => {
         if (this.workspace.workspace()) void this.runs.followStarted(path, runId);
       }),
@@ -61,4 +65,29 @@ export class WorkspaceSync {
     await this.runs.reloadFromDisk(paths);
     if (this.git.available) void this.git.refreshInBackground();
   }
+
+  /**
+   * Re-reads what the UI shows of the files at `paths` (or inside folders at `paths`; anything
+   * when missing), which the host saw change on disk. The git status is re-read on its own event.
+   */
+  private async reload(paths?: string[]): Promise<void> {
+    if (!this.workspace.workspace()) return;
+    // A file's local-only mark lives in .gitignore.
+    if (touchesArea(paths, REQUESTS_FOLDER, GITIGNORE)) {
+      await this.workspace.refresh();
+      await this.workspace.reloadFromDisk(paths);
+    }
+    // The selected environment is kept in the workspace file.
+    if (touchesArea(paths, ENVIRONMENTS_FOLDER, WORKSPACE_FILE, GITIGNORE)) {
+      await this.environments.refresh(paths);
+    }
+    if (touchesArea(paths, PLANS_FOLDER, GITIGNORE)) {
+      await this.runs.refresh();
+      await this.runs.reloadFromDisk(paths);
+    }
+  }
 }
+
+const GITIGNORE = '.gitignore';
+const WORKSPACE_FILE = 'dynpost.yaml';
+const ENVIRONMENTS_FOLDER = 'environments';

@@ -49,3 +49,19 @@ export const DISCARD: Omit<ConfirmOptions, 'message'> = {
   confirmLabel: 'Discard',
   danger: true,
 };
+
+/** Options of the question asked when a file open with unsaved edits changed on disk. */
+export const CHANGED_ON_DISK: Omit<ConfirmOptions, 'message'> = {
+  title: 'Changed on disk',
+  confirmLabel: 'Reload',
+  cancelLabel: 'Keep mine',
+};
+
+/** The question asked when `what` (such as `The request "Get user"`) changed on disk while it has unsaved edits. */
+export function changedOnDisk(what: string): string {
+  return (
+    `${what} changed on disk, and you have unsaved changes to it.\n\n` +
+    'Reload it from disk and lose your changes, or keep your version? Saving your version ' +
+    'replaces the file.'
+  );
+}

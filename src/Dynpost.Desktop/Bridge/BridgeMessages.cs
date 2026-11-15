@@ -437,6 +437,13 @@ internal static class BridgeEventTypes
     /// status again. Payload: <see cref="GitChangedEvent"/>.
     /// </summary>
     public const string GitChanged = "git.changed";
+
+    /// <summary>
+    /// Request, environment, run plan or folder settings files of the open workspace changed on
+    /// disk, by anyone (another editor, git in a terminal, the app itself), so the UI should re-read
+    /// what it shows of them. Payload: <see cref="FilesChangedEvent"/>.
+    /// </summary>
+    public const string FilesChanged = "workspace.filesChanged";
 }
 
 /// <summary>A message from the host the UI didn't ask for; unlike a <see cref="BridgeResponse"/> it has no id.</summary>
@@ -447,6 +454,12 @@ internal sealed record WorkspaceChangedEvent(IReadOnlyList<string> Paths);
 
 /// <summary>The payload of <see cref="BridgeEventTypes.GitChanged"/>: nothing, the UI reads the status again.</summary>
 internal sealed record GitChangedEvent;
+
+/// <param name="Paths">
+/// The workspace paths of the files and folders that changed, or <see langword="null"/> when
+/// changes were lost and any file may have changed.
+/// </param>
+internal sealed record FilesChangedEvent(IReadOnlyList<string>? Paths);
 
 /// <param name="Path">The workspace path of the plan being run.</param>
 internal sealed record RunStartedEvent(string Path, string RunId);
