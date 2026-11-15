@@ -84,8 +84,11 @@ internal static class Program
         var bridge = new PhotinoBridge(window);
         var events = services.GetRequiredService<HostEvents>();
         bridge.Attach(BridgeHandlers.Create(services, bridge, bridge), events);
-        // Keep the source control view current as files and git state change, whoever changes them.
-        services.GetRequiredService<WatchWorkingTree>().Start(() => _ = events.GitChangedAsync());
+        // Keep the source control view and the open files current as files and git state change,
+        // whoever changes them.
+        services.GetRequiredService<WatchWorkingTree>().Start(
+            () => _ = events.GitChangedAsync(),
+            paths => _ = events.FilesChangedAsync(paths));
         // Off unless the user turned it on; a failure to start is shown in its settings.
         _ = services.GetRequiredService<StartMcpServer>().ExecuteAsync();
 

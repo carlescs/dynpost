@@ -3,7 +3,8 @@ import { Bridge, BridgeError } from './bridge';
 import { ERROR_CODES, RunPlanFileDto, RunResultDto, RunSummaryDto } from '../models/messages';
 import { PLANS_FOLDER } from '../models/workspace';
 import { WorkspaceStore } from './workspace-store';
-import { DISCARD, Dialogs } from './dialogs';
+import { CHANGED_ON_DISK, DISCARD, Dialogs, changedOnDisk } from './dialogs';
+import { touches } from '../models/disk-changes';
 import { joinPath } from './tree-state';
 import { DateFormatStore } from './date-format-store';
 
@@ -76,6 +77,8 @@ export class RunStore {
     { generation: number; timer: ReturnType<typeof setTimeout> | null }
   >();
   private generation = 0;
+  /** Keys of the plans whose reload is being asked about. */
+  private readonly asking = new Set<string>();
 
   constructor() {
     effect(() => {
@@ -160,21 +163,35 @@ export class RunStore {
   }
 
   /**
-   * Re-reads open plans changed outside the UI (by an AI assistant): those at `paths` without
-   * unsaved edits, closing those whose file is gone, and the earlier runs of every open plan,
-   * which runs deleted outside the UI change.
+   * Re-reads open plans whose files changed on disk (in another program, through git or an AI
+   * assistant): those at `paths` (or inside folders at `paths`; all when missing). Plans without
+   * unsaved edits reload silently; for those with unsaved edits the user chooses between reloading
+   * and keeping theirs. Plans whose file is gone are closed. Also re-reads the earlier runs of
+   * every open plan, which runs deleted outside the UI change.
    */
-  async reloadFromDisk(paths: string[]): Promise<void> {
+  async reloadFromDisk(paths?: string[]): Promise<void> {
     for (const draft of this.drafts()) {
-      if (paths.includes(draft.path) && !isRunPlanDirty(draft)) {
+      if (touches(paths, draft.path)) {
         const { key, path } = draft;
         try {
           const document = await this.bridge.send('runPlan.open', { path });
-          this.patch(key, (d) =>
-            d.path === path && !isRunPlanDirty(d)
-              ? { ...d, yaml: document.yaml, savedYaml: document.yaml, error: document.error }
-              : d,
-          );
+          const current = this.find(key);
+          if (current?.path === path && document.yaml === current.savedYaml) {
+            // Unchanged on disk (such as after the app's own save), but the files it uses may have.
+            if (document.error !== current.error)
+              this.patch(key, (d) => (d.path === path ? { ...d, error: document.error } : d));
+          } else if (current?.path === path) {
+            const reload = !isRunPlanDirty(current) || (await this.askReload(key, path));
+            if (reload !== null)
+              this.patch(key, (d) =>
+                d.path !== path
+                  ? d
+                  : reload
+                    ? { ...d, yaml: document.yaml, savedYaml: document.yaml, error: document.error }
+                    : // Keep theirs; it stays unsaved, and isn't asked about again until the file changes once more.
+                      { ...d, savedYaml: document.yaml },
+              );
+          }
         } catch (error) {
           if (error instanceof BridgeError && error.code === ERROR_CODES.notFound) {
             const current = this.find(key);
@@ -188,6 +205,24 @@ export class RunStore {
       if (this.find(draft.key) && !isRunPlanRunning(this.find(draft.key)!)) {
         await this.loadHistory(draft.key);
       }
+    }
+  }
+
+  /**
+   * Asks whether to reload a plan with unsaved edits that changed on disk; `null` when that is
+   * being asked already.
+   */
+  private async askReload(key: string, path: string): Promise<boolean | null> {
+    if (this.asking.has(key)) return null;
+    this.asking.add(key);
+    try {
+      this.workspace.activateTab(key);
+      return await this.dialogs.confirm(
+        changedOnDisk(`The run plan "${this.nameOf(path)}"`),
+        CHANGED_ON_DISK,
+      );
+    } finally {
+      this.asking.delete(key);
     }
   }
 

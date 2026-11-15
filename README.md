@@ -151,6 +151,20 @@ always relative to the workspace folder (`requests/users/get-user.yaml`), so a
 run plan refers to a request as `requests/users/get-user.yaml` and a body file as
 `uploads/report.pdf`. Dynpost leaves every other file and folder alone.
 
+### Changes made outside Dynpost
+
+Dynpost watches the workspace folder, so edits made elsewhere — in another
+editor, or by `git checkout`/`git pull` in a terminal — show up without
+reopening the workspace. The explorer tree, the environments, the run plans and
+the git status follow them, and open tabs (requests, environments, folder
+settings and run plans) reload on their own when they have no unsaved changes;
+a tab whose file is deleted closes. When a tab has unsaved changes and its file
+changes on disk, Dynpost asks whether to **Reload** it from disk or **Keep
+mine** (saving then replaces the file). A file written with the content the tab
+already has — such as Dynpost's own saves — changes nothing. Changes in
+`.dynpost/` and git's own folder, and files outside `requests/`, `plans/`,
+`environments/`, `dynpost.yaml` and `.gitignore`, are not followed.
+
 ### Moving from the old layout
 
 Workspaces made by earlier versions kept requests, collection folders and run

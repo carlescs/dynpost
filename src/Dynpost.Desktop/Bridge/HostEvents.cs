@@ -28,6 +28,13 @@ internal sealed class HostEvents
     public Task GitChangedAsync() =>
         SendAsync(BridgeEventTypes.GitChanged, new GitChangedEvent());
 
+    /// <summary>
+    /// Files the UI shows changed on disk, by anyone: those at <paramref name="paths"/> (workspace
+    /// paths), or any of them when <paramref name="paths"/> is <see langword="null"/>.
+    /// </summary>
+    public Task FilesChangedAsync(IReadOnlyList<string>? paths) =>
+        SendAsync(BridgeEventTypes.FilesChanged, new FilesChangedEvent(paths));
+
     /// <summary>A run of the plan at <paramref name="planPath"/> started outside the UI, so the UI can follow it.</summary>
     public Task RunStartedAsync(string planPath, string runId) =>
         SendAsync(BridgeEventTypes.RunStarted, new RunStartedEvent(planPath, runId));

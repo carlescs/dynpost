@@ -7,6 +7,7 @@ namespace Dynpost.Infrastructure.Git;
 /// the repository's git folder is elsewhere (the workspace is a subfolder of the repository, or a
 /// linked worktree), one on that folder. Inside the git folder only the files that record what git
 /// reports count (<c>HEAD</c>, <c>index</c>, refs, merge state); object writes and lock files don't.
+/// The workspace files changed in a burst are reported with it, by workspace path.
 /// </summary>
 public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkingTreeWatcher
 {
@@ -18,7 +19,7 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
     {
     }
 
-    public IDisposable Watch(string workspacePath, Action changed)
+    public IDisposable Watch(string workspacePath, Action<WorkingTreeChange> changed)
     {
         var workspace = Path.GetFullPath(workspacePath);
         var gitFolders = GitFolders.Find(workspace);
@@ -59,16 +60,21 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
 
     private sealed class Subscription : IDisposable
     {
+        private readonly string _workspace;
         private readonly string _localFolder;
         private readonly IReadOnlyList<string> _gitFolders;
-        private readonly Action _changed;
+        private readonly Action<WorkingTreeChange> _changed;
+        private readonly Lock _gate = new();
+        private HashSet<string> _files = new(StringComparer.Ordinal);
+        private bool _lost;
         private readonly TimeSpan _settleDelay;
         private readonly List<FileSystemWatcher> _watchers = [];
         private readonly Timer _timer;
         private volatile bool _disposed;
 
-        public Subscription(string workspace, IReadOnlyList<string> gitFolders, TimeSpan settleDelay, Action changed)
+        public Subscription(string workspace, IReadOnlyList<string> gitFolders, TimeSpan settleDelay, Action<WorkingTreeChange> changed)
         {
+            _workspace = workspace;
             _localFolder = Path.Combine(workspace, ".dynpost");
             _gitFolders = gitFolders;
             _settleDelay = settleDelay;
@@ -89,7 +95,15 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
             watcher.Deleted += OnEvent;
             watcher.Renamed += OnRenamed;
             // A lost batch of events (buffer overflow) may have held a change: re-read to be sure.
-            watcher.Error += (_, _) => Schedule();
+            watcher.Error += (_, _) =>
+            {
+                lock (_gate)
+                {
+                    _lost = true;
+                }
+
+                Schedule();
+            };
             _watchers.Add(watcher);
             watcher.EnableRaisingEvents = true;
         }
@@ -98,15 +112,46 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
         {
             if (Counts(e.FullPath))
             {
+                Record(e.FullPath);
                 Schedule();
             }
         }
 
         private void OnRenamed(object sender, RenamedEventArgs e)
         {
-            if (Counts(e.FullPath) || Counts(e.OldFullPath))
+            var counts = false;
+            foreach (var path in new[] { e.OldFullPath, e.FullPath })
+            {
+                if (Counts(path))
+                {
+                    Record(path);
+                    counts = true;
+                }
+            }
+
+            if (counts)
             {
                 Schedule();
+            }
+        }
+
+        /// <summary>Adds a changed path to the burst being collected, if it is a workspace file (not git's).</summary>
+        private void Record(string path)
+        {
+            if (!IsUnder(path, _workspace) || _gitFolders.Any(gitFolder => IsUnder(path, gitFolder)))
+            {
+                return;
+            }
+
+            var relative = Path.GetRelativePath(_workspace, path).Replace('\\', '/');
+            if (relative is "." or "" || relative.StartsWith("../", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                _files.Add(relative);
             }
         }
 
@@ -159,10 +204,20 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
 
         private void Fire()
         {
-            if (!_disposed)
+            if (_disposed)
             {
-                _changed();
+                return;
             }
+
+            WorkingTreeChange change;
+            lock (_gate)
+            {
+                change = new WorkingTreeChange(_lost ? null : [.. _files.Order(StringComparer.Ordinal)]);
+                _files = new HashSet<string>(StringComparer.Ordinal);
+                _lost = false;
+            }
+
+            _changed(change);
         }
     }
 

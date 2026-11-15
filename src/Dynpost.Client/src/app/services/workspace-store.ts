@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
-import { ERROR_CODES, RecentWorkspaceDto, WorkspaceDto } from '../models/messages';
+import { ERROR_CODES, RecentWorkspaceDto, RequestDto, WorkspaceDto } from '../models/messages';
+import { DiskSnapshots, touches } from '../models/disk-changes';
 import { describeMigration } from '../models/layout-migration';
 import {
   REQUESTS_FOLDER,
@@ -11,7 +12,7 @@ import {
   WorkspaceNode,
 } from '../models/workspace';
 import { EMPTY_AUTH, fromNodeDto, fromRequestDto, toRequestDto } from '../models/request-mapping';
-import { DISCARD, Dialogs } from './dialogs';
+import { CHANGED_ON_DISK, DISCARD, Dialogs, changedOnDisk } from './dialogs';
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 600;
@@ -74,6 +75,8 @@ export class WorkspaceStore {
   );
   readonly activeId = computed(() => this.activeDocument()?.id ?? null);
 
+  /** The request files of the open documents as last read or written, to tell real changes apart. */
+  private readonly onDisk = new DiskSnapshots();
   private untitledCount = 0;
   private tabCount = 0;
   private sendCount = 0;
@@ -145,6 +148,7 @@ export class WorkspaceStore {
       if (workspace) {
         this.removeTabs(this.documents().map((d) => d.key));
         this.documents.set([]);
+        this.onDisk.clear();
         this.applyWorkspace(workspace);
         this.error.set(null);
       }
@@ -167,28 +171,26 @@ export class WorkspaceStore {
   }
 
   /**
-   * Re-reads open documents from disk after git changed files (a pull, a resolved conflict, an
-   * aborted merge): all of them, or those at `paths`. Unsaved edits are preserved, and removed
-   * files are detached from their open drafts.
+   * Re-reads open documents whose files changed on disk — edited in another program, or changed
+   * by git, the app's git actions or an AI assistant: all of them, or those at `paths` (or inside
+   * folders at `paths`). A file whose content is what the document last read or saved (such as the
+   * app's own save) is left alone. Documents without unsaved edits reload silently; for those with
+   * unsaved edits the user chooses between reloading and keeping theirs. Removed files are closed,
+   * or detached from their open drafts when those have unsaved edits.
    */
   async reloadFromDisk(paths?: string[]): Promise<void> {
     this.reloaded.set({ paths });
-    const targets = this.documents().filter(
-      (d) => d.path && !d.dirty && (!paths || paths.includes(d.path)),
-    );
+    const targets = this.documents().filter((d) => d.path && touches(paths, d.path));
     for (const doc of targets) {
+      let dto: RequestDto;
       try {
-        const content = fromRequestDto(await this.bridge.send('request.load', { path: doc.path! }));
-        this.documents.update((docs) =>
-          docs.map((d) =>
-            d.id === doc.id && !d.dirty ? { ...d, ...content, revision: d.revision + 1 } : d,
-          ),
-        );
+        dto = await this.bridge.send('request.load', { path: doc.path! });
       } catch (error) {
-        // Keep unreadable files open, but reconcile files removed by git.
+        // Keep unreadable files open, but reconcile removed files.
         if (!(error instanceof BridgeError) || error.code !== 'not_found') continue;
         const current = this.documents().find((d) => d.key === doc.key);
         if (!current || current.path !== doc.path) continue;
+        this.onDisk.forget(current.key);
         if (current.dirty) {
           this.documents.update((docs) =>
             docs.map((d) =>
@@ -200,7 +202,36 @@ export class WorkspaceStore {
         } else {
           this.discard(current);
         }
+        continue;
       }
+
+      const content = fromRequestDto(dto);
+      const current = this.documents().find((d) => d.key === doc.key);
+      if (!current || current.path !== doc.path || !this.onDisk.differs(doc.key, content)) continue;
+      if (current.dirty) {
+        const reload = await this.onDisk.ask(doc.key, () => {
+          this.activateTab(doc.key);
+          return this.dialogs.confirm(
+            changedOnDisk(`The request "${current.name}"`),
+            CHANGED_ON_DISK,
+          );
+        });
+        if (reload === null) continue;
+        if (!reload) {
+          // Keep theirs, and don't ask again until the file changes once more.
+          this.onDisk.remember(doc.key, content);
+          continue;
+        }
+      }
+
+      this.onDisk.remember(doc.key, content);
+      this.documents.update((docs) =>
+        docs.map((d) =>
+          d.key === doc.key && d.path === doc.path
+            ? { ...d, ...content, dirty: false, revision: d.revision + 1 }
+            : d,
+        ),
+      );
     }
   }
 
@@ -254,7 +285,8 @@ export class WorkspaceStore {
     }
 
     try {
-      const content = fromRequestDto(await this.bridge.send('request.load', { path: node.path }));
+      const dto = await this.bridge.send('request.load', { path: node.path });
+      const content = fromRequestDto(dto);
       // Another click may have opened it while loading.
       const opened = this.documents().find((d) => d.id === node.path);
       if (opened) {
@@ -272,6 +304,7 @@ export class WorkspaceStore {
           response: null,
           revision: 0,
         };
+        this.onDisk.remember(doc.key, content);
         this.documents.update((docs) => [...docs, doc]);
         this.openTab(doc.key);
       }
@@ -295,6 +328,8 @@ export class WorkspaceStore {
       const saved = doc.path
         ? await this.bridge.send('request.save', { path: doc.path, request })
         : await this.bridge.send('request.create', { folder: doc.folder, request });
+      // Compared as the client model, which smooths over how the file spells defaults.
+      this.onDisk.remember(doc.key, fromRequestDto(saved.request));
 
       this.documents.update((docs) =>
         docs.map((d) => {
@@ -509,6 +544,7 @@ export class WorkspaceStore {
     try {
       await this.bridge.send('request.delete', { path });
       if (doc) {
+        this.onDisk.forget(doc.key);
         this.documents.update((docs) => docs.filter((d) => d.key !== doc.key));
         this.removeTabs([doc.key]);
       }
@@ -542,6 +578,7 @@ export class WorkspaceStore {
       await this.bridge.send('folder.delete', { path });
       this.folderDeleted.set({ path });
       const closed = new Set(open.map((d) => d.key));
+      closed.forEach((key) => this.onDisk.forget(key));
       this.documents.update((docs) => docs.filter((d) => !closed.has(d.key)));
       this.removeTabs([...closed]);
       this.error.set(null);
@@ -611,6 +648,7 @@ export class WorkspaceStore {
     if (doc.sendId) {
       void this.bridge.send('request.cancel', { id: doc.sendId }).catch(() => undefined);
     }
+    this.onDisk.forget(doc.key);
     this.documents.update((docs) => docs.filter((d) => d.key !== doc.key));
     this.removeTabs([doc.key]);
   }

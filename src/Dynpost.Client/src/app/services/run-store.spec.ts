@@ -339,13 +339,46 @@ describe('RunStore', () => {
       const history = [{ runId: 'old' } as RunSummaryDto];
       handlers['run.list'] = () => history;
 
+      dialogs.confirm.mockResolvedValue(false);
+
       await store.reloadFromDisk(['a.run.yaml', 'b.run.yaml']);
 
       const draft = (k: string) => store.drafts().find((d) => d.key === k)!;
       expect(draft(a)).toMatchObject({ yaml: 'name: Changed\n', error: 'Bad', history });
       expect(isRunPlanDirty(draft(a))).toBe(false);
+      // The user kept their edits of b.
+      expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+      expect(dialogs.confirm.mock.calls[0][1]).toMatchObject({ confirmLabel: 'Reload' });
       expect(draft(b).yaml).toBe('name: Unsaved\n');
+      expect(isRunPlanDirty(draft(b))).toBe(true);
       expect(draft(b).history).toEqual(history);
+
+      // Not asked again until the file changes once more.
+      await store.reloadFromDisk(['b.run.yaml']);
+      expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('reloads a plan with unsaved edits when the user chooses to', async () => {
+      await store.open('a.run.yaml');
+      store.edit(key(), 'name: Unsaved\n');
+      handlers['runPlan.open'] = (p) => ({ path: p.path, yaml: 'name: Changed\n', error: null });
+
+      await store.reloadFromDisk(['a.run.yaml']);
+
+      expect(store.draft()?.yaml).toBe('name: Changed\n');
+      expect(isRunPlanDirty(store.draft()!)).toBe(false);
+    });
+
+    it('leaves plans whose file did not change alone, such as after its own save', async () => {
+      await store.open('a.run.yaml');
+      const before = store.draft()!.savedYaml;
+      store.edit(key(), 'name: Unsaved\n');
+      handlers['runPlan.open'] = (p) => ({ path: p.path, yaml: before, error: null });
+
+      await store.reloadFromDisk();
+
+      expect(dialogs.confirm).not.toHaveBeenCalled();
+      expect(store.draft()?.yaml).toBe('name: Unsaved\n');
     });
 
     it('closes a plan whose file was deleted', async () => {

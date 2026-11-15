@@ -272,6 +272,12 @@ Desktop → Application
   refs and merge state count there; `.dynpost/` is ignored; bursts are debounced) and the host
   sends a `git.changed` event, on which the client's `GitStore.refreshInBackground` re-reads the
   status without a busy state, queueing behind a running operation rather than dropping the read.
+  The same watch reports the workspace files each burst changed (`WorkingTreeChange.Files`, `null`
+  when notifications were lost); those the app reads (`WatchWorkingTree.IsAppFile`) go to the UI
+  as a `workspace.filesChanged` event, on which `services/workspace-sync.ts` re-reads the tree,
+  environments and plans, and the stores reload open tabs: silently when clean, asking "Reload /
+  Keep mine" when dirty. The app's own writes are ignored by content: each store remembers what
+  its tabs last read or saved (`models/disk-changes.ts`, `DiskSnapshots`).
   Git reads run with `GIT_OPTIONAL_LOCKS=0` so they don't write `.git/index` and re-trigger it.
 - Pull always merges (`--no-rebase`); conflicts are left in the working tree and
   reported. Files under `.dynpost/` are excluded from status and commits even

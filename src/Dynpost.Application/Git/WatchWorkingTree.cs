@@ -1,30 +1,39 @@
 using Dynpost.Application.Workspaces;
+using Dynpost.Domain.Workspaces;
 
 namespace Dynpost.Application.Git;
 
 /// <summary>
-/// Tells the UI when the open workspace's git status may have changed, so the source control view
-/// stays current without the user refreshing it: follows the workspace the app has open and
-/// watches it through <see cref="IWorkingTreeWatcher"/>. Registered as a singleton.
+/// Tells the UI when the open workspace changes on disk, whoever changes it (the app, another
+/// editor, git in a terminal), so it stays current without the user reloading it: the git status
+/// may have changed, and so may the request, environment, run plan and folder settings files the
+/// UI shows. Follows the workspace the app has open and watches it through
+/// <see cref="IWorkingTreeWatcher"/>. Registered as a singleton.
 /// </summary>
 public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWatcher watcher) : IDisposable
 {
     private readonly Lock _gate = new();
-    private Action? _changed;
+    private Action? _gitChanged;
+    private Action<IReadOnlyList<string>?>? _filesChanged;
     private IDisposable? _watch;
     private bool _disposed;
 
-    /// <summary>Calls <paramref name="changed"/> whenever the open workspace's files or git state change.</summary>
-    public void Start(Action changed)
+    /// <summary>
+    /// Calls <paramref name="gitChanged"/> whenever the open workspace's files or git state change,
+    /// and <paramref name="filesChanged"/> when files the app reads changed among them: with their
+    /// workspace paths, or <see langword="null"/> when changes were lost and any file may have changed.
+    /// </summary>
+    public void Start(Action gitChanged, Action<IReadOnlyList<string>?> filesChanged)
     {
         lock (_gate)
         {
-            if (_changed is not null || _disposed)
+            if (_gitChanged is not null || _disposed)
             {
                 return;
             }
 
-            _changed = changed;
+            _gitChanged = gitChanged;
+            _filesChanged = filesChanged;
         }
 
         workspace.Opened += Follow;
@@ -34,11 +43,52 @@ public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWat
         }
     }
 
+    /// <summary>
+    /// Whether the app reads the file or folder at <paramref name="path"/> (workspace-relative):
+    /// anything in the requests, plans and environments folders, those folders themselves, the
+    /// workspace file and the <c>.gitignore</c> that marks files local-only.
+    /// </summary>
+    public static bool IsAppFile(string path)
+    {
+        var first = path.Split('/', 2)[0];
+        return first is WorkspaceLayout.RequestsFolder or WorkspaceLayout.PlansFolder or WorkspaceLayout.EnvironmentsFolder
+            || path is WorkspaceLayout.WorkspaceFile or ".gitignore";
+    }
+
+    private void Report(WorkingTreeChange change)
+    {
+        Action? gitChanged;
+        Action<IReadOnlyList<string>?>? filesChanged;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            gitChanged = _gitChanged;
+            filesChanged = _filesChanged;
+        }
+
+        gitChanged?.Invoke();
+        if (change.Files is null)
+        {
+            filesChanged?.Invoke(null);
+            return;
+        }
+
+        var files = change.Files.Where(IsAppFile).ToList();
+        if (files.Count > 0)
+        {
+            filesChanged?.Invoke(files);
+        }
+    }
+
     private void Follow(string root)
     {
         lock (_gate)
         {
-            if (_disposed || _changed is not { } changed)
+            if (_disposed || _gitChanged is null)
             {
                 return;
             }
@@ -47,7 +97,7 @@ public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWat
             _watch = null;
             try
             {
-                _watch = watcher.Watch(root, changed);
+                _watch = watcher.Watch(root, Report);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or PlatformNotSupportedException)
             {

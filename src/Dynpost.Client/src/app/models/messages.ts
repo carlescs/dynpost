@@ -1195,6 +1195,12 @@ export interface BridgeEvents {
    * program, or committed, checked out or staged with other git tools — so the git status may have.
    */
   'git.changed': Record<string, never>;
+  /**
+   * Request, environment, run plan or folder settings files of the open workspace changed on
+   * disk — edited in another program, changed by git in a terminal, or saved by the app itself:
+   * the files and folders at `paths` (workspace paths), or any of them when `paths` is `null`.
+   */
+  'workspace.filesChanged': { paths: string[] | null };
 }
 
 export type BridgeEventType = keyof BridgeEvents;

@@ -9,7 +9,8 @@ import {
 } from '../models/messages';
 import { VariableInfo, VariableLookup } from '../models/variables';
 import { WorkspaceStore } from './workspace-store';
-import { DISCARD, Dialogs } from './dialogs';
+import { CHANGED_ON_DISK, DISCARD, Dialogs, changedOnDisk } from './dialogs';
+import { DiskSnapshots, touches } from '../models/disk-changes';
 
 /** An environment open in an editor tab. */
 export interface EnvironmentDraft {
@@ -54,6 +55,8 @@ export class EnvironmentStore {
 
   private readonly root = computed(() => this.workspace.workspace()?.root ?? null);
   private loadCount = 0;
+  /** The environment files of the open drafts as last read or written, to tell real changes apart. */
+  private readonly onDisk = new DiskSnapshots();
 
   constructor() {
     effect(() => {
@@ -64,6 +67,7 @@ export class EnvironmentStore {
         this.variables.set(new Map());
         this.workspace.removeTabs(this.drafts().map((d) => d.key));
         this.drafts.set([]);
+        this.onDisk.clear();
         if (root) void this.refresh();
       });
     });
@@ -119,6 +123,7 @@ export class EnvironmentStore {
       // Another click may have opened it while loading, or another folder been opened.
       if (this.showOpen(id) || this.root() !== root) return;
       const key = this.workspace.newTabKey();
+      this.onDisk.remember(key, onDiskContent(environment));
       this.drafts.update((drafts) => [
         ...drafts,
         {
@@ -177,6 +182,7 @@ export class EnvironmentStore {
       const saved = draft.id
         ? await this.bridge.send('environment.save', { id: draft.id, environment })
         : await this.bridge.send('environment.create', { environment });
+      this.onDisk.remember(key, onDiskContent(saved.environment));
 
       this.patchDraft(key, (d) => {
         const base = { ...d, id: saved.id, saving: false };
@@ -312,6 +318,7 @@ export class EnvironmentStore {
   }
 
   private remove(key: string): void {
+    this.onDisk.forget(key);
     this.drafts.update((drafts) => drafts.filter((d) => d.key !== key));
     this.workspace.removeTabs([key]);
   }
@@ -328,30 +335,52 @@ export class EnvironmentStore {
   ): Promise<void> {
     const available = new Set(environments.map((environment) => environment.id));
     const targets = this.drafts().filter(
-      (draft) => draft.id && (!paths || paths.includes(`environments/${draft.id}`)),
+      (draft) => draft.id && touches(paths, environmentPath(draft.id)),
     );
     for (const draft of targets) {
       if (load !== this.loadCount || this.root() !== root) return;
       if (!available.has(draft.id!)) {
         const current = this.drafts().find((candidate) => candidate.key === draft.key);
         if (!current || current.id !== draft.id) continue;
-        if (current.dirty) this.patchDraft(draft.key, (candidate) => ({ ...candidate, id: null }));
-        else this.remove(draft.key);
+        if (current.dirty) {
+          this.onDisk.forget(draft.key);
+          this.patchDraft(draft.key, (candidate) => ({ ...candidate, id: null }));
+        } else {
+          this.remove(draft.key);
+        }
         continue;
       }
-      if (draft.dirty) continue;
       try {
         const environment = await this.bridge.send('environment.load', { id: draft.id! });
         if (load !== this.loadCount || this.root() !== root) return;
-        this.patchDraft(draft.key, (current) =>
-          current.id === draft.id && !current.dirty
+        const content = onDiskContent(environment);
+        const current = this.drafts().find((candidate) => candidate.key === draft.key);
+        // Unchanged (such as after the app's own save): leave the draft alone.
+        if (current?.id !== draft.id || !this.onDisk.differs(draft.key, content)) continue;
+        if (current.dirty) {
+          const reload = await this.onDisk.ask(draft.key, () => {
+            this.workspace.activateTab(draft.key);
+            return this.dialogs.confirm(
+              changedOnDisk(`The environment "${current.name}"`),
+              CHANGED_ON_DISK,
+            );
+          });
+          if (reload === null) continue;
+          this.onDisk.remember(draft.key, content);
+          if (!reload) continue;
+        } else {
+          this.onDisk.remember(draft.key, content);
+        }
+        this.patchDraft(draft.key, (candidate) =>
+          candidate.id === draft.id
             ? {
-                ...current,
+                ...candidate,
                 ...environment,
                 cookieJar: !!environment.cookieJar,
-                revision: current.revision + 1,
+                dirty: false,
+                revision: candidate.revision + 1,
               }
-            : current,
+            : candidate,
         );
       } catch {
         // Keep an open draft if its file exists but cannot currently be read.
@@ -392,4 +421,17 @@ export class EnvironmentStore {
       error instanceof BridgeError || error instanceof Error ? error.message : String(error),
     );
   }
+}
+
+/** What an environment draft shows of its file, to compare what was read or written. */
+function onDiskContent(environment: {
+  name: string;
+  variables: EnvironmentVariableDto[];
+  cookieJar?: boolean | null;
+}): unknown {
+  return {
+    name: environment.name,
+    variables: environment.variables,
+    cookieJar: !!environment.cookieJar,
+  };
 }
