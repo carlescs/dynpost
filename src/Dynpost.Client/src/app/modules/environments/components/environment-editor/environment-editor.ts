@@ -10,7 +10,11 @@ import {
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentVariableDto } from '../../../../models/messages';
-import { EnvironmentDraft, EnvironmentStore } from '../../../../services/environment-store';
+import {
+  isGlobals,
+  EnvironmentDraft,
+  EnvironmentStore,
+} from '../../../../services/environment-store';
 import { CookieJar } from '../cookie-jar/cookie-jar';
 import { ClientCertificates } from '../client-certificates/client-certificates';
 import { CapturedValues } from '../captured-values/captured-values';
@@ -35,6 +39,8 @@ export class EnvironmentEditor {
   });
   protected readonly rows = computed(() => [...this.draft().variables, BLANK]);
   protected readonly hasSecrets = computed(() => this.draft().variables.some((v) => v.secret));
+  /** Whether the tab edits the workspace-global variables rather than an environment. */
+  protected readonly globals = computed(() => isGlobals(this.draft()));
   protected readonly isActive = computed(() => {
     const id = this.draft().id;
     return !!id && id === this.store.activeId();

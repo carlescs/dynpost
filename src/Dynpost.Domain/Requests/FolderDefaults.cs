@@ -138,12 +138,26 @@ public sealed record InheritedDefaults(IReadOnlyList<InheritedHeader> Headers, R
     /// variables; environment values are final and are not expanded again. Folder variables that
     /// refer to each other in a loop are left out and listed in <see cref="ResolvedVariables.Cycle"/>.
     /// </summary>
-    public ResolvedVariables ResolveVariables(IReadOnlyDictionary<string, string> environment)
+    /// <param name="overridable">
+    /// Names in <paramref name="environment"/> that a folder variable wins over: those that come
+    /// from the workspace-global variables, which are less specific than a folder's.
+    /// </param>
+    public ResolvedVariables ResolveVariables(IReadOnlyDictionary<string, string> environment, IReadOnlySet<string>? overridable = null)
     {
-        var own = Variables.Where(variable => !environment.ContainsKey(variable.Name)).ToList();
+        var own = Variables
+            .Where(variable => !environment.ContainsKey(variable.Name) || overridable?.Contains(variable.Name) == true)
+            .ToList();
         if (own.Count == 0)
         {
             return new ResolvedVariables(environment, []);
+        }
+
+        if (overridable is { Count: > 0 })
+        {
+            var replaced = own.Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
+            environment = environment
+                .Where(pair => !replaced.Contains(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         }
 
         // Environment values take part as placeholders no folder value can contain, so they are

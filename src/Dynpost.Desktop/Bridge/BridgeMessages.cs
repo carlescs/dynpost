@@ -210,6 +210,12 @@ internal static class BridgeMessageTypes
     /// <summary>Reads an environment with its secret values. Payload: <see cref="EnvironmentIdPayload"/>. Result: environment.</summary>
     public const string EnvironmentLoad = "environment.load";
 
+    /// <summary>Reads the workspace-global variables, with this computer's secret values. Payload: none. Result: <see cref="GlobalVariablesDto"/>.</summary>
+    public const string GlobalsLoad = "globals.load";
+
+    /// <summary>Saves the workspace-global variables in <c>dynpost.yaml</c>. Payload: <see cref="SaveGlobalsPayload"/>. Result: <see cref="GlobalVariablesDto"/>.</summary>
+    public const string GlobalsSave = "globals.save";
+
     /// <summary>Saves a new environment. Payload: <see cref="CreateEnvironmentPayload"/>. Result: saved environment.</summary>
     public const string EnvironmentCreate = "environment.create";
 
@@ -545,6 +551,8 @@ internal sealed record DeleteCookiePayload(string Environment, string Name, stri
 
 /// <param name="Environment">The environment's file name in the <c>environments</c> folder.</param>
 internal sealed record CertificatesPayload(string Environment);
+
+internal sealed record SaveGlobalsPayload(GlobalVariablesDto Globals);
 
 /// <param name="Certificates">Every certificate of the environment, in the order they are matched.</param>
 internal sealed record SaveCertificatesPayload(string Environment, IReadOnlyList<ClientCertificateDto> Certificates);

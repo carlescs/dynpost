@@ -498,7 +498,9 @@ public sealed class StartRun(
         var token = run.Cancellation.Token;
         var definition = context.Definitions[path.Value];
         // The folders' variables are defaults: the environment's and the CSV row's win over them.
-        values = context.Inherited[path.Value].ResolveVariables(values).Values;
+        // The workspace globals are less specific than a folder's variables; a CSV value isn't.
+        var overridable = row is null ? variables.Globals : variables.Globals.Where(name => !row.ContainsKey(name)).ToHashSet(StringComparer.Ordinal);
+        values = context.Inherited[path.Value].ResolveVariables(values, overridable).Values;
         // Built-in variables ({{$uuid}}, …) get fresh values for every request sent.
         values = DynamicVariables.With(values, time.GetUtcNow(), Random.Shared);
         if (bodyFile is not null)

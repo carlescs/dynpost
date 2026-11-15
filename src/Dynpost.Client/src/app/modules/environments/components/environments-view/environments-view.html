@@ -47,6 +47,30 @@
         <span class="truncate text-slate-500 italic">No environment</span>
       </button>
     </li>
+    <li
+      class="group flex items-center gap-1 px-3 py-1 hover:bg-slate-200/60"
+      [class.bg-sky-100]="store.draft()?.id === globalsId"
+    >
+      <button
+        type="button"
+        class="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-sky-700"
+        title="Variables for every request, with any environment or none (dynpost.yaml)"
+        (click)="store.editGlobals()"
+      >
+        <fa-icon class="shrink-0 text-slate-400" [icon]="faGlobe" />
+        <span class="truncate">Globals</span>
+      </button>
+      <button
+        type="button"
+        class="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-300 hover:text-slate-800"
+        [class.text-sky-600]="store.draft()?.id === globalsId"
+        title="Edit the workspace-global variables"
+        aria-label="Edit globals"
+        (click)="store.editGlobals()"
+      >
+        <fa-icon [icon]="faPen" />
+      </button>
+    </li>
     @for (env of store.environments(); track env.id) {
       <li
         class="group flex items-center gap-1 px-3 py-1 hover:bg-slate-200/60"

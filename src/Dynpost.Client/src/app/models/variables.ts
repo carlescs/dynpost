@@ -63,6 +63,8 @@ export interface VariableInfo {
   captured?: boolean;
   /** The folder that sets it, for a folder variable (its value as written, not resolved). */
   folder?: string;
+  /** Whether it comes from the workspace-global variables (the environment doesn't set it). */
+  global?: boolean;
 }
 
 /** The variables a request can use by name; secrets without a local value are left out. */
@@ -78,13 +80,16 @@ export interface FolderVariable {
 
 /**
  * The variables a request in a folder can use: the selected environment's, plus the folders'
- * variables it doesn't define (the environment's win, as when the host sends).
+ * variables it doesn't define (the environment's win, as when the host sends, but a folder's win
+ * over the workspace globals).
  */
 export function withFolderVariables(
   environment: VariableLookup,
   folders: readonly FolderVariable[],
 ): VariableLookup {
-  const missing = folders.filter((v) => !environment.has(v.name));
+  const missing = folders.filter(
+    (v) => !environment.has(v.name) || environment.get(v.name)!.global,
+  );
   if (!missing.length) return environment;
   const combined = new Map(environment);
   for (const v of missing)
@@ -109,12 +114,14 @@ export function describeVariable(name: string, variables: VariableLookup | null)
   }
   if (!variables) return `Variable ${name}`;
   const variable = variables.get(name);
-  if (!variable) return `${name} is not defined in the selected environment`;
+  if (!variable) return `${name} is not defined in the selected environment or the globals`;
   const source = variable.captured
     ? ' (captured)'
     : variable.folder
       ? ` (set by the folder ${variable.folder})`
-      : '';
+      : variable.global
+        ? ' (workspace global)'
+        : '';
   return variable.secret
     ? `${name}: secret value${source}`
     : `${name} = ${variable.value}${source}`;

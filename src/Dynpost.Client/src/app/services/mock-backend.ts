@@ -12,6 +12,8 @@ import {
   CaptureResultDto,
   CapturedValueDto,
   ClientCertificateDto,
+  EnvironmentVariableDto,
+  GlobalVariablesDto,
   CookieDto,
   DateFormat,
   ERROR_CODES,
@@ -211,6 +213,7 @@ export class MockBackend {
   /** Cookie jars by environment id. */
   private readonly jars = new Map<string, CookieDto[]>();
   private readonly certificates = new Map<string, ClientCertificateDto[]>();
+  private globals: EnvironmentVariableDto[] = [];
   /** Values requests captured, by environment id and variable name. */
   private readonly captured = new Map<string, Map<string, string>>();
 
@@ -507,6 +510,16 @@ export class MockBackend {
         if (!env.cookieJar) this.jars.delete(id);
         this.environments.set(id, env);
         return ok({ id, environment: structuredClone(env) });
+      }
+      case 'globals.load':
+        return ok({ variables: structuredClone(this.globals) });
+      case 'globals.save': {
+        this.globals = structuredClone(
+          ((payload?.['globals'] as GlobalVariablesDto | undefined)?.variables ?? []).filter(
+            (v) => v.name,
+          ),
+        );
+        return ok({ variables: structuredClone(this.globals) });
       }
       case 'certificate.list':
         return ok(structuredClone(this.certificates.get(payload?.['environment'] as string) ?? []));
@@ -1168,6 +1181,8 @@ export class MockBackend {
     for (const [name, value] of this.captured.get(this.activeEnvironment ?? '') ?? []) {
       raw.set(name, value);
     }
+    // Workspace globals apply below the environment's values.
+    for (const v of this.globals) if (v.value && !raw.has(v.name)) raw.set(v.name, v.value);
     const resolved = new Map<string, string>();
     const resolve = (name: string, seen: Set<string>): string | undefined => {
       if (resolved.has(name)) return resolved.get(name);

@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
+  faGlobe,
   faArrowsRotate,
   faCircleCheck,
   faCircleExclamation,
@@ -8,7 +9,7 @@ import {
   faPlus,
 } from '@fortawesome/free-solid-svg-icons';
 import { SharingToggle } from '../../../../components/sharing-toggle/sharing-toggle';
-import { EnvironmentStore } from '../../../../services/environment-store';
+import { EnvironmentStore, GLOBALS_ID } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 
 /** Lists the workspace's environments: click one to send requests with it, or its pen icon to edit it. */
@@ -23,6 +24,8 @@ export class EnvironmentsView {
   protected readonly workspace = inject(WorkspaceStore);
   protected readonly faPlus = faPlus;
   protected readonly faPen = faPen;
+  protected readonly faGlobe = faGlobe;
+  protected readonly globalsId = GLOBALS_ID;
   protected readonly faArrowsRotate = faArrowsRotate;
   protected readonly faCircleCheck = faCircleCheck;
   protected readonly faCircleExclamation = faCircleExclamation;

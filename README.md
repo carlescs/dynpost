@@ -99,7 +99,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       out of git (see [Local-only files](#local-only-files))
 - [x] Collections as folders, with folder-level headers, auth and variables that apply to
       everything inside (see [Folder settings](#folder-settings))
-- [x] Environments with `{{variable}}` substitution, and built-in variables
+- [x] Environments with `{{variable}}` substitution, workspace-global
+      variables (see [Global variables](#global-variables)), and built-in variables
       such as `{{$uuid}}` and `{{$timestamp}}` (see [Built-in variables](#built-in-variables))
 - [x] Auth helpers: Basic, Digest, Bearer token, API key and OAuth 2.0 (client
       credentials, and authorization code with PKCE in the system browser), and
@@ -129,7 +130,7 @@ A workspace is a folder, usually a git repository:
 
 ```text
 my-api/
-├── dynpost.yaml            # workspace metadata: the layout version (`layout: 2`)
+├── dynpost.yaml            # workspace metadata: the layout version (`layout: 2`) and global variables
 ├── environments/
 │   ├── dev.yaml
 │   └── prod.yaml
@@ -532,6 +533,37 @@ of which can be marked **Secret**. New environments are saved as a file named af
 name was chosen by hand, and its secret values, cookies, captured values and
 selection follow. Deleting an environment also removes its stored secret values,
 cookies, captured values and OAuth 2.0 tokens.
+
+### Global variables
+
+**Globals**, at the top of the **Environments** view, holds variables for every
+request: they apply with any environment, and when none is selected. They are
+kept in the workspace's `dynpost.yaml`, written like an environment's
+`variables` and `secrets` (Dynpost keeps the file's other keys, such as
+`layout`, as they are), and secret values stay on each computer, in
+`.dynpost/secrets.yaml`:
+
+```yaml
+# dynpost.yaml
+layout: 2
+variables:
+  apiVersion: v2
+  baseUrl: https://{{host}}/{{apiVersion}}
+secrets:
+  - licenseKey
+```
+
+When several places set the same variable, the most specific one wins:
+
+1. a value captured from a response (for the selected environment),
+2. the selected environment's variable,
+3. the closest folder's variable (see [Folder settings](#folder-settings)),
+4. the global variable.
+
+A global's value can use the selected environment's variables (`{{host}}`
+above) and other globals; an environment's can use globals. In load runs, a CSV
+column wins over all of these. The request editor's hover says when a value
+comes from the globals.
 
 **Keep cookies between requests** turns on the environment's cookie jar (off by
 default). Cookies that responses set, including redirects on the way, are then

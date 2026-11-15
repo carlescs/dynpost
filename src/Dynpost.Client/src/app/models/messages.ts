@@ -32,6 +32,11 @@ export interface AuthDto {
 }
 
 /** The headers, auth and variables a folder sets for every request and folder in it. */
+/** The workspace-global variables: they apply with every environment, and without one. */
+export interface GlobalVariablesDto {
+  variables: EnvironmentVariableDto[];
+}
+
 /** A client certificate of an environment (mutual TLS). */
 export interface ClientCertificateDto {
   /** The host it is for (`*.example.com`, `host:port`); empty for every host. */
@@ -1052,6 +1057,10 @@ export interface BridgeMessages {
   'response.saveBody': { payload: { id: string }; result: { path: string } | null };
   /** The cookies kept for an environment (`environment` is its id), without expired ones. */
   'cookie.list': { payload: { environment: string }; result: CookieDto[] };
+  /** Reads the workspace-global variables (in `dynpost.yaml`), with this computer's secret values. */
+  'globals.load': { payload: void; result: GlobalVariablesDto };
+  /** Saves the workspace-global variables; secret values stay on this computer. */
+  'globals.save': { payload: { globals: GlobalVariablesDto }; result: GlobalVariablesDto };
   /** Lists the client certificates set up for an environment (passphrases are never sent back). */
   'certificate.list': { payload: { environment: string }; result: ClientCertificateDto[] };
   /** Replaces the client certificates of an environment; a `null` passphrase keeps the stored one. */

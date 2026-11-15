@@ -224,6 +224,10 @@ internal static class BridgeHandlers
                 ct => Use<ListEnvironments>().ExecuteAsync(ct))
             .Register<EnvironmentIdPayload, EnvironmentDto>(BridgeMessageTypes.EnvironmentLoad,
                 (p, ct) => Use<LoadEnvironment>().ExecuteAsync(p.Id, ct))
+            .Register(BridgeMessageTypes.GlobalsLoad,
+                ct => Use<LoadGlobalVariables>().ExecuteAsync(ct))
+            .Register<SaveGlobalsPayload, GlobalVariablesDto>(BridgeMessageTypes.GlobalsSave,
+                (p, ct) => Use<SaveGlobalVariables>().ExecuteAsync(p.Globals, ct))
             .Register<CreateEnvironmentPayload, SavedEnvironmentDto>(BridgeMessageTypes.EnvironmentCreate,
                 (p, ct) => Use<CreateEnvironment>().ExecuteAsync(p.Environment, ct))
             .Register<SaveEnvironmentPayload, SavedEnvironmentDto>(BridgeMessageTypes.EnvironmentSave,

@@ -26,6 +26,12 @@ public sealed record ActiveVariables(
     public static ActiveVariables None { get; } =
         new(null, new Dictionary<string, string>(), new HashSet<string>());
 
+    /// <summary>
+    /// The names in <see cref="Values"/> that come from the workspace-global variables (the
+    /// environment doesn't define them), so a folder's variable of the same name wins over them.
+    /// </summary>
+    public IReadOnlySet<string> Globals { get; init; } = new HashSet<string>();
+
     /// <summary>Explains where the values of undefined variables should come from; <c>null</c> when none are missing.</summary>
     public string? MissingVariablesHint(IReadOnlyList<string> missing)
     {
@@ -46,7 +52,10 @@ public sealed record ActiveVariables(
         string hint;
         if (EnvironmentName is null)
         {
-            hint = "No environment is selected.";
+            var unsetGlobals = missing.Where(UnsetSecrets.Contains).ToList();
+            hint = unsetGlobals.Count > 0
+                ? $"Secret values are kept on each computer and not shared through git: enter {string.Join(", ", unsetGlobals)} in the workspace's Globals."
+                : "No environment is selected.";
         }
         else
         {
@@ -70,12 +79,14 @@ public sealed class ActiveEnvironment(
     ISecretStore secrets,
     ICapturedValueStore captures,
     IWorkspaceStateStore state,
-    CurrentWorkspace current)
+    CurrentWorkspace current,
+    IWorkspaceVariablesStore? globals = null)
 {
     /// <summary>
     /// The selected environment's variables, with the values requests captured for it taking
-    /// precedence over the file's values. Without a workspace or a selected environment (or
-    /// when the selected file no longer exists) there are none. An environment that can't be read
+    /// precedence over the file's values, and the workspace-global variables it doesn't define.
+    /// Without a selected environment (or when the selected file no longer exists) only the globals
+    /// apply; without a workspace there are none. An environment that can't be read
     /// or whose variables refer to each other in a loop is an error.
     /// </summary>
     public async Task<Result<ActiveVariables>> LoadAsync(CancellationToken cancellationToken = default)
@@ -88,14 +99,14 @@ public sealed class ActiveEnvironment(
         var id = (await state.LoadAsync(root, cancellationToken)).ActiveEnvironment;
         if (id is null || !EnvironmentMapper.IsValidId(id) || !store.Exists(root, id))
         {
-            return ActiveVariables.None;
+            return await ResolveAsync(root, null, null, cancellationToken);
         }
 
         var environment = await store.ReadAsync(root, id, cancellationToken);
         if (!environment.IsSuccess)
         {
             return environment.Error!.Code == ErrorCodes.NotFound
-                ? ActiveVariables.None
+                ? await ResolveAsync(root, null, null, cancellationToken)
                 : new Error(environment.Error.Code, $"The selected environment can't be used. {environment.Error.Message}");
         }
 
@@ -136,19 +147,18 @@ public sealed class ActiveEnvironment(
         return await ResolveAsync(root.Value, id, environment.Value, cancellationToken);
     }
 
-    private async Task<Result<ActiveVariables>> ResolveAsync(string root, string id, EnvironmentDefinition environment, CancellationToken cancellationToken)
+    private async Task<Result<ActiveVariables>> ResolveAsync(string root, string? id, EnvironmentDefinition? environment, CancellationToken cancellationToken)
     {
-
         var stored = await secrets.LoadAsync(root, cancellationToken);
         if (!stored.IsSuccess)
         {
             return stored.Error!;
         }
 
-        var secretValues = stored.Value.GetValueOrDefault(id);
+        var secretValues = id is null ? null : stored.Value.GetValueOrDefault(id);
         var unset = new SortedSet<string>(StringComparer.Ordinal);
         var variables = new List<EnvironmentVariable>();
-        foreach (var variable in environment.Variables)
+        foreach (var variable in environment?.Variables ?? [])
         {
             if (!variable.Secret)
             {
@@ -164,16 +174,21 @@ public sealed class ActiveEnvironment(
             }
         }
 
-        var captured = await captures.LoadAsync(root, cancellationToken);
-        if (!captured.IsSuccess)
+        IReadOnlyDictionary<string, string> capturedValues = new Dictionary<string, string>();
+        if (id is not null)
         {
-            return captured.Error!;
+            var captured = await captures.LoadAsync(root, cancellationToken);
+            if (!captured.IsSuccess)
+            {
+                return captured.Error!;
+            }
+
+            capturedValues = captured.Value.GetValueOrDefault(id) ?? new Dictionary<string, string>();
         }
 
         // Captured values come from responses: they are used as they are, never expanded as
         // templates, so a value such as "{{token}}" can't refer to other variables or loop. They
         // take part in resolution as placeholders that no file value can contain.
-        var capturedValues = captured.Value.GetValueOrDefault(id) ?? new Dictionary<string, string>();
         var placeholders = capturedValues.Keys
             .Order(StringComparer.Ordinal)
             .Select((name, index) => (Name: name, Placeholder: $"\0captured:{index}\0"))
@@ -185,12 +200,40 @@ public sealed class ActiveEnvironment(
             variables.AddRange(placeholders.Select(p => new EnvironmentVariable(p.Name, p.Placeholder)));
         }
 
+        // Workspace-global variables come last: the environment's (and captured) values win.
+        var globalNames = new HashSet<string>(StringComparer.Ordinal);
+        var globalSecrets = new List<string>();
+        if (globals is not null)
+        {
+            var loaded = await GlobalVariables.LoadWithSecretsAsync(globals, secrets, root, cancellationToken);
+            if (!loaded.IsSuccess)
+            {
+                return loaded.Error!;
+            }
+
+            var defined = new HashSet<string>(variables.Select(v => v.Name).Concat(unset), StringComparer.Ordinal);
+            foreach (var variable in loaded.Value.Variables.Where(v => !defined.Contains(v.Name)))
+            {
+                variables.Add(variable);
+                globalNames.Add(variable.Name);
+                if (variable.Secret)
+                {
+                    globalSecrets.Add(variable.Name);
+                }
+            }
+
+            unset.UnionWith(loaded.Value.UnsetSecrets.Where(name => !defined.Contains(name)));
+        }
+
         var resolved = VariableSet.Resolve(variables);
         if (resolved.Cycle.Count > 0)
         {
-            return new Error(
-                ErrorCodes.InvalidRequest,
-                $"{VariableSet.CycleMessage(resolved.Cycle)} Fix the environment '{environment.Name}'.");
+            var owner = environment is null
+                ? $"the workspace's {GlobalVariables.DisplayName.ToLowerInvariant()}"
+                : resolved.Cycle.Any(globalNames.Contains)
+                    ? $"the environment '{environment.Name}' and the workspace's globals"
+                    : $"the environment '{environment.Name}'";
+            return new Error(ErrorCodes.InvalidRequest, $"{VariableSet.CycleMessage(resolved.Cycle)} Fix {owner}.");
         }
 
         if (placeholders.Count > 0)
@@ -202,12 +245,18 @@ public sealed class ActiveEnvironment(
             resolved = resolved with { Values = values };
         }
 
-        var resolvedSecrets = environment.Variables
-            .Where(v => v.Secret && resolved.Values.ContainsKey(v.Name))
-            .Select(v => resolved.Values[v.Name])
+        var resolvedSecrets = (environment?.Variables ?? [])
+            .Where(v => v.Secret)
+            .Select(v => v.Name)
+            .Concat(globalSecrets)
+            .Where(resolved.Values.ContainsKey)
+            .Select(name => resolved.Values[name])
             .Where(value => value.Length > 0)
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        return new ActiveVariables(environment.Name, resolved.Values, unset, id, resolvedSecrets, environment.CookieJar);
+        return new ActiveVariables(environment?.Name, resolved.Values, unset, id, resolvedSecrets, environment?.CookieJar ?? false)
+        {
+            Globals = globalNames,
+        };
     }
 }

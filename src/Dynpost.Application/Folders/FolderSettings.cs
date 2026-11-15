@@ -120,7 +120,7 @@ public sealed class FolderInheritance(IFolderDefaultsStore store)
             return environment;
         }
 
-        var resolved = defaults.ResolveVariables(environment.Values);
+        var resolved = defaults.ResolveVariables(environment.Values, environment.Globals);
         if (resolved.Cycle.Count > 0)
         {
             var folders = string.Join(", ", defaults.FoldersOf(resolved.Cycle).Select(folder => $"'{folder}'"));
