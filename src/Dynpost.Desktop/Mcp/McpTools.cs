@@ -253,6 +253,13 @@ internal static class McpTools
                 + $"time into the run, virtual user, iteration, URL, status, latency, error and the start of the response. At most {MaxSamplesPage} per page.",
                 (p, ct) => Use<GetRunSamples>().ExecuteAsync(p.RunId, Math.Max(0, p.Offset), Math.Clamp(p.Limit, 1, MaxSamplesPage), p.FailedOnly, ct),
                 readOnly: true)
+            .Add<CompareRunsArguments, RunComparisonDto>(
+                "compare_runs", "Compare load runs",
+                "Compares a finished run with a baseline run (usually an earlier run of the same plan): for the whole run, each request and "
+                + "each environment, the baseline and compared values of the sample count, error rate (%), latency average, median, p90, p95, "
+                + "p99 and max (ms) and throughput (requests per second), with the change and a verdict (better, worse, or same within noise).",
+                (p, ct) => Use<CompareRuns>().ExecuteAsync(p.BaselineRunId, p.RunId, ct),
+                readOnly: true)
             .Add<RunIdsArguments, Unit>(
                 "delete_runs", "Delete load runs",
                 "Deletes saved runs (their results, request logs and saved responses); the plans stay. Ask the user before deleting anything.",
@@ -549,6 +556,10 @@ internal sealed record RunSamplesArguments(
     [property: Description("How many logged requests to skip.")] int Offset = 0,
     [property: Description("How many logged requests to return (at most 100).")] int Limit = 50,
     [property: Description("Return only the failed requests.")] bool FailedOnly = false);
+
+internal sealed record CompareRunsArguments(
+    [property: Description("The id of the run to compare against (usually the earlier one), from list_runs.")] string BaselineRunId,
+    [property: Description("The id of the run to compare, from list_runs.")] string RunId);
 
 internal sealed record RunIdsArguments(
     [property: Description("The ids of the runs to delete, from list_runs.")] IReadOnlyList<string> RunIds);

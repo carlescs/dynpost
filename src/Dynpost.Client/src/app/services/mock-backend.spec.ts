@@ -5,6 +5,7 @@ import {
   KeyValueDto,
   QuickOpenItemDto,
   ResponseDto,
+  RunComparisonDto,
   WorkspaceSearchDto,
 } from '../models/messages';
 import { MockBackend } from './mock-backend';
@@ -185,5 +186,39 @@ describe('MockBackend search', () => {
 
     expect(plain.files).toEqual([]);
     expect(fuzzy.files.map((f) => f.path)).toContain('requests/orders/list-orders.yaml');
+  });
+});
+
+describe('MockBackend run.compare', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('compares two finished runs and refuses a running one', async () => {
+    const backend = new MockBackend();
+    const call = async (type: string, payload?: unknown) => {
+      const reply = backend.handle({ id: '1', type, payload } as never);
+      await vi.advanceTimersByTimeAsync(1000);
+      return reply;
+    };
+    const path = 'plans/perf/users-smoke.run.yaml';
+    const start = async () => {
+      const reply = await call('run.start', { path });
+      if (!reply.ok) throw new Error(reply.error.message);
+      return (reply.payload as { runId: string }).runId;
+    };
+    const first = await start();
+    await vi.advanceTimersByTimeAsync(7000);
+    const second = await start();
+
+    const running = await call('run.compare', { baselineRunId: first, runId: second });
+    expect(running.ok).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(7000);
+    const reply = await call('run.compare', { baselineRunId: first, runId: second });
+    if (!reply.ok) throw new Error(reply.error.message);
+    const comparison = reply.payload as RunComparisonDto;
+    expect(comparison.baseline.runId).toBe(first);
+    expect(comparison.total.metrics.map((m) => m.metric)).toContain('p95');
+    expect(comparison.requests).toHaveLength(2);
   });
 });

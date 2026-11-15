@@ -14,6 +14,7 @@ describe('RunEditor', () => {
       error: null,
       run,
       history: [],
+      comparison: null,
       saving: false,
       starting: false,
       confirmation: null,

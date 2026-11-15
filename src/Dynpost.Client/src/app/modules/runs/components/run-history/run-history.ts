@@ -5,6 +5,7 @@ import {
   faBan,
   faCircleCheck,
   faCircleXmark,
+  faCodeCompare,
   faSpinner,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
@@ -15,7 +16,7 @@ import { DateFormatStore } from '../../../../services/date-format-store';
 /**
  * The earlier runs of a plan, newest first; their p95 bars share one scale so runs compare. Each
  * run can be deleted, several can be checked (shift-click checks a range) and deleted together, or
- * the whole history cleared.
+ * the whole history cleared. Two checked runs can be compared.
  */
 @Component({
   selector: 'app-run-history',
@@ -33,8 +34,11 @@ export class RunHistory {
   readonly remove = output<string[]>();
   /** Asks to delete every run of the plan. */
   readonly clear = output<void>();
+  /** Asks to compare two runs, by id. */
+  readonly compare = output<string[]>();
 
   protected readonly faTrash = faTrash;
+  protected readonly faCodeCompare = faCodeCompare;
 
   protected readonly formatMs = formatMs;
   protected readonly formatElapsed = formatElapsed;
@@ -95,6 +99,19 @@ export class RunHistory {
     this.checked.set(new Set());
     this.anchor = null;
   }
+
+  /** Compares the two checked runs, when exactly two are checked and neither is still running. */
+  protected compareChosen(): void {
+    if (this.canCompare()) this.compare.emit(this.chosen());
+  }
+
+  protected readonly canCompare = computed(() => {
+    const chosen = new Set(this.chosen());
+    return (
+      chosen.size === 2 &&
+      this.runs().every((run) => !chosen.has(run.runId) || run.state !== 'running')
+    );
+  });
 
   protected removeChosen(): void {
     const chosen = this.chosen();
