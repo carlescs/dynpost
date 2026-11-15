@@ -11,7 +11,7 @@
           [disabled]="git.busy() !== null"
           (click)="git.fetch()"
         >
-          <fa-icon [icon]="faCloudArrowDown" [animation]="spin('fetch')" />
+          <fa-icon [icon]="busyIcon('fetch', faCloudArrowDown)" [animation]="spin('fetch')" />
         </button>
       }
       <button
