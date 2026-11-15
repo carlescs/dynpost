@@ -84,8 +84,8 @@ internal static class McpTools
             .Add<SearchWorkspaceArguments, WorkspaceSearchDto>(
                 "search_workspace", "Search workspace",
                 "Searches the text of every request file (URLs, parameters, headers, bodies, descriptions) and returns the matching lines, "
-                + $"grouped by request file. Lines are numbered from 1 and shown without their indentation. Stops after {SearchWorkspace.MaxLines} lines (truncated).",
-                (p, ct) => Use<SearchWorkspace>().ExecuteAsync(p.Query, p.MatchCase ?? false, ct),
+                + $"grouped by request file (or, with fuzzy, the closest files first). Lines are numbered from 1 and shown without their indentation. Stops after {SearchWorkspace.MaxLines} lines (truncated).",
+                (p, ct) => Use<SearchWorkspace>().ExecuteAsync(p.Query, p.MatchCase ?? false, p.Fuzzy ?? false, ct),
                 readOnly: true)
             .Add<PathArguments, RequestDto>(
                 "read_request", "Read request",
@@ -465,7 +465,8 @@ internal sealed record NoArguments;
 
 internal sealed record SearchWorkspaceArguments(
     [property: Description("The text to find, as plain text (not a pattern).")] string Query,
-    [property: Description("Whether letter case must match; default false.")] bool? MatchCase = null);
+    [property: Description("Whether letter case must match; default false.")] bool? MatchCase = null,
+    [property: Description("Whether to forgive typos (one for 4-6 characters, two for longer), the closest files first; default false (exact text).")] bool? Fuzzy = null);
 
 internal sealed record PathArguments(
     [property: Description("The request's workspace path, such as requests/users/get-user.yaml.")] string Path);

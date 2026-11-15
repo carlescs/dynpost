@@ -6,6 +6,7 @@ import {
   faChevronDown,
   faChevronRight,
   faFont,
+  faWandMagicSparkles,
 } from '@fortawesome/free-solid-svg-icons';
 import { highlightRanges } from '../../../../models/highlight';
 import { SearchFileDto } from '../../../../models/messages';
@@ -31,6 +32,7 @@ export class SearchView {
   protected readonly faChevronDown = faChevronDown;
   protected readonly faChevronRight = faChevronRight;
   protected readonly faFont = faFont;
+  protected readonly faWandMagicSparkles = faWandMagicSparkles;
 
   protected readonly headerButton =
     'flex size-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 disabled:opacity-40';

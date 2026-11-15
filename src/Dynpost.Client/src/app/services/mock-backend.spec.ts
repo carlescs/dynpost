@@ -148,8 +148,8 @@ describe('MockBackend search', () => {
     return result.payload as never;
   }
 
-  it('finds requests by fuzzy name, method or URL words for quick open', async () => {
-    const items: QuickOpenItemDto[] = await call('workspace.quickOpen', { query: 'post usr' });
+  it('finds requests by name, method or URL words with typos for quick open', async () => {
+    const items: QuickOpenItemDto[] = await call('workspace.quickOpen', { query: 'post /usars' });
 
     expect(items.map((i) => i.name)).toContain('Create user');
     expect(items.every((i) => i.method === 'POST')).toBe(true);
@@ -174,5 +174,16 @@ describe('MockBackend search', () => {
       matchCase: true,
     });
     expect(cased.files).toEqual([]);
+  });
+
+  it('forgives typos with a fuzzy search', async () => {
+    const plain: WorkspaceSearchDto = await call('workspace.search', { query: '/ordars' });
+    const fuzzy: WorkspaceSearchDto = await call('workspace.search', {
+      query: '/ordars',
+      fuzzy: true,
+    });
+
+    expect(plain.files).toEqual([]);
+    expect(fuzzy.files.map((f) => f.path)).toContain('requests/orders/list-orders.yaml');
   });
 });

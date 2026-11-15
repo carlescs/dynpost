@@ -34,6 +34,7 @@ using Dynpost.Infrastructure.Sharing;
 using Dynpost.Infrastructure.About;
 using Dynpost.Infrastructure.Locale;
 using Dynpost.Infrastructure.Updates;
+using Dynpost.Infrastructure.Search;
 using Dynpost.Infrastructure.Workspaces;
 using Dynpost.Infrastructure.Yaml;
 using Photino.NET;
@@ -95,6 +96,7 @@ internal static class Program
         new ServiceCollection()
             .AddSingleton<CurrentWorkspace>()
             .AddSingleton<IWorkspaceRepository, FileSystemWorkspaceRepository>()
+            .AddSingleton<IFuzzyMatcher, FuzzySearchNetMatcher>()
             .AddSingleton<IFolderDefaultsStore, YamlFolderDefaultsStore>()
             .AddSingleton<FolderInheritance>()
             .AddSingleton<IWorkspaceLayoutStore, FileSystemWorkspaceLayoutStore>()

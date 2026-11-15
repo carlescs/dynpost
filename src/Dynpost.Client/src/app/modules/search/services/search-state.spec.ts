@@ -44,7 +44,11 @@ describe('SearchState', () => {
     await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS);
 
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith('workspace.search', { query: 'users', matchCase: false });
+    expect(send).toHaveBeenCalledWith('workspace.search', {
+      query: 'users',
+      matchCase: false,
+      fuzzy: true,
+    });
     expect(state.results()?.files).toHaveLength(1);
     expect(state.summary()).toBe('1 result in 1 file.');
   });
@@ -54,7 +58,24 @@ describe('SearchState', () => {
     state.toggleMatchCase();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(send).toHaveBeenCalledWith('workspace.search', { query: 'Users', matchCase: true });
+    expect(send).toHaveBeenCalledWith('workspace.search', {
+      query: 'Users',
+      matchCase: true,
+      fuzzy: true,
+    });
+  });
+
+  it('searches for the exact text once fuzzy is turned off', async () => {
+    state.query.set('Autorization');
+    state.toggleFuzzy();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(state.fuzzy()).toBe(false);
+    expect(send).toHaveBeenCalledWith('workspace.search', {
+      query: 'Autorization',
+      matchCase: false,
+      fuzzy: false,
+    });
   });
 
   it('clears the results for an empty query without asking the host', async () => {

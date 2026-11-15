@@ -1,15 +1,15 @@
 using Dynpost.Application.Common;
 using Dynpost.Application.Workspaces;
-using Dynpost.Domain.Search;
 
 namespace Dynpost.Application.Search;
 
 /// <summary>
-/// Finds requests by a fuzzy query over their names, file paths, methods and URLs, best match first,
-/// for the quick open (Ctrl+P) dialog. Words of the query separated by spaces can each match a
-/// different one of these: <c>post users</c> finds a POST request named "Create user".
+/// Finds requests by their names, file paths, methods and URLs for the quick open (Ctrl+P) dialog,
+/// best match first, forgiving typos (see <see cref="FuzzyTolerance"/>). Words of the query
+/// separated by spaces can each match a different one of these: <c>post users</c> finds a POST
+/// request named "Create user".
 /// </summary>
-public sealed class QuickOpen(IWorkspaceRepository repository, CurrentWorkspace current)
+public sealed class QuickOpen(IWorkspaceRepository repository, IFuzzyMatcher matcher, CurrentWorkspace current)
 {
     /// <summary>How many requests are returned at most.</summary>
     public const int MaxResults = 50;
@@ -41,8 +41,8 @@ public sealed class QuickOpen(IWorkspaceRepository repository, CurrentWorkspace 
             .ToList();
     }
 
-    /// <summary>Scores a request: every term must match its name, path, method or URL.</summary>
-    private static (int Score, QuickOpenItemDto Item)? Match(RequestFiles.Item file, IReadOnlyList<string> terms)
+    /// <summary>Scores a request: every term must match its name, URL, method or path.</summary>
+    private (int Score, QuickOpenItemDto Item)? Match(RequestFiles.Item file, IReadOnlyList<string> terms)
     {
         var name = file.Name;
         var path = file.Path.Value;
@@ -55,29 +55,30 @@ public sealed class QuickOpen(IWorkspaceRepository repository, CurrentWorkspace 
 
         foreach (var term in terms)
         {
-            // The name counts most, then the URL and method; the path breaks ties with the folder.
-            var candidates = new (FuzzyMatchResult? Match, int Weight, SortedSet<int>? Positions)[]
-            {
-                (FuzzyMatch.Score(term, name), 3, nameMatches),
-                (FuzzyMatch.Score(term, url), 2, urlMatches),
-                (string.Equals(term, method, StringComparison.OrdinalIgnoreCase) ? new FuzzyMatchResult(term.Length * 10, []) : null, 2, null),
-                (FuzzyMatch.Score(term, path), 1, pathMatches),
-            };
-
-            var best = candidates
-                .Where(candidate => candidate.Match is not null)
-                .Select(candidate => (candidate.Match, candidate.Positions, Score: candidate.Match!.Score * candidate.Weight))
-                .OrderByDescending(candidate => candidate.Score)
-                .FirstOrDefault();
+            // The name counts most, then the URL and the method (exactly); the path breaks ties with the folder.
+            (string Text, int Weight, SortedSet<int> Positions)[] fields = [(name, 3, nameMatches), (url, 2, urlMatches), (path, 1, pathMatches)];
+            var best = fields
+                .SelectMany(field => matcher.FindTolerant(term, field.Text, matchCase: false)
+                    .Select(match => (Positions: (SortedSet<int>?)field.Positions, Match: (FuzzyMatch?)match, Score: Score(term, field.Weight, match.Distance, IsWordStart(field.Text, match.Start)))))
+                .Append(string.Equals(term, method, StringComparison.OrdinalIgnoreCase)
+                    ? (null, new FuzzyMatch(0, method.Length, 0), Score(term, 2, 0, wordStart: true))
+                    : (null, null, int.MinValue))
+                .MaxBy(candidate => candidate.Score);
             if (best.Match is null)
             {
                 return null;
             }
 
             total += best.Score;
-            best.Positions?.UnionWith(best.Match.Positions);
+            best.Positions?.UnionWith(Enumerable.Range(best.Match.Start, best.Match.Length));
         }
 
         return (total, new QuickOpenItemDto(path, name, file.Method, url, [.. nameMatches], [.. pathMatches], [.. urlMatches]));
     }
+
+    /// <summary>Longer terms count more, typos cost, and matching from the start of a word helps.</summary>
+    private static int Score(string term, int weight, int distance, bool wordStart) =>
+        weight * (term.Length * 10 - distance * 15 + (wordStart ? 5 : 0));
+
+    private static bool IsWordStart(string text, int index) => index == 0 || !char.IsLetterOrDigit(text[index - 1]);
 }

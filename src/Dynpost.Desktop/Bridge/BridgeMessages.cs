@@ -477,7 +477,8 @@ internal sealed record QuickOpenPayload(string Query = "");
 
 /// <param name="Query">The text to find, as typed.</param>
 /// <param name="MatchCase">Whether letter case must match.</param>
-internal sealed record SearchWorkspacePayload(string Query, bool MatchCase = false);
+/// <param name="Fuzzy">Whether to find the query's characters in order rather than the exact text.</param>
+internal sealed record SearchWorkspacePayload(string Query, bool MatchCase = false, bool Fuzzy = false);
 
 internal sealed record SetThemePayload(string Theme);
 internal sealed record SetActivityOrderPayload(IReadOnlyList<string>? Order);

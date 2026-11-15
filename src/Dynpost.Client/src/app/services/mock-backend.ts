@@ -416,7 +416,13 @@ export class MockBackend {
       case 'workspace.quickOpen':
         return ok(this.quickOpen(String(payload?.['query'] ?? '')));
       case 'workspace.search':
-        return ok(this.search(String(payload?.['query'] ?? ''), !!payload?.['matchCase']));
+        return ok(
+          this.search(
+            String(payload?.['query'] ?? ''),
+            !!payload?.['matchCase'],
+            !!payload?.['fuzzy'],
+          ),
+        );
       case 'workspace.exportFormats':
         return ok([
           { id: 'postman', name: 'Postman collection v2.1', extension: '.postman_collection.json' },
@@ -1223,7 +1229,7 @@ export class MockBackend {
     }
   }
 
-  /** Roughly the host's quick open: every word must appear, in order, in the name, path or URL. */
+  /** Roughly the host's quick open: every word must appear, give or take typos, in the name, path or URL. */
   private quickOpen(query: string): QuickOpenItemDto[] {
     const terms = query.split(' ').filter(Boolean);
     const items: { score: number; item: QuickOpenItemDto }[] = [];
@@ -1248,10 +1254,10 @@ export class MockBackend {
           [dto.url, 'urlMatches'],
           [path, 'pathMatches'],
         ] as const) {
-          const positions = subsequence(term, text);
-          if (positions) {
-            item[key].push(...positions);
-            score += positions.length * 10 - (positions.at(-1)! - positions[0]);
+          const [match] = typoMatches(term.toLowerCase(), text.toLowerCase());
+          if (match) {
+            for (let i = 0; i < match.length; i++) item[key].push(match.start + i);
+            score += match.length * 10 - match.typos * 15;
             return true;
           }
         }
@@ -1270,8 +1276,11 @@ export class MockBackend {
       }));
   }
 
-  /** Roughly the host's workspace search, over the requests written out as JSON instead of YAML. */
-  private search(query: string, matchCase: boolean): WorkspaceSearchDto {
+  /**
+   * Roughly the host's workspace search, over the requests written out as JSON instead of YAML. Its
+   * fuzzy search only forgives mistyped letters (not missing or extra ones) and doesn't rank the files.
+   */
+  private search(query: string, matchCase: boolean, fuzzy: boolean): WorkspaceSearchDto {
     const files: SearchFileDto[] = [];
     let matchCount = 0;
     if (!query) return { files, matchCount, truncated: false };
@@ -1284,12 +1293,18 @@ export class MockBackend {
           const text = raw.trim();
           const haystack = matchCase ? text : text.toLowerCase();
           const ranges: SearchRangeDto[] = [];
-          for (
-            let at = haystack.indexOf(needle);
-            at >= 0;
-            at = haystack.indexOf(needle, at + needle.length)
-          ) {
-            ranges.push({ start: at, length: needle.length });
+          if (fuzzy) {
+            ranges.push(
+              ...typoMatches(needle, haystack).map(({ start, length }) => ({ start, length })),
+            );
+          } else {
+            for (
+              let at = haystack.indexOf(needle);
+              at >= 0;
+              at = haystack.indexOf(needle, at + needle.length)
+            ) {
+              ranges.push({ start: at, length: needle.length });
+            }
           }
           if (ranges.length) lines.push({ line: index + 1, text, ranges });
           matchCount += ranges.length;
@@ -1678,16 +1693,26 @@ function mockToken(): string {
   ).join('');
 }
 
-/** The indexes in `text` of the characters of `term`, in order and ignoring case; `null` if missing. */
-function subsequence(term: string, text: string): number[] | null {
-  const positions: number[] = [];
-  const lower = text.toLowerCase();
-  let from = 0;
-  for (const char of term.toLowerCase()) {
-    const at = lower.indexOf(char, from);
-    if (at < 0) return null;
-    positions.push(at);
-    from = at + 1;
+/**
+ * Where `pattern` appears in `text` with at most the typos the host forgives (none for 1–3
+ * characters, one for 4–6, two for longer), counting only mistyped letters; in order, not overlapping.
+ */
+function typoMatches(
+  pattern: string,
+  text: string,
+): { start: number; length: number; typos: number }[] {
+  const allowed = pattern.length <= 3 ? 0 : pattern.length <= 6 ? 1 : 2;
+  const found: { start: number; length: number; typos: number }[] = [];
+  if (!pattern) return found;
+  for (let start = 0; start + pattern.length <= text.length; start++) {
+    let typos = 0;
+    for (let i = 0; i < pattern.length && typos <= allowed; i++) {
+      if (text[start + i] !== pattern[i]) typos++;
+    }
+    if (typos <= allowed) {
+      found.push({ start, length: pattern.length, typos });
+      start += pattern.length - 1;
+    }
   }
-  return positions;
+  return found;
 }

@@ -23,6 +23,7 @@ public static class TextSearch
 
     private const string Ellipsis = "…";
 
+
     /// <summary>
     /// Finds every occurrence of <paramref name="query"/> in <paramref name="text"/>, line by line.
     /// Ignores case unless <paramref name="matchCase"/> is set. An empty query finds nothing.
@@ -48,28 +49,33 @@ public static class TextSearch
 
             if (starts.Count > 0)
             {
-                matches.Add(Show(number + 1, line, starts, query.Length));
+                matches.Add(Show(number + 1, line, [.. starts.Select(start => new TextRange(start, query.Length))]));
             }
         }
 
         return matches;
     }
 
-    private static LineMatch Show(int number, string line, List<int> starts, int length)
+    /// <summary>
+    /// Shows line <paramref name="number"/> with matches found some other way (such as a fuzzy
+    /// search) as <see cref="Find"/> shows its own: without indentation, cut when long.
+    /// </summary>
+    /// <param name="ranges">The matches, as indexes into the whole line, in order.</param>
+    public static LineMatch Show(int number, string line, IReadOnlyList<TextRange> ranges)
     {
         var indent = line.Length - line.TrimStart().Length;
         var from = line.Length - indent > MaxLineLength
-            ? Math.Max(indent, Math.Min(starts[0] - Lead, line.Length - MaxLineLength))
+            ? Math.Max(indent, Math.Min(ranges[0].Start - Lead, line.Length - MaxLineLength))
             : indent;
         var to = Math.Min(line.Length, from + MaxLineLength);
         var prefix = from > indent ? Ellipsis : string.Empty;
         var suffix = to < line.Length ? Ellipsis : string.Empty;
         var shown = prefix + line[from..to] + suffix;
 
-        var ranges = starts
-            .Where(start => start >= from && start + length <= to)
-            .Select(start => new TextRange(start - from + prefix.Length, length))
+        var shownRanges = ranges
+            .Where(range => range.Start >= from && range.Start + range.Length <= to)
+            .Select(range => range with { Start = range.Start - from + prefix.Length })
             .ToList();
-        return new LineMatch(number, shown, ranges);
+        return new LineMatch(number, shown, shownRanges);
     }
 }

@@ -6,14 +6,20 @@ namespace Dynpost.Application.Search;
 
 /// <summary>
 /// Searches the text of every request file — URLs, parameters, headers, bodies, descriptions —
-/// and returns the matching lines grouped by file.
+/// and returns the matching lines grouped by file: in the tree's order for a plain search; for a
+/// fuzzy one, which forgives typos (see <see cref="FuzzyTolerance"/>), the files with the closest
+/// matches first.
 /// </summary>
-public sealed class SearchWorkspace(IWorkspaceRepository repository, CurrentWorkspace current)
+public sealed class SearchWorkspace(IWorkspaceRepository repository, IFuzzyMatcher matcher, CurrentWorkspace current)
 {
-    /// <summary>The search stops after this many matching lines, so a one-letter query stays quick to show.</summary>
+    /// <summary>The search returns at most this many matching lines, so a one-letter query stays quick to show.</summary>
     public const int MaxLines = 1000;
 
-    public async Task<Result<WorkspaceSearchDto>> ExecuteAsync(string? query, bool matchCase = false, CancellationToken cancellationToken = default)
+    public async Task<Result<WorkspaceSearchDto>> ExecuteAsync(
+        string? query,
+        bool matchCase = false,
+        bool fuzzy = false,
+        CancellationToken cancellationToken = default)
     {
         var root = current.RequireRoot();
         if (!root.IsSuccess)
@@ -32,10 +38,7 @@ public sealed class SearchWorkspace(IWorkspaceRepository repository, CurrentWork
             return new WorkspaceSearchDto([], 0, false);
         }
 
-        var found = new List<SearchFileDto>();
-        var lineCount = 0;
-        var matchCount = 0;
-        var truncated = false;
+        var found = new List<(RequestFiles.Item File, IReadOnlyList<LineMatch> Lines, int Distance)>();
         foreach (var file in files.Value)
         {
             var text = await repository.ReadTextAsync(root.Value, file.Path, cancellationToken);
@@ -45,12 +48,26 @@ public sealed class SearchWorkspace(IWorkspaceRepository repository, CurrentWork
                 continue;
             }
 
-            var lines = TextSearch.Find(text.Value, query, matchCase);
-            if (lines.Count == 0)
+            var (lines, distance) = fuzzy ? FindFuzzy(text.Value, query, matchCase) : (TextSearch.Find(text.Value, query, matchCase), 0);
+            if (lines.Count > 0)
             {
-                continue;
+                found.Add((file, lines, distance));
             }
+        }
 
+        if (fuzzy)
+        {
+            // OrderBy is stable: files that match equally well keep the tree's order.
+            found = [.. found.OrderBy(entry => entry.Distance)];
+        }
+
+        var results = new List<SearchFileDto>();
+        var lineCount = 0;
+        var matchCount = 0;
+        var truncated = false;
+        foreach (var (file, all, _) in found)
+        {
+            var lines = all;
             if (lineCount + lines.Count > MaxLines)
             {
                 truncated = true;
@@ -64,7 +81,7 @@ public sealed class SearchWorkspace(IWorkspaceRepository repository, CurrentWork
 
             lineCount += lines.Count;
             matchCount += lines.Sum(line => line.Ranges.Count);
-            found.Add(new SearchFileDto(
+            results.Add(new SearchFileDto(
                 file.Path.Value,
                 file.Name,
                 file.Method,
@@ -75,6 +92,28 @@ public sealed class SearchWorkspace(IWorkspaceRepository repository, CurrentWork
             }
         }
 
-        return new WorkspaceSearchDto(found, matchCount, truncated);
+        return new WorkspaceSearchDto(results, matchCount, truncated);
+    }
+
+    /// <summary>The lines with fuzzy matches, and the fewest typos any of them has.</summary>
+    private (IReadOnlyList<LineMatch> Lines, int Distance) FindFuzzy(string text, string query, bool matchCase)
+    {
+        var lines = new List<LineMatch>();
+        var distance = int.MaxValue;
+        var rows = text.Split('\n');
+        for (var number = 0; number < rows.Length; number++)
+        {
+            var line = rows[number].TrimEnd('\r');
+            var matches = matcher.FindTolerant(query, line, matchCase);
+            if (matches.Count == 0)
+            {
+                continue;
+            }
+
+            distance = Math.Min(distance, matches.Min(match => match.Distance));
+            lines.Add(TextSearch.Show(number + 1, line, [.. matches.Select(match => new TextRange(match.Start, match.Length))]));
+        }
+
+        return (lines, distance);
     }
 }

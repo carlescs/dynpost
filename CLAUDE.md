@@ -118,8 +118,10 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   never show secret values to the assistant; update the tool table in `README.md` when adding one.
 - Search: quick open (Ctrl+P, `workspace.quickOpen`) and the Search view (`workspace.search`, client
   `modules/search`) both run in the backend (`Application/Search`) over the request files
-  (`IWorkspaceRepository.ListAsync`/`ReadTextAsync`); the fuzzy scoring and line search are pure
-  helpers in `Domain/Search`. The client's `components/quick-open` dialog is lazy-loaded by
+  (`IWorkspaceRepository.ListAsync`/`ReadTextAsync`). Typo-tolerant matching goes through the
+  `IFuzzyMatcher` port (`FuzzyTolerance` sets how many typos a query length allows), implemented
+  with the FuzzySearch.Net library by `Infrastructure/Search/FuzzySearchNetMatcher.cs`; don't hand-roll
+  a matcher. The plain line search and how a matching line is shown are in `Domain/Search/TextSearch.cs`. The client's `components/quick-open` dialog is lazy-loaded by
   `Shortcuts`, and matches are highlighted with `components/highlighted-text`.
 - Dates: the client never formats dates with the webview's locale or Angular's
   `DatePipe`; it uses `DateFormatStore` (`services/date-format-store.ts`), which formats

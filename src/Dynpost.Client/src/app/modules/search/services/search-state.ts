@@ -18,6 +18,8 @@ export class SearchState {
 
   readonly query = signal('');
   readonly matchCase = signal(false);
+  /** Whether to find the query's characters in order rather than the exact text. */
+  readonly fuzzy = signal(true);
   readonly results = signal<WorkspaceSearchDto | null>(null);
   readonly searching = signal(false);
   readonly error = signal<string | null>(null);
@@ -62,6 +64,11 @@ export class SearchState {
     this.schedule(0);
   }
 
+  toggleFuzzy(): void {
+    this.fuzzy.update((value) => !value);
+    this.schedule(0);
+  }
+
   toggleFile(path: string): void {
     this.collapsed.update((paths) => {
       const next = new Set(paths);
@@ -87,6 +94,7 @@ export class SearchState {
       const results = await this.bridge.send('workspace.search', {
         query,
         matchCase: this.matchCase(),
+        fuzzy: this.fuzzy(),
       });
       if (search !== this.searches) return;
       this.results.set(results);

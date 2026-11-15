@@ -400,10 +400,10 @@ export interface SearchFileDto {
   lines: SearchLineDto[];
 }
 
-/** What a workspace search found, grouped by file in the tree's order. */
+/** What a workspace search found, grouped by file: in the tree's order, or best first if fuzzy. */
 export interface WorkspaceSearchDto {
   files: SearchFileDto[];
-  /** How many matches the files listed contain. */
+  /** How many matches the files listed contain; for a fuzzy search, one per line. */
   matchCount: number;
   /** Whether the search stopped at its limit of matching lines. */
   truncated: boolean;
@@ -942,9 +942,12 @@ export interface BridgeMessages {
    * (at most 50); an empty query lists the first requests in the tree's order.
    */
   'workspace.quickOpen': { payload: { query: string }; result: QuickOpenItemDto[] };
-  /** Searches the text of every request file and groups the matching lines by file. */
+  /**
+   * Searches the text of every request file and groups the matching lines by file. `fuzzy`
+   * forgives typos (one for 4–6 characters, two for longer), the closest files first.
+   */
   'workspace.search': {
-    payload: { query: string; matchCase?: boolean };
+    payload: { query: string; matchCase?: boolean; fuzzy?: boolean };
     result: WorkspaceSearchDto;
   };
   /** Shows the open workspace folder in the system file manager (File Explorer, Finder...). */

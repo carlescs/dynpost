@@ -4,6 +4,7 @@ using Dynpost.Application.Common;
 using Dynpost.Application.Search;
 using Dynpost.Application.Workspaces;
 using Dynpost.Desktop.Bridge;
+using Dynpost.Infrastructure.Search;
 using Dynpost.Domain.Requests;
 using Dynpost.Domain.Workspaces;
 using NSubstitute;
@@ -23,6 +24,7 @@ public sealed class SearchBridgeTests : IDisposable
     {
         _services = new ServiceCollection()
             .AddSingleton(_repository)
+            .AddSingleton<IFuzzyMatcher, FuzzySearchNetMatcher>()
             .AddSingleton<CurrentWorkspace>()
             .AddTransient<QuickOpen>()
             .AddTransient<SearchWorkspace>()
@@ -74,5 +76,15 @@ public sealed class SearchBridgeTests : IDisposable
     {
         var json = await _router.HandleAsync($$"""{ "id": "1", "type": "{{type}}", "payload": {{payload}} }""");
         return JsonDocument.Parse(json!).RootElement;
+    }
+
+    [Fact]
+    public async Task Search_PassesFuzzyOn()
+    {
+        var plain = await SendAsync("workspace.search", """{ "query": "usrs" }""");
+        var fuzzy = await SendAsync("workspace.search", """{ "query": "usrs", "fuzzy": true }""");
+
+        Assert.Equal(0, plain.GetProperty("payload").GetProperty("files").GetArrayLength());
+        Assert.Equal(1, fuzzy.GetProperty("payload").GetProperty("files").GetArrayLength());
     }
 }

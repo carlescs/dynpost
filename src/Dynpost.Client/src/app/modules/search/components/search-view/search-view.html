@@ -45,6 +45,18 @@
       >
         <fa-icon [icon]="faFont" />
       </button>
+      <button
+        type="button"
+        class="mr-0.5 flex size-6 items-center justify-center rounded text-xs text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+        [class.bg-sky-100]="state.fuzzy()"
+        [class.text-sky-700]="state.fuzzy()"
+        title="Fuzzy: forgive typos (autorization finds Authorization)"
+        aria-label="Fuzzy search"
+        [attr.aria-pressed]="state.fuzzy()"
+        (click)="state.toggleFuzzy()"
+      >
+        <fa-icon [icon]="faWandMagicSparkles" />
+      </button>
     </div>
     @if (state.error(); as error) {
       <p class="mt-1 text-xs text-rose-600" role="alert">{{ error }}</p>

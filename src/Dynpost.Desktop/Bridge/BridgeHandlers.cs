@@ -55,7 +55,7 @@ internal static class BridgeHandlers
             .Register<QuickOpenPayload, IReadOnlyList<QuickOpenItemDto>>(BridgeMessageTypes.WorkspaceQuickOpen,
                 (p, ct) => Use<QuickOpen>().ExecuteAsync(p.Query, ct))
             .Register<SearchWorkspacePayload, WorkspaceSearchDto>(BridgeMessageTypes.WorkspaceSearch,
-                (p, ct) => Use<SearchWorkspace>().ExecuteAsync(p.Query, p.MatchCase, ct))
+                (p, ct) => Use<SearchWorkspace>().ExecuteAsync(p.Query, p.MatchCase, p.Fuzzy, ct))
             .Register(BridgeMessageTypes.WorkspaceReveal,
                 _ => Task.FromResult(NoValue(Use<ShowWorkspaceFolder>().Execute())))
             .Register(BridgeMessageTypes.WorkspaceExportFormats,

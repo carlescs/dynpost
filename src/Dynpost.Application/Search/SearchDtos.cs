@@ -29,7 +29,7 @@ public sealed record SearchLineDto(int Line, string Text, IReadOnlyList<SearchRa
 /// <param name="Method">The HTTP method; <c>null</c> when the file could not be read.</param>
 public sealed record SearchFileDto(string Path, string Name, string? Method, IReadOnlyList<SearchLineDto> Lines);
 
-/// <summary>What a workspace search found, grouped by file in the tree's order.</summary>
+/// <summary>What a workspace search found, grouped by file: in the tree's order, or closest matches first for a fuzzy search.</summary>
 /// <param name="MatchCount">How many matches the files listed contain.</param>
 /// <param name="Truncated">Whether the search stopped at <see cref="SearchWorkspace.MaxLines"/> matching lines.</param>
 public sealed record WorkspaceSearchDto(IReadOnlyList<SearchFileDto> Files, int MatchCount, bool Truncated);
