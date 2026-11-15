@@ -1,11 +1,20 @@
 import { TestBed } from '@angular/core/testing';
 import { Mock } from 'vitest';
-import { ERROR_CODES, RunResultDto, RunSummaryDto } from '../models/messages';
+import { ERROR_CODES, RunComparisonDto, RunResultDto, RunSummaryDto } from '../models/messages';
 import { Bridge, BridgeError } from './bridge';
 import { RunStore, isRunPlanDirty } from './run-store';
 import { WorkspaceStore } from './workspace-store';
 import { Dialogs } from './dialogs';
 import { testDateTime, useTestDateFormat } from '../testing/date-format';
+
+const comparison = (baseline: string, current: string): RunComparisonDto =>
+  ({
+    baseline: { runId: baseline },
+    current: { runId: current },
+    total: { key: '', name: 'Total', inBaseline: true, inCurrent: true, metrics: [] },
+    requests: [],
+    environments: [],
+  }) as unknown as RunComparisonDto;
 
 const result = (patch: Partial<RunResultDto> = {}): RunResultDto =>
   ({ runId: 'r1', state: 'completed', ...patch }) as RunResultDto;
@@ -31,6 +40,7 @@ describe('RunStore', () => {
       'runPlan.delete': () => null,
       'run.delete': () => null,
       'run.clear': () => null,
+      'run.compare': (p) => comparison(p.baselineRunId, p.runId),
     };
     send = vi.fn(async (type: string, payload: unknown) => {
       const handler = handlers[type];
@@ -311,6 +321,56 @@ describe('RunStore', () => {
 
     expect(send).toHaveBeenCalledWith('run.clear', { path: 'a.run.yaml' });
     expect(store.draft()?.run).toBeNull();
+  });
+
+  describe('comparing runs', () => {
+    const summaries = [
+      { runId: 'later', startedAt: '2026-01-03T09:30:00Z' },
+      // Earlier, though its text sorts after: 09:00 UTC.
+      { runId: 'earlier', startedAt: '2026-01-03T10:00:00+01:00' },
+    ] as RunSummaryDto[];
+
+    beforeEach(async () => {
+      await store.open('a.run.yaml');
+      store.drafts.update((drafts) =>
+        drafts.map((d) => ({ ...d, run: result(), history: summaries })),
+      );
+    });
+
+    it('compares two runs with the older one as the baseline', async () => {
+      await store.compare(key(), ['later', 'earlier']);
+
+      expect(send).toHaveBeenCalledWith('run.compare', {
+        baselineRunId: 'earlier',
+        runId: 'later',
+      });
+      expect(store.draft()?.comparison?.baseline.runId).toBe('earlier');
+    });
+
+    it('closes the comparison, and drops it when showing a run or deleting a compared one', async () => {
+      await store.compare(key(), ['later', 'earlier']);
+      store.closeComparison(key());
+      expect(store.draft()?.comparison).toBeNull();
+
+      await store.compare(key(), ['later', 'earlier']);
+      await store.show(key(), 'later');
+      expect(store.draft()?.comparison).toBeNull();
+
+      await store.compare(key(), ['later', 'earlier']);
+      await store.deleteRuns(key(), ['later']);
+      expect(store.draft()?.comparison).toBeNull();
+    });
+
+    it('does not compare while the plan is running', async () => {
+      store.drafts.update((drafts) =>
+        drafts.map((d) => ({ ...d, run: result({ state: 'running' }) })),
+      );
+
+      await store.compare(key(), ['later', 'earlier']);
+
+      expect(send).not.toHaveBeenCalledWith('run.compare', expect.anything());
+      expect(store.draft()?.failure).toContain('Stop the running plan');
+    });
   });
 
   it('does not delete runs while the plan is running', async () => {

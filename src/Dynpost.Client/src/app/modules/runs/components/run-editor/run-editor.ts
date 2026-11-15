@@ -18,6 +18,7 @@ import {
   isRunPlanDirty,
   isRunPlanRunning,
 } from '../../../../services/run-store';
+import { RunComparison } from '../run-comparison/run-comparison';
 import { RunHistory } from '../run-history/run-history';
 import { RunPlanForm } from '../run-plan-form/run-plan-form';
 import { RunResults } from '../run-results/run-results';
@@ -32,7 +33,15 @@ export type RunEditorZone = 'plan' | 'results';
  */
 @Component({
   selector: 'app-run-editor',
-  imports: [CodeEditor, FaIconComponent, RunHistory, RunPlanForm, RunResults, RunSamples],
+  imports: [
+    CodeEditor,
+    FaIconComponent,
+    RunComparison,
+    RunHistory,
+    RunPlanForm,
+    RunResults,
+    RunSamples,
+  ],
   host: { class: 'flex min-h-0 flex-1 flex-col overflow-hidden' },
   templateUrl: './run-editor.html',
 })
@@ -66,6 +75,12 @@ export class RunEditor {
   /** Shows the table of requests and responses. */
   protected showRequests(): void {
     this.view.set('requests');
+  }
+
+  /** Compares two earlier runs on the dashboard. */
+  protected compare(key: string, runIds: string[]): void {
+    this.view.set('dashboard');
+    void this.store.compare(key, runIds);
   }
 
   protected readonly iconButton =

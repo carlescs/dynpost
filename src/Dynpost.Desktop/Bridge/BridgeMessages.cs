@@ -281,6 +281,12 @@ internal static class BridgeMessageTypes
     /// <summary>Deletes all the earlier runs of a plan. Payload: <see cref="RunPlanPathPayload"/>. Result: none.</summary>
     public const string RunClear = "run.clear";
 
+    /// <summary>
+    /// Compares a finished run with a baseline run: overall, per-request and per-environment deltas.
+    /// Payload: <see cref="CompareRunsPayload"/>. Result: the comparison.
+    /// </summary>
+    public const string RunCompare = "run.compare";
+
     /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
     public const string GitStatus = "git.status";
 
@@ -635,6 +641,8 @@ internal sealed record StartRunPayload(string Path, bool ConfirmLarge = false);
 internal sealed record RunIdPayload(string RunId);
 
 internal sealed record RunIdsPayload(IReadOnlyList<string> RunIds);
+
+internal sealed record CompareRunsPayload(string BaselineRunId, string RunId);
 
 internal sealed record RunResponsePayload(string RunId, string File);
 

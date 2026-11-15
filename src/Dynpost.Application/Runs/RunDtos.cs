@@ -116,6 +116,21 @@ public sealed record RunSummaryDto(
     long Errors,
     double ErrorPercent,
     double P95,
-    double Throughput);
+    double Throughput)
+{
+    public static RunSummaryDto From(RunResultDto run) => new(
+        run.RunId,
+        run.PlanPath,
+        run.PlanName,
+        run.State,
+        run.StartedAt,
+        run.ElapsedMs,
+        run.Passed,
+        run.Total.Samples,
+        run.Total.Errors,
+        run.Total.ErrorPercent,
+        run.Total.P95,
+        run.Total.Throughput);
+}
 
 public sealed record StartedRunDto(string RunId);

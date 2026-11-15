@@ -1,6 +1,12 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
-import { ERROR_CODES, RunPlanFileDto, RunResultDto, RunSummaryDto } from '../models/messages';
+import {
+  ERROR_CODES,
+  RunComparisonDto,
+  RunPlanFileDto,
+  RunResultDto,
+  RunSummaryDto,
+} from '../models/messages';
 import { PLANS_FOLDER } from '../models/workspace';
 import { WorkspaceStore } from './workspace-store';
 import { DISCARD, Dialogs } from './dialogs';
@@ -21,6 +27,8 @@ export interface RunPlanDraft {
   run: RunResultDto | null;
   /** The plan's earlier runs. */
   history: RunSummaryDto[];
+  /** Two earlier runs compared, shown instead of the dashboard; `null` when not comparing. */
+  comparison: RunComparisonDto | null;
   saving: boolean;
   starting: boolean;
   /** Set when a very large run needs the user's go-ahead. */
@@ -146,6 +154,7 @@ export class RunStore {
           savedYaml: document.yaml,
           run: null,
           history: [],
+          comparison: null,
           saving: false,
           starting: false,
           confirmation: null,
@@ -378,10 +387,39 @@ export class RunStore {
     this.stopPolling(key);
     try {
       const run = await this.bridge.send('run.progress', { runId });
-      this.patch(key, (d) => ({ ...d, run }));
+      this.patch(key, (d) => ({ ...d, run, comparison: null }));
     } catch (error) {
       this.report(error, key);
     }
+  }
+
+  /**
+   * Compares two earlier runs of a plan: the older one is the baseline. The comparison is shown in
+   * place of the dashboard until it is closed or another run is shown.
+   */
+  async compare(key: string, runIds: string[]): Promise<void> {
+    const draft = this.find(key);
+    if (!draft || runIds.length !== 2) return;
+    if (isRunPlanRunning(draft)) {
+      this.report('Stop the running plan before comparing runs.', key);
+      return;
+    }
+    const [baselineRunId, runId] = [...runIds].sort((a, b) => {
+      const at = (id: string) =>
+        Date.parse(draft.history.find((summary) => summary.runId === id)?.startedAt ?? '') || 0;
+      return at(a) - at(b);
+    });
+    try {
+      const comparison = await this.bridge.send('run.compare', { baselineRunId, runId });
+      this.patch(key, (d) => ({ ...d, comparison, failure: null }));
+    } catch (error) {
+      this.report(error, key);
+    }
+  }
+
+  /** Closes the comparison of a plan, showing its dashboard again. */
+  closeComparison(key: string): void {
+    this.patch(key, (d) => ({ ...d, comparison: null }));
   }
 
   /** Deletes earlier runs of a plan after asking; the dashboard empties if it showed one of them. */
@@ -413,6 +451,11 @@ export class RunStore {
       this.patch(key, (d) => ({
         ...d,
         run: d.run && deleted.has(d.run.runId) ? null : d.run,
+        comparison:
+          d.comparison &&
+          (deleted.has(d.comparison.baseline.runId) || deleted.has(d.comparison.current.runId))
+            ? null
+            : d.comparison,
         history: d.history.filter((summary) => !deleted.has(summary.runId)),
       }));
     } catch (error) {
@@ -436,7 +479,7 @@ export class RunStore {
     if (!ok) return;
     try {
       await this.bridge.send('run.clear', { path: draft.path });
-      this.patch(key, (d) => ({ ...d, run: null, history: [] }));
+      this.patch(key, (d) => ({ ...d, run: null, history: [], comparison: null }));
     } catch (error) {
       this.report(error, key);
     }
@@ -527,6 +570,7 @@ export class RunStore {
 
   private async follow(key: string, runId: string): Promise<void> {
     this.stopPolling(key);
+    this.patch(key, (d) => ({ ...d, comparison: null }));
     const generation = ++this.generation;
     this.polls.set(key, { generation, timer: null });
     const current = () => this.polls.get(key)?.generation === generation;

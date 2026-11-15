@@ -131,19 +131,7 @@ public sealed class JsonRunStore : IRunStore
                     var run = await ReadAsync(file, cancellationToken);
                     if (run is not null && run.PlanPath == planPath)
                     {
-                        summaries.Add(new RunSummaryDto(
-                            run.RunId,
-                            run.PlanPath,
-                            run.PlanName,
-                            run.State,
-                            run.StartedAt,
-                            run.ElapsedMs,
-                            run.Passed,
-                            run.Total.Samples,
-                            run.Total.Errors,
-                            run.Total.ErrorPercent,
-                            run.Total.P95,
-                            run.Total.Throughput));
+                        summaries.Add(RunSummaryDto.From(run));
                     }
                 }
             }
