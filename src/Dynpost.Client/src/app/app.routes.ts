@@ -11,6 +11,10 @@ export const routes: Routes = [
     loadChildren: () => import('./modules/explorer/explorer.routes').then((m) => m.EXPLORER_ROUTES),
   },
   {
+    path: 'search',
+    loadChildren: () => import('./modules/search/search.routes').then((m) => m.SEARCH_ROUTES),
+  },
+  {
     path: 'environments',
     loadChildren: () =>
       import('./modules/environments/environments.routes').then((m) => m.ENVIRONMENTS_ROUTES),

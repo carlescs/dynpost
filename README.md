@@ -82,6 +82,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       them from recents
 - [x] Open the workspace folder in File Explorer (Finder on macOS, the default
       file manager on Linux) from the explorer's "More actions" menu
+- [x] Quick open (Ctrl+P) and full-text workspace search, both forgiving typos (see
+      [Finding requests](#finding-requests))
 - [x] Request descriptions in Markdown (a **Docs** tab), imported and exported
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`, GraphQL), saved as YAML files
@@ -512,6 +514,8 @@ the settings menu, lists them in the app.
 | Ctrl+Tab, Ctrl+PageDown | Next tab |
 | Ctrl+Shift+Tab, Ctrl+PageUp | Previous tab |
 | Ctrl+B | Show or hide the sidebar |
+| Ctrl+P | Quick open: find a request by name, path, method or URL |
+| Ctrl+Shift+F | Search the text of every request |
 | Ctrl+1 … Ctrl+4 | Explorer, Environments, Load runs, Source control |
 | F1 | Keyboard shortcuts |
 | Ctrl+Q | Quit Dynpost (asking first if tabs have unsaved changes or load runs are running; desktop app only) |
@@ -528,6 +532,26 @@ drag an icon to its new place, or focus it and press Alt+Up or Alt+Down. The
 order is remembered in your user settings, and the small reset icon at the
 bottom of the activity bar puts the views back in their default order. Ctrl+1 … Ctrl+4 keep opening the
 same views whatever their order.
+
+## Finding requests
+
+**Quick open** (Ctrl+P, or *Open request…* in the header) finds a request as you
+type by its name, file path, method or URL, forgiving typos: none in words of up
+to 3 characters, one in words of 4 to 6, two in longer ones (`helth` finds
+*Health check*). The best matches come first: exact ones before ones with typos,
+and names before URLs and methods, then paths. Words separated by spaces can
+match different things: `post users` finds a POST request whose name or URL
+mentions users. Use the arrow keys and Enter, or click, to open the request.
+
+The **Search** view (the magnifier in the activity bar, or Ctrl+Shift+F) finds
+text in every request file — URLs, parameters, headers, auth, bodies and
+descriptions — and lists the matching lines grouped by request. *Fuzzy* (the
+wand button, on by default) forgives typos as quick open does, so `autorization`
+finds `Authorization`, and lists the requests with the closest matches first;
+turn it off to find only the exact text, in the explorer's order. *Match case*
+(the **A** button) makes letter case count. Click a request or a line to open
+it. The search reads the files on disk, so it doesn't see unsaved edits, and it
+stops after the first 1000 matching lines (refine the search to see the rest).
 
 ## Sending requests
 
@@ -1171,6 +1195,7 @@ The assistant can use these tools, always on the workspace open in the app:
 | Tool | What it does |
 | --- | --- |
 | `get_workspace` | Lists the requests and collection folders. |
+| `search_workspace` | Finds text in request files (URLs, headers, bodies…), exactly or forgiving typos, and returns the matching lines grouped by file. |
 | `read_request`, `create_request`, `save_request`, `move_request`, `delete_request` | Read and change request files. |
 | `create_folder` | Creates a folder in `requests/` or `plans/`. |
 | `get_folder_settings` | Reads the headers, auth and variables a folder of `requests/` (or `requests/` itself) sets for everything in it. |

@@ -16,6 +16,7 @@ using Dynpost.Application.About;
 using Dynpost.Application.Locale;
 using Dynpost.Application.Mcp;
 using Dynpost.Application.Updates;
+using Dynpost.Application.Search;
 using Dynpost.Application.Workspaces;
 using Dynpost.Desktop.Bridge;
 using Dynpost.Desktop.Hosting;
@@ -33,6 +34,7 @@ using Dynpost.Infrastructure.Sharing;
 using Dynpost.Infrastructure.About;
 using Dynpost.Infrastructure.Locale;
 using Dynpost.Infrastructure.Updates;
+using Dynpost.Infrastructure.Search;
 using Dynpost.Infrastructure.Workspaces;
 using Dynpost.Infrastructure.Yaml;
 using Photino.NET;
@@ -94,6 +96,7 @@ internal static class Program
         new ServiceCollection()
             .AddSingleton<CurrentWorkspace>()
             .AddSingleton<IWorkspaceRepository, FileSystemWorkspaceRepository>()
+            .AddSingleton<IFuzzyMatcher, FuzzySearchNetMatcher>()
             .AddSingleton<IFolderDefaultsStore, YamlFolderDefaultsStore>()
             .AddSingleton<FolderInheritance>()
             .AddSingleton<IWorkspaceLayoutStore, FileSystemWorkspaceLayoutStore>()
@@ -155,6 +158,8 @@ internal static class Program
             .AddTransient<RemoveRecentWorkspace>()
             .AddTransient<GetWorkspaceTree>()
             .AddTransient<FindWorkspaceItem>()
+            .AddTransient<QuickOpen>()
+            .AddTransient<SearchWorkspace>()
             .AddTransient<ShowWorkspaceFolder>()
             .AddTransient<ExportWorkspace>()
             .AddTransient<ImportCollection>()

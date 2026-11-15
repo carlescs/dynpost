@@ -8,6 +8,8 @@ export type ShortcutAction =
   | 'nextTab'
   | 'previousTab'
   | 'toggleSidebar'
+  | 'quickOpen'
+  | 'search'
   | 'explorer'
   | 'environments'
   | 'runs'
@@ -61,6 +63,12 @@ export const SHORTCUTS: readonly Shortcut[] = [
     ],
   },
   { action: 'toggleSidebar', label: 'Show or hide the sidebar', keys: [{ key: 'b', mod: true }] },
+  { action: 'quickOpen', label: 'Open a request by name', keys: [{ key: 'p', mod: true }] },
+  {
+    action: 'search',
+    label: 'Search the workspace',
+    keys: [{ key: 'f', mod: true, shift: true }],
+  },
   { action: 'explorer', label: 'Explorer', keys: [{ key: '1', mod: true }] },
   { action: 'environments', label: 'Environments', keys: [{ key: '2', mod: true }] },
   { action: 'runs', label: 'Load runs', keys: [{ key: '3', mod: true }] },

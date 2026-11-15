@@ -143,6 +143,35 @@ describe('Shortcuts', () => {
     expect(navigate).toHaveBeenCalledWith(['/', 'git']);
   });
 
+  it('opens quick open with Ctrl+P once a workspace is open', async () => {
+    setup();
+    const event = press('p', { ctrlKey: true });
+    shortcuts.handle(event);
+    expect(event.defaultPrevented).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(dialogs.open).not.toHaveBeenCalled();
+
+    workspace.workspace.set({ name: 'api', root: '/r' });
+    shortcuts.handle(press('p', { ctrlKey: true }));
+
+    await vi.waitFor(() =>
+      expect(dialogs.open).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ ariaLabelledBy: 'quick-open-title' }),
+      ),
+    );
+  });
+
+  it('shows the search view with Ctrl+Shift+F', async () => {
+    setup();
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    shortcuts.handle(press('F', { ctrlKey: true, shiftKey: true }));
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith(['/', 'search']));
+    expect(workspace.sidebarOpen()).toBe(true);
+  });
+
   it('opens the shortcuts dialog with F1', () => {
     setup();
     shortcuts.handle(press('F1'));

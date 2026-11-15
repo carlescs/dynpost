@@ -8,6 +8,7 @@ import {
   faFolderTree,
   faGaugeHigh,
   faLayerGroup,
+  faMagnifyingGlass,
   faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons';
 import { Bridge } from '../../services/bridge';
@@ -15,8 +16,11 @@ import { GitStore } from '../../services/git-store';
 import { filter, map } from 'rxjs';
 import { WorkspaceStore } from '../../services/workspace-store';
 
-/** The routed modules, one per activity: `#/explorer`, `#/environments`, `#/runs` and `#/git`. */
-type Activity = 'explorer' | 'environments' | 'runs' | 'git';
+/**
+ * The routed modules, one per activity: `#/explorer`, `#/search`, `#/environments`, `#/runs` and
+ * `#/git`.
+ */
+type Activity = 'explorer' | 'search' | 'environments' | 'runs' | 'git';
 
 interface ActivityItem {
   view: Activity;
@@ -27,6 +31,7 @@ interface ActivityItem {
 /** The activities in their default order. */
 const ACTIVITIES: readonly ActivityItem[] = [
   { view: 'explorer', label: 'Explorer', icon: faFolderTree },
+  { view: 'search', label: 'Search', icon: faMagnifyingGlass },
   { view: 'environments', label: 'Environments', icon: faLayerGroup },
   { view: 'runs', label: 'Load runs', icon: faGaugeHigh },
   { view: 'git', label: 'Source control', icon: faCodeBranch },

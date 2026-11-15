@@ -1,5 +1,6 @@
 import { Dialog } from '@angular/cdk/dialog';
-import { Injectable, inject } from '@angular/core';
+import { createGlobalPositionStrategy } from '@angular/cdk/overlay';
+import { Injectable, Injector, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { ShortcutsDialog } from '../components/shortcuts-dialog/shortcuts-dialog';
 import { Bridge } from './bridge';
@@ -18,6 +19,7 @@ export class Shortcuts {
   private readonly bridge = inject(Bridge);
   private readonly dialog = inject(Dialog);
   private readonly dialogs = inject(Dialogs);
+  private readonly injector = inject(Injector);
   private readonly router = inject(Router);
   private readonly workspace = inject(WorkspaceStore);
   private readonly environments = inject(EnvironmentStore);
@@ -63,9 +65,12 @@ export class Shortcuts {
         return this.cycleTab(-1);
       case 'toggleSidebar':
         return this.workspace.toggleSidebar();
+      case 'quickOpen':
+        return this.quickOpen();
       case 'explorer':
       case 'environments':
       case 'runs':
+      case 'search':
       case 'git':
         this.workspace.toggleSidebar(true);
         await this.router.navigate(['/', action]);
@@ -76,6 +81,20 @@ export class Shortcuts {
       case 'quit':
         return this.quit();
     }
+  }
+
+  /** Opens quick open (loaded on first use: startup doesn't need it) when a workspace is open. */
+  private async quickOpen(): Promise<void> {
+    if (!this.workspace.workspace()) return;
+    const { QuickOpen } = await import('../components/quick-open/quick-open');
+    if (this.dialog.openDialogs.length) return;
+    this.dialogs.open(QuickOpen, {
+      ariaLabelledBy: 'quick-open-title',
+      // Near the top, like a command palette, so the list grows downwards as it fills.
+      positionStrategy: createGlobalPositionStrategy(this.injector)
+        .centerHorizontally()
+        .top('4rem'),
+    });
   }
 
   /** Whether a git screen (conflict, commit review or diff) covers the editor tabs. */

@@ -15,6 +15,7 @@ using Dynpost.Application.Git;
 using Dynpost.Application.Http;
 using Dynpost.Application.Requests;
 using Dynpost.Application.Runs;
+using Dynpost.Application.Search;
 using Dynpost.Application.Workspaces;
 using Dynpost.Desktop.Bridge;
 using Dynpost.Domain.Workspaces;
@@ -79,6 +80,12 @@ internal static class McpTools
                 "Lists the workspace open in Dynpost: its name, folder and the tree of requests (in requests/) and their collection folders. "
                 + "Paths are relative to the workspace folder, with / separators (requests/users/get-user.yaml).",
                 (_, ct) => Use<GetWorkspaceTree>().ExecuteAsync(ct),
+                readOnly: true)
+            .Add<SearchWorkspaceArguments, WorkspaceSearchDto>(
+                "search_workspace", "Search workspace",
+                "Searches the text of every request file (URLs, parameters, headers, bodies, descriptions) and returns the matching lines, "
+                + $"grouped by request file (or, with fuzzy, the closest files first). Lines are numbered from 1 and shown without their indentation. Stops after {SearchWorkspace.MaxLines} lines (truncated).",
+                (p, ct) => Use<SearchWorkspace>().ExecuteAsync(p.Query, p.MatchCase ?? false, p.Fuzzy ?? false, ct),
                 readOnly: true)
             .Add<PathArguments, RequestDto>(
                 "read_request", "Read request",
@@ -455,6 +462,11 @@ internal static class McpTools
 // The arguments of the tools. Descriptions end up in their JSON Schemas.
 
 internal sealed record NoArguments;
+
+internal sealed record SearchWorkspaceArguments(
+    [property: Description("The text to find, as plain text (not a pattern).")] string Query,
+    [property: Description("Whether letter case must match; default false.")] bool? MatchCase = null,
+    [property: Description("Whether to forgive typos (one for 4-6 characters, two for longer), the closest files first; default false (exact text).")] bool? Fuzzy = null);
 
 internal sealed record PathArguments(
     [property: Description("The request's workspace path, such as requests/users/get-user.yaml.")] string Path);

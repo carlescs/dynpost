@@ -79,7 +79,7 @@ describe('ActivityBar', () => {
     send = vi.fn().mockResolvedValue({ activityOrder: ['git', 'removed', 'runs'] });
     const { fixture, labels } = await render();
     await fixture.whenStable();
-    expect(labels()).toEqual(['Source control', 'Load runs', 'Explorer', 'Environments']);
+    expect(labels()).toEqual(['Source control', 'Load runs', 'Explorer', 'Search', 'Environments']);
   });
 
   it('moves the focused activity with Alt+arrows and saves the order', async () => {
@@ -93,14 +93,14 @@ describe('ActivityBar', () => {
     };
 
     await key('Load runs', 'ArrowUp');
-    expect(labels()).toEqual(['Explorer', 'Load runs', 'Environments', 'Source control']);
+    expect(labels()).toEqual(['Explorer', 'Search', 'Load runs', 'Environments', 'Source control']);
     await key('Explorer', 'ArrowUp');
-    expect(labels()).toEqual(['Explorer', 'Load runs', 'Environments', 'Source control']);
+    expect(labels()).toEqual(['Explorer', 'Search', 'Load runs', 'Environments', 'Source control']);
     await key('Explorer', 'ArrowDown');
-    expect(labels()).toEqual(['Load runs', 'Explorer', 'Environments', 'Source control']);
+    expect(labels()).toEqual(['Search', 'Explorer', 'Load runs', 'Environments', 'Source control']);
     await vi.waitFor(() =>
       expect(send).toHaveBeenLastCalledWith('settings.setActivityOrder', {
-        order: ['runs', 'explorer', 'environments', 'git'],
+        order: ['search', 'explorer', 'runs', 'environments', 'git'],
       }),
     );
     expect(router.url).toBe('/explorer');
@@ -127,7 +127,7 @@ describe('ActivityBar reset', () => {
     reset.click();
     await fixture.whenStable();
 
-    expect(labels()).toEqual(['Explorer', 'Environments', 'Load runs', 'Source control']);
+    expect(labels()).toEqual(['Explorer', 'Search', 'Environments', 'Load runs', 'Source control']);
     expect(reset.disabled).toBe(true);
     await vi.waitFor(() =>
       expect(send).toHaveBeenLastCalledWith('settings.setActivityOrder', { order: [] }),
@@ -141,8 +141,9 @@ describe('orderActivities', () => {
       'runs',
       'git',
       'explorer',
+      'search',
       'environments',
     ]);
-    expect(orderActivities([])).toEqual(['explorer', 'environments', 'runs', 'git']);
+    expect(orderActivities([])).toEqual(['explorer', 'search', 'environments', 'runs', 'git']);
   });
 });
