@@ -89,10 +89,13 @@ public sealed class SendRequest(
             return variables.Error!;
         }
 
+        // Built-in variables ({{$uuid}}, …) get one value per send, shared by both preparations below.
+        var values = DynamicVariables.With(variables.Value.Values, time.GetUtcNow(), Random.Shared);
+
         // An OAuth 2.0 token is only worth obtaining for a request that can be sent: check it first
         // with a stand-in token.
         var oauth = definition.Value.Auth as OAuth2Auth;
-        var prepared = RequestPreparation.Prepare(definition.Value, variables.Value.Values, oauth is null ? null : "token", root);
+        var prepared = RequestPreparation.Prepare(definition.Value, values, oauth is null ? null : "token", root);
         if (!prepared.IsValid)
         {
             return new Error(ErrorCodes.InvalidRequest, variables.Value.Explain(prepared.Errors, prepared.MissingVariables));
@@ -101,7 +104,7 @@ public sealed class SendRequest(
         OAuth2Settings? oauthSettings = null;
         if (oauth is not null)
         {
-            var resolution = OAuth2Flow.Resolve(oauth, variables.Value.Values);
+            var resolution = OAuth2Flow.Resolve(oauth, values);
             if (!resolution.IsValid)
             {
                 return new Error(ErrorCodes.InvalidRequest, variables.Value.Explain(resolution.Errors, resolution.MissingVariables));
@@ -141,7 +144,7 @@ public sealed class SendRequest(
                     return token.Error!;
                 }
 
-                var withToken = RequestPreparation.Prepare(definition.Value, variables.Value.Values, token.Value.AccessToken, root).Request!;
+                var withToken = RequestPreparation.Prepare(definition.Value, values, token.Value.AccessToken, root).Request!;
                 outgoing = withToken with { Cookies = outgoing.Cookies };
             }
 

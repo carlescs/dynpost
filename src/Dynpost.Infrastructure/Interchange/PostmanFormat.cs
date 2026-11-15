@@ -41,7 +41,7 @@ internal static partial class PostmanFormat
 
         var variables = root.Arr("variable")
             .Where(v => !v.Bool("disabled"))
-            .Select(v => new EnvironmentVariable(v.Str("key") ?? v.Str("id") ?? string.Empty, v.Get("value").AnyText(), v.Str("type") == "secret"))
+            .Select(v => new EnvironmentVariable(v.Str("key") ?? v.Str("id") ?? string.Empty, FromPostmanValue(v.Get("value").AnyText()), v.Str("type") == "secret"))
             .Where(v => v.Name.Length > 0)
             .ToList();
         IReadOnlyList<EnvironmentDefinition> environments = variables.Count > 0 ? [new EnvironmentDefinition(name, variables)] : [];
@@ -57,7 +57,7 @@ internal static partial class PostmanFormat
     {
         var variables = root.Arr("values")
             .Where(v => v.Get("enabled") is not JsonValue enabled || enabled.Text() != "false")
-            .Select(v => new EnvironmentVariable(v.Str("key") ?? string.Empty, v.Get("value").AnyText(), v.Str("type") == "secret"))
+            .Select(v => new EnvironmentVariable(v.Str("key") ?? string.Empty, FromPostmanValue(v.Get("value").AnyText()), v.Str("type") == "secret"))
             .ToList();
         var environment = new EnvironmentDefinition(root.Str("name") ?? string.Empty, variables);
         return new ParsedCollection(
@@ -92,6 +92,9 @@ internal static partial class PostmanFormat
         return new CollectionFolder(name, folders, requests);
     }
 
+    private static string FromPostmanValue(string value) =>
+        InterchangeText.RenameVariables(value, InterchangeText.FromPostmanDynamic);
+
     /// <summary>A description is text, or an object with the text in <c>content</c>.</summary>
     private static string? Description(JsonNode? description) =>
         (description is JsonObject ? description.Str("content") : description.Text()) is { Length: > 0 } text ? text : null;
@@ -102,7 +105,9 @@ internal static partial class PostmanFormat
         if (request is JsonValue)
         {
             var (plainUrl, plainQuery) = InterchangeText.SplitQuery(request.Text() ?? string.Empty);
-            return new HttpRequestDefinition(name, RequestMethod.Get, plainUrl, plainQuery);
+            return InterchangeText.MapText(
+                new HttpRequestDefinition(name, RequestMethod.Get, plainUrl, plainQuery),
+                text => InterchangeText.RenameVariables(text, InterchangeText.FromPostmanDynamic));
         }
 
         var methodName = request.Str("method") ?? "GET";
@@ -117,7 +122,7 @@ internal static partial class PostmanFormat
         var auth = ImportAuth(request.Obj("auth"), name, warnings) ?? inherited;
         var body = ImportBody(request.Obj("body"), headers, name, warnings);
 
-        return new HttpRequestDefinition(
+        var imported = new HttpRequestDefinition(
             name,
             method,
             url,
@@ -125,6 +130,7 @@ internal static partial class PostmanFormat
             InterchangeText.WithoutImpliedContentType(headers, body.Type),
             auth,
             body);
+        return InterchangeText.MapText(imported, text => InterchangeText.RenameVariables(text, InterchangeText.FromPostmanDynamic));
     }
 
     private static (string Url, List<KeyValueEntry> Query) ImportUrl(JsonNode? url)
@@ -396,8 +402,8 @@ internal static partial class PostmanFormat
 
     private static JsonObject ExportRequest(HttpRequestDefinition original)
     {
-        // Postman doesn't read references with spaces inside the braces.
-        var request = InterchangeText.MapText(original, text => InterchangeText.RenameVariables(text, name => name));
+        // Postman doesn't read references with spaces inside the braces, and names its built-in variables its own way.
+        var request = InterchangeText.MapText(original, text => InterchangeText.RenameVariables(text, InterchangeText.ToPostmanDynamic));
         var result = new JsonObject
         {
             ["method"] = request.Method.ToName(),
@@ -575,7 +581,7 @@ internal static partial class PostmanFormat
             .Select(v => (JsonNode)new JsonObject
             {
                 ["key"] = v.Name,
-                ["value"] = v.Secret ? string.Empty : InterchangeText.RenameVariables(v.Value, name => name),
+                ["value"] = v.Secret ? string.Empty : InterchangeText.RenameVariables(v.Value, InterchangeText.ToPostmanDynamic),
                 ["type"] = v.Secret ? "secret" : "default",
                 ["enabled"] = true,
             })

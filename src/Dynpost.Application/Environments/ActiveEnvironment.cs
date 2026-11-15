@@ -1,6 +1,7 @@
 using Dynpost.Application.Common;
 using Dynpost.Application.Workspaces;
 using Dynpost.Domain.Environments;
+using Dynpost.Domain.Requests;
 
 namespace Dynpost.Application.Environments;
 
@@ -33,15 +34,29 @@ public sealed record ActiveVariables(
             return null;
         }
 
-        if (EnvironmentName is null)
+        var builtIn = missing.Where(DynamicVariables.IsDynamic).ToList();
+        var builtInHint = builtIn.Count == 0
+            ? null
+            : $"Names starting with '$' are built-in variables; the supported ones are {string.Join(", ", DynamicVariables.All.Select(v => v.Name))} ({{{{$randomInt min max}}}} takes two whole numbers).";
+        if (builtIn.Count == missing.Count)
         {
-            return "No environment is selected.";
+            return builtInHint;
         }
 
-        var unsetSecrets = missing.Where(UnsetSecrets.Contains).ToList();
-        return unsetSecrets.Count > 0
-            ? $"Secret values are kept on each computer and not shared through git: enter {string.Join(", ", unsetSecrets)} in the environment '{EnvironmentName}'."
-            : $"Add them to the environment '{EnvironmentName}'.";
+        string hint;
+        if (EnvironmentName is null)
+        {
+            hint = "No environment is selected.";
+        }
+        else
+        {
+            var unsetSecrets = missing.Where(UnsetSecrets.Contains).ToList();
+            hint = unsetSecrets.Count > 0
+                ? $"Secret values are kept on each computer and not shared through git: enter {string.Join(", ", unsetSecrets)} in the environment '{EnvironmentName}'."
+                : $"Add them to the environment '{EnvironmentName}'.";
+        }
+
+        return builtInHint is null ? hint : $"{hint} {builtInHint}";
     }
 
     /// <summary>Errors with the hint on undefined variables, as one message.</summary>

@@ -585,4 +585,56 @@ public class ImportFormatTests
 
         Assert.Equal(ErrorCodes.InvalidFile, result.Error?.Code);
     }
+
+    [Fact]
+    public void Postman_MapsDynamicVariablesToBuiltInOnes()
+    {
+        var parsed = Parse("""
+            {
+              "info": { "name": "Shop", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+              "item": [
+                {
+                  "name": "Create",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "X-Request-Id", "value": "{{$guid}}" }],
+                    "url": { "raw": "https://api.example.com/items?at={{$timestamp}}&n={{$randomInt}}" }
+                  }
+                }
+              ]
+            }
+            """);
+
+        var request = Assert.Single(parsed.Collection.Root.Requests);
+        Assert.Equal("{{$uuid}}", request.Headers[0].Value);
+        Assert.Contains(request.Params, p => p.Value == "{{$timestamp}}");
+        Assert.Contains(request.Params, p => p.Value == "{{$randomInt}}");
+    }
+
+    [Fact]
+    public void Insomnia_MapsUuidAndNowTagsToBuiltInVariables()
+    {
+        var parsed = Parse("""
+            {
+              "_type": "export",
+              "__export_format": 4,
+              "resources": [
+                { "_id": "wrk_1", "_type": "workspace", "name": "Shop" },
+                {
+                  "_id": "req_1", "_type": "request", "parentId": "wrk_1", "name": "Create",
+                  "method": "POST", "url": "https://api.example.com/items",
+                  "headers": [
+                    { "name": "X-Id", "value": "{% uuid 'v4' %}" },
+                    { "name": "X-At", "value": "{% now 'unix' %}" },
+                    { "name": "X-Iso", "value": "{% now 'iso-8601' %}" }
+                  ]
+                }
+              ]
+            }
+            """);
+
+        var request = Assert.Single(parsed.Collection.Root.Requests);
+        Assert.Equal(["{{$uuid}}", "{{$timestamp}}", "{{$isoTimestamp}}"], request.Headers.Select(h => h.Value));
+        Assert.DoesNotContain(parsed.Warnings, w => w.Contains("template tags"));
+    }
 }

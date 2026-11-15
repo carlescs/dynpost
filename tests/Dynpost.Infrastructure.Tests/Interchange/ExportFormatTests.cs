@@ -199,4 +199,24 @@ public class ExportFormatTests
             AssertSameRequests(expected.Folders[i], actual.Folders[i], normalizeVariables);
         }
     }
+
+    [Fact]
+    public void Exports_WriteBuiltInVariablesTheWayEachToolNamesThem()
+    {
+        var request = new HttpRequestDefinition(
+            "Create",
+            RequestMethod.Post,
+            "https://api.example.com/items",
+            headers: [new KeyValueEntry("X-Id", "{{$uuid}}"), new KeyValueEntry("X-At", "{{ $timestamp }}"), new KeyValueEntry("X-Host", "{{host}}")]);
+        var collection = new RequestCollection(new CollectionFolder("api", [], [request]), []);
+
+        var postman = new PostmanCollectionExporter().Export(collection).Content;
+        Assert.Contains("{{$guid}}", postman);
+        Assert.Contains("{{$timestamp}}", postman);
+
+        var insomnia = new InsomniaExporter().Export(collection).Content;
+        Assert.Contains("{% uuid 'v4' %}", insomnia);
+        Assert.Contains("{% now 'unix' %}", insomnia);
+        Assert.Contains("{{ _.host }}", insomnia);
+    }
 }

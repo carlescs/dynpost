@@ -132,6 +132,36 @@ public class SendRequestTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task Execute_GeneratesBuiltInVariablesOncePerSend()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response("{}"));
+        var request = Request("https://api.example.com/users/{{$uuid}}?at={{$timestamp}}") with
+        {
+            Headers = [new KeyValueDto("X-Request-Id", "{{ $uuid }}")],
+        };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r =>
+                r.Url.Query.Contains($"at={Now.ToUnixTimeSeconds()}")
+                && r.Url.AbsolutePath.EndsWith("/" + r.Headers.Single(h => h.Key == "X-Request-Id").Value)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_AnUnknownBuiltInVariableIsReportedWithTheSupportedOnes()
+    {
+        var result = await CreateSendRequest().ExecuteAsync("1", Request("https://api.example.com/{{$nope}}"));
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("$nope", result.Error!.Message);
+        Assert.Contains("$uuid", result.Error.Message);
+        await _sender.DidNotReceive().SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>());
+    }
+
     private void GivenFolder(string folder, FolderDefaults defaults) =>
         _folders.ReadAsync(Root, Dynpost.Domain.Workspaces.WorkspacePath.Parse(folder), Arg.Any<CancellationToken>()).Returns(defaults);
 

@@ -13,6 +13,14 @@
   border-radius: 2px;
 }
 
+// Built-in {{$uuid}}-style variables, generated when the request is sent.
+.variable-builtin,
+.monaco-editor .view-line .variable-builtin {
+  color: #0f766e; // teal-700
+  background-color: #ccfbf1; // teal-100
+  border-radius: 2px;
+}
+
 .variable-undefined,
 .monaco-editor .view-line .variable-undefined {
   color: #be123c; // rose-700
@@ -25,6 +33,12 @@
   .monaco-editor .view-line .variable-highlight {
     color: #c4b5fd; // violet-300
     background-color: #4c1d95; // violet-900
+  }
+
+  .variable-builtin,
+  .monaco-editor .view-line .variable-builtin {
+    color: #5eead4; // teal-300
+    background-color: #134e4a; // teal-900
   }
 
   .variable-undefined,

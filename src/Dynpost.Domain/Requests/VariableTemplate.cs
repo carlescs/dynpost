@@ -6,7 +6,7 @@ namespace Dynpost.Domain.Requests;
 public static partial class VariableTemplate
 {
     /// <summary>
-    /// Replaces each <c>{{name}}</c> (spaces inside the braces are allowed) with its value.
+    /// Replaces each <c>{{name}}</c> (spaces inside the braces are allowed, and a built-in <c>{{$name arg …}}</c> may have arguments) with its value.
     /// Names without a value are left as written and added to <paramref name="missing"/>.
     /// </summary>
     public static string Resolve(string text, IReadOnlyDictionary<string, string> variables, ISet<string> missing) =>
@@ -44,7 +44,8 @@ public static partial class VariableTemplate
     /// <summary>Whether <paramref name="name"/> can be referenced as <c>{{name}}</c>.</summary>
     public static bool IsValidName(string name) => Name().IsMatch(name);
 
-    [GeneratedRegex(@"\{\{\s*(?<name>[^{}\s]+)\s*\}\}")]
+    // A built-in variable ($name) may take arguments separated by spaces: {{$randomInt 1 100}}.
+    [GeneratedRegex(@"\{\{\s*(?<name>\$[^{}\s]+(?:[ \t]+[^{}\s]+)*|[^{}\s]+)\s*\}\}")]
     private static partial Regex Reference();
 
     [GeneratedRegex(@"^[^{}\s]+$")]

@@ -333,7 +333,15 @@ internal static partial class InsomniaFormat
 
     /// <summary><c>{{ _.name }}</c> (Insomnia) → <c>{{name}}</c> (Dynpost).</summary>
     private static string FromInsomnia(string text) =>
-        InsomniaVariable().Replace(text, match => "{{" + match.Groups["name"].Value + "}}");
+        InsomniaTag().Replace(
+            InsomniaVariable().Replace(text, match => "{{" + match.Groups["name"].Value + "}}"),
+            match => (match.Groups["tag"].Value, match.Groups["arg"].Value) switch
+            {
+                ("uuid", "" or "v4") => "{{$uuid}}",
+                ("now", "unix") => "{{$timestamp}}",
+                ("now", "" or "iso-8601") => "{{$isoTimestamp}}",
+                _ => match.Value,
+            });
 
     // ---- Export ----
 
@@ -555,7 +563,14 @@ internal static partial class InsomniaFormat
 
     /// <summary><c>{{name}}</c> (Dynpost) → <c>{{ _.name }}</c> (Insomnia).</summary>
     private static string ToInsomnia(string text) =>
-        InterchangeText.RenameVariables(text, name => $" _.{name} ");
+        VariableTemplate.Replace(text, name => name switch
+        {
+            // Built-in variables are template tags in Insomnia.
+            "$uuid" => "{% uuid 'v4' %}",
+            "$timestamp" => "{% now 'unix' %}",
+            "$isoTimestamp" => "{% now 'iso-8601' %}",
+            _ => "{{ _." + name + " }}",
+        });
 
     /// <summary>A stable id: the same workspace exports with the same ids, so files diff cleanly.</summary>
     private static string Id(string prefix, string seed) =>
@@ -563,6 +578,9 @@ internal static partial class InsomniaFormat
 
     [GeneratedRegex(@"\{\{\s*_\.(?<name>[^{}\s]+)\s*\}\}")]
     private static partial Regex InsomniaVariable();
+
+    [GeneratedRegex(@"\{%\s*(?<tag>uuid|now)\s*(?:'(?<arg>[^']*)'|""(?<arg>[^""]*)"")?\s*%\}")]
+    private static partial Regex InsomniaTag();
 
     [GeneratedRegex(@"\{%.*?%\}")]
     private static partial Regex TemplateTag();

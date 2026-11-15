@@ -77,4 +77,25 @@ describe('variables', () => {
       expect(withFolderVariables(lookup, [])).toBe(lookup);
     });
   });
+
+  describe('built-in variables', () => {
+    it('splits references with arguments only for built-in variables', () => {
+      expect(splitVariables('{{$randomInt 1 6}}')).toEqual([
+        { text: '{{$randomInt 1 6}}', variable: '$randomInt 1 6' },
+      ]);
+    });
+
+    it('highlights supported built-in variables apart from environment variables', () => {
+      expect(variableClass('$uuid', lookup)).toBe('variable-builtin');
+      expect(variableClass('$randomInt 1 6', null)).toBe('variable-builtin');
+      expect(variableClass('$nope', lookup)).toBe('variable-undefined');
+      expect(variableClass('$randomInt 6 1', lookup)).toBe('variable-undefined');
+    });
+
+    it('describes what a built-in variable holds', () => {
+      expect(describeVariable('$uuid', lookup)).toContain('built-in');
+      expect(describeVariable('$randomInt 1 6', lookup)).toContain('from 1 to 6');
+      expect(describeVariable('$nope', lookup)).toContain('not a built-in variable');
+    });
+  });
 });

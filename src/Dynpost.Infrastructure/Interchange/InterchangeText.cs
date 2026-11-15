@@ -259,6 +259,31 @@ internal static partial class InterchangeText
         return string.Empty;
     }
 
+    /// <summary>
+    /// A Postman dynamic variable as Dynpost's built-in one (<c>$guid</c> → <c>$uuid</c>); other
+    /// names are kept.
+    /// </summary>
+    public static string FromPostmanDynamic(string name) => name switch
+    {
+        "$guid" or "$randomUUID" => "$uuid",
+        _ => name,
+    };
+
+    /// <summary>
+    /// A Dynpost built-in variable as Postman's (<c>$uuid</c> → <c>$guid</c>); Postman's
+    /// <c>$randomInt</c> takes no range, so the arguments are dropped. Other names are kept.
+    /// </summary>
+    public static string ToPostmanDynamic(string name)
+    {
+        var bare = name.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)[0];
+        return bare switch
+        {
+            "$uuid" => "$guid",
+            "$randomInt" => "$randomInt",
+            _ => name,
+        };
+    }
+
     /// <summary>Replaces <c>{{name}}</c> references using <paramref name="rename"/>.</summary>
     public static string RenameVariables(string text, Func<string, string> rename) =>
         VariableTemplate.Replace(text, name => "{{" + rename(name) + "}}");

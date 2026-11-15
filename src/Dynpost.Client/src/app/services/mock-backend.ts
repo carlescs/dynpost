@@ -830,8 +830,21 @@ export class MockBackend {
         v.value.replace(VARIABLE_PATTERN, (match, name: string) => variables.get(name) ?? match),
       );
     }
+    // Built-in variables, roughly as the host generates them (one value per reference and send).
+    const now = new Date();
+    const builtIn: Record<string, () => string> = {
+      $uuid: () => crypto.randomUUID(),
+      $timestamp: () => String(Math.floor(now.getTime() / 1000)),
+      $isoTimestamp: () => now.toISOString(),
+      $randomInt: () => String(Math.floor(Math.random() * 1001)),
+    };
+    const generated = (name: string) => {
+      if (!variables.has(name) && Object.hasOwn(builtIn, name))
+        variables.set(name, builtIn[name]());
+      return variables.get(name);
+    };
     const resolve = (text: string | null | undefined) =>
-      (text ?? '').replace(VARIABLE_PATTERN, (match, name: string) => variables.get(name) ?? match);
+      (text ?? '').replace(VARIABLE_PATTERN, (match, name: string) => generated(name) ?? match);
     dto = {
       ...dto,
       url: resolve(dto.url),

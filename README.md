@@ -99,7 +99,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       out of git (see [Local-only files](#local-only-files))
 - [x] Collections as folders, with folder-level headers, auth and variables that apply to
       everything inside (see [Folder settings](#folder-settings))
-- [x] Environments with `{{variable}}` substitution
+- [x] Environments with `{{variable}}` substitution, and built-in variables
+      such as `{{$uuid}}` and `{{$timestamp}}` (see [Built-in variables](#built-in-variables))
 - [x] Auth helpers: Basic, Bearer token, API key and OAuth 2.0 (client
       credentials, and authorization code with PKCE in the system browser)
 - [x] Local response history per request, compared with the latest response
@@ -498,6 +499,31 @@ forgets them.
 In the request editor, `{{variable}}` references are highlighted in the URL and
 body: in violet when the selected environment defines them, in red when it
 doesn't. Hover over one to see its value (secret values are not shown).
+
+### Built-in variables
+
+Names starting with `$` are built-in variables, generated when the request is
+sent, without any scripting:
+
+| Variable | Value |
+| --- | --- |
+| `{{$uuid}}` | a random UUID (version 4) |
+| `{{$timestamp}}` | the current time in Unix seconds |
+| `{{$isoTimestamp}}` | the current time in ISO 8601, UTC (`2026-11-15T09:30:00.000Z`) |
+| `{{$randomInt}}` | a random whole number from 0 to 1000 |
+| `{{$randomInt 1 100}}` | a random whole number from 1 to 100 (both included) |
+
+Each reference gets one value per send: a request that uses `{{$uuid}}` in its
+URL and in a header sends the same id in both, and the next send (or the next
+request of a load run) gets a new one. They work wherever variables do,
+including environment and folder variable values (`requestId: "{{$uuid}}"`) and
+load-run body files. The editor highlights them in teal, and their hover says
+what they hold; an unknown `$` name is shown in red and stops the request from
+being sent. A variable an environment defines with the same name wins over the
+built-in one. Postman's `{{$guid}}`, `{{$randomUUID}}`, `{{$timestamp}}`,
+`{{$isoTimestamp}}` and `{{$randomInt}}`, and Insomnia's `{% uuid %}` and
+`{% now 'unix' %}`/`{% now 'iso-8601' %}` tags, become these on import, and
+exports write them back the way each tool names them.
 
 ## Keyboard shortcuts
 

@@ -497,6 +497,8 @@ public sealed class StartRun(
         var definition = context.Definitions[path.Value];
         // The folders' variables are defaults: the environment's and the CSV row's win over them.
         values = context.Inherited[path.Value].ResolveVariables(values).Values;
+        // Built-in variables ({{$uuid}}, …) get fresh values for every request sent.
+        values = DynamicVariables.With(values, time.GetUtcNow(), Random.Shared);
         if (bodyFile is not null)
         {
             definition = definition with { Body = RunBodies.Replace(definition.Body, bodyFile) };
