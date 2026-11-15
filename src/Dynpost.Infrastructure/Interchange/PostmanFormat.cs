@@ -117,7 +117,7 @@ internal static partial class PostmanFormat
             return null;
         }
 
-        var (url, query) = ImportUrl(request.Get("url"));
+        var (url, query, pathParams) = ImportUrl(request.Get("url"));
         var headers = ImportHeaders(request.Get("header"));
         var auth = ImportAuth(request.Obj("auth"), name, warnings) ?? inherited;
         var body = ImportBody(request.Obj("body"), headers, name, warnings);
@@ -129,20 +129,24 @@ internal static partial class PostmanFormat
             query,
             InterchangeText.WithoutImpliedContentType(headers, body.Type),
             auth,
-            body);
+            body)
+        {
+            PathParams = pathParams,
+        };
         return InterchangeText.MapText(imported, text => InterchangeText.RenameVariables(text, InterchangeText.FromPostmanDynamic));
     }
 
-    private static (string Url, List<KeyValueEntry> Query) ImportUrl(JsonNode? url)
+    private static (string Url, List<KeyValueEntry> Query, IReadOnlyList<KeyValueEntry> PathParams) ImportUrl(JsonNode? url)
     {
         if (url is JsonValue)
         {
-            return InterchangeText.SplitQuery(url.Text() ?? string.Empty);
+            var (plain, plainQuery) = InterchangeText.SplitQuery(url.Text() ?? string.Empty);
+            return (plain, plainQuery, PathParameters.Sync(plain, []));
         }
 
         if (url is not JsonObject)
         {
-            return (string.Empty, []);
+            return (string.Empty, [], []);
         }
 
         var raw = url.Str("raw") ?? BuildRaw(url);
@@ -157,18 +161,13 @@ internal static partial class PostmanFormat
                 .ToList()
             : rawQuery;
 
-        // Path variables (/users/:id) become their value, or a {{variable}} when they have none.
-        var values = url.Arr("variable")
+        // Path variables (/users/:id) stay in the URL, with their values as Dynpost path variables.
+        var pathParams = url.Arr("variable")
             .Where(v => v.Str("key") is not null)
-            .GroupBy(v => v.Str("key")!)
-            .ToDictionary(g => g.Key, g => g.First().Str("value") ?? string.Empty, StringComparer.Ordinal);
-        var resolved = PathVariable().Replace(baseUrl, match =>
-        {
-            var key = match.Groups["name"].Value;
-            return values.TryGetValue(key, out var value) && value.Length > 0 ? value : "{{" + key + "}}";
-        });
+            .Select(v => new KeyValueEntry(v.Str("key")!, v.Get("value").AnyText()))
+            .ToList();
 
-        return (resolved, query);
+        return (baseUrl, query, PathParameters.Sync(baseUrl, pathParams));
     }
 
     private static string BuildRaw(JsonNode url)
@@ -420,7 +419,7 @@ internal static partial class PostmanFormat
             result["body"] = body;
         }
 
-        result["url"] = ExportUrl(request.Url, request.Params);
+        result["url"] = ExportUrl(request.Url, request.Params, request.PathParams);
         if (original.Description.Length > 0)
         {
             result["description"] = original.Description;
@@ -523,7 +522,7 @@ internal static partial class PostmanFormat
     }
 
     /// <summary>The URL as Postman writes it: the raw text and its parts.</summary>
-    private static JsonObject ExportUrl(string url, IReadOnlyList<KeyValueEntry> parameters)
+    private static JsonObject ExportUrl(string url, IReadOnlyList<KeyValueEntry> parameters, IReadOnlyList<KeyValueEntry> pathParams)
     {
         var result = new JsonObject { ["raw"] = InterchangeText.JoinQuery(url, parameters) };
 
@@ -570,6 +569,14 @@ internal static partial class PostmanFormat
                 .ToArray());
         }
 
+        var variables = PathParameters.Sync(url, pathParams);
+        if (variables.Count > 0)
+        {
+            result["variable"] = new JsonArray(variables
+                .Select(p => (JsonNode)new JsonObject { ["key"] = p.Key, ["value"] = p.Value })
+                .ToArray());
+        }
+
         return result;
     }
 
@@ -600,9 +607,6 @@ internal static partial class PostmanFormat
         bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
         return new Guid(bytes, bigEndian: true).ToString();
     }
-
-    [GeneratedRegex(@"(?<=/):(?<name>[A-Za-z_][A-Za-z0-9_.-]*)")]
-    private static partial Regex PathVariable();
 
     [GeneratedRegex(@"^(?<scheme>[A-Za-z][A-Za-z0-9+.-]*)://")]
     private static partial Regex Scheme();

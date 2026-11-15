@@ -32,6 +32,7 @@ internal static class ImportSanitizer
         var cleaned = request with
         {
             Name = name.Length > MaxNameLength ? name[..MaxNameLength].TrimEnd() : name,
+            PathParams = PathParameters.Sync(request.Url, request.PathParams),
             Params = Entries(request.Params, "query parameter", StringComparer.Ordinal, name, warnings),
             Headers = Entries(request.Headers, "header", StringComparer.OrdinalIgnoreCase, name, warnings),
             Description = RequestMapper.NormalizeDescription(request.Description),

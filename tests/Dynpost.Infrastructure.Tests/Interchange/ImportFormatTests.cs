@@ -66,7 +66,8 @@ public class ImportFormatTests
         Assert.Equal("Users", users.Name);
         var get = Assert.Single(users.Requests);
         Assert.Equal(RequestMethod.Get, get.Method);
-        Assert.Equal("{{baseUrl}}/users/42", get.Url);
+        Assert.Equal("{{baseUrl}}/users/:id", get.Url);
+        Assert.Equal([new KeyValueEntry("id", "42")], get.PathParams);
         Assert.Equal(
             [new KeyValueEntry("expand", "orders"), new KeyValueEntry("q", "a b"), new KeyValueEntry("page", "2", false)],
             get.Params);
@@ -496,7 +497,8 @@ public class ImportFormatTests
         Assert.Contains("\"email\": \"user@example.com\"", create.Body.Content);
 
         var delete = root.Requests.Single(r => r.Method == RequestMethod.Delete);
-        Assert.Equal("{{baseUrl}}/pets/{{petId}}", delete.Url);
+        Assert.Equal("{{baseUrl}}/pets/:petId", delete.Url);
+        Assert.Equal("petId", Assert.Single(delete.PathParams).Key);
         Assert.Equal(RequestAuth.None, delete.Auth);
         var health = root.Requests.Single(r => r.Url.EndsWith("/health"));
         Assert.Equal(new ApiKeyAuth("X-API-Key", "{{apiKey}}"), health.Auth);

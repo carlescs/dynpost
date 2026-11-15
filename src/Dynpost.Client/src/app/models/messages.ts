@@ -142,6 +142,8 @@ export interface RequestDto {
   description?: string | null;
   /** Values to capture from a successful response. */
   captures?: CaptureDto[] | null;
+  /** The values of the URL's `:name` path variables, in the URL's order. */
+  pathParams?: KeyValueDto[] | null;
 }
 
 export interface SavedRequestDto {

@@ -19,7 +19,8 @@ public static class RequestMapper
             request.Body.Type == BodyType.Graphql ? request.Body.Variables : null,
             request.Body.Fields?.Select(ToDto).ToList()),
         request.Description,
-        request.Captures.Select(c => new CaptureDto(c.Variable, c.Expression)).ToList());
+        request.Captures.Select(c => new CaptureDto(c.Variable, c.Expression)).ToList(),
+        PathParameters.Sync(request.Url, request.PathParams).Select(ToDto).ToList());
 
     /// <summary>
     /// Builds a valid domain request from a DTO. Rows with neither key nor value (the blank row the
@@ -52,6 +53,9 @@ public static class RequestMapper
             auth.Value,
             ToDomain(bodyType, dto.Body!))
         {
+            PathParams = PathParameters.Sync(
+                dto.Url ?? string.Empty,
+                (dto.PathParams ?? []).Select(row => new KeyValueEntry((row.Key ?? string.Empty).Trim(), row.Value ?? string.Empty)).ToList()),
             Description = NormalizeDescription(dto.Description),
             Captures = (dto.Captures ?? [])
                 .Where(c => !string.IsNullOrWhiteSpace(c.Variable) || !string.IsNullOrWhiteSpace(c.Expression))

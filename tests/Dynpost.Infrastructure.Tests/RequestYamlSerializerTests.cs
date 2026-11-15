@@ -21,6 +21,31 @@ public class RequestYamlSerializerTests
     }
 
     [Fact]
+    public void PathParams_AreWrittenAfterTheUrlWithoutEmptyValuesAndReadBack()
+    {
+        var request = new HttpRequestDefinition("Get user", RequestMethod.Get, "{{baseUrl}}/orgs/:org/users/:id", @params: [new KeyValueEntry("page", "1")])
+        {
+            PathParams = [new KeyValueEntry("org", ""), new KeyValueEntry("id", "{{userId}}")],
+        };
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Equal(
+            """
+            name: Get user
+            method: GET
+            url: "{{baseUrl}}/orgs/:org/users/:id"
+            pathParams:
+              id: "{{userId}}"
+            params:
+              page: "1"
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal([new KeyValueEntry("id", "{{userId}}")], RequestYamlSerializer.Deserialize(yaml, "x").PathParams);
+    }
+
+    [Fact]
     public void Serialize_WritesTheDocumentedFormat()
     {
         var request = new HttpRequestDefinition(

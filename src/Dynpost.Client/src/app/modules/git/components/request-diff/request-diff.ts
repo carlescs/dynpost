@@ -15,6 +15,7 @@ import {
   authValue,
   captureRows,
   diffRows,
+  paramRows,
   requestChanges,
   textChange,
 } from '../../models/request-diff-model';
@@ -68,7 +69,7 @@ export class RequestDiff {
     equal: (x, y) => JSON.stringify(x) === JSON.stringify(y),
   });
   // For an added or deleted request every row shows as added or removed.
-  protected readonly paramRows = computed(() => diffRows(this.a().params, this.b().params));
+  protected readonly paramRows = computed(() => diffRows(paramRows(this.a()), paramRows(this.b())));
   protected readonly headerRows = computed(() => diffRows(this.a().headers, this.b().headers));
   protected readonly captureChanges = computed(() =>
     diffRows(captureRows(this.a()), captureRows(this.b())),

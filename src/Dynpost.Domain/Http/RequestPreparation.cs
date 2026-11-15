@@ -36,7 +36,8 @@ public static class RequestPreparation
         var missing = new SortedSet<string>(StringComparer.Ordinal);
         string Resolve(string text) => VariableTemplate.Resolve(text, variables, missing);
 
-        var url = Resolve(request.Url).Trim();
+        // Path variables first: their values are percent-encoded, so they can't add segments.
+        var url = Resolve(PathParameters.Apply(request.Url, request.PathParams, Resolve)).Trim();
         var query = Resolved(request.Params, Resolve);
         var headers = Resolved(request.Headers, Resolve);
         ApplyAuth(request.Auth, Resolve, headers, query, errors, accessToken);

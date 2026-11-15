@@ -1,11 +1,19 @@
 import { RequestDto } from './messages';
-import { EMPTY_AUTH, fromNodeDto, fromRequestDto, toRequestDto } from './request-mapping';
+import {
+  EMPTY_AUTH,
+  fromNodeDto,
+  fromRequestDto,
+  pathVariableNames,
+  syncPathParams,
+  toRequestDto,
+} from './request-mapping';
 import { RequestContent } from './workspace';
 
 const content: RequestContent = {
   name: 'Create user',
   method: 'POST',
   url: 'https://{{host}}/users',
+  pathParams: [],
   params: [{ key: 'page', value: '1', enabled: true }],
   headers: [{ key: 'Accept', value: 'application/json', enabled: false }],
   auth: { ...EMPTY_AUTH, type: 'bearer', token: 't0k', username: 'kept while editing' },
@@ -253,6 +261,33 @@ describe('request mapping', () => {
           },
         ],
       });
+    });
+  });
+
+  describe('path variables', () => {
+    it('finds whole :name segments of the path only', () => {
+      expect(pathVariableNames('http://localhost:8080/orgs/:org/users/:id/:org?q=/:no')).toEqual([
+        'org',
+        'id',
+      ]);
+      expect(pathVariableNames('https://example.com/a:b/:1x')).toEqual([]);
+    });
+
+    it('keeps one row per name in the URL, with the values already set', () => {
+      expect(syncPathParams('/:b/:a', [{ key: 'a', value: '1', enabled: true }])).toEqual([
+        { key: 'b', value: '', enabled: true },
+        { key: 'a', value: '1', enabled: true },
+      ]);
+    });
+
+    it('maps path variables to and from the DTO', () => {
+      const request = fromRequestDto({
+        ...toRequestDto(content),
+        url: 'https://{{host}}/users/:id',
+        pathParams: [{ key: 'id', value: '42', enabled: true }],
+      });
+      expect(request.pathParams).toEqual([{ key: 'id', value: '42', enabled: true }]);
+      expect(toRequestDto(request).pathParams).toEqual([{ key: 'id', value: '42', enabled: true }]);
     });
   });
 });

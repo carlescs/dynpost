@@ -214,8 +214,8 @@ body:
     }
 ```
 
-Keys are always written in this order — `name`, `method`, `url`, `params`,
-`headers`, `auth`, `body`, `capture`, `description` — and empty sections are
+Keys are always written in this order — `name`, `method`, `url`, `pathParams`,
+`params`, `headers`, `auth`, `body`, `capture`, `description` — and empty sections are
 left out. Query parameters
 use the same `name: value` form as headers. A parameter or header that is
 disabled in the editor is kept in the file with a `~` prefix (so names cannot
@@ -226,6 +226,27 @@ params:
   page: "1"
   ~debug: "true"     # disabled
 ```
+
+A `:name` segment in the URL's path is a path variable, and `pathParams` holds
+its value in the same `name: value` form:
+
+```yaml
+url: "{{baseUrl}}/orgs/:org/users/:id"
+pathParams:
+  org: acme
+  id: "{{userId}}"
+```
+
+The request editor's **Params** tab lists a row for each path variable of the
+URL (rows come and go as you edit the URL). Values can use `{{variables}}`, and
+are percent-encoded when sent, so `a/b` is sent as `a%2Fb` and can't add path
+segments. A path variable without a value is left out of the file and sent as
+written (`:id`). Only whole segments count — a name starts with a letter or `_`
+and holds letters, digits, `_` and `-`, and may be followed by an extension
+(`/:file.json`) — so ports (`localhost:8080`) and colons inside a segment are
+not path variables. Postman imports and exports keep path variables, and OpenAPI
+imports turn `/pets/{petId}` into `/pets/:petId`, with the parameter's example
+as its value.
 
 A request without `auth` inherits the auth of its folders (see
 [Folder settings](#folder-settings)); `auth: { type: none }` sends no auth even

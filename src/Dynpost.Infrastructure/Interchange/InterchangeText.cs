@@ -183,6 +183,7 @@ internal static partial class InterchangeText
         request with
         {
             Url = map(request.Url),
+            PathParams = request.PathParams.Select(p => p with { Value = map(p.Value) }).ToList(),
             Params = request.Params.Select(p => p with { Key = map(p.Key), Value = map(p.Value) }).ToList(),
             Headers = request.Headers.Select(h => h with { Key = map(h.Key), Value = map(h.Value) }).ToList(),
             Auth = request.Auth switch

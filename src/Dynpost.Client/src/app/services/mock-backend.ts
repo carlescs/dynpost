@@ -847,7 +847,19 @@ export class MockBackend {
       (text ?? '').replace(VARIABLE_PATTERN, (match, name: string) => generated(name) ?? match);
     dto = {
       ...dto,
-      url: resolve(dto.url),
+      // Path variables, roughly as the host applies them: whole `:name` segments with a value.
+      url: resolve(
+        (dto.pathParams ?? []).reduce(
+          (url, p) =>
+            p.value
+              ? url.replace(
+                  new RegExp(`(?<=/):${p.key}(?=[/;.?#]|$)`, 'g'),
+                  encodeURIComponent(resolve(p.value)),
+                )
+              : url,
+          dto.url,
+        ),
+      ),
       params: dto.params.map((r) => ({ ...r, key: resolve(r.key), value: resolve(r.value) })),
       headers: dto.headers.map((r) => ({ ...r, key: resolve(r.key), value: resolve(r.value) })),
       auth: Object.fromEntries(

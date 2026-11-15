@@ -110,13 +110,25 @@ internal static partial class OpenApiFormat
         var pathValues = parameters
             .Where(p => p.Key.In == "path")
             .ToDictionary(p => p.Key.Name, p => ExampleText(context, p.Value), StringComparer.Ordinal);
+        // A parameter that is a whole segment (/users/{id}) becomes a path variable (/users/:id) with
+        // its example as the value; one inside a segment (/files/{name}.json) is filled in.
         var url = "{{" + BaseUrl + "}}" + PathParameter().Replace(path, match =>
         {
             var parameterName = match.Groups["name"].Value;
+            var wholeSegment = match.Index > 0 && path[match.Index - 1] == '/'
+                && (match.Index + match.Length == path.Length || path[match.Index + match.Length] == '/');
+            if (wholeSegment && PathParameters.IsValidName(parameterName))
+            {
+                return ":" + parameterName;
+            }
+
             return pathValues.GetValueOrDefault(parameterName) is { Length: > 0 } value
                 ? Uri.EscapeDataString(value)
                 : "{{" + parameterName + "}}";
         });
+        var pathParams = PathParameters.Sync(
+            url,
+            pathValues.Select(p => new KeyValueEntry(p.Key, p.Value)).ToList());
 
         var query = parameters
             .Where(p => p.Key.In == "query")
@@ -138,6 +150,7 @@ internal static partial class OpenApiFormat
         var auth = Security(context, operation.Get("security") ?? context.Root.Get("security"), name);
         return new HttpRequestDefinition(name, method, url, query, headers, auth, body)
         {
+            PathParams = pathParams,
             Description = operation.Str("description") ?? string.Empty,
         };
     }

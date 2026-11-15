@@ -161,6 +161,14 @@ export class RequestEditor {
     this.store.update(this.document().id, patch);
   }
 
+  protected patchPathParam(index: number, value: string): void {
+    this.patch({
+      pathParams: this.document().pathParams.map((row, i) =>
+        i === index ? { ...row, value } : row,
+      ),
+    });
+  }
+
   protected patchAuth(patch: Partial<RequestAuth>): void {
     this.patch({ auth: { ...this.document().auth, ...patch } });
   }
@@ -209,7 +217,7 @@ export class RequestEditor {
 
   protected count(doc: RequestDocument, tab: RequestTab): number {
     const enabled = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.key).length;
-    if (tab === 'params') return enabled(doc.params);
+    if (tab === 'params') return enabled(doc.params) + doc.pathParams.filter((r) => r.value).length;
     if (tab === 'headers') return enabled(doc.headers);
     if (tab === 'capture') return doc.captures.filter((c) => c.variable).length;
     return 0;

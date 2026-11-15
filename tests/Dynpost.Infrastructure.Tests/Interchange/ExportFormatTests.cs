@@ -219,4 +219,21 @@ public class ExportFormatTests
         Assert.Contains("{% now 'unix' %}", insomnia);
         Assert.Contains("{{ _.host }}", insomnia);
     }
+
+    [Fact]
+    public void Postman_WritesPathVariables()
+    {
+        var request = new HttpRequestDefinition("Get user", RequestMethod.Get, "{{baseUrl}}/users/:id")
+        {
+            PathParams = [new KeyValueEntry("id", "42")],
+        };
+        var collection = new RequestCollection(new CollectionFolder("api", [], [request]), []);
+
+        var document = JsonNode.Parse(new PostmanCollectionExporter().Export(collection).Content)!;
+
+        var url = document["item"]![0]!["request"]!["url"]!;
+        Assert.Equal("{{baseUrl}}/users/:id", (string?)url["raw"]);
+        Assert.Equal("id", (string?)url["variable"]![0]!["key"]);
+        Assert.Equal("42", (string?)url["variable"]![0]!["value"]);
+    }
 }

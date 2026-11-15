@@ -7,8 +7,9 @@ namespace Dynpost.Infrastructure.Yaml;
 
 /// <summary>
 /// Reads and writes request files. Keys are always written in the same order
-/// (<c>name</c>, <c>method</c>, <c>url</c>, <c>params</c>, <c>headers</c>, <c>auth</c>,
-/// <c>body</c>, <c>capture</c>, <c>description</c>) and empty or default values are omitted. Disabled params and headers are written
+/// (<c>name</c>, <c>method</c>, <c>url</c>, <c>pathParams</c>, <c>params</c>, <c>headers</c>, <c>auth</c>,
+/// <c>body</c>, <c>capture</c>, <c>description</c>) and empty or default values are omitted (path
+/// variables without a value too). Disabled params and headers are written
 /// with a <c>~</c> prefix on their name. A request without <c>auth</c> inherits the auth of its
 /// folders; <c>type: none</c> sends none. Folder defaults (<c>_folder.yaml</c>) use the same
 /// <c>headers</c> and <c>auth</c> keys, in that order, followed by <c>variables</c> (written like
@@ -25,6 +26,7 @@ public static class RequestYamlSerializer
             .Scalar("method", request.Method.ToName())
             .Scalar("url", request.Url);
 
+        WriteEntries(writer, "pathParams", request.PathParams.Where(entry => entry.Value.Length > 0).ToList());
         WriteEntries(writer, "params", request.Params);
         WriteEntries(writer, "headers", request.Headers);
         WriteAuth(writer, request.Auth);
@@ -120,6 +122,7 @@ public static class RequestYamlSerializer
             ReadAuth(root),
             ReadBody(root))
         {
+            PathParams = ReadEntries(root, "pathParams").Select(entry => entry with { Enabled = true }).ToList(),
             Captures = ReadCaptures(root),
             Description = OptionalString(root, "description") ?? string.Empty,
         };

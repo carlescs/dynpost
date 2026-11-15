@@ -104,6 +104,36 @@
         [rows]="doc.params"
         (rowsChange)="patch({ params: $event })"
       />
+      @if (doc.pathParams.length) {
+        <h3 class="mt-4 mb-1 text-xs font-semibold text-slate-500 uppercase">Path variables</h3>
+        <table class="w-full text-sm" aria-label="Path variables">
+          <tbody>
+            @for (row of doc.pathParams; track row.key; let i = $index) {
+              <tr class="border-b border-slate-100">
+                <td
+                  class="w-1/3 py-1 pr-2 font-mono text-slate-600"
+                  [title]="'Replaces :' + row.key + ' in the URL'"
+                >
+                  :{{ row.key }}
+                </td>
+                <td class="py-1">
+                  <app-variable-input
+                    [ariaLabel]="'Value of :' + row.key"
+                    placeholder="Value (sent percent-encoded)"
+                    [variables]="variables()"
+                    [value]="row.value"
+                    (valueChange)="patchPathParam(i, $event)"
+                  />
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <p class="mt-1 text-xs text-slate-400">
+          Add a <code>:name</code> segment to the URL's path for a path variable; an empty one is
+          sent as written.
+        </p>
+      }
     }
     @case ('headers') {
       <app-key-value-table

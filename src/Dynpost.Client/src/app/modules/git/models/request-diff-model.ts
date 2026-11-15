@@ -7,6 +7,7 @@ export const EMPTY_REQUEST: RequestContent = {
   name: '',
   method: 'GET',
   url: '',
+  pathParams: [],
   params: [],
   headers: [],
   auth: EMPTY_AUTH,
@@ -161,6 +162,14 @@ export interface RequestChanges {
   docs: boolean;
 }
 
+/** A request's path variables (as `:name`) followed by its query parameters, as table rows. */
+export function paramRows(request: RequestContent): KeyValue[] {
+  return [
+    ...request.pathParams.map((r) => ({ key: `:${r.key}`, value: r.value, enabled: true })),
+    ...request.params,
+  ];
+}
+
 /** A request's captures as table rows: the variable and where its value comes from. */
 export function captureRows(request: RequestContent): KeyValue[] {
   return request.captures.map((c) => ({ key: c.variable, value: c.expression, enabled: true }));
@@ -172,7 +181,7 @@ export function requestChanges(before: RequestContent, after: RequestContent): R
   return {
     name: before.name !== after.name,
     line: before.method !== after.method || before.url !== after.url,
-    params: changedRows(diffRows(before.params, after.params)),
+    params: changedRows(diffRows(paramRows(before), paramRows(after))),
     headers: changedRows(diffRows(before.headers, after.headers)),
     auth:
       before.auth.type !== after.auth.type ||

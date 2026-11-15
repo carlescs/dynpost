@@ -27,6 +27,12 @@ public sealed record HttpRequestDefinition
 
     public string Url { get; init; }
 
+    /// <summary>
+    /// The values of the URL's <c>:name</c> path variables (see <see cref="PathParameters"/>), in
+    /// the URL's order. They can't be disabled.
+    /// </summary>
+    public IReadOnlyList<KeyValueEntry> PathParams { get; init; } = [];
+
     public IReadOnlyList<KeyValueEntry> Params { get; init; }
 
     public IReadOnlyList<KeyValueEntry> Headers { get; init; }
@@ -60,11 +66,28 @@ public sealed record HttpRequestDefinition
             errors.Add("The request needs a name.");
         }
 
+        CheckPathParams(PathParams, errors);
         CheckEntries(Params, "parameter", StringComparer.Ordinal, errors);
         CheckHeaders(Headers, errors);
         CheckCaptures(Captures, errors);
 
         return errors;
+    }
+
+    private static void CheckPathParams(IReadOnlyList<KeyValueEntry> pathParams, List<string> errors)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in pathParams)
+        {
+            if (!PathParameters.IsValidName(entry.Key))
+            {
+                errors.Add($"'{entry.Key}' is not a valid path variable name: use letters, digits, '_' and '-', starting with a letter or '_'.");
+            }
+            else if (!seen.Add(entry.Key))
+            {
+                errors.Add($"The path variable '{entry.Key}' is defined more than once.");
+            }
+        }
     }
 
     private static void CheckCaptures(IReadOnlyList<CaptureRule> captures, List<string> errors)

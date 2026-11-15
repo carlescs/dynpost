@@ -53,6 +53,10 @@ public sealed record CaptureDto(string Variable, string Expression);
 
 /// <param name="Captures">Values to store in variables from a successful response.</param>
 /// <param name="Description">Notes about the request, in Markdown; empty when there are none.</param>
+/// <param name="PathParams">
+/// The values of the URL's <c>:name</c> path variables, one per name in the URL's order (rows for
+/// names the URL no longer has are dropped).
+/// </param>
 public sealed record RequestDto(
     string Name,
     string Method,
@@ -62,7 +66,8 @@ public sealed record RequestDto(
     AuthDto Auth,
     BodyDto Body,
     string? Description = null,
-    IReadOnlyList<CaptureDto>? Captures = null);
+    IReadOnlyList<CaptureDto>? Captures = null,
+    IReadOnlyList<KeyValueDto>? PathParams = null);
 
 /// <summary>A request as stored: its (possibly new) path and its content.</summary>
 public sealed record SavedRequestDto(string Path, RequestDto Request);

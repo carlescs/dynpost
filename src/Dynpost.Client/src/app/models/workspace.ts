@@ -80,6 +80,8 @@ export interface RequestContent {
   name: string;
   method: HttpMethod;
   url: string;
+  /** The values of the URL's `:name` path variables, one row per name in the URL's order. */
+  pathParams: KeyValue[];
   params: KeyValue[];
   headers: KeyValue[];
   auth: RequestAuth;

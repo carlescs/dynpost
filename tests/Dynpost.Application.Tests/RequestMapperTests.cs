@@ -93,4 +93,20 @@ public class RequestMapperTests
         Assert.Equal(" s p ace ", auth.ClientSecret);
         Assert.Equal("https://auth.test/token", auth.TokenUrl);
     }
+
+    [Fact]
+    public void PathParams_FollowTheNamesInTheUrl()
+    {
+        var dto = RequestDtoFactory.Create() with
+        {
+            Url = "https://api.test/orgs/:org/users/:id",
+            PathParams = [new KeyValueDto("id", "42"), new KeyValueDto("gone", "1")],
+        };
+
+        var domain = RequestMapper.ToDomain(dto);
+
+        Assert.True(domain.IsSuccess, domain.Error?.Message);
+        Assert.Equal([new KeyValueEntry("org", ""), new KeyValueEntry("id", "42")], domain.Value.PathParams);
+        Assert.Equal([new KeyValueDto("org", ""), new KeyValueDto("id", "42")], RequestMapper.ToDto(domain.Value).PathParams);
+    }
 }
