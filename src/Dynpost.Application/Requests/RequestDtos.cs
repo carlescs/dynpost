@@ -3,7 +3,7 @@ namespace Dynpost.Application.Requests;
 public sealed record KeyValueDto(string Key, string Value, bool Enabled = true);
 
 /// <summary>Auth settings. Only the fields used by <see cref="Type"/> are meaningful.</summary>
-/// <param name="Type"><c>none</c>, <c>basic</c>, <c>bearer</c>, <c>apiKey</c> or <c>oauth2</c>.</param>
+/// <param name="Type"><c>none</c>, <c>basic</c>, <c>digest</c>, <c>bearer</c>, <c>apiKey</c> or <c>oauth2</c>.</param>
 /// <param name="In">For API keys: <c>header</c> or <c>query</c>.</param>
 /// <param name="Grant">For OAuth 2.0: <c>clientCredentials</c> or <c>authorizationCode</c>.</param>
 /// <param name="Credentials">For OAuth 2.0: how the client secret is sent, <c>header</c> or <c>body</c>.</param>

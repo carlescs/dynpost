@@ -497,6 +497,13 @@ internal static partial class OpenApiFormat
                     return new BasicAuth("{{username}}", "{{password}}");
                 }
 
+                if (type == "http" && httpScheme == "digest")
+                {
+                    context.UseAuthVariable("username");
+                    context.UseAuthVariable("password");
+                    return new DigestAuth("{{username}}", "{{password}}");
+                }
+
                 if (type == "http" && httpScheme == "bearer")
                 {
                     context.UseAuthVariable("token");

@@ -11,6 +11,7 @@ import {
   CaptureDto,
   CaptureResultDto,
   CapturedValueDto,
+  ClientCertificateDto,
   CookieDto,
   DateFormat,
   ERROR_CODES,
@@ -209,6 +210,7 @@ export class MockBackend {
   private readonly bodies = new Map<string, string>();
   /** Cookie jars by environment id. */
   private readonly jars = new Map<string, CookieDto[]>();
+  private readonly certificates = new Map<string, ClientCertificateDto[]>();
   /** Values requests captured, by environment id and variable name. */
   private readonly captured = new Map<string, Map<string, string>>();
 
@@ -505,6 +507,20 @@ export class MockBackend {
         if (!env.cookieJar) this.jars.delete(id);
         this.environments.set(id, env);
         return ok({ id, environment: structuredClone(env) });
+      }
+      case 'certificate.list':
+        return ok(structuredClone(this.certificates.get(payload?.['environment'] as string) ?? []));
+      case 'certificate.save': {
+        const saved = ((payload?.['certificates'] ?? []) as ClientCertificateDto[])
+          .filter((c) => c.certificate)
+          .map((c) => ({
+            host: c.host,
+            certificate: c.certificate,
+            key: c.key || null,
+            hasPassphrase: !!c.passphrase,
+          }));
+        this.certificates.set(payload?.['environment'] as string, saved);
+        return ok(structuredClone(saved));
       }
       case 'cookie.list':
         return ok(structuredClone(this.jars.get(payload?.['environment'] as string) ?? []));

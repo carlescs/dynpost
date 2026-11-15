@@ -11,7 +11,7 @@ export interface KeyValueDto {
 
 export interface AuthDto {
   /** `inherit` uses the auth of the closest folder above that sets one. */
-  type: 'inherit' | 'none' | 'basic' | 'bearer' | 'apiKey' | 'oauth2';
+  type: 'inherit' | 'none' | 'basic' | 'digest' | 'bearer' | 'apiKey' | 'oauth2';
   username?: string | null;
   password?: string | null;
   token?: string | null;
@@ -32,6 +32,20 @@ export interface AuthDto {
 }
 
 /** The headers, auth and variables a folder sets for every request and folder in it. */
+/** A client certificate of an environment (mutual TLS). */
+export interface ClientCertificateDto {
+  /** The host it is for (`*.example.com`, `host:port`); empty for every host. */
+  host: string;
+  /** The certificate file (PKCS#12 or PEM), workspace-relative or absolute. */
+  certificate: string;
+  /** The PEM private key file, when the key is in its own file. */
+  key?: string | null;
+  /** Whether a passphrase is stored (results only). */
+  hasPassphrase?: boolean;
+  /** When saving: the new passphrase, `''` for none, `null` to keep the stored one. */
+  passphrase?: string | null;
+}
+
 /** How a request is sent; unset values are inherited from the folders, or the default. */
 export interface RequestSettingsDto {
   /** The timeout in milliseconds; 0 for none. */
@@ -1038,6 +1052,13 @@ export interface BridgeMessages {
   'response.saveBody': { payload: { id: string }; result: { path: string } | null };
   /** The cookies kept for an environment (`environment` is its id), without expired ones. */
   'cookie.list': { payload: { environment: string }; result: CookieDto[] };
+  /** Lists the client certificates set up for an environment (passphrases are never sent back). */
+  'certificate.list': { payload: { environment: string }; result: ClientCertificateDto[] };
+  /** Replaces the client certificates of an environment; a `null` passphrase keeps the stored one. */
+  'certificate.save': {
+    payload: { environment: string; certificates: ClientCertificateDto[] };
+    result: ClientCertificateDto[];
+  };
   /** Deletes one cookie from an environment's jar; the result is what is left. */
   'cookie.delete': {
     payload: { environment: string; name: string; domain: string; path: string };

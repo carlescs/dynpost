@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Dynpost.Application.Captures;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Cookies;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
@@ -21,6 +22,7 @@ using Dynpost.Application.Workspaces;
 using Dynpost.Desktop.Bridge;
 using Dynpost.Desktop.Hosting;
 using Dynpost.Desktop.Mcp;
+using Dynpost.Infrastructure.Certificates;
 using Dynpost.Infrastructure.Cookies;
 using Dynpost.Infrastructure.Environments;
 using Dynpost.Infrastructure.Git;
@@ -104,6 +106,7 @@ internal static class Program
             .AddSingleton<ISecretStore, YamlSecretStore>()
             .AddSingleton<IWorkspaceStateStore, YamlWorkspaceStateStore>()
             .AddSingleton<ICookieJarStore, JsonCookieJarStore>()
+            .AddSingleton<IClientCertificateStore, JsonClientCertificateStore>()
             .AddSingleton<ICapturedValueStore, YamlCapturedValueStore>()
             .AddSingleton<IOAuth2TokenStore, JsonOAuth2TokenStore>()
             .AddSingleton<IAuthorizationBrowser, LoopbackAuthorizationBrowser>()
@@ -176,6 +179,8 @@ internal static class Program
             .AddTransient<SendRequestFile>()
             .AddTransient<CancelRequest>()
             .AddTransient<SaveResponseBody>()
+            .AddTransient<ListClientCertificates>()
+            .AddTransient<SaveClientCertificates>()
             .AddTransient<ListCookies>()
             .AddTransient<DeleteCookie>()
             .AddTransient<ClearCookies>()

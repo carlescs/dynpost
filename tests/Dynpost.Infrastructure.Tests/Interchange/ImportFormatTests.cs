@@ -130,7 +130,8 @@ public class ImportFormatTests
                     { "name": "Key", "request": { "method": "GET", "url": "https://x.test/c",
                       "auth": { "type": "apikey", "apikey": [{ "key": "key", "value": "X-Key" }, { "key": "value", "value": "k" }, { "key": "in", "value": "query" }] } } },
                     { "name": "Basic", "request": { "method": "DELETE", "url": "https://x.test/d" } },
-                    { "name": "Digest", "request": { "method": "GET", "url": "https://x.test/e", "auth": { "type": "digest" } } }
+                    { "name": "Digest", "request": { "method": "GET", "url": "https://x.test/e", "auth": { "type": "digest", "digest": [{ "key": "username", "value": "ada" }, { "key": "password", "value": "pw" }] } } },
+                    { "name": "Hawk", "request": { "method": "GET", "url": "https://x.test/f", "auth": { "type": "hawk" } } }
                   ]
                 }
               ]
@@ -143,8 +144,9 @@ public class ImportFormatTests
         var admin = root.Folders[0];
         Assert.Equal(new ApiKeyAuth("X-Key", "k", ApiKeyLocation.Query), admin.Requests[0].Auth);
         Assert.Equal(new BasicAuth("root", "pw"), admin.Requests[1].Auth);
-        Assert.Equal(RequestAuth.None, admin.Requests[2].Auth);
-        Assert.Contains(parsed.Warnings, w => w.Contains("digest"));
+        Assert.Equal(new DigestAuth("ada", "pw"), admin.Requests[2].Auth);
+        Assert.Equal(RequestAuth.None, admin.Requests[3].Auth);
+        Assert.Contains(parsed.Warnings, w => w.Contains("hawk"));
     }
 
     [Fact]

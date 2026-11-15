@@ -20,6 +20,12 @@ public sealed record BasicAuth(string Username, string Password) : RequestAuth;
 
 public sealed record BearerAuth(string Token) : RequestAuth;
 
+/// <summary>
+/// HTTP Digest authentication (RFC 7616): the request is sent without credentials, and when the
+/// server answers 401 with a <c>Digest</c> challenge it is sent again with the response to it.
+/// </summary>
+public sealed record DigestAuth(string Username, string Password) : RequestAuth;
+
 public enum ApiKeyLocation
 {
     Header,

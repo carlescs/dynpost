@@ -190,6 +190,7 @@ internal static partial class InterchangeText
             {
                 BasicAuth basic => new BasicAuth(map(basic.Username), map(basic.Password)),
                 BearerAuth bearer => new BearerAuth(map(bearer.Token)),
+                DigestAuth digest => new DigestAuth(map(digest.Username), map(digest.Password)),
                 ApiKeyAuth apiKey => apiKey with { Key = map(apiKey.Key), Value = map(apiKey.Value) },
                 OAuth2Auth oauth => oauth with
                 {

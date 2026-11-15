@@ -206,6 +206,8 @@ internal static partial class InsomniaFormat
                 return RequestAuth.None;
             case "basic":
                 return new BasicAuth(auth.Str("username") ?? string.Empty, auth.Str("password") ?? string.Empty);
+            case "digest":
+                return new DigestAuth(auth.Str("username") ?? string.Empty, auth.Str("password") ?? string.Empty);
             case "bearer":
                 var prefix = auth.Str("prefix");
                 if (prefix is { Length: > 0 } && !string.Equals(prefix, "Bearer", StringComparison.OrdinalIgnoreCase))
@@ -461,6 +463,7 @@ internal static partial class InsomniaFormat
     private static JsonObject ExportAuth(RequestAuth auth) => auth switch
     {
         BasicAuth basic => new JsonObject { ["type"] = "basic", ["username"] = basic.Username, ["password"] = basic.Password },
+        DigestAuth digest => new JsonObject { ["type"] = "digest", ["username"] = digest.Username, ["password"] = digest.Password },
         BearerAuth bearer => new JsonObject { ["type"] = "bearer", ["token"] = bearer.Token },
         ApiKeyAuth apiKey => new JsonObject
         {

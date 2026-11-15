@@ -101,8 +101,9 @@ until you allow it in *System Settings* → *Privacy & Security*.
       everything inside (see [Folder settings](#folder-settings))
 - [x] Environments with `{{variable}}` substitution, and built-in variables
       such as `{{$uuid}}` and `{{$timestamp}}` (see [Built-in variables](#built-in-variables))
-- [x] Auth helpers: Basic, Bearer token, API key and OAuth 2.0 (client
-      credentials, and authorization code with PKCE in the system browser)
+- [x] Auth helpers: Basic, Digest, Bearer token, API key and OAuth 2.0 (client
+      credentials, and authorization code with PKCE in the system browser), and
+      client certificates (mutual TLS) per environment
 - [x] Local response history per request, compared with the latest response
       in a diff view (kept out of git, see [Response history](#response-history))
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
@@ -250,7 +251,7 @@ as its value.
 
 A request without `auth` inherits the auth of its folders (see
 [Folder settings](#folder-settings)); `auth: { type: none }` sends no auth even
-when a folder sets one. The other auth types are `basic` (`username`, `password`), `bearer` (`token`),
+when a folder sets one. The other auth types are `basic` (`username`, `password`), `digest` (`username`, `password`), `bearer` (`token`),
 `apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
 instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form`, `urlencoded`, `graphql` and `binary`.
 `graphql` bodies store a GraphQL `query` and JSON `variables` separately and are sent as JSON POSTs.
@@ -541,6 +542,28 @@ with the jar's cookies added after it. The editor lists the kept cookies, where
 each can be deleted, or all cleared at once; turning the jar off and saving
 forgets them.
 
+**Client certificates** (mutual TLS): an environment can present a TLS client
+certificate to `https` servers that ask for one. Add one in the environment
+editor with the host it is for (`api.example.com`, `*.example.com` for any
+sub-domain, `host:8443` for one port, or empty for every host), the certificate
+file — PKCS#12 (`.pfx`, `.p12`) or PEM — the PEM private key file when the key
+is in its own file, and the passphrase of the PKCS#12 file or encrypted key.
+Requests (and load runs) sent with the environment use the first certificate
+whose host matches. Paths can be workspace-relative or absolute. Certificates
+are saved with their own **Save certificates** button, apart from the
+environment file, and are kept on this computer only, in
+`.dynpost/certificates.json`; passphrases are never shown again (type a new one
+to replace it). They follow a renamed environment and are deleted with it.
+
+```json
+{
+  "dev.yaml": [
+    { "host": "api.example.com", "certificate": "certs/client.pfx", "passphrase": "s3cr3t" },
+    { "certificate": "/home/ada/certs/client.pem", "key": "/home/ada/certs/client.key" }
+  ]
+}
+```
+
 In the request editor, `{{variable}}` references are highlighted in the URL and
 body: in violet when the selected environment defines them, in red when it
 doesn't. Hover over one to see its value (secret values are not shown).
@@ -639,7 +662,12 @@ rules such as CORS don't apply. When sending:
 - The headers and auth of the request's folders are applied (see
   [Folder settings](#folder-settings)).
 - Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
-  query parameter; a header you set yourself (or a folder sets) takes precedence. OAuth 2.0 first
+  query parameter. Digest auth sends the request without credentials first and,
+  when the server answers 401 with a `Digest` challenge, sends it again with the
+  answer (MD5 or SHA-256, and their `-sess` variants; `qop=auth` or `auth-int`);
+  the 401 itself isn't shown (Postman and Insomnia imports and exports, and
+  OpenAPI imports, keep Digest auth). A header you set yourself (or a folder
+  sets) takes precedence. OAuth 2.0 first
   gets a token if it needs one (see [OAuth 2.0](#oauth-20)). JSON, text and
   `urlencoded` bodies get a matching `Content-Type` unless you set one;
   multipart `form` bodies always get `multipart/form-data` with the boundary. A

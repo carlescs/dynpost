@@ -20,7 +20,15 @@ export const BODY_TYPES = [
 ] as const;
 export type BodyType = (typeof BODY_TYPES)[number];
 
-export const AUTH_TYPES = ['inherit', 'none', 'basic', 'bearer', 'apiKey', 'oauth2'] as const;
+export const AUTH_TYPES = [
+  'inherit',
+  'none',
+  'basic',
+  'digest',
+  'bearer',
+  'apiKey',
+  'oauth2',
+] as const;
 export type AuthType = (typeof AUTH_TYPES)[number];
 
 export interface KeyValue {
@@ -165,6 +173,7 @@ export const AUTH_LABELS: Record<AuthType, string> = {
   inherit: 'Inherit from folder',
   none: 'No auth',
   basic: 'Basic',
+  digest: 'Digest',
   bearer: 'Bearer token',
   apiKey: 'API key',
   oauth2: 'OAuth 2.0',

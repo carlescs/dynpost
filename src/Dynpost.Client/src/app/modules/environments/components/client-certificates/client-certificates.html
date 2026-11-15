@@ -1,0 +1,103 @@
+<div class="mb-1 flex items-center gap-3">
+  <h3
+    class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase"
+  >
+    <fa-icon [icon]="faCertificate" /> Client certificates
+    <span class="font-normal normal-case">({{ rows().length }})</span>
+  </h3>
+  <button
+    type="button"
+    class="flex items-center gap-1 text-xs text-sky-700 hover:underline"
+    (click)="add()"
+  >
+    <fa-icon [icon]="faPlus" /> Add
+  </button>
+  @if (dirty()) {
+    <button
+      type="button"
+      class="flex items-center gap-1 text-xs text-sky-700 hover:underline disabled:opacity-50"
+      [disabled]="saving()"
+      (click)="save()"
+    >
+      <fa-icon [icon]="faFloppyDisk" /> Save certificates
+    </button>
+  }
+</div>
+
+@for (row of rows(); track $index; let i = $index) {
+  <div
+    class="mb-2 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 gap-y-1 rounded border border-slate-200 p-2 text-xs"
+  >
+    <label [for]="'cert-host-' + i" class="text-slate-500">Host</label>
+    <input
+      [id]="'cert-host-' + i"
+      class="rounded border border-slate-300 px-1.5 py-0.5 font-mono focus:border-sky-500 focus:outline-none"
+      placeholder="Every host (or api.example.com, *.example.com, host:8443)"
+      spellcheck="false"
+      [value]="row.host"
+      (input)="patch(i, { host: $any($event.target).value })"
+    />
+    <button
+      type="button"
+      class="justify-self-end text-slate-400 hover:text-rose-600"
+      title="Remove this certificate"
+      (click)="remove(i)"
+    >
+      <fa-icon [icon]="faTrash" />
+    </button>
+
+    <label [for]="'cert-file-' + i" class="text-slate-500">Certificate</label>
+    <input
+      [id]="'cert-file-' + i"
+      class="rounded border border-slate-300 px-1.5 py-0.5 font-mono focus:border-sky-500 focus:outline-none"
+      placeholder=".pfx, .p12 or PEM file"
+      spellcheck="false"
+      [value]="row.certificate"
+      (input)="patch(i, { certificate: $any($event.target).value })"
+    />
+    <button
+      type="button"
+      class="text-sky-700 hover:underline"
+      title="Choose the certificate file"
+      (click)="pick(i, 'certificate')"
+    >
+      <fa-icon [icon]="faFolderOpen" />
+    </button>
+
+    <label [for]="'cert-key-' + i" class="text-slate-500">Key</label>
+    <input
+      [id]="'cert-key-' + i"
+      class="rounded border border-slate-300 px-1.5 py-0.5 font-mono focus:border-sky-500 focus:outline-none"
+      placeholder="PEM key file, when it isn't in the certificate file"
+      spellcheck="false"
+      [value]="row.key"
+      (input)="patch(i, { key: $any($event.target).value })"
+    />
+    <button
+      type="button"
+      class="text-sky-700 hover:underline"
+      title="Choose the key file"
+      (click)="pick(i, 'key')"
+    >
+      <fa-icon [icon]="faFolderOpen" />
+    </button>
+
+    <label [for]="'cert-pass-' + i" class="text-slate-500">Passphrase</label>
+    <input
+      [id]="'cert-pass-' + i"
+      type="password"
+      autocomplete="off"
+      class="rounded border border-slate-300 px-1.5 py-0.5 focus:border-sky-500 focus:outline-none"
+      [placeholder]="row.hasPassphrase ? 'Stored (type to change)' : 'None'"
+      [value]="row.passphrase ?? ''"
+      (input)="patch(i, { passphrase: $any($event.target).value })"
+    />
+    <span></span>
+  </div>
+}
+<p class="mt-1 text-xs text-slate-500">
+  Presented to <code>https</code> servers that ask for one (mutual TLS) when requests are sent with
+  this environment; the first certificate whose host matches is used. Paths and passphrases stay on
+  this computer, in <code>.dynpost/certificates.json</code>, and are saved apart from the
+  environment.
+</p>

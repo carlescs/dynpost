@@ -1,4 +1,5 @@
 using Dynpost.Application.Captures;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Common;
 using Dynpost.Application.Cookies;
 using Dynpost.Application.Environments;
@@ -37,7 +38,8 @@ public sealed class SendRequest(
     TimeProvider time,
     OAuth2Tokens tokens,
     ResponseHistory history,
-    FolderInheritance inheritance)
+    FolderInheritance inheritance,
+    IClientCertificateStore? certificates = null)
 {
     /// <param name="id">An id chosen by the caller, used to cancel the request.</param>
     /// <param name="path">
@@ -126,6 +128,17 @@ public sealed class SendRequest(
             outgoing = outgoing with { Cookies = jar.Value };
         }
 
+        if (certificates is not null && root is not null)
+        {
+            var certificate = await ClientCertificates.ForAsync(certificates, root, variables.Value.EnvironmentId, outgoing.Url, cancellationToken);
+            if (!certificate.IsSuccess)
+            {
+                return certificate.Error!;
+            }
+
+            outgoing = outgoing with { ClientCertificate = certificate.Value };
+        }
+
         var sentAt = time.GetUtcNow();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (!inFlight.TryStart(id, cancellation))
@@ -145,7 +158,7 @@ public sealed class SendRequest(
                 }
 
                 var withToken = RequestPreparation.Prepare(definition.Value, values, token.Value.AccessToken, root).Request!;
-                outgoing = withToken with { Cookies = outgoing.Cookies };
+                outgoing = withToken with { Cookies = outgoing.Cookies, ClientCertificate = outgoing.ClientCertificate };
             }
 
             var response = await sender.SendAsync(outgoing, cancellation.Token);

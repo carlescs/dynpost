@@ -530,4 +530,15 @@ public class RequestYamlSerializerTests
         Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.DeserializeFolder("- a list\n"));
         Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.DeserializeFolder("auth:\n  type: magic\n"));
     }
+
+    [Fact]
+    public void DigestAuth_RoundTrips()
+    {
+        var request = new HttpRequestDefinition("R", RequestMethod.Get, "https://x", auth: new DigestAuth("ada", "{{password}}"));
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Contains("auth:\n  type: digest\n  username: ada\n  password: \"{{password}}\"\n", yaml);
+        Assert.Equal(request.Auth, RequestYamlSerializer.Deserialize(yaml, "R").Auth);
+    }
 }

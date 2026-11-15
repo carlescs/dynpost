@@ -225,6 +225,11 @@ public static class RequestYamlSerializer
                     ScalarIfNotEmpty(map, "username", basic.Username);
                     ScalarIfNotEmpty(map, "password", basic.Password);
                     break;
+                case DigestAuth digest:
+                    map.Scalar("type", "digest");
+                    ScalarIfNotEmpty(map, "username", digest.Username);
+                    ScalarIfNotEmpty(map, "password", digest.Password);
+                    break;
                 case BearerAuth bearer:
                     map.Scalar("type", "bearer");
                     ScalarIfNotEmpty(map, "token", bearer.Token);
@@ -438,6 +443,7 @@ public static class RequestYamlSerializer
             "none" => RequestAuth.None,
             "basic" => new BasicAuth(Field("username"), Field("password")),
             "bearer" => new BearerAuth(Field("token")),
+            "digest" => new DigestAuth(Field("username"), Field("password")),
             "apikey" => new ApiKeyAuth(Field("key"), Field("value"), Field("in").ToLowerInvariant() switch
             {
                 "" or "header" => ApiKeyLocation.Header,

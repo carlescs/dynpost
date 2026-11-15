@@ -227,6 +227,8 @@ internal static partial class PostmanFormat
                 return RequestAuth.None;
             case "basic":
                 return new BasicAuth(AuthParam(auth!, type, "username"), AuthParam(auth!, type, "password"));
+            case "digest":
+                return new DigestAuth(AuthParam(auth!, type, "username"), AuthParam(auth!, type, "password"));
             case "bearer":
                 return new BearerAuth(AuthParam(auth!, type, "token"));
             case "apikey":
@@ -505,6 +507,7 @@ internal static partial class PostmanFormat
         return auth switch
         {
             BasicAuth basic => Auth("basic", ("username", basic.Username), ("password", basic.Password)),
+            DigestAuth digest => Auth("digest", ("username", digest.Username), ("password", digest.Password)),
             BearerAuth bearer => Auth("bearer", ("token", bearer.Token)),
             ApiKeyAuth apiKey => Auth("apikey",
                 ("key", apiKey.Key),

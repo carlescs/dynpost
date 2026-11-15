@@ -118,6 +118,10 @@ export const AUTH_FIELDS: Record<
     { field: 'username', label: 'Username' },
     { field: 'password', label: 'Password' },
   ],
+  digest: [
+    { field: 'username', label: 'Username' },
+    { field: 'password', label: 'Password' },
+  ],
   bearer: [{ field: 'token', label: 'Token' }],
   apiKey: [
     { field: 'key', label: 'Key' },

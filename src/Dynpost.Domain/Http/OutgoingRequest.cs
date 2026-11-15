@@ -21,6 +21,15 @@ public sealed record OutgoingRequest(
     /// </summary>
     public IReadOnlyList<StoredCookie>? Cookies { get; init; }
 
+    /// <summary>
+    /// The credentials to answer a <c>Digest</c> challenge (a 401 response) with; <c>null</c> when
+    /// the request doesn't use Digest auth.
+    /// </summary>
+    public DigestCredentials? Digest { get; init; }
+
+    /// <summary>The client certificate to present when the server asks for one; <c>null</c> for none.</summary>
+    public ClientCertificate? ClientCertificate { get; init; }
+
     /// <summary>How to send it: timeout, redirects, TLS checks and HTTP version (unset values take the defaults).</summary>
     public RequestSettings Settings { get; init; } = RequestSettings.Inherit;
 }

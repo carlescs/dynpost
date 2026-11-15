@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
@@ -60,6 +63,13 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
 
     /// <summary>Sends requests whose settings turn off TLS certificate checks; made when first needed.</summary>
     private readonly Lazy<HttpClient> _insecureClient;
+
+    /// <summary>
+    /// Clients that present a client certificate, one per certificate (and TLS check setting), so
+    /// pooled connections made with one certificate are never reused with another. Only made by
+    /// the default constructor; a sender given a client uses it for those requests too.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Lazy<HttpClient>>? _certificateClients;
     private readonly bool _ownsClient;
     private readonly TimeSpan _timeout;
     private readonly int _maxBodyBytes;
@@ -69,6 +79,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     {
         _client = new HttpClient(CreateHandler()) { Timeout = Timeout.InfiniteTimeSpan };
         _insecureClient = new Lazy<HttpClient>(() => new HttpClient(CreateHandler(verifyTls: false)) { Timeout = Timeout.InfiniteTimeSpan });
+        _certificateClients = new ConcurrentDictionary<string, Lazy<HttpClient>>(StringComparer.Ordinal);
         _ownsClient = true;
         _timeout = DefaultTimeout;
         _maxBodyBytes = DefaultMaxBodyBytes;
@@ -99,11 +110,13 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     /// phases of each new connection to the timings of the request that opened it. With
     /// <paramref name="verifyTls"/> off it accepts any server certificate.
     /// </summary>
-    internal static SocketsHttpHandler CreateHandler(bool verifyTls = true) => new()
+    internal static SocketsHttpHandler CreateHandler(bool verifyTls = true, X509Certificate2? clientCertificate = null) => new()
     {
-        SslOptions = verifyTls
-            ? new SslClientAuthenticationOptions()
-            : new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, _, _, _) => true },
+        SslOptions = new SslClientAuthenticationOptions
+        {
+            RemoteCertificateValidationCallback = verifyTls ? null : (_, _, _, _) => true,
+            ClientCertificates = clientCertificate is null ? null : new X509CertificateCollection { clientCertificate },
+        },
         AllowAutoRedirect = false,
         AutomaticDecompression = DecompressionMethods.All,
         UseCookies = false,
@@ -136,6 +149,16 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         var limit = settings.Timeout ?? _timeout;
         var maxRedirects = settings.EffectiveMaxRedirects;
         var client = settings.EffectiveVerifyTls ? _client : _insecureClient.Value;
+        if (request.ClientCertificate is { } certificate)
+        {
+            var withCertificate = ClientFor(certificate, settings.EffectiveVerifyTls);
+            if (!withCertificate.IsSuccess)
+            {
+                return withCertificate.Error!;
+            }
+
+            client = withCertificate.Value;
+        }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (limit > TimeSpan.Zero)
@@ -152,6 +175,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         var wait = TimeSpan.Zero;
         long bytesSent = 0;
         var staleRetries = 0;
+        var digestAnswered = false;
         var stopwatch = Stopwatch.StartNew();
         try
         {
@@ -199,6 +223,26 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                     .ToList();
                 StoreCookies(jar, url, responseHeaders);
 
+                if (request.Digest is { } digest
+                    && !digestAnswered
+                    && response.StatusCode == HttpStatusCode.Unauthorized
+                    && DigestChallenge.Parse(responseHeaders
+                        .Where(header => header.Key.Equals("WWW-Authenticate", StringComparison.OrdinalIgnoreCase))
+                        .Select(header => header.Value)) is { IsAnswerable: true } challenge)
+                {
+                    // Send it again, answering the challenge (the 401 isn't reported as a hop).
+                    response.Dispose();
+                    var authorization = challenge.Authorization(
+                        digest,
+                        method,
+                        url.PathAndQuery,
+                        Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)),
+                        body: challenge.Qop.Contains("auth") || challenge.Qop.Count == 0 ? null : await BodyBytesAsync(method, url, headers, body, timeout.Token));
+                    headers = [.. headers.Where(header => !header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)), KeyValuePair.Create("Authorization", authorization)];
+                    digestAnswered = true;
+                    continue;
+                }
+
                 if (redirects.Count < maxRedirects && RedirectTarget(response, url) is { } location)
                 {
                     response.Dispose();
@@ -210,6 +254,8 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                     // Like HttpClient's own redirects: credentials are not sent on to the new location.
                     headers = headers.Where(header => !header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)).ToList();
                     url = location;
+                    // The new location may challenge again.
+                    digestAnswered = false;
                     continue;
                 }
 
@@ -253,7 +299,129 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
             {
                 _insecureClient.Value.Dispose();
             }
+
+            foreach (var client in _certificateClients?.Values ?? [])
+            {
+                if (client.IsValueCreated)
+                {
+                    client.Value.Dispose();
+                }
+            }
         }
+    }
+
+    /// <summary>
+    /// The client that presents <paramref name="certificate"/>: made (and its certificate loaded)
+    /// the first time, and again when the files change.
+    /// </summary>
+    private Result<HttpClient> ClientFor(ClientCertificate certificate, bool verifyTls)
+    {
+        string key;
+        try
+        {
+            key = string.Join(
+                '|',
+                verifyTls,
+                certificate.CertificatePath,
+                File.GetLastWriteTimeUtc(certificate.CertificatePath).Ticks,
+                certificate.KeyPath,
+                certificate.KeyPath is null ? 0 : File.GetLastWriteTimeUtc(certificate.KeyPath).Ticks,
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Passphrase ?? string.Empty))));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not read the client certificate: {ex.Message}");
+        }
+
+        if (_certificateClients is not null && _certificateClients.TryGetValue(key, out var existing))
+        {
+            return existing.Value;
+        }
+
+        var loaded = LoadCertificate(certificate);
+        if (!loaded.IsSuccess)
+        {
+            return loaded.Error!;
+        }
+
+        if (_certificateClients is null)
+        {
+            // A sender given its client (tests) checks the certificate but sends with that client.
+            loaded.Value.Dispose();
+            return verifyTls ? _client : _insecureClient.Value;
+        }
+
+        var created = new Lazy<HttpClient>(() =>
+            new HttpClient(CreateHandler(verifyTls, loaded.Value)) { Timeout = Timeout.InfiniteTimeSpan });
+        var client = _certificateClients.GetOrAdd(key, created);
+        if (!ReferenceEquals(client, created))
+        {
+            loaded.Value.Dispose();
+        }
+
+        return client.Value;
+    }
+
+    /// <summary>
+    /// Loads a client certificate with its private key: a PKCS#12 file (<c>.pfx</c>, <c>.p12</c>),
+    /// or a PEM certificate with the key in the same file or its own.
+    /// </summary>
+    internal static Result<X509Certificate2> LoadCertificate(ClientCertificate certificate)
+    {
+        var name = Path.GetFileName(certificate.CertificatePath);
+        try
+        {
+            if (!File.Exists(certificate.CertificatePath))
+            {
+                return new Error(ErrorCodes.InvalidRequest, $"The client certificate file '{certificate.CertificatePath}' doesn't exist.");
+            }
+
+            if (certificate.KeyPath is not null && !File.Exists(certificate.KeyPath))
+            {
+                return new Error(ErrorCodes.InvalidRequest, $"The private key file '{certificate.KeyPath}' doesn't exist.");
+            }
+
+            X509Certificate2 loaded;
+            var extension = Path.GetExtension(certificate.CertificatePath).ToLowerInvariant();
+            if (extension is ".pfx" or ".p12")
+            {
+                loaded = X509CertificateLoader.LoadPkcs12FromFile(certificate.CertificatePath, certificate.Passphrase);
+            }
+            else
+            {
+                using var pem = certificate.Passphrase is { } passphrase
+                    ? X509Certificate2.CreateFromEncryptedPemFile(certificate.CertificatePath, passphrase, certificate.KeyPath)
+                    : X509Certificate2.CreateFromPemFile(certificate.CertificatePath, certificate.KeyPath);
+                // Windows can't use the ephemeral key of a PEM certificate for TLS: go through PKCS#12.
+                loaded = X509CertificateLoader.LoadPkcs12(pem.Export(X509ContentType.Pkcs12), null);
+            }
+
+            if (!loaded.HasPrivateKey)
+            {
+                loaded.Dispose();
+                return new Error(ErrorCodes.InvalidRequest, $"The client certificate '{name}' has no private key: choose the key file too.");
+            }
+
+            return loaded;
+        }
+        catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return new Error(
+                ErrorCodes.InvalidRequest,
+                $"Could not load the client certificate '{name}' (is the passphrase right, and is it a PKCS#12 or PEM file?): {ex.Message}");
+        }
+    }
+
+    /// <summary>The bytes of a request body, for a Digest <c>auth-int</c> answer.</summary>
+    private static async Task<byte[]> BodyBytesAsync(
+        string method,
+        Uri url,
+        IReadOnlyList<KeyValuePair<string, string>> headers,
+        OutgoingBody? body,
+        CancellationToken cancellationToken)
+    {
+        using var message = CreateMessage(method, url, headers, body, null, out _);
+        return message.Content is null ? [] : await message.Content.ReadAsByteArrayAsync(cancellationToken);
     }
 
     /// <summary>Resolves the host and opens a TCP connection, timing each step.</summary>

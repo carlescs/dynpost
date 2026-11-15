@@ -298,6 +298,49 @@ public sealed class HttpClientSenderTests
     }
 
     [Fact]
+    public async Task SendAsync_AnswersADigestChallenge()
+    {
+        var handler = new SequenceHandler(
+            _ =>
+            {
+                var challenge = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                challenge.Headers.WwwAuthenticate.ParseAdd("Digest realm=\"api\", qop=\"auth\", nonce=\"abc\", opaque=\"xyz\"");
+                return challenge;
+            },
+            Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var result = await sender.SendAsync(Request() with { Digest = new DigestCredentials("ada", "pw") });
+
+        Assert.Equal(200, result.Value.StatusCode);
+        Assert.Equal(2, handler.Received.Count);
+        Assert.Null(handler.Received[0].Request.Headers.Authorization);
+        var authorization = handler.Received[1].Request.Headers.Authorization!;
+        Assert.Equal("Digest", authorization.Scheme);
+        Assert.Contains("username=\"ada\"", authorization.Parameter);
+        Assert.Contains("opaque=\"xyz\"", authorization.Parameter);
+    }
+
+    [Fact]
+    public async Task SendAsync_ReturnsTheSecond401WhenTheDigestAnswerIsRejected()
+    {
+        static HttpResponseMessage Challenge(HttpRequestMessage _)
+        {
+            var challenge = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            challenge.Headers.WwwAuthenticate.ParseAdd("Digest realm=\"api\", nonce=\"abc\"");
+            return challenge;
+        }
+
+        var handler = new SequenceHandler(Challenge, Challenge, Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var result = await sender.SendAsync(Request() with { Digest = new DigestCredentials("ada", "wrong") });
+
+        Assert.Equal(401, result.Value.StatusCode);
+        Assert.Equal(2, handler.Received.Count);
+    }
+
+    [Fact]
     public async Task SendAsync_ThrowsWhenCancelled()
     {
         var handler = new RecordingHandler(async (_, ct) =>

@@ -200,6 +200,7 @@ public static class RequestMapper
     {
         BasicAuth basic => new AuthDto("basic", Username: basic.Username, Password: basic.Password),
         BearerAuth bearer => new AuthDto("bearer", Token: bearer.Token),
+        DigestAuth digest => new AuthDto("digest", Username: digest.Username, Password: digest.Password),
         ApiKeyAuth apiKey => new AuthDto("apiKey", Key: apiKey.Key, Value: apiKey.Value, In: apiKey.In == ApiKeyLocation.Query ? "query" : "header"),
         OAuth2Auth oauth => new AuthDto(
             "oauth2",
@@ -246,6 +247,7 @@ public static class RequestMapper
         "none" => RequestAuth.None,
         "basic" => new BasicAuth(auth.Username ?? string.Empty, auth.Password ?? string.Empty),
         "bearer" => new BearerAuth(auth.Token ?? string.Empty),
+        "digest" => new DigestAuth(auth.Username ?? string.Empty, auth.Password ?? string.Empty),
         "apikey" => auth.In?.ToLowerInvariant() switch
         {
             null or "" or "header" => new ApiKeyAuth(auth.Key ?? string.Empty, auth.Value ?? string.Empty, ApiKeyLocation.Header),

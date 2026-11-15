@@ -179,6 +179,8 @@ export function toAuthDto(auth: RequestAuth): AuthDto {
   switch (auth.type) {
     case 'basic':
       return { type: 'basic', username: auth.username, password: auth.password };
+    case 'digest':
+      return { type: 'digest', username: auth.username, password: auth.password };
     case 'bearer':
       return { type: 'bearer', token: auth.token };
     case 'apiKey':

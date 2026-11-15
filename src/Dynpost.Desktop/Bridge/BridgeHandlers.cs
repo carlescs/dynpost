@@ -1,5 +1,6 @@
 using Dynpost.Application.Captures;
 using Dynpost.Application.Common;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Cookies;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
@@ -183,6 +184,10 @@ internal static class BridgeHandlers
                 (p, ct) => Use<DeleteCookie>().ExecuteAsync(p.Environment, p.Name, p.Domain, p.Path, ct))
             .Register<CookieJarPayload, Unit?>(BridgeMessageTypes.CookieClear,
                 async (p, ct) => NoValue(await Use<ClearCookies>().ExecuteAsync(p.Environment, ct)))
+            .Register<CertificatesPayload, IReadOnlyList<ClientCertificateDto>>(BridgeMessageTypes.CertificateList,
+                (p, ct) => Use<ListClientCertificates>().ExecuteAsync(p.Environment, ct))
+            .Register<SaveCertificatesPayload, IReadOnlyList<ClientCertificateDto>>(BridgeMessageTypes.CertificateSave,
+                (p, ct) => Use<SaveClientCertificates>().ExecuteAsync(p.Environment, p.Certificates ?? [], ct))
             .Register<CapturedValuesPayload, IReadOnlyList<CapturedValueDto>>(BridgeMessageTypes.CaptureList,
                 (p, ct) => Use<ListCapturedValues>().ExecuteAsync(p.Environment, ct))
             .Register<ClearCapturedValuesPayload, IReadOnlyList<CapturedValueDto>>(BridgeMessageTypes.CaptureClear,

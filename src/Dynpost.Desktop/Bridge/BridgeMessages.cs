@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Common;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
@@ -141,6 +142,12 @@ internal static class BridgeMessageTypes
 
     /// <summary>Deletes every cookie kept for an environment. Payload: <see cref="CookieJarPayload"/>. Result: none.</summary>
     public const string CookieClear = "cookie.clear";
+
+    /// <summary>Lists the client certificates set up for an environment. Payload: <see cref="CertificatesPayload"/>. Result: certificates.</summary>
+    public const string CertificateList = "certificate.list";
+
+    /// <summary>Replaces the client certificates of an environment. Payload: <see cref="SaveCertificatesPayload"/>. Result: certificates.</summary>
+    public const string CertificateSave = "certificate.save";
 
     /// <summary>Lists the values requests captured for an environment. Payload: <see cref="CapturedValuesPayload"/>. Result: captured values.</summary>
     public const string CaptureList = "capture.list";
@@ -535,6 +542,12 @@ internal sealed record ClearCapturedValuesPayload(string Environment, string? Na
 internal sealed record OAuth2TokenPayload(AuthDto Auth);
 
 internal sealed record DeleteCookiePayload(string Environment, string Name, string Domain, string Path);
+
+/// <param name="Environment">The environment's file name in the <c>environments</c> folder.</param>
+internal sealed record CertificatesPayload(string Environment);
+
+/// <param name="Certificates">Every certificate of the environment, in the order they are matched.</param>
+internal sealed record SaveCertificatesPayload(string Environment, IReadOnlyList<ClientCertificateDto> Certificates);
 
 /// <param name="Folder">The destination folder: <c>requests</c> or a folder inside it.</param>
 internal sealed record MoveRequestPayload(string Path, string Folder);
