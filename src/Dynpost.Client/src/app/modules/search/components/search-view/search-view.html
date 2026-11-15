@@ -1,0 +1,115 @@
+<header class="flex h-9 shrink-0 items-center justify-between px-3">
+  <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Search</h2>
+  @if (workspace.workspace()) {
+    <button
+      type="button"
+      [class]="headerButton"
+      title="Search again"
+      aria-label="Search again"
+      [disabled]="!state.query()"
+      (click)="state.search()"
+    >
+      <fa-icon [icon]="faArrowsRotate" [animation]="state.searching() ? 'spin' : undefined" />
+    </button>
+  }
+</header>
+
+@if (!workspace.workspace()) {
+  <p class="px-3 py-1 text-sm text-slate-500">Open a workspace folder to search its requests.</p>
+} @else {
+  <div class="px-3 pb-2">
+    <div
+      class="flex items-center rounded border border-slate-300 bg-white focus-within:border-sky-500"
+    >
+      <input
+        class="min-w-0 flex-1 bg-transparent px-2 py-1 text-sm focus:outline-none"
+        type="search"
+        placeholder="Search URLs, headers, bodies…"
+        aria-label="Search the workspace"
+        autocomplete="off"
+        spellcheck="false"
+        #input
+        [value]="state.query()"
+        (input)="state.setQuery($any($event.target).value)"
+        (keydown)="onKeydown($event)"
+      />
+      <button
+        type="button"
+        class="mr-0.5 flex size-6 items-center justify-center rounded text-xs text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+        [class.bg-sky-100]="state.matchCase()"
+        [class.text-sky-700]="state.matchCase()"
+        title="Match case"
+        aria-label="Match case"
+        [attr.aria-pressed]="state.matchCase()"
+        (click)="state.toggleMatchCase()"
+      >
+        <fa-icon [icon]="faFont" />
+      </button>
+    </div>
+    @if (state.error(); as error) {
+      <p class="mt-1 text-xs text-rose-600" role="alert">{{ error }}</p>
+    } @else if (state.summary(); as summary) {
+      <p class="mt-1 text-xs text-slate-500" aria-live="polite">{{ summary }}</p>
+    }
+  </div>
+
+  <ul class="min-h-0 flex-1 overflow-y-auto pb-2 text-sm" aria-label="Search results">
+    @for (entry of files(); track entry.file.path) {
+      @let collapsed = state.collapsed().has(entry.file.path);
+      <li>
+        <div class="group flex items-center gap-1 px-2 py-0.5 hover:bg-slate-200/60">
+          <button
+            type="button"
+            class="flex size-4 shrink-0 items-center justify-center text-[10px] text-slate-500"
+            [attr.aria-label]="(collapsed ? 'Show' : 'Hide') + ' the matches in ' + entry.file.name"
+            [attr.aria-expanded]="!collapsed"
+            (click)="state.toggleFile(entry.file.path)"
+          >
+            <fa-icon [icon]="collapsed ? faChevronRight : faChevronDown" />
+          </button>
+          <button
+            type="button"
+            class="flex min-w-0 flex-1 items-baseline gap-1.5 text-left"
+            [title]="'Open ' + entry.file.path"
+            (click)="open(entry.file)"
+          >
+            <span
+              class="shrink-0 font-mono text-[10px] font-semibold"
+              [class]="methodColor(entry.file.method)"
+              >{{ entry.file.method ?? '—' }}</span
+            >
+            <span class="truncate">{{ entry.file.name }}</span>
+            <span class="truncate text-xs text-slate-400">{{ entry.folder }}</span>
+          </button>
+          <span class="shrink-0 rounded-full bg-slate-200 px-1.5 text-[10px] text-slate-600">
+            {{ entry.lines.length }}
+          </span>
+        </div>
+        @if (!collapsed) {
+          <ul>
+            @for (match of entry.lines; track match.line.line) {
+              <li>
+                <button
+                  type="button"
+                  class="flex w-full items-baseline gap-2 py-0.5 pr-2 pl-8 text-left hover:bg-slate-200/60"
+                  [title]="'Line ' + match.line.line + ' of ' + entry.file.path"
+                  (click)="open(entry.file)"
+                >
+                  <span class="truncate font-mono text-xs text-slate-600">
+                    <app-highlighted-text
+                      [segments]="match.parts"
+                      markClass="rounded-sm bg-amber-200 text-slate-900"
+                    />
+                  </span>
+                  <span class="ml-auto shrink-0 text-[10px] text-slate-400">{{
+                    match.line.line
+                  }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </li>
+    }
+  </ul>
+}

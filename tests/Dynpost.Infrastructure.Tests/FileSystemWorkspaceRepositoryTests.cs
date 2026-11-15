@@ -219,6 +219,18 @@ public sealed class FileSystemWorkspaceRepositoryTests : IDisposable
         Assert.Equal([WorkspacePath.Parse("users/admin")], contents.Folders);
     }
 
+    [Fact]
+    public async Task ReadText_ReturnsTheFileAsOnDisk_OrNotFound()
+    {
+        Write("requests/raw.yaml", "name: Raw\n# a comment\n");
+
+        var text = await _repository.ReadTextAsync(_root, WorkspacePath.Parse("requests/raw.yaml"));
+        var missing = await _repository.ReadTextAsync(_root, WorkspacePath.Parse("requests/missing.yaml"));
+
+        Assert.Equal("name: Raw\n# a comment\n", text.Value);
+        Assert.Equal(ErrorCodes.NotFound, missing.Error!.Code);
+    }
+
     private void Write(string relativePath, string content)
     {
         var full = Path.Combine(_root, relativePath);

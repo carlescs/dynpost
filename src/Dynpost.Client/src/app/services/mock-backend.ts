@@ -1,4 +1,9 @@
 import {
+  QuickOpenItemDto,
+  SearchFileDto,
+  SearchLineDto,
+  SearchRangeDto,
+  WorkspaceSearchDto,
   Theme,
   AuthDto,
   BridgeRequestEnvelope,
@@ -408,6 +413,10 @@ export class MockBackend {
         return ok(null);
       case 'workspace.tree':
         return ok(this.workspace());
+      case 'workspace.quickOpen':
+        return ok(this.quickOpen(String(payload?.['query'] ?? '')));
+      case 'workspace.search':
+        return ok(this.search(String(payload?.['query'] ?? ''), !!payload?.['matchCase']));
       case 'workspace.exportFormats':
         return ok([
           { id: 'postman', name: 'Postman collection v2.1', extension: '.postman_collection.json' },
@@ -1214,6 +1223,82 @@ export class MockBackend {
     }
   }
 
+  /** Roughly the host's quick open: every word must appear, in order, in the name, path or URL. */
+  private quickOpen(query: string): QuickOpenItemDto[] {
+    const terms = query.split(' ').filter(Boolean);
+    const items: { score: number; item: QuickOpenItemDto }[] = [];
+    for (const [path, dto] of [...this.files].sort(([a], [b]) => a.localeCompare(b))) {
+      const item: QuickOpenItemDto = {
+        path,
+        name: dto.name,
+        method: dto.method,
+        url: dto.url,
+        nameMatches: [],
+        pathMatches: [],
+        urlMatches: [],
+      };
+      let score = 0;
+      const matched = terms.every((term) => {
+        if (term.toUpperCase() === dto.method) {
+          score += 10;
+          return true;
+        }
+        for (const [text, key] of [
+          [dto.name, 'nameMatches'],
+          [dto.url, 'urlMatches'],
+          [path, 'pathMatches'],
+        ] as const) {
+          const positions = subsequence(term, text);
+          if (positions) {
+            item[key].push(...positions);
+            score += positions.length * 10 - (positions.at(-1)! - positions[0]);
+            return true;
+          }
+        }
+        return false;
+      });
+      if (matched) items.push({ score, item });
+    }
+    return items
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 50)
+      .map(({ item }) => ({
+        ...item,
+        nameMatches: [...new Set(item.nameMatches)].sort((a, b) => a - b),
+        pathMatches: [...new Set(item.pathMatches)].sort((a, b) => a - b),
+        urlMatches: [...new Set(item.urlMatches)].sort((a, b) => a - b),
+      }));
+  }
+
+  /** Roughly the host's workspace search, over the requests written out as JSON instead of YAML. */
+  private search(query: string, matchCase: boolean): WorkspaceSearchDto {
+    const files: SearchFileDto[] = [];
+    let matchCount = 0;
+    if (!query) return { files, matchCount, truncated: false };
+    const needle = matchCase ? query : query.toLowerCase();
+    for (const [path, dto] of [...this.files].sort(([a], [b]) => a.localeCompare(b))) {
+      const lines: SearchLineDto[] = [];
+      JSON.stringify(dto, null, 2)
+        .split('\n')
+        .forEach((raw, index) => {
+          const text = raw.trim();
+          const haystack = matchCase ? text : text.toLowerCase();
+          const ranges: SearchRangeDto[] = [];
+          for (
+            let at = haystack.indexOf(needle);
+            at >= 0;
+            at = haystack.indexOf(needle, at + needle.length)
+          ) {
+            ranges.push({ start: at, length: needle.length });
+          }
+          if (ranges.length) lines.push({ line: index + 1, text, ranges });
+          matchCount += ranges.length;
+        });
+      if (lines.length) files.push({ path, name: dto.name, method: dto.method, lines });
+    }
+    return { files, matchCount, truncated: false };
+  }
+
   private workspace(): WorkspaceDto {
     const nodes = (folder: string): WorkspaceNodeDto[] => {
       const prefix = folder ? `${folder}/` : '';
@@ -1591,4 +1676,18 @@ function mockToken(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
     b.toString(16).padStart(2, '0'),
   ).join('');
+}
+
+/** The indexes in `text` of the characters of `term`, in order and ignoring case; `null` if missing. */
+function subsequence(term: string, text: string): number[] | null {
+  const positions: number[] = [];
+  const lower = text.toLowerCase();
+  let from = 0;
+  for (const char of term.toLowerCase()) {
+    const at = lower.indexOf(char, from);
+    if (at < 0) return null;
+    positions.push(at);
+    from = at + 1;
+  }
+  return positions;
 }

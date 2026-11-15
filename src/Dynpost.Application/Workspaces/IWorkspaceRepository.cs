@@ -40,6 +40,9 @@ public interface IWorkspaceRepository
 
     bool FileExists(string root, WorkspacePath path);
 
+    /// <summary>Reads a file's text as it is on disk, such as a request file for a workspace search.</summary>
+    Task<Result<string>> ReadTextAsync(string root, WorkspacePath path, CancellationToken cancellationToken = default);
+
     Task<Result<HttpRequestDefinition>> ReadRequestAsync(string root, WorkspacePath path, CancellationToken cancellationToken = default);
 
     /// <summary>

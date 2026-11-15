@@ -29,23 +29,33 @@ public sealed class FileSystemWorkspaceRepository : IWorkspaceRepository
 
     public bool FileExists(string root, WorkspacePath path) => File.Exists(FullPath(root, path));
 
-    public async Task<Result<HttpRequestDefinition>> ReadRequestAsync(string root, WorkspacePath path, CancellationToken cancellationToken = default)
+    public async Task<Result<string>> ReadTextAsync(string root, WorkspacePath path, CancellationToken cancellationToken = default)
     {
-        string text;
         try
         {
-            text = await File.ReadAllTextAsync(FullPath(root, path), Utf8NoBom, cancellationToken);
+            return await File.ReadAllTextAsync(FullPath(root, path), Utf8NoBom, cancellationToken);
         }
         catch (FileNotFoundException)
         {
-            return new Error(ErrorCodes.NotFound, $"The request file '{path}' does not exist.");
+            return new Error(ErrorCodes.NotFound, $"The file '{path}' does not exist.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return IoError($"Could not read '{path}': {ex.Message}");
         }
+    }
 
-        return Parse(text, path);
+    public async Task<Result<HttpRequestDefinition>> ReadRequestAsync(string root, WorkspacePath path, CancellationToken cancellationToken = default)
+    {
+        var text = await ReadTextAsync(root, path, cancellationToken);
+        if (!text.IsSuccess)
+        {
+            return text.Error!.Code == ErrorCodes.NotFound
+                ? new Error(ErrorCodes.NotFound, $"The request file '{path}' does not exist.")
+                : text.Error;
+        }
+
+        return Parse(text.Value, path);
     }
 
     public async Task<Result<bool>> WriteRequestAsync(string root, WorkspacePath path, HttpRequestDefinition request, CancellationToken cancellationToken = default)

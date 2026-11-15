@@ -57,9 +57,9 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   - `models/` — bridge message types (`messages.ts`), the client model
     (`workspace.ts`), DTO mapping and other pure helpers.
   - `modules/<name>/` — one lazy-loaded, routable feature per activity-bar view
-    (`explorer`, `environments`, `git`), with the same `components/`,
+    (`explorer`, `search`, `environments`, `runs`, `git`), with the same `components/`,
     `services/` and `models/` folders inside and a `<name>.routes.ts` loaded by
-    `app.routes.ts`. The route selects the sidebar panel (`#/explorer`,
+    `app.routes.ts`. The route selects the sidebar panel (`#/explorer`, `#/search`,
     `#/environments`, `#/git`); the editor area is shared and rendered by the
     shell (`app.ts`), which uses the modules' editor components. Modules may
     import from the top-level folders, but not from each other — move shared
@@ -116,6 +116,11 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   what changed, open the plan's tab to follow the run, and open the item asked for; the item's kind
   comes from `Application/Workspaces/FindWorkspaceItem.cs`). `get_run` waits for a run through `Application/Runs/WaitForRun.cs`. Keep commit/pull/push out of the tools and
   never show secret values to the assistant; update the tool table in `README.md` when adding one.
+- Search: quick open (Ctrl+P, `workspace.quickOpen`) and the Search view (`workspace.search`, client
+  `modules/search`) both run in the backend (`Application/Search`) over the request files
+  (`IWorkspaceRepository.ListAsync`/`ReadTextAsync`); the fuzzy scoring and line search are pure
+  helpers in `Domain/Search`. The client's `components/quick-open` dialog is lazy-loaded by
+  `Shortcuts`, and matches are highlighted with `components/highlighted-text`.
 - Dates: the client never formats dates with the webview's locale or Angular's
   `DatePipe`; it uses `DateFormatStore` (`services/date-format-store.ts`), which formats
   with the operating system's regional patterns read by the host

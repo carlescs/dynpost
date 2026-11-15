@@ -1,4 +1,12 @@
-import { AuthDto, DateFormat, KeyValueDto, ResponseDto } from '../models/messages';
+import {
+  AuthDto,
+  BridgeMessageType,
+  DateFormat,
+  KeyValueDto,
+  QuickOpenItemDto,
+  ResponseDto,
+  WorkspaceSearchDto,
+} from '../models/messages';
 import { MockBackend } from './mock-backend';
 
 describe('MockBackend request.send', () => {
@@ -128,5 +136,43 @@ describe('MockBackend locale.dateFormat', () => {
     expect(format.abbreviatedMonthNames[8]).toBe('Sep');
     expect(format.dayNames).toHaveLength(7);
     expect(format.abbreviatedDayNames[0]).toBe('Sun');
+  });
+});
+
+describe('MockBackend search', () => {
+  async function call(type: BridgeMessageType, payload: Record<string, unknown>) {
+    const backend = new MockBackend();
+    await backend.handle({ id: '1', type: 'workspace.open', payload: { path: '/demo' } });
+    const result = await backend.handle({ id: '2', type, payload });
+    if (!result.ok) throw new Error(result.error.message);
+    return result.payload as never;
+  }
+
+  it('finds requests by fuzzy name, method or URL words for quick open', async () => {
+    const items: QuickOpenItemDto[] = await call('workspace.quickOpen', { query: 'post usr' });
+
+    expect(items.map((i) => i.name)).toContain('Create user');
+    expect(items.every((i) => i.method === 'POST')).toBe(true);
+  });
+
+  it('lists every request for an empty quick open query', async () => {
+    const items: QuickOpenItemDto[] = await call('workspace.quickOpen', { query: '' });
+
+    expect(items.length).toBeGreaterThan(3);
+  });
+
+  it('groups matching lines by file for a workspace search', async () => {
+    const result: WorkspaceSearchDto = await call('workspace.search', { query: '/ORDERS' });
+
+    expect(result.files.map((f) => f.path)).toEqual(['requests/orders/list-orders.yaml']);
+    const line = result.files[0].lines[0];
+    expect(line.text.substr(line.ranges[0].start, line.ranges[0].length)).toBe('/orders');
+    expect(result.matchCount).toBe(1);
+
+    const cased: WorkspaceSearchDto = await call('workspace.search', {
+      query: '/ORDERS',
+      matchCase: true,
+    });
+    expect(cased.files).toEqual([]);
   });
 });

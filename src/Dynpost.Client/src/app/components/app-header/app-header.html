@@ -17,6 +17,18 @@
     </button>
   }
   @if (store.workspace()) {
+    <button
+      type="button"
+      class="flex items-center gap-2 rounded border border-slate-600 px-2 py-1 text-sm text-slate-400 hover:bg-slate-700 hover:text-white"
+      [title]="'Open a request by name, path, method or URL (' + quickOpenKeys + ')'"
+      aria-label="Open a request"
+      [attr.aria-keyshortcuts]="'Control+P'"
+      (click)="shortcuts.run('quickOpen')"
+    >
+      <fa-icon [icon]="faMagnifyingGlass" />
+      <span class="hidden md:inline">Open request…</span>
+      <kbd class="hidden font-sans text-xs text-slate-500 md:inline">{{ quickOpenKeys }}</kbd>
+    </button>
     <label
       class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300"
       title="The environment whose variables requests are sent with"

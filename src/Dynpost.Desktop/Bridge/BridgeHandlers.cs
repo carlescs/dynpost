@@ -17,6 +17,7 @@ using Dynpost.Application.About;
 using Dynpost.Application.Locale;
 using Dynpost.Application.Mcp;
 using Dynpost.Application.Updates;
+using Dynpost.Application.Search;
 using Dynpost.Application.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -51,6 +52,10 @@ internal static class BridgeHandlers
                 async (p, ct) => NoValue(await Use<RemoveRecentWorkspace>().ExecuteAsync(p.Path, ct)))
             .Register(BridgeMessageTypes.WorkspaceTree,
                 ct => Use<GetWorkspaceTree>().ExecuteAsync(ct))
+            .Register<QuickOpenPayload, IReadOnlyList<QuickOpenItemDto>>(BridgeMessageTypes.WorkspaceQuickOpen,
+                (p, ct) => Use<QuickOpen>().ExecuteAsync(p.Query, ct))
+            .Register<SearchWorkspacePayload, WorkspaceSearchDto>(BridgeMessageTypes.WorkspaceSearch,
+                (p, ct) => Use<SearchWorkspace>().ExecuteAsync(p.Query, p.MatchCase, ct))
             .Register(BridgeMessageTypes.WorkspaceReveal,
                 _ => Task.FromResult(NoValue(Use<ShowWorkspaceFolder>().Execute())))
             .Register(BridgeMessageTypes.WorkspaceExportFormats,

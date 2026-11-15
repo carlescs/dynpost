@@ -34,6 +34,18 @@ internal static class BridgeMessageTypes
     /// <summary>Re-reads the open workspace. Payload: none. Result: workspace.</summary>
     public const string WorkspaceTree = "workspace.tree";
 
+    /// <summary>
+    /// Finds requests by a fuzzy query over their names, paths, methods and URLs, best match first.
+    /// Payload: <see cref="QuickOpenPayload"/>. Result: quick open items.
+    /// </summary>
+    public const string WorkspaceQuickOpen = "workspace.quickOpen";
+
+    /// <summary>
+    /// Searches the text of every request file and groups the matching lines by file.
+    /// Payload: <see cref="SearchWorkspacePayload"/>. Result: search results.
+    /// </summary>
+    public const string WorkspaceSearch = "workspace.search";
+
     /// <summary>Shows the open workspace folder in the system file manager. Payload: none. Result: none.</summary>
     public const string WorkspaceReveal = "workspace.reveal";
 
@@ -459,6 +471,13 @@ internal sealed record BridgeResponse(string Id, bool Ok, object? Payload = null
 
 internal sealed record OpenWorkspacePayload(string Path);
 internal sealed record RemoveRecentWorkspacePayload(string Path);
+
+/// <param name="Query">Words to look for; empty lists the first requests in the tree's order.</param>
+internal sealed record QuickOpenPayload(string Query = "");
+
+/// <param name="Query">The text to find, as typed.</param>
+/// <param name="MatchCase">Whether letter case must match.</param>
+internal sealed record SearchWorkspacePayload(string Query, bool MatchCase = false);
 
 internal sealed record SetThemePayload(string Theme);
 internal sealed record SetActivityOrderPayload(IReadOnlyList<string>? Order);

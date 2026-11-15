@@ -1,0 +1,66 @@
+<div
+  class="adaptive flex max-h-[min(32rem,calc(100vh-6rem))] w-[36rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-slate-300 bg-white text-sm text-slate-800 shadow-xl"
+>
+  <label class="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
+    <fa-icon class="text-slate-400" [icon]="faMagnifyingGlass" />
+    <span id="quick-open-title" class="sr-only">Open a request</span>
+    <input
+      class="min-w-0 flex-1 bg-transparent py-1 focus:outline-none"
+      type="text"
+      placeholder="Search requests by name, path, method or URL"
+      aria-labelledby="quick-open-title"
+      role="combobox"
+      aria-controls="quick-open-list"
+      aria-autocomplete="list"
+      [attr.aria-expanded]="rows().length > 0"
+      [attr.aria-activedescendant]="rows().length ? 'quick-open-' + selected() : null"
+      autocomplete="off"
+      spellcheck="false"
+      [value]="query()"
+      (input)="onInput($any($event.target).value)"
+      (keydown)="onKeydown($event)"
+    />
+  </label>
+  <ul
+    #list
+    id="quick-open-list"
+    class="min-h-0 flex-1 overflow-y-auto py-1"
+    role="listbox"
+    aria-label="Requests"
+  >
+    @for (row of rows(); track row.item.path; let i = $index) {
+      <li
+        class="flex cursor-pointer items-baseline gap-2 px-3 py-1.5"
+        role="option"
+        [id]="'quick-open-' + i"
+        [attr.data-index]="i"
+        [attr.aria-selected]="i === selected()"
+        [class.bg-sky-100]="i === selected()"
+        (mousemove)="selected.set(i)"
+        (click)="open(row.item)"
+      >
+        <span
+          class="w-14 shrink-0 text-right font-mono text-[11px] font-semibold"
+          [class]="methodColor(row.item.method)"
+          >{{ row.item.method ?? '—' }}</span
+        >
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="truncate">
+            <app-highlighted-text [segments]="row.name" />
+          </span>
+          <span class="truncate text-xs text-slate-500">
+            <app-highlighted-text [segments]="row.path" />
+            @if (row.item.url) {
+              <span class="text-slate-400"> · </span>
+              <app-highlighted-text [segments]="row.url" />
+            }
+          </span>
+        </span>
+      </li>
+    } @empty {
+      @if (loaded()) {
+        <li class="px-3 py-2 text-slate-500">{{ error() ?? 'No matching requests.' }}</li>
+      }
+    }
+  </ul>
+</div>

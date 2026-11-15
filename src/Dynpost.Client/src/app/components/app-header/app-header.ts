@@ -10,6 +10,7 @@ import {
   faMoon,
   faFolderOpen,
   faLayerGroup,
+  faMagnifyingGlass,
   faPaperPlane,
   faRobot,
   faXmark,
@@ -20,6 +21,8 @@ import { McpSettingsDialog } from '../mcp-settings-dialog/mcp-settings-dialog';
 import { ShortcutsDialog } from '../shortcuts-dialog/shortcuts-dialog';
 import { Dialogs } from '../../services/dialogs';
 import { EnvironmentStore } from '../../services/environment-store';
+import { Shortcuts } from '../../services/shortcuts';
+import { formatCombo } from '../../models/shortcuts';
 import { ThemeStore } from '../../services/theme-store';
 import { UpdateStore } from '../../services/update-store';
 import { WorkspaceStore } from '../../services/workspace-store';
@@ -43,6 +46,7 @@ export class AppHeader {
   protected readonly updates = inject(UpdateStore);
   protected readonly theme = inject(ThemeStore);
   private readonly dialogs = inject(Dialogs);
+  protected readonly shortcuts = inject(Shortcuts);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly menuOpen = signal(false);
   protected readonly recentOpen = signal(false);
@@ -61,6 +65,8 @@ export class AppHeader {
   protected readonly faCircleArrowUp = faCircleArrowUp;
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faLayerGroup = faLayerGroup;
+  protected readonly faMagnifyingGlass = faMagnifyingGlass;
+  protected readonly quickOpenKeys = formatCombo({ key: 'p', mod: true });
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faXmark = faXmark;
   protected readonly faRobot = faRobot;

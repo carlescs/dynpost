@@ -362,6 +362,53 @@ export interface WorkspaceDto {
   migration?: LayoutMigrationDto | null;
 }
 
+/** A request quick open (Ctrl+P) offers, best match first. */
+export interface QuickOpenItemDto {
+  path: string;
+  /** The request's name; the file name when the file could not be read. */
+  name: string;
+  /** `null` when the file could not be read. */
+  method: string | null;
+  /** The URL as written, variables unresolved. */
+  url: string;
+  /** Indexes of the characters of `name` the query matched, to highlight them. */
+  nameMatches: number[];
+  pathMatches: number[];
+  urlMatches: number[];
+}
+
+/** Where a match is in a `SearchLineDto.text`. */
+export interface SearchRangeDto {
+  start: number;
+  length: number;
+}
+
+/** A line of a request file containing the searched text. */
+export interface SearchLineDto {
+  /** The line's number, from 1. */
+  line: number;
+  /** The line without its indentation, cut around the match (with `…`) when it is long. */
+  text: string;
+  ranges: SearchRangeDto[];
+}
+
+/** A request file with matches. */
+export interface SearchFileDto {
+  path: string;
+  name: string;
+  method: string | null;
+  lines: SearchLineDto[];
+}
+
+/** What a workspace search found, grouped by file in the tree's order. */
+export interface WorkspaceSearchDto {
+  files: SearchFileDto[];
+  /** How many matches the files listed contain. */
+  matchCount: number;
+  /** Whether the search stopped at its limit of matching lines. */
+  truncated: boolean;
+}
+
 /**
  * What opening a workspace in the old layout did to move its requests into `requests/` and its run
  * plans into `plans/`.
@@ -890,6 +937,16 @@ export interface BridgeMessages {
   'workspace.recent.remove': { payload: { path: string }; result: null };
   /** Re-reads the open workspace from disk. */
   'workspace.tree': { payload: void; result: WorkspaceDto };
+  /**
+   * Finds requests by a fuzzy query over their names, paths, methods and URLs, best match first
+   * (at most 50); an empty query lists the first requests in the tree's order.
+   */
+  'workspace.quickOpen': { payload: { query: string }; result: QuickOpenItemDto[] };
+  /** Searches the text of every request file and groups the matching lines by file. */
+  'workspace.search': {
+    payload: { query: string; matchCase?: boolean };
+    result: WorkspaceSearchDto;
+  };
   /** Shows the open workspace folder in the system file manager (File Explorer, Finder...). */
   'workspace.reveal': { payload: void; result: null };
   /** The formats `workspace.export` can write. */
