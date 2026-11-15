@@ -511,6 +511,50 @@ export class MockBackend {
         this.environments.set(id, env);
         return ok({ id, environment: structuredClone(env) });
       }
+      case 'request.parseCurl': {
+        // Roughly as the host reads it: the URL, -X, -H and -d (bash quoting only).
+        const command = String(payload?.['command'] ?? '');
+        const words = [...command.matchAll(/'([^']*)'|"([^"]*)"|(\S+)/g)].map(
+          (m) => m[1] ?? m[2] ?? m[3],
+        );
+        if (words[0] !== 'curl')
+          return fail(ERROR_CODES.invalidRequest, 'Paste a command that starts with curl.');
+        let method = '';
+        let url = '';
+        let data = '';
+        const headers: { key: string; value: string; enabled: boolean }[] = [];
+        for (let i = 1; i < words.length; i++) {
+          const word = words[i];
+          if (word === '-X' || word === '--request') method = words[++i].toUpperCase();
+          else if (word === '-H' || word === '--header') {
+            const [key, ...value] = words[++i].split(':');
+            headers.push({ key: key.trim(), value: value.join(':').trim(), enabled: true });
+          } else if (word.startsWith('-d') || word.startsWith('--data')) data = words[++i];
+          else if (!word.startsWith('-')) url = word;
+        }
+        return ok({
+          request: {
+            name: `${method || (data ? 'POST' : 'GET')} ${url.replace(/^\w+:\/\/[^/]*/, '') || '/'}`,
+            method: method || (data ? 'POST' : 'GET'),
+            url,
+            params: [],
+            headers,
+            auth: { type: 'inherit' },
+            body: data ? { type: 'text', content: data } : { type: 'none', content: '' },
+          },
+          warnings: [],
+        });
+      }
+      case 'request.copyAsCurl': {
+        const dto = payload?.['request'] as RequestDto;
+        const quote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`;
+        const parts = [`curl -X ${dto.method} ${quote(dto.url)}`];
+        for (const h of dto.headers.filter((h) => h.enabled && h.key))
+          parts.push(`-H ${quote(`${h.key}: ${h.value}`)}`);
+        if (dto.body.type !== 'none' && dto.body.content)
+          parts.push(`--data-raw ${quote(dto.body.content)}`);
+        return ok(parts.join(' \\\n  '));
+      }
       case 'globals.load':
         return ok({ variables: structuredClone(this.globals) });
       case 'globals.save': {

@@ -113,6 +113,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Load runner: `*.run.yaml` plans that send requests from concurrent
       virtual users, with live statistics and pass/fail thresholds (see
       [Load runs](#load-runs))
+- [x] Import from cURL, and copy requests as cURL (see [cURL](#curl))
 - [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
       Postman and Insomnia
 - [x] A built-in MCP server, off by default, so AI assistants can control the
@@ -678,6 +679,39 @@ turn it off to find only the exact text, in the explorer's order. *Match case*
 (the **A** button) makes letter case count. Click a request or a line to open
 it. The search reads the files on disk, so it doesn't see unsaved edits, and it
 stops after the first 1000 matching lines (refine the search to see the rest).
+
+## cURL
+
+**Paste a cURL command** into a request's URL field and Dynpost fills in the
+request from it (its name, docs and captures stay), or use **New request from
+cURL…** in the explorer's "More actions" menu to open it as a new request. It
+reads bash/zsh quoting (single and double quotes, `$'…'`, `\` line breaks),
+Windows cmd (`^` line breaks and escapes) and PowerShell (`curl.exe`, backtick
+line breaks), and the options that describe a request: `-X`, `-H`, `-d` /
+`--data` / `--data-raw` / `--data-binary` / `--data-urlencode`, `--json`, `-F` /
+`--form-string`, `-u` (with `--digest` for Digest auth), `-G`, `-I`, `-A`, `-e`,
+`-b`, `-k`, `--max-time`, `--max-redirs` and `--http2`. A JSON `-d` becomes a
+JSON body, `name=value&…` data a `urlencoded` body, `-F` fields a `form` body
+(`@file` parts as file fields), and an `Authorization: Bearer`/`Basic` header the
+matching auth. Options that only change what curl prints (`-s`, `-v`, `-o`, …)
+are ignored; anything else is listed in a note.
+
+The request editor's **cURL** button copies the request as a command, with the
+headers and auth of its folders:
+
+- **Copy as cURL** resolves `{{variables}}` with the selected environment (and
+  the folders' and globals'), with secret values and credentials masked
+  (`••••••`), so it is safe to share.
+- **Copy as cURL with secrets…** writes them as they are, after asking.
+- **Copy as cURL with variables as written** keeps `{{variables}}`, like the
+  request file.
+
+Pick the shell it is quoted for at the bottom of the menu: bash/zsh, cmd
+(`^` line breaks; cmd can't break a quoted value over lines, so line breaks in
+bodies become spaces) or PowerShell (`curl.exe`, backtick line breaks); it is
+PowerShell on Windows and bash/zsh elsewhere until you change it. File bodies
+and parts point at the file's full path, and OAuth 2.0 requests get an
+`<access token>` placeholder.
 
 ## Sending requests
 

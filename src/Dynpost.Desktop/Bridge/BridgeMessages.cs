@@ -68,6 +68,12 @@ internal static class BridgeMessageTypes
     /// <summary>Reads a request file. Payload: <see cref="LoadRequestPayload"/>. Result: request.</summary>
     public const string RequestLoad = "request.load";
 
+    /// <summary>Reads a <c>curl …</c> command into a request (not saved). Payload: <see cref="ParseCurlPayload"/>. Result: <see cref="ParsedCurlDto"/>.</summary>
+    public const string RequestParseCurl = "request.parseCurl";
+
+    /// <summary>Writes the request in the editor as a cURL command. Payload: <see cref="CopyAsCurlPayload"/>. Result: the command.</summary>
+    public const string RequestCopyAsCurl = "request.copyAsCurl";
+
     /// <summary>Shows a native file picker for a request body. Payload: none. Result: file path or null if cancelled.</summary>
     public const string RequestPickFile = "request.pickFile";
 
@@ -519,6 +525,19 @@ internal sealed record SaveRequestPayload(string Path, RequestDto Request);
 /// <param name="Path">The request file the request belongs to, whose history keeps the response; <c>null</c> when unsaved.</param>
 /// <param name="Folder">The folder an unsaved request will be saved in; it inherits that folder's headers and auth.</param>
 internal sealed record SendRequestPayload(string Id, RequestDto Request, string? Path = null, string? Folder = null);
+
+internal sealed record ParseCurlPayload(string Command);
+
+/// <param name="Resolve">Whether to resolve <c>{{variables}}</c> with the selected environment (else they are kept as written).</param>
+/// <param name="IncludeSecrets">Whether secret values and credentials are written as they are (else masked).</param>
+/// <param name="Shell"><c>posix</c> (the default), <c>cmd</c> or <c>powershell</c>.</param>
+internal sealed record CopyAsCurlPayload(
+    RequestDto Request,
+    string? Path = null,
+    string? Folder = null,
+    bool Resolve = true,
+    bool IncludeSecrets = false,
+    string? Shell = null);
 
 /// <param name="Path">The workspace path of the request file.</param>
 internal sealed record HistoryPathPayload(string Path);

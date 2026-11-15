@@ -32,6 +32,16 @@ export interface AuthDto {
 }
 
 /** The headers, auth and variables a folder sets for every request and folder in it. */
+/** The shell a cURL command is quoted for. */
+export type CurlShell = 'posix' | 'cmd' | 'powershell';
+
+/** A request read from a cURL command. */
+export interface ParsedCurlDto {
+  request: RequestDto;
+  /** Options that were skipped or not carried over exactly. */
+  warnings: string[];
+}
+
 /** The workspace-global variables: they apply with every environment, and without one. */
 export interface GlobalVariablesDto {
   variables: EnvironmentVariableDto[];
@@ -1009,6 +1019,22 @@ export interface BridgeMessages {
   'request.load': { payload: { path: string }; result: RequestDto };
   /** Shows the native file picker for a request body; `null` when cancelled. */
   'request.pickFile': { payload: void; result: PickedFileDto | null };
+  /** Reads a `curl …` command into a request (not saved), with what it couldn't represent. */
+  'request.parseCurl': { payload: { command: string }; result: ParsedCurlDto };
+  /** Writes the request in the editor as a cURL command for a shell. */
+  'request.copyAsCurl': {
+    payload: {
+      request: RequestDto;
+      path?: string | null;
+      folder?: string | null;
+      /** Resolve `{{variables}}` with the selected environment (else keep them as written). */
+      resolve: boolean;
+      /** Write secret values and credentials as they are (else masked). */
+      includeSecrets: boolean;
+      shell: CurlShell;
+    };
+    result: string;
+  };
   /** Picks files for the file fields of a form body; empty when cancelled. */
   'request.pickFiles': { payload: { multiple: boolean }; result: PickedFileDto[] };
   /** Describes the files a request body sends: size, missing, outside the workspace. */

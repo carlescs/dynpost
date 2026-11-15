@@ -24,6 +24,66 @@
     />
     Save
   </button>
+  <div class="relative">
+    <button
+      type="button"
+      class="flex items-center gap-2 rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100"
+      title="Copy as a cURL command (paste one into the URL field to import it)"
+      aria-haspopup="menu"
+      [attr.aria-expanded]="curlMenuOpen()"
+      (click)="$event.stopPropagation(); curlMenuOpen.set(!curlMenuOpen())"
+    >
+      <fa-icon [icon]="faTerminal" /> cURL
+    </button>
+    @if (curlMenuOpen()) {
+      <div
+        role="menu"
+        aria-label="Copy as cURL"
+        class="absolute top-full right-0 z-30 mt-1 w-72 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
+        (click)="$event.stopPropagation()"
+      >
+        <button
+          type="button"
+          role="menuitem"
+          class="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
+          title="Variables resolved with the selected environment; secrets and credentials masked"
+          (click)="copyAsCurl('masked')"
+        >
+          Copy as cURL
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="copyAsCurl('secrets')"
+        >
+          Copy as cURL with secrets…
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="copyAsCurl('written')"
+        >
+          Copy as cURL with variables as written
+        </button>
+        <div class="mt-1 border-t border-slate-200 px-3 pt-1.5 pb-1 text-xs text-slate-500">
+          For
+          @for (shell of curlShells; track shell.id) {
+            <label class="ml-2 inline-flex items-center gap-1">
+              <input
+                type="radio"
+                name="curl-shell"
+                [checked]="interchange.curlShell() === shell.id"
+                (change)="interchange.curlShell.set(shell.id)"
+              />
+              {{ shell.label }}
+            </label>
+          }
+        </div>
+      </div>
+    }
+  </div>
 </div>
 
 <!-- Method, URL and send -->
@@ -45,6 +105,7 @@
     <app-variable-input
       class="flex-1"
       ariaLabel="URL"
+      (paste)="pasteUrl($event)"
       [placeholder]="urlPlaceholder"
       [variables]="variables()"
       [value]="doc.url"

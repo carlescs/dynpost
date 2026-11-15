@@ -92,6 +92,16 @@
               <fa-icon class="w-4 text-slate-500" [icon]="faSliders" />
               Settings for all requests
             </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+              title="Open a curl command as a new request"
+              (click)="newFromCurl()"
+            >
+              <fa-icon class="w-4 text-slate-500" [icon]="faTerminal" />
+              New request from cURL…
+            </button>
           </div>
         }
       </div>

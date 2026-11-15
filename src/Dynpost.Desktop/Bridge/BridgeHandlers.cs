@@ -116,6 +116,22 @@ internal static class BridgeHandlers
                 (p, _) => Task.FromResult(Use<MoveRequest>().Execute(p.Path, p.Folder)))
             .Register<SendRequestPayload, ResponseDto>(BridgeMessageTypes.RequestSend,
                 (p, ct) => Use<SendRequest>().ExecuteAsync(p.Id, p.Request, p.Path, p.Folder, ct))
+            .Register<ParseCurlPayload, ParsedCurlDto>(BridgeMessageTypes.RequestParseCurl,
+                (p, _) => Task.FromResult(Use<ParseCurl>().Execute(p.Command)))
+            .Register<CopyAsCurlPayload, string>(BridgeMessageTypes.RequestCopyAsCurl,
+                (p, ct) => Use<CopyAsCurl>().ExecuteAsync(
+                    p.Request,
+                    p.Path,
+                    p.Folder,
+                    p.Resolve,
+                    p.IncludeSecrets,
+                    p.Shell?.ToLowerInvariant() switch
+                    {
+                        "cmd" => CurlShell.Cmd,
+                        "powershell" => CurlShell.PowerShell,
+                        _ => CurlShell.Posix,
+                    },
+                    ct))
             .Register<HistoryPathPayload, IReadOnlyList<HistoryEntryDto>>(BridgeMessageTypes.HistoryList,
                 (p, ct) => Use<ListResponseHistory>().ExecuteAsync(p.Path, ct))
             .Register<HistoryEntryPayload, HistoryEntryDetailsDto>(BridgeMessageTypes.HistoryGet,
