@@ -31,6 +31,7 @@ import { VariableInput } from '../../../../components/variable-input/variable-in
 import { MarkdownView } from '../../../../components/markdown-view/markdown-view';
 import { AuthEditor } from '../auth-editor/auth-editor';
 import { InheritedHeaders } from '../inherited-headers/inherited-headers';
+import { SettingsEditor, settingsCount } from '../settings-editor/settings-editor';
 import { FolderSettingsStore } from '../../../../services/folder-settings-store';
 import { InheritedSettingsDto } from '../../../../models/messages';
 import { withFolderVariables } from '../../../../models/variables';
@@ -38,7 +39,7 @@ import { FormFieldsEditor } from '../form-fields-editor/form-fields-editor';
 import { fieldsOf, isAbsolutePath } from '../../../../models/form-fields';
 import { Bridge } from '../../../../services/bridge';
 
-type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
+type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'settings' | 'capture' | 'docs';
 
 @Component({
   selector: 'app-request-editor',
@@ -48,6 +49,7 @@ type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
     ResponseViewer,
     CodeEditor,
     VariableInput,
+    SettingsEditor,
     MarkdownView,
     AuthEditor,
     InheritedHeaders,
@@ -96,6 +98,7 @@ export class RequestEditor {
     { id: 'headers', label: 'Headers' },
     { id: 'auth', label: 'Auth' },
     { id: 'body', label: 'Body' },
+    { id: 'settings', label: 'Settings' },
     { id: 'capture', label: 'Capture' },
     { id: 'docs', label: 'Docs' },
   ];
@@ -219,6 +222,7 @@ export class RequestEditor {
     const enabled = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.key).length;
     if (tab === 'params') return enabled(doc.params) + doc.pathParams.filter((r) => r.value).length;
     if (tab === 'headers') return enabled(doc.headers);
+    if (tab === 'settings') return settingsCount(doc.settings);
     if (tab === 'capture') return doc.captures.filter((c) => c.variable).length;
     return 0;
   }

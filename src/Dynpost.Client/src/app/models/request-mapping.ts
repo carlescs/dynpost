@@ -1,4 +1,10 @@
-import { AuthDto, FormFieldDto, RequestDto, WorkspaceNodeDto } from './messages';
+import {
+  AuthDto,
+  FormFieldDto,
+  RequestDto,
+  RequestSettingsDto,
+  WorkspaceNodeDto,
+} from './messages';
 import {
   AUTH_TYPES,
   BODY_TYPES,
@@ -59,6 +65,15 @@ export function syncPathParams(url: string, rows: readonly KeyValue[]): KeyValue
   }));
 }
 
+/** The settings that are set, without the `null` (inherited) ones. */
+export function compactSettings(
+  settings: RequestSettingsDto | null | undefined,
+): RequestSettingsDto {
+  return Object.fromEntries(
+    Object.entries(settings ?? {}).filter(([, value]) => value !== null && value !== undefined),
+  );
+}
+
 export function fromRequestDto(dto: RequestDto): RequestContent {
   return {
     name: dto.name,
@@ -77,6 +92,7 @@ export function fromRequestDto(dto: RequestDto): RequestContent {
     bodyFields: dto.body.fields ? dto.body.fields.map(fromFieldDto) : null,
     description: dto.description ?? '',
     captures: (dto.captures ?? []).map((c) => ({ ...c })),
+    settings: compactSettings(dto.settings),
   };
 }
 
@@ -116,6 +132,7 @@ export function toRequestDto(content: RequestContent): RequestDto {
     body: toBodyDto(content),
     description: content.description,
     captures: content.captures.map((c) => ({ ...c })),
+    ...(Object.keys(content.settings).length ? { settings: { ...content.settings } } : {}),
   };
 }
 

@@ -242,6 +242,7 @@ export class WorkspaceStore {
       bodyFields: null,
       description: '',
       captures: [],
+      settings: {},
       dirty: true,
       saving: false,
       sendId: null,

@@ -1,3 +1,5 @@
+using Dynpost.Domain.Requests;
+
 namespace Dynpost.Domain.Http;
 
 /// <summary>
@@ -18,6 +20,9 @@ public sealed record OutgoingRequest(
     /// when no cookies are kept (only a <c>Cookie</c> header the request sets is sent).
     /// </summary>
     public IReadOnlyList<StoredCookie>? Cookies { get; init; }
+
+    /// <summary>How to send it: timeout, redirects, TLS checks and HTTP version (unset values take the defaults).</summary>
+    public RequestSettings Settings { get; init; } = RequestSettings.Inherit;
 }
 
 /// <summary>The body of an <see cref="OutgoingRequest"/>.</summary>

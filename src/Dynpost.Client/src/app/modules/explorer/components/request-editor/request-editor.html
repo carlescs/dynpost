@@ -143,6 +143,13 @@
       />
       <app-inherited-headers [headers]="inherited()?.headers ?? []" [own]="doc.headers" />
     }
+    @case ('settings') {
+      <app-settings-editor
+        [settings]="doc.settings"
+        [inherited]="inherited()?.settings ?? null"
+        (settingsChange)="patch({ settings: $event })"
+      />
+    }
     @case ('auth') {
       <app-auth-editor
         [auth]="doc.auth"

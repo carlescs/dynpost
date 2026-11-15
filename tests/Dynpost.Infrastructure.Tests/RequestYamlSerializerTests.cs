@@ -21,6 +21,51 @@ public class RequestYamlSerializerTests
     }
 
     [Fact]
+    public void Settings_AreWrittenAfterTheBodyOnlyWhenSetAndReadBack()
+    {
+        var request = new HttpRequestDefinition("Slow", RequestMethod.Get, "https://api.test/slow")
+        {
+            Settings = new RequestSettings(TimeSpan.FromSeconds(90), false, 5, false, HttpVersionPreference.Http2),
+            Captures = [new CaptureRule("id", "$.id")],
+        };
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Equal(
+            """
+            name: Slow
+            method: GET
+            url: https://api.test/slow
+            settings:
+              timeout: "90s"
+              followRedirects: false
+              maxRedirects: 5
+              verifyTls: false
+              httpVersion: "2"
+            capture:
+              id: $.id
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal(request.Settings, RequestYamlSerializer.Deserialize(yaml, "x").Settings);
+        Assert.Equal(
+            new RequestSettings(Timeout: TimeSpan.Zero),
+            RequestYamlSerializer.Deserialize("url: x\nsettings:\n  timeout: 0\n", "x").Settings);
+        Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.Deserialize("url: x\nsettings:\n  httpVersion: 3\n", "x"));
+    }
+
+    [Fact]
+    public void FolderSettings_AreWrittenLast()
+    {
+        var defaults = new FolderDefaults([new KeyValueEntry("Accept", "*/*")]) { Settings = new RequestSettings(VerifyTls: false) };
+
+        var yaml = RequestYamlSerializer.SerializeFolder(defaults);
+
+        Assert.Equal("headers:\n  Accept: \"*/*\"\nsettings:\n  verifyTls: false\n", yaml);
+        Assert.Equal(defaults.Settings, RequestYamlSerializer.DeserializeFolder(yaml).Settings);
+    }
+
+    [Fact]
     public void PathParams_AreWrittenAfterTheUrlWithoutEmptyValuesAndReadBack()
     {
         var request = new HttpRequestDefinition("Get user", RequestMethod.Get, "{{baseUrl}}/orgs/:org/users/:id", @params: [new KeyValueEntry("page", "1")])

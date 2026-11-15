@@ -215,7 +215,7 @@ body:
 ```
 
 Keys are always written in this order — `name`, `method`, `url`, `pathParams`,
-`params`, `headers`, `auth`, `body`, `capture`, `description` — and empty sections are
+`params`, `headers`, `auth`, `body`, `settings`, `capture`, `description` — and empty sections are
 left out. Query parameters
 use the same `name: value` form as headers. A parameter or header that is
 disabled in the editor is kept in the file with a `~` prefix (so names cannot
@@ -319,6 +319,28 @@ the `Content-Type` the body is sent with: Dynpost generates
 `multipart/form-data; boundary=…` for `form` bodies and replaces a
 `Content-Type` header you set, which it points out.
 
+`settings` changes how the request is sent; only the values you set are
+written, and the others are inherited from the request's folders (see
+[Folder settings](#folder-settings)) or take the default:
+
+```yaml
+settings:
+  timeout: "5s"          # default 60s; 0 waits for ever (up to 24h)
+  followRedirects: false # default true
+  maxRedirects: 5        # default 20 (at most 100)
+  verifyTls: false       # default true; false accepts self-signed and invalid certificates
+  httpVersion: "2"       # default 1.1; 2 asks for HTTP/2 and falls back to 1.1
+```
+
+They are edited in the request editor's **Settings** tab, which shows the
+inherited value or the default next to each one; an emptied field goes back to
+inheriting. With `httpVersion: "2"`, HTTP/2 is negotiated during the TLS
+handshake, so plain `http://` requests still use HTTP/1.1. Load runs use the
+same settings. Postman imports and exports keep whether redirects are followed
+(and how many) and whether certificates are verified; timeouts and HTTP
+versions are app-wide settings in Postman. A proxy can't be set yet: Dynpost
+uses the operating system's proxy settings.
+
 `capture` stores values from a successful response in variables, so a login
 request can hand its token to the requests after it — declaratively, without
 scripts:
@@ -390,8 +412,8 @@ writes new files and never changes existing ones.
 A collection folder can set headers, auth and variables for every request and
 folder inside it, in an optional `_folder.yaml` (and `requests/_folder.yaml` sets
 them for the whole workspace). It uses the same `headers` and `auth` keys as a
-request file, in that order, followed by `variables`, written like `headers`; a
-folder that sets nothing has no file:
+request file, in that order, followed by `variables`, written like `headers`,
+and `settings`, written like a request's; a folder that sets nothing has no file:
 
 ```yaml
 # requests/users/_folder.yaml
@@ -418,6 +440,8 @@ The more specific level always wins:
   with `auth: { type: none }` stops it there: it and everything below that
   inherits it is sent without auth. When no level sets auth, the request is sent
   without.
+- **Settings** (timeout, redirects, TLS, HTTP version) come one by one from the
+  closest level that sets them: the request's own, else its folder's, and so on.
 - **Variables** add up like headers (names are case-sensitive): a sub-folder's
   variable replaces a parent's of the same name. They are defaults: the selected
   environment's variables (and the values captured for it) win over them, and in
@@ -436,7 +460,7 @@ exported (the export says so), so their requests keep their `{{references}}`.
 Open a folder's settings with **Folder settings** in its menu (the "…" button on
 its row, or a right-click), or **Settings for all requests** in the explorer's
 "More actions" menu (for `requests/` itself). They open in a tab with a
-**Headers**, an **Auth** and a **Variables** tab, which also list what the folder
+**Headers**, an **Auth**, a **Variables** and a **Settings** tab, which also list what the folder
 itself inherits from the folders above. In the request editor, `{{references}}`
 to its folders' variables are highlighted as defined, and their hover says which
 folder sets them. The **Headers** tab lists the
@@ -623,8 +647,10 @@ rules such as CORS don't apply. When sending:
   workspace, is not sent.
 - A `User-Agent: Dynpost` header is added unless you set one. Compressed
   responses (gzip, deflate, Brotli and Zstandard) are decompressed. No cookies are kept between requests unless the
-  environment's cookie jar is on. A request times out after 60 seconds.
-- Up to 20 redirects are followed, never from `https` to `http`. A 303, or a
+  environment's cookie jar is on. A request times out after 60 seconds, unless
+  its settings say otherwise.
+- Up to 20 redirects are followed (the request's settings can change that or
+  turn redirects off), never from `https` to `http`. A 303, or a
   301/302 answering a POST, continues as a GET without a body; 307 and 308 keep
   the method and body. The `Authorization` header is not sent on to the new
   location.

@@ -84,7 +84,8 @@ internal static partial class PostmanFormat
                 {
                     // Postman keeps a request's description on its request, older exports on the item.
                     var description = Description(request.Get("description")) ?? Description(item.Get("description"));
-                    requests.Add(description is null ? imported : imported with { Description = description });
+                    var withSettings = imported with { Settings = ImportSettings(item.Obj("protocolProfileBehavior")) };
+                    requests.Add(description is null ? withSettings : withSettings with { Description = description });
                 }
             }
         }
@@ -393,10 +394,62 @@ internal static partial class PostmanFormat
 
         foreach (var request in folder.Requests)
         {
-            items.Add(new JsonObject { ["name"] = request.Name, ["request"] = ExportRequest(request) });
+            var exported = new JsonObject { ["name"] = request.Name, ["request"] = ExportRequest(request) };
+            if (ExportSettings(request.Settings) is { } behavior)
+            {
+                exported["protocolProfileBehavior"] = behavior;
+            }
+
+            items.Add(exported);
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// Postman's <c>protocolProfileBehavior</c>: whether redirects are followed (and how many),
+    /// and whether certificates are checked (<c>strictSSL</c>). Timeouts and HTTP versions are
+    /// app-wide in Postman, so they aren't read.
+    /// </summary>
+    private static RequestSettings ImportSettings(JsonObject? behavior)
+    {
+        if (behavior is null)
+        {
+            return RequestSettings.Inherit;
+        }
+
+        static bool? Flag(JsonObject behavior, string key) =>
+            behavior.Get(key) is JsonValue value && value.TryGetValue<bool>(out var flag) ? flag : null;
+
+        int? maxRedirects = behavior.Get("maxRedirects") is JsonValue max && max.TryGetValue<int>(out var count)
+            && count is >= 0 and <= RequestSettings.MaxRedirectsLimit
+            ? count
+            : null;
+        return new RequestSettings(
+            FollowRedirects: Flag(behavior, "followRedirects"),
+            MaxRedirects: maxRedirects,
+            VerifyTls: Flag(behavior, "strictSSL"));
+    }
+
+    private static JsonObject? ExportSettings(RequestSettings settings)
+    {
+        var behavior = new JsonObject();
+        if (settings.FollowRedirects is { } follow)
+        {
+            behavior["followRedirects"] = follow;
+        }
+
+        if (settings.MaxRedirects is { } max)
+        {
+            behavior["maxRedirects"] = max;
+        }
+
+        if (settings.VerifyTls is { } verify)
+        {
+            behavior["strictSSL"] = verify;
+        }
+
+        return behavior.Count == 0 ? null : behavior;
     }
 
     private static JsonObject ExportRequest(HttpRequestDefinition original)

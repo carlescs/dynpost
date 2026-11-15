@@ -23,6 +23,7 @@ const content: RequestContent = {
   bodyFields: null,
   description: '# Notes',
   captures: [{ variable: 'token', expression: '$.token' }],
+  settings: {},
 };
 
 describe('request mapping', () => {

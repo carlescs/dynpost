@@ -41,6 +41,9 @@ public sealed record HttpRequestDefinition
 
     public RequestBody Body { get; init; }
 
+    /// <summary>How the request is sent (timeout, redirects, TLS, HTTP version); unset values are inherited.</summary>
+    public RequestSettings Settings { get; init; } = RequestSettings.Inherit;
+
     /// <summary>Values to store in variables from a successful response, in order.</summary>
     public IReadOnlyList<CaptureRule> Captures { get; init; } = [];
 
@@ -70,6 +73,7 @@ public sealed record HttpRequestDefinition
         CheckEntries(Params, "parameter", StringComparer.Ordinal, errors);
         CheckHeaders(Headers, errors);
         CheckCaptures(Captures, errors);
+        errors.AddRange(Settings.Validate());
 
         return errors;
     }

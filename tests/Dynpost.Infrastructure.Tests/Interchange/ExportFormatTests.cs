@@ -236,4 +236,23 @@ public class ExportFormatTests
         Assert.Equal("id", (string?)url["variable"]![0]!["key"]);
         Assert.Equal("42", (string?)url["variable"]![0]!["value"]);
     }
+
+    [Fact]
+    public void Postman_RoundTripsRedirectAndTlsSettings()
+    {
+        var request = new HttpRequestDefinition("Local", RequestMethod.Get, "https://localhost:5001/")
+        {
+            Settings = new RequestSettings(TimeSpan.FromSeconds(5), false, 3, false),
+        };
+        var collection = new RequestCollection(new CollectionFolder("api", [], [request]), []);
+
+        var content = new PostmanCollectionExporter().Export(collection).Content;
+        var behavior = JsonNode.Parse(content)!["item"]![0]!["protocolProfileBehavior"]!;
+        Assert.False((bool?)behavior["followRedirects"]);
+        Assert.Equal(3, (int?)behavior["maxRedirects"]);
+        Assert.False((bool?)behavior["strictSSL"]);
+
+        var imported = new CollectionImporter().Parse(content, "api.json").Value.Collection.Root.Requests[0];
+        Assert.Equal(new RequestSettings(null, false, 3, false), imported.Settings);
+    }
 }

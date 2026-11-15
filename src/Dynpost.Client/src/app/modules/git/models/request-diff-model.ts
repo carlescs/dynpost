@@ -17,6 +17,7 @@ export const EMPTY_REQUEST: RequestContent = {
   bodyFields: null,
   description: '',
   captures: [],
+  settings: {},
 };
 
 /** How one row of a params or headers table changed. */
@@ -158,8 +159,38 @@ export interface RequestChanges {
   headers: number;
   auth: boolean;
   body: boolean;
+  settings: number;
   capture: number;
   docs: boolean;
+}
+
+const SETTING_LABELS: Record<string, string> = {
+  timeoutMs: 'Timeout',
+  followRedirects: 'Follow redirects',
+  maxRedirects: 'Most redirects',
+  verifyTls: 'Verify TLS certificates',
+  httpVersion: 'HTTP version',
+};
+
+/** The settings a request sets, as table rows (inherited ones are left out). */
+export function settingsRows(request: RequestContent): KeyValue[] {
+  return Object.entries(SETTING_LABELS).flatMap(([key, label]) => {
+    const value = request.settings[key as keyof RequestContent['settings']];
+    if (value === null || value === undefined) return [];
+    const text =
+      key === 'timeoutMs'
+        ? value === 0
+          ? 'no timeout'
+          : `${Number(value) / 1000} s`
+        : typeof value === 'boolean'
+          ? value
+            ? 'yes'
+            : 'no'
+          : key === 'httpVersion'
+            ? `HTTP/${value}`
+            : String(value);
+    return [{ key: label, value: text, enabled: true }];
+  });
 }
 
 /** A request's path variables (as `:name`) followed by its query parameters, as table rows. */
@@ -193,6 +224,7 @@ export function requestChanges(before: RequestContent, after: RequestContent): R
       (after.bodyType !== 'none' &&
         (bodyText(before) !== bodyText(after) ||
           (before.bodyType === 'graphql' && before.bodyVariables !== after.bodyVariables))),
+    settings: changedRows(diffRows(settingsRows(before), settingsRows(after))),
     capture: changedRows(diffRows(captureRows(before), captureRows(after))),
     docs: before.description !== after.description,
   };

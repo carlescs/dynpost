@@ -47,6 +47,16 @@ public sealed record FormFieldDto(
     string? FileName = null,
     bool Encode = false);
 
+/// <summary>How a request is sent; <c>null</c> values are inherited from the folders, or the default.</summary>
+/// <param name="TimeoutMs">The timeout in milliseconds; 0 for none.</param>
+/// <param name="HttpVersion"><c>1.1</c> or <c>2</c>.</param>
+public sealed record RequestSettingsDto(
+    long? TimeoutMs = null,
+    bool? FollowRedirects = null,
+    int? MaxRedirects = null,
+    bool? VerifyTls = null,
+    string? HttpVersion = null);
+
 /// <param name="Variable">The variable the value is stored in.</param>
 /// <param name="Expression">Where the value comes from: a JSONPath (<c>$.token</c>) or <c>header:Name</c>.</param>
 public sealed record CaptureDto(string Variable, string Expression);
@@ -57,6 +67,7 @@ public sealed record CaptureDto(string Variable, string Expression);
 /// The values of the URL's <c>:name</c> path variables, one per name in the URL's order (rows for
 /// names the URL no longer has are dropped).
 /// </param>
+/// <param name="Settings">How the request is sent; <c>null</c> sets nothing (all inherited).</param>
 public sealed record RequestDto(
     string Name,
     string Method,
@@ -67,7 +78,8 @@ public sealed record RequestDto(
     BodyDto Body,
     string? Description = null,
     IReadOnlyList<CaptureDto>? Captures = null,
-    IReadOnlyList<KeyValueDto>? PathParams = null);
+    IReadOnlyList<KeyValueDto>? PathParams = null,
+    RequestSettingsDto? Settings = null);
 
 /// <summary>A request as stored: its (possibly new) path and its content.</summary>
 public sealed record SavedRequestDto(string Path, RequestDto Request);

@@ -184,6 +184,11 @@
         />
       }
     }
+    @case ('settings') {
+      <ng-container
+        *ngTemplateOutlet="table; context: { $implicit: settingChanges(), label: 'Setting' }"
+      />
+    }
     @case ('capture') {
       <ng-container
         *ngTemplateOutlet="table; context: { $implicit: captureChanges(), label: 'Variable' }"

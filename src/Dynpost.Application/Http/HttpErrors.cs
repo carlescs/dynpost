@@ -16,7 +16,9 @@ public static class HttpErrors
             : $"Could not reach {host}: {details.Trim()}");
 
     public static Error Timeout(TimeSpan timeout) =>
-        new(TimeoutCode, $"No response within {timeout.TotalSeconds:0} seconds.");
+        new(TimeoutCode, timeout < TimeSpan.FromSeconds(1)
+            ? $"No response within {timeout.TotalMilliseconds:0} ms. The timeout can be changed on the request's Settings tab."
+            : $"No response within {timeout.TotalSeconds:0.#} seconds. The timeout can be changed on the request's Settings tab.");
 
     public static Error Cancelled() => new(CancelledCode, "The request was cancelled.");
 

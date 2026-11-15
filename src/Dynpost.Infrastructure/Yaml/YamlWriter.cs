@@ -43,6 +43,14 @@ internal sealed partial class YamlWriter
         return this;
     }
 
+    /// <summary>Writes <c>key: 5</c> (an unquoted YAML integer).</summary>
+    public YamlWriter Integer(string key, long value)
+    {
+        Indent();
+        _builder.Append(FormatKey(key)).Append(": ").Append(value.ToString(CultureInfo.InvariantCulture)).Append('\n');
+        return this;
+    }
+
     /// <summary>Writes <c>key:</c> and indents what <paramref name="body"/> writes under it.</summary>
     public YamlWriter Mapping(string key, Action<YamlWriter> body)
     {

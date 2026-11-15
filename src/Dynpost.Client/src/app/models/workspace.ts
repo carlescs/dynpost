@@ -1,4 +1,4 @@
-import { CaptureDto, ResponseDto } from './messages';
+import { CaptureDto, RequestSettingsDto, ResponseDto } from './messages';
 
 /** The workspace folder holding every request and collection folder. */
 export const REQUESTS_FOLDER = 'requests';
@@ -97,6 +97,8 @@ export interface RequestContent {
   description: string;
   /** Values to capture from a successful response into variables. */
   captures: CaptureDto[];
+  /** How the request is sent (timeout, redirects, TLS, HTTP version); unset values are inherited. */
+  settings: RequestSettingsDto;
 }
 
 /** The outcome of the last send of a request: its response, or why there is none. */

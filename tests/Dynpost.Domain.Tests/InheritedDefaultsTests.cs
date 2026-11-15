@@ -193,4 +193,33 @@ public class InheritedDefaultsTests
             ],
             defaults.Validate());
     }
+
+    [Fact]
+    public void Settings_TheClosestLevelSetsEachValue()
+    {
+        var inherited = InheritedDefaults.From(
+        [
+            (WorkspacePath.Parse("requests"), new FolderDefaults { Settings = new RequestSettings(TimeSpan.FromSeconds(5), VerifyTls: false) }),
+            (WorkspacePath.Parse("requests/users"), new FolderDefaults { Settings = new RequestSettings(TimeSpan.FromSeconds(10)) }),
+        ]);
+        var request = new HttpRequestDefinition("R", RequestMethod.Get, "https://x") { Settings = new RequestSettings(FollowRedirects: false) };
+
+        var applied = inherited.Apply(request).Settings;
+
+        Assert.Equal(new RequestSettings(TimeSpan.FromSeconds(10), false, null, false), applied);
+        Assert.Equal(0, applied.EffectiveMaxRedirects);
+        Assert.False(applied.EffectiveVerifyTls);
+        Assert.Equal(HttpVersionPreference.Http11, applied.EffectiveHttpVersion);
+    }
+
+    [Fact]
+    public void Settings_AreValidated()
+    {
+        var request = new HttpRequestDefinition("R", RequestMethod.Get, "https://x")
+        {
+            Settings = new RequestSettings(TimeSpan.FromDays(2), MaxRedirects: 1000),
+        };
+
+        Assert.Equal(2, request.Validate().Count);
+    }
 }

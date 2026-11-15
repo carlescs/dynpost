@@ -1,12 +1,14 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
 using Dynpost.Application.Common;
 using Dynpost.Application.Http;
 using Dynpost.Domain.Http;
+using Dynpost.Domain.Requests;
 
 namespace Dynpost.Infrastructure.Http;
 
@@ -27,10 +29,13 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     /// <summary>Bodies larger than this are cut off.</summary>
     public const int DefaultMaxBodyBytes = 20 * 1024 * 1024;
 
-    /// <summary>Redirects beyond this many are not followed: the last redirect response is returned.</summary>
-    public const int MaxRedirects = 20;
+    /// <summary>
+    /// Redirects beyond this many are not followed (unless the request's settings say otherwise):
+    /// the last redirect response is returned.
+    /// </summary>
+    public const int MaxRedirects = RequestSettings.DefaultMaxRedirects;
 
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
+    public static readonly TimeSpan DefaultTimeout = RequestSettings.DefaultTimeout;
 
     /// <summary>How long a pooled connection is used before it's replaced, so DNS changes are picked up.</summary>
     private static readonly TimeSpan PooledConnectionLifetime = TimeSpan.FromMinutes(5);
@@ -52,6 +57,9 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     private static readonly HttpRequestOptionsKey<ConnectionTimings> TimingsKey = new("Dynpost.ConnectionTimings");
 
     private readonly HttpClient _client;
+
+    /// <summary>Sends requests whose settings turn off TLS certificate checks; made when first needed.</summary>
+    private readonly Lazy<HttpClient> _insecureClient;
     private readonly bool _ownsClient;
     private readonly TimeSpan _timeout;
     private readonly int _maxBodyBytes;
@@ -60,16 +68,27 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     public HttpClientSender()
     {
         _client = new HttpClient(CreateHandler()) { Timeout = Timeout.InfiniteTimeSpan };
+        _insecureClient = new Lazy<HttpClient>(() => new HttpClient(CreateHandler(verifyTls: false)) { Timeout = Timeout.InfiniteTimeSpan });
         _ownsClient = true;
         _timeout = DefaultTimeout;
         _maxBodyBytes = DefaultMaxBodyBytes;
     }
 
-    /// <summary>Uses the given client, e.g. one with a test handler. Its own timeout is ignored.</summary>
-    public HttpClientSender(HttpClient client, bool ownsClient = false, TimeSpan? timeout = null, int maxBodyBytes = DefaultMaxBodyBytes)
+    /// <summary>
+    /// Uses the given client, e.g. one with a test handler, also for requests that don't verify TLS
+    /// certificates unless <paramref name="insecureClient"/> is given. Its own timeout is ignored;
+    /// <paramref name="timeout"/> replaces the default one.
+    /// </summary>
+    public HttpClientSender(
+        HttpClient client,
+        bool ownsClient = false,
+        TimeSpan? timeout = null,
+        int maxBodyBytes = DefaultMaxBodyBytes,
+        HttpClient? insecureClient = null)
     {
         _client = client;
         _client.Timeout = Timeout.InfiniteTimeSpan;
+        _insecureClient = new Lazy<HttpClient>(insecureClient ?? client);
         _ownsClient = ownsClient;
         _timeout = timeout ?? DefaultTimeout;
         _maxBodyBytes = maxBodyBytes;
@@ -77,10 +96,14 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
 
     /// <summary>
     /// A pooled handler that doesn't follow redirects or keep cookies itself and reports the
-    /// phases of each new connection to the timings of the request that opened it.
+    /// phases of each new connection to the timings of the request that opened it. With
+    /// <paramref name="verifyTls"/> off it accepts any server certificate.
     /// </summary>
-    internal static SocketsHttpHandler CreateHandler() => new()
+    internal static SocketsHttpHandler CreateHandler(bool verifyTls = true) => new()
     {
+        SslOptions = verifyTls
+            ? new SslClientAuthenticationOptions()
+            : new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, _, _, _) => true },
         AllowAutoRedirect = false,
         AutomaticDecompression = DecompressionMethods.All,
         UseCookies = false,
@@ -108,8 +131,17 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
     {
         var timings = new ConnectionTimings();
 
+        var settings = request.Settings;
+        // The sender's own timeout is the default; a request's setting replaces it (0: none).
+        var limit = settings.Timeout ?? _timeout;
+        var maxRedirects = settings.EffectiveMaxRedirects;
+        var client = settings.EffectiveVerifyTls ? _client : _insecureClient.Value;
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(_timeout);
+        if (limit > TimeSpan.Zero)
+        {
+            timeout.CancelAfter(limit);
+        }
 
         var jar = request.Cookies is null ? null : ToContainer(request.Cookies);
         var method = request.Method;
@@ -132,6 +164,13 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                 }
 
                 message.Options.Set(TimingsKey, timings);
+                if (settings.EffectiveHttpVersion == HttpVersionPreference.Http2)
+                {
+                    // HTTP/2 when the server agrees (negotiated during the TLS handshake), else HTTP/1.1.
+                    message.Version = HttpVersion.Version20;
+                    message.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+                }
+
                 bytesSent += message.Content?.Headers.ContentLength ?? 0;
                 var hopStart = stopwatch.Elapsed;
                 var setupBefore = timings.Setup;
@@ -139,7 +178,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                 HttpResponseMessage response;
                 try
                 {
-                    response = await _client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+                    response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
                 }
                 catch (HttpRequestException ex) when (staleRetries < MaxStaleConnectionRetries
                     && timings.Opened == openedBefore
@@ -160,7 +199,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
                     .ToList();
                 StoreCookies(jar, url, responseHeaders);
 
-                if (redirects.Count < MaxRedirects && RedirectTarget(response, url) is { } location)
+                if (redirects.Count < maxRedirects && RedirectTarget(response, url) is { } location)
                 {
                     response.Dispose();
                     redirects.Add(new RedirectHop(method, url, (int)response.StatusCode, response.ReasonPhrase, location, responseHeaders, stopwatch.Elapsed - hopStart)
@@ -193,7 +232,7 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return HttpErrors.Timeout(_timeout);
+            return HttpErrors.Timeout(limit);
         }
         catch (HttpRequestException ex)
         {
@@ -210,6 +249,10 @@ public sealed class HttpClientSender : IHttpSender, IDisposable
         if (_ownsClient)
         {
             _client.Dispose();
+            if (_insecureClient.IsValueCreated)
+            {
+                _insecureClient.Value.Dispose();
+            }
         }
     }
 

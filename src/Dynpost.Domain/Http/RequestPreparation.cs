@@ -56,7 +56,7 @@ public static class RequestPreparation
                 request.Body.Type == BodyType.Graphql ? "POST" : request.Method.ToName(),
                 uri,
                 headers,
-                body), [], [])
+                body) { Settings = request.Settings }, [], [])
             : new PreparedRequest(null, errors, [.. missing]);
     }
 

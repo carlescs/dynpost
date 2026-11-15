@@ -32,12 +32,26 @@ export interface AuthDto {
 }
 
 /** The headers, auth and variables a folder sets for every request and folder in it. */
+/** How a request is sent; unset values are inherited from the folders, or the default. */
+export interface RequestSettingsDto {
+  /** The timeout in milliseconds; 0 for none. */
+  timeoutMs?: number | null;
+  followRedirects?: boolean | null;
+  maxRedirects?: number | null;
+  /** Whether the server's TLS certificate must be valid and trusted. */
+  verifyTls?: boolean | null;
+  /** `1.1` or `2`. */
+  httpVersion?: string | null;
+}
+
 export interface FolderSettingsDto {
   headers: KeyValueDto[];
   /** Type `inherit` passes on the auth of the folders above. */
   auth: AuthDto;
   /** Variables for the requests below it; the selected environment's win over them. */
   variables?: KeyValueDto[] | null;
+  /** How the requests below it are sent. */
+  settings?: RequestSettingsDto | null;
 }
 
 /** A header inherited from a folder. */
@@ -66,6 +80,8 @@ export interface InheritedSettingsDto {
   authFolder: string | null;
   /** The inherited variables (the selected environment's win over them). */
   variables: InheritedVariableDto[];
+  /** The inherited request settings; unset values are not set by any folder. */
+  settings?: RequestSettingsDto | null;
 }
 
 /** A cached OAuth 2.0 token, as far as the UI needs to know (the token itself stays in the host). */
@@ -144,6 +160,8 @@ export interface RequestDto {
   captures?: CaptureDto[] | null;
   /** The values of the URL's `:name` path variables, in the URL's order. */
   pathParams?: KeyValueDto[] | null;
+  /** How the request is sent; unset values are inherited. */
+  settings?: RequestSettingsDto | null;
 }
 
 export interface SavedRequestDto {
