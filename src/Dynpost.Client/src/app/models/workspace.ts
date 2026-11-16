@@ -137,18 +137,6 @@ export interface RequestDocument extends RequestContent {
   response: ResponseState | null;
   /** Incremented on every edit, so a save can tell whether the document changed meanwhile. */
   revision: number;
-  /** The file's content as last read or saved (see `contentKey`), to tell when it changed on disk. */
-  baseline?: string;
-  /**
-   * The file's new content when it changed on disk (in another program) while the document had
-   * unsaved edits; the editor asks whether to reload it or keep the edits.
-   */
-  changedOnDisk?: RequestContent | null;
-}
-
-/** Whether `path` is one of `changed`, or inside a folder among them. */
-export function isChangedPath(path: string, changed: readonly string[]): boolean {
-  return changed.some((p) => path === p || path.startsWith(`${p}/`));
 }
 
 export interface WorkspaceNode {

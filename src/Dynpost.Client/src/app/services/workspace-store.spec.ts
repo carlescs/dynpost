@@ -68,54 +68,6 @@ describe('WorkspaceStore', () => {
     expect(store.error()).toBeNull();
   });
 
-  describe('files changed on disk', () => {
-    const node = { path: 'users/get.yaml', name: 'Get user', kind: 'request' } as const;
-
-    it('reloads a clean tab, and leaves it alone when the file is the same', async () => {
-      let onDisk = request;
-      respond({ 'request.load': () => onDisk });
-      await store.openRequest(node);
-      const revision = store.activeDocument()!.revision;
-
-      await store.reloadFromDisk(['users/get.yaml']);
-      expect(store.activeDocument()!.revision).toBe(revision);
-
-      onDisk = { ...request, url: 'https://example.com/users/2' };
-      await store.reloadFromDisk(['users']);
-      expect(store.activeDocument()!.url).toBe('https://example.com/users/2');
-      expect(store.activeDocument()!.dirty).toBe(false);
-    });
-
-    it('keeps unsaved edits and asks when the file changed, then reloads or keeps them', async () => {
-      let onDisk = request;
-      respond({ 'request.load': () => onDisk });
-      await store.openRequest(node);
-      const id = store.activeDocument()!.id;
-      store.update(id, { url: 'https://example.com/mine' });
-
-      await store.reloadFromDisk(['users/get.yaml']);
-      expect(store.activeDocument()!.changedOnDisk).toBeFalsy();
-
-      onDisk = { ...request, url: 'https://example.com/theirs' };
-      await store.reloadFromDisk(['users/get.yaml']);
-      expect(store.activeDocument()!.url).toBe('https://example.com/mine');
-      expect(store.activeDocument()!.changedOnDisk?.url).toBe('https://example.com/theirs');
-
-      store.keepEditsOverChangedFile(id);
-      expect(store.activeDocument()!.changedOnDisk).toBeNull();
-      await store.reloadFromDisk(['users/get.yaml']);
-      expect(store.activeDocument()!.changedOnDisk).toBeFalsy();
-
-      onDisk = { ...request, url: 'https://example.com/again' };
-      await store.reloadFromDisk(['users/get.yaml']);
-      store.reloadChangedFile(id);
-      expect(store.activeDocument()).toMatchObject({
-        url: 'https://example.com/again',
-        dirty: false,
-      });
-    });
-  });
-
   it('opens a request once and focuses its tab when opened again', async () => {
     respond({ 'request.load': () => request });
     const node = { path: 'users/get.yaml', name: 'Get user', kind: 'request' } as const;
@@ -436,5 +388,101 @@ describe('WorkspaceStore', () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(store.error()).toContain('Read-only');
     expect(store.sharingChanged()).toBe(0);
+  });
+
+  describe('files changed on disk', () => {
+    const node = { path: 'requests/get.yaml', name: 'Get user', kind: 'request' } as const;
+    let onDisk: RequestDto;
+
+    beforeEach(async () => {
+      onDisk = request;
+      respond({
+        'request.load': () => onDisk,
+        'request.save': (p) => ({ path: p.path, request: p.request }),
+        'workspace.tree': () => workspace,
+      });
+      store.workspace.set({ name: 'api', root: '/home/me/api' });
+      await store.openRequest(node);
+    });
+
+    const doc = () => store.documents()[0];
+
+    it('reloads a document without unsaved edits silently', async () => {
+      onDisk = { ...request, url: 'https://example.com/changed' };
+
+      await store.reloadFromDisk(['requests/get.yaml']);
+
+      expect(doc()).toMatchObject({ url: 'https://example.com/changed', dirty: false });
+      expect(dialogs.confirm).not.toHaveBeenCalled();
+    });
+
+    it('reloads documents inside a folder that changed', async () => {
+      onDisk = { ...request, url: 'https://example.com/changed' };
+
+      await store.reloadFromDisk(['requests']);
+
+      expect(doc().url).toBe('https://example.com/changed');
+    });
+
+    it('leaves a document whose file did not change alone, such as after its own save', async () => {
+      store.update(doc().id, { url: 'https://example.com/saved' });
+      await store.save(doc().id);
+      onDisk = { ...request, url: 'https://example.com/saved' };
+      const revision = doc().revision;
+      store.update(doc().id, { url: 'https://example.com/typing' });
+
+      await store.reloadFromDisk(['requests/get.yaml']);
+
+      expect(dialogs.confirm).not.toHaveBeenCalled();
+      expect(doc()).toMatchObject({ url: 'https://example.com/typing', dirty: true });
+      expect(doc().revision).toBe(revision + 1);
+    });
+
+    it('asks before replacing unsaved edits, and reloads when the user chooses to', async () => {
+      store.update(doc().id, { url: 'https://example.com/mine' });
+      onDisk = { ...request, url: 'https://example.com/theirs' };
+
+      await store.reloadFromDisk(['requests/get.yaml']);
+
+      expect(dialogs.confirm).toHaveBeenCalledWith(
+        expect.stringContaining('"Get user" changed on disk'),
+        expect.objectContaining({ confirmLabel: 'Reload', cancelLabel: 'Keep mine' }),
+      );
+      expect(doc()).toMatchObject({ url: 'https://example.com/theirs', dirty: false });
+    });
+
+    it('keeps unsaved edits when the user chooses to, and does not ask again for the same change', async () => {
+      dialogs.confirm.mockResolvedValue(false);
+      store.update(doc().id, { url: 'https://example.com/mine' });
+      onDisk = { ...request, url: 'https://example.com/theirs' };
+
+      await store.reloadFromDisk(['requests/get.yaml']);
+      await store.reloadFromDisk(['requests/get.yaml']);
+
+      expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+      expect(doc()).toMatchObject({ url: 'https://example.com/mine', dirty: true });
+    });
+
+    it('closes a document without unsaved edits whose file was deleted', async () => {
+      respond({
+        'request.load': () => Promise.reject(new BridgeError('not_found', 'Gone')),
+      });
+
+      await store.reloadFromDisk(['requests/get.yaml']);
+
+      expect(store.documents()).toEqual([]);
+      expect(store.tabs()).toEqual([]);
+    });
+
+    it('detaches a document with unsaved edits whose file was deleted', async () => {
+      store.update(doc().id, { url: 'https://example.com/mine' });
+      respond({
+        'request.load': () => Promise.reject(new BridgeError('not_found', 'Gone')),
+      });
+
+      await store.reloadFromDisk(['requests/get.yaml']);
+
+      expect(doc()).toMatchObject({ path: null, dirty: true, url: 'https://example.com/mine' });
+    });
   });
 });

@@ -29,6 +29,7 @@ describe('WorkspaceSync', () => {
     };
     const git = { available: true, refreshInBackground: vi.fn().mockResolvedValue(undefined) };
     const runs = {
+      refresh: vi.fn().mockResolvedValue(undefined),
       reloadFromDisk: vi.fn().mockResolvedValue(undefined),
       followStarted: vi.fn().mockResolvedValue(undefined),
       open: vi.fn().mockResolvedValue(undefined),
@@ -48,7 +49,11 @@ describe('WorkspaceSync', () => {
       emit('workspace.changed', { paths });
       await new Promise((resolve) => setTimeout(resolve));
     };
-    return { on, stop, emit, workspace, environments, git, runs, changed };
+    const filesChanged = async (paths: string[] | null) => {
+      emit('workspace.filesChanged', { paths });
+      await new Promise((resolve) => setTimeout(resolve));
+    };
+    return { on, stop, emit, workspace, environments, git, runs, changed, filesChanged };
   }
 
   it('re-reads the tree, the changed files, the environments, the run plans and the git status', async () => {
@@ -140,6 +145,58 @@ describe('WorkspaceSync', () => {
 
     TestBed.resetTestingModule();
 
-    expect(stop).toHaveBeenCalledTimes(4);
+    expect(stop).toHaveBeenCalledTimes(5);
+  });
+
+  describe('files changed on disk', () => {
+    it('re-reads the tree and the open requests when requests changed', async () => {
+      const { workspace, environments, runs, git, filesChanged } = setup();
+
+      await filesChanged(['requests/users', 'requests/people']);
+
+      expect(workspace.refresh).toHaveBeenCalled();
+      expect(workspace.reloadFromDisk).toHaveBeenCalledWith(['requests/users', 'requests/people']);
+      expect(environments.refresh).not.toHaveBeenCalled();
+      expect(runs.reloadFromDisk).not.toHaveBeenCalled();
+      // The git status follows its own event.
+      expect(git.refreshInBackground).not.toHaveBeenCalled();
+    });
+
+    it('re-reads the environments when they or the workspace file changed', async () => {
+      const { workspace, environments, filesChanged } = setup();
+
+      await filesChanged(['dynpost.yaml']);
+
+      expect(environments.refresh).toHaveBeenCalledWith(['dynpost.yaml']);
+      expect(workspace.refresh).not.toHaveBeenCalled();
+    });
+
+    it('re-reads the plans and the open ones when plans changed', async () => {
+      const { runs, workspace, filesChanged } = setup();
+
+      await filesChanged(['plans/smoke.run.yaml']);
+
+      expect(runs.refresh).toHaveBeenCalled();
+      expect(runs.reloadFromDisk).toHaveBeenCalledWith(['plans/smoke.run.yaml']);
+      expect(workspace.refresh).not.toHaveBeenCalled();
+    });
+
+    it('re-reads everything when changes were lost', async () => {
+      const { workspace, environments, runs, filesChanged } = setup();
+
+      await filesChanged(null);
+
+      expect(workspace.reloadFromDisk).toHaveBeenCalledWith(undefined);
+      expect(environments.refresh).toHaveBeenCalledWith(undefined);
+      expect(runs.reloadFromDisk).toHaveBeenCalledWith(undefined);
+    });
+
+    it('does nothing without an open workspace', async () => {
+      const { workspace, filesChanged } = setup(false);
+
+      await filesChanged(['requests/a.yaml']);
+
+      expect(workspace.refresh).not.toHaveBeenCalled();
+    });
   });
 });

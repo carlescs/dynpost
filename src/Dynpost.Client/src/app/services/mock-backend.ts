@@ -26,11 +26,15 @@ import {
   OAuth2TokenDto,
   RequestDto,
   ResponseDto,
+  ComparedMetric,
+  ComparisonRowDto,
+  RunComparisonDto,
   RunPlanDocumentDto,
   RunResultDto,
   RunSampleDto,
   RunSamplesPageDto,
   RunStatsDto,
+  RunSummaryDto,
   WorkspaceDto,
   WorkspaceNodeDto,
 } from '../models/messages';
@@ -1619,24 +1623,23 @@ export class MockBackend {
               ([, run]) => run.path === path && Date.now() - run.startedAt >= MockBackend.RUN_MS,
             )
             .reverse()
-            .map(([id, run]) => {
-              const result = this.simulateRun(id, run);
-              return {
-                runId: id,
-                planPath: run.path,
-                planName: run.name,
-                state: result.state,
-                startedAt: result.startedAt,
-                elapsedMs: result.elapsedMs,
-                passed: result.passed,
-                samples: result.total.samples,
-                errors: result.total.errors,
-                errorPercent: result.total.errorPercent,
-                p95: result.total.p95,
-                throughput: result.total.throughput,
-              };
-            }),
+            .map(([id, run]) => summarizeRun(this.simulateRun(id, run))),
         );
+      case 'run.compare': {
+        const ids = [payload?.['baselineRunId'] as string, payload?.['runId'] as string];
+        if (!ids[0] || !ids[1] || ids[0] === ids[1])
+          return fail('invalid_request', 'Choose two different runs to compare.');
+        const results: RunResultDto[] = [];
+        for (const id of ids) {
+          const run = this.runs.get(id);
+          if (!run) return fail('run_not_found', 'There is no such run.');
+          const result = this.simulateRun(id, run);
+          if (result.state === 'running')
+            return fail('invalid_request', 'Wait for the run to finish before comparing it.');
+          results.push(result);
+        }
+        return ok(compareRuns(results[0], results[1]));
+      }
       default:
         return fail(ERROR_CODES.unknownMessage, `Unknown message type '${request.type}'.`);
     }
@@ -1837,4 +1840,91 @@ function typoMatches(
     }
   }
   return found;
+}
+
+/** The history entry of a run, like the host's `RunSummaryDto.From`. */
+function summarizeRun(result: RunResultDto): RunSummaryDto {
+  return {
+    runId: result.runId,
+    planPath: result.planPath,
+    planName: result.planName,
+    state: result.state,
+    startedAt: result.startedAt,
+    elapsedMs: result.elapsedMs,
+    passed: result.passed,
+    samples: result.total.samples,
+    errors: result.total.errors,
+    errorPercent: result.total.errorPercent,
+    p95: result.total.p95,
+    throughput: result.total.throughput,
+  };
+}
+
+/** The metrics `run.compare` reports: which way is better, and the noise tolerance (absolute, relative). */
+const COMPARED_METRICS: [ComparedMetric, 'lower' | 'higher' | 'neutral', number, number][] = [
+  ['samples', 'neutral', 0, 0],
+  ['errorPercent', 'lower', 0.1, 0],
+  ['average', 'lower', 0.5, 0.05],
+  ['median', 'lower', 0.5, 0.05],
+  ['p90', 'lower', 0.5, 0.05],
+  ['p95', 'lower', 0.5, 0.05],
+  ['p99', 'lower', 0.5, 0.05],
+  ['max', 'lower', 0.5, 0.05],
+  ['throughput', 'higher', 0.01, 0.05],
+];
+
+/** A comparison of two runs, like the host's `CompareRuns` (in less detail). */
+function compareRuns(baseline: RunResultDto, current: RunResultDto): RunComparisonDto {
+  const row = (
+    key: string,
+    name: string,
+    before: RunStatsDto | undefined,
+    after: RunStatsDto | undefined,
+  ): ComparisonRowDto => ({
+    key,
+    name,
+    inBaseline: !!before,
+    inCurrent: !!after,
+    metrics:
+      before && after
+        ? COMPARED_METRICS.map(([metric, direction, absolute, relative]) => {
+            const change = after[metric] - before[metric];
+            const changePercent =
+              before[metric] === 0 ? (change === 0 ? 0 : null) : (100 * change) / before[metric];
+            const significant =
+              Math.abs(change) > absolute &&
+              (relative <= 0 ||
+                changePercent === null ||
+                Math.abs(changePercent) >= 100 * relative);
+            const verdict =
+              !significant || direction === 'neutral'
+                ? 'same'
+                : change < 0 === (direction === 'lower')
+                  ? 'better'
+                  : 'worse';
+            return {
+              metric,
+              baseline: before[metric],
+              current: after[metric],
+              change,
+              changePercent,
+              verdict,
+            };
+          })
+        : [],
+  });
+  const before = new Map(baseline.requests.map((r) => [r.request, r.stats]));
+  const after = new Set(current.requests.map((r) => r.request));
+  return {
+    baseline: summarizeRun(baseline),
+    current: summarizeRun(current),
+    total: row('', 'Total', baseline.total, current.total),
+    requests: [
+      ...current.requests.map((r) => row(r.request, r.request, before.get(r.request), r.stats)),
+      ...baseline.requests
+        .filter((r) => !after.has(r.request))
+        .map((r) => row(r.request, r.request, r.stats, undefined)),
+    ],
+    environments: [],
+  };
 }

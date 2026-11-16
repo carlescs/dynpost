@@ -174,6 +174,36 @@ describe('FolderSettingsStore', () => {
     expect(store.changed()).toBe(1);
   });
 
+  it('asks before replacing unsaved edits with settings changed on disk', async () => {
+    respond({ 'folder.settings.load': () => settings });
+    await store.open('requests/users');
+    const key = store.draft()!.key;
+    store.update(key, { headers: [] });
+    const reloaded = async () => {
+      workspaceStore.reloaded.set({ paths: ['requests/users/_folder.yaml'] });
+      TestBed.tick();
+      await new Promise((resolve) => setTimeout(resolve));
+    };
+
+    // Unchanged on disk: nothing to ask.
+    await reloaded();
+    expect(dialogs.confirm).not.toHaveBeenCalled();
+
+    respond({ 'folder.settings.load': () => ({ headers: [], auth: { type: 'none' } }) });
+    dialogs.confirm.mockResolvedValue(false);
+    await reloaded();
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+    expect(store.draft()).toMatchObject({ dirty: true, headers: [] });
+    expect(store.draft()!.auth.type).toBe('bearer');
+
+    dialogs.confirm.mockResolvedValue(true);
+    respond({ 'folder.settings.load': () => ({ headers: [], auth: { type: 'basic' } }) });
+    await reloaded();
+    expect(dialogs.confirm).toHaveBeenCalledTimes(2);
+    expect(store.draft()).toMatchObject({ dirty: false });
+    expect(store.draft()!.auth.type).toBe('basic');
+  });
+
   it('reads what a folder passes on, or null when it cannot', async () => {
     const inherited = { headers: [], auth: { type: 'none' }, authFolder: null, variables: [] };
     respond({ 'folder.settings.inherited': () => inherited });

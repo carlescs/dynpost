@@ -160,7 +160,28 @@
         </button>
       </div>
 
-      @if (d.run; as run) {
+      @if (d.comparison && view() === 'dashboard') {
+        <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3 text-sm">
+          @defer {
+            <app-run-comparison
+              [comparison]="d.comparison"
+              (close)="store.closeComparison(d.key)"
+            />
+          }
+          @if (d.history.length) {
+            @defer {
+              <app-run-history
+                [runs]="d.history"
+                [selected]="null"
+                (select)="store.show(d.key, $event)"
+                (remove)="store.deleteRuns(d.key, $event)"
+                (clear)="store.clearHistory(d.key)"
+                (compare)="compare(d.key, $event)"
+              />
+            }
+          }
+        </div>
+      } @else if (d.run; as run) {
         @if (view() === 'requests') {
           @defer {
             <app-run-samples class="min-h-0 flex-1 p-3 text-sm" [run]="run" />
@@ -178,6 +199,7 @@
                   (select)="store.show(d.key, $event)"
                   (remove)="store.deleteRuns(d.key, $event)"
                   (clear)="store.clearHistory(d.key)"
+                  (compare)="compare(d.key, $event)"
                 />
               }
             }
@@ -200,6 +222,7 @@
                 (select)="store.show(d.key, $event)"
                 (remove)="store.deleteRuns(d.key, $event)"
                 (clear)="store.clearHistory(d.key)"
+                (compare)="compare(d.key, $event)"
               />
             }
           }

@@ -1,3 +1,4 @@
+using Dynpost.Application.Git;
 using Dynpost.Infrastructure.Git;
 
 namespace Dynpost.Infrastructure.Tests.Git;
@@ -24,8 +25,38 @@ public sealed class FileSystemWorkingTreeWatcherTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(workspace, "requests", "health.yaml"), "name: Health\n");
 
         Assert.True(await changes.NextAsync(Wait));
-        Assert.Contains("requests/health.yaml", changes.Paths);
-        Assert.DoesNotContain(changes.Paths, p => p is not null && p.StartsWith(".git", StringComparison.Ordinal));
+        Assert.Contains("requests/health.yaml", await changes.FilesUntilAsync("requests/health.yaml", Wait));
+    }
+
+    [Fact]
+    public async Task RenamingAFolder_ReportsBothNames()
+    {
+        var workspace = Repository("api");
+        Directory.CreateDirectory(Path.Combine(workspace, "requests", "users"));
+        using var changes = new Changes();
+        using var watch = _watcher.Watch(workspace, changes.Report);
+
+        Directory.Move(Path.Combine(workspace, "requests", "users"), Path.Combine(workspace, "requests", "people"));
+
+        var files = await changes.FilesUntilAsync("requests/people", Wait);
+        Assert.Contains("requests/users", files);
+        Assert.Contains("requests/people", files);
+    }
+
+    [Fact]
+    public async Task ACommit_ReportsNoWorkspaceFiles()
+    {
+        var workspace = Repository("api");
+        File.WriteAllText(Path.Combine(workspace, "requests", "health.yaml"), "name: Health\n");
+        TestGit.Run(workspace, "add", ".");
+        using var changes = new Changes();
+        using var watch = _watcher.Watch(workspace, changes.Report);
+
+        TestGit.Run(workspace, "commit", "-m", "Add health");
+
+        Assert.True(await changes.NextAsync(Wait));
+        await Task.Delay(Quiet);
+        Assert.All(changes.Files, path => Assert.DoesNotContain(".git", path));
     }
 
     [Fact]
@@ -153,25 +184,40 @@ public sealed class FileSystemWorkingTreeWatcherTests : IDisposable
     private sealed class Changes : IDisposable
     {
         private readonly SemaphoreSlim _reported = new(0);
+        private readonly List<string> _files = [];
 
-        /// <summary>Every path reported so far; <c>null</c> entries are "anything may have changed".</summary>
-        public System.Collections.Concurrent.ConcurrentQueue<string?> Paths { get; } = new();
-
-        public void Report(IReadOnlyCollection<string>? paths)
+        public void Report(WorkingTreeChange change)
         {
-            if (paths is null)
+            lock (_files)
             {
-                Paths.Enqueue(null);
-            }
-            else
-            {
-                foreach (var path in paths)
-                {
-                    Paths.Enqueue(path);
-                }
+                _files.AddRange(change.Files ?? []);
             }
 
             _reported.Release();
+        }
+
+        /// <summary>Every workspace file reported so far.</summary>
+        public IReadOnlyList<string> Files
+        {
+            get
+            {
+                lock (_files)
+                {
+                    return [.. _files];
+                }
+            }
+        }
+
+        /// <summary>Waits until <paramref name="path"/> is reported, then returns every file reported so far.</summary>
+        public async Task<IReadOnlyList<string>> FilesUntilAsync(string path, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+            while (!Files.Contains(path) && DateTime.UtcNow < deadline)
+            {
+                await _reported.WaitAsync(deadline - DateTime.UtcNow > TimeSpan.Zero ? deadline - DateTime.UtcNow : TimeSpan.Zero);
+            }
+
+            return Files;
         }
 
         public Task<bool> NextAsync(TimeSpan timeout) => _reported.WaitAsync(timeout);

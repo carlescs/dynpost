@@ -214,14 +214,6 @@ export class RequestEditor {
     });
   }
 
-  protected reloadChangedFile(): void {
-    this.store.reloadChangedFile(this.document().id);
-  }
-
-  protected keepEdits(): void {
-    this.store.keepEditsOverChangedFile(this.document().id);
-  }
-
   protected patchPathParam(index: number, value: string): void {
     this.patch({
       pathParams: this.document().pathParams.map((row, i) =>

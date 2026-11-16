@@ -301,6 +301,12 @@ internal static class BridgeMessageTypes
     /// <summary>Deletes all the earlier runs of a plan. Payload: <see cref="RunPlanPathPayload"/>. Result: none.</summary>
     public const string RunClear = "run.clear";
 
+    /// <summary>
+    /// Compares a finished run with a baseline run: overall, per-request and per-environment deltas.
+    /// Payload: <see cref="CompareRunsPayload"/>. Result: the comparison.
+    /// </summary>
+    public const string RunCompare = "run.compare";
+
     /// <summary>Reads the open workspace's git status. Payload: none. Result: git status.</summary>
     public const string GitStatus = "git.status";
 
@@ -475,6 +481,13 @@ internal static class BridgeEventTypes
     /// status again. Payload: <see cref="GitChangedEvent"/>.
     /// </summary>
     public const string GitChanged = "git.changed";
+
+    /// <summary>
+    /// Request, environment, run plan or folder settings files of the open workspace changed on
+    /// disk, by anyone (another editor, git in a terminal, the app itself), so the UI should re-read
+    /// what it shows of them. Payload: <see cref="FilesChangedEvent"/>.
+    /// </summary>
+    public const string FilesChanged = "workspace.filesChanged";
 }
 
 /// <summary>A message from the host the UI didn't ask for; unlike a <see cref="BridgeResponse"/> it has no id.</summary>
@@ -485,6 +498,12 @@ internal sealed record WorkspaceChangedEvent(IReadOnlyList<string> Paths);
 
 /// <summary>The payload of <see cref="BridgeEventTypes.GitChanged"/>: nothing, the UI reads the status again.</summary>
 internal sealed record GitChangedEvent;
+
+/// <param name="Paths">
+/// The workspace paths of the files and folders that changed, or <see langword="null"/> when
+/// changes were lost and any file may have changed.
+/// </param>
+internal sealed record FilesChangedEvent(IReadOnlyList<string>? Paths);
 
 /// <param name="Path">The workspace path of the plan being run.</param>
 internal sealed record RunStartedEvent(string Path, string RunId);
@@ -685,6 +704,8 @@ internal sealed record StartRunPayload(string Path, bool ConfirmLarge = false);
 internal sealed record RunIdPayload(string RunId);
 
 internal sealed record RunIdsPayload(IReadOnlyList<string> RunIds);
+
+internal sealed record CompareRunsPayload(string BaselineRunId, string RunId);
 
 internal sealed record RunResponsePayload(string RunId, string File);
 

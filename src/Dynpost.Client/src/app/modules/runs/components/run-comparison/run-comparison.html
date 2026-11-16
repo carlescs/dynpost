@@ -1,0 +1,118 @@
+@let c = comparison();
+
+<div [class]="card + ' flex flex-wrap items-center gap-x-3 gap-y-2 p-3'" data-comparison-header>
+  <fa-icon class="text-slate-500" [icon]="faCodeCompare" />
+  <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+    <span class="text-slate-500">Baseline</span>
+    <span class="font-medium" data-baseline>{{ dates.dateTime(c.baseline.startedAt) }}</span>
+    <fa-icon class="text-slate-400" [icon]="faArrowRight" />
+    <span class="text-slate-500">Compared</span>
+    <span class="font-medium" data-current>{{ dates.dateTime(c.current.startedAt) }}</span>
+  </div>
+  <span class="text-xs" data-tally>
+    <span class="font-medium text-emerald-700">{{ tally().better }} better</span>
+    ·
+    <span class="font-medium text-rose-700">{{ tally().worse }} worse</span>
+  </span>
+  <button
+    type="button"
+    class="flex size-6 items-center justify-center rounded text-xs text-slate-500 hover:bg-slate-200"
+    title="Close the comparison"
+    aria-label="Close the comparison"
+    data-close-comparison
+    (click)="close.emit()"
+  >
+    <fa-icon [icon]="faXmark" />
+  </button>
+</div>
+
+<section>
+  <h3 [class]="heading + ' mb-1.5'">Overall</h3>
+  <table [class]="card + ' w-full border-separate border-spacing-0 text-xs'" data-total>
+    <thead class="text-left text-slate-500">
+      <tr>
+        <th class="px-3 py-1.5 font-medium">Metric</th>
+        <th class="px-3 py-1.5 text-right font-medium">Baseline</th>
+        <th class="px-3 py-1.5 text-right font-medium">Compared</th>
+        <th class="px-3 py-1.5 text-right font-medium">Change</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (m of c.total.metrics; track m.metric) {
+        <tr [attr.data-metric]="m.metric" [attr.data-verdict]="m.verdict">
+          <td class="border-t border-slate-200 px-3 py-1">{{ labels[m.metric] }}</td>
+          <td class="border-t border-slate-200 px-3 py-1 text-right text-slate-500">
+            {{ formatMetric(m.metric, m.baseline) }}
+          </td>
+          <td class="border-t border-slate-200 px-3 py-1 text-right font-medium">
+            {{ formatMetric(m.metric, m.current) }}
+          </td>
+          <td
+            class="border-t border-slate-200 px-3 py-1 text-right font-medium"
+            [class]="colors[m.verdict]"
+          >
+            {{ formatChange(m) }}
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>
+
+@for (section of sections(); track section.id) {
+  <section [attr.data-section]="section.id">
+    <h3 [class]="heading + ' mb-1.5'">{{ section.title }}</h3>
+    <div [class]="card + ' overflow-x-auto'">
+      <table class="w-full border-separate border-spacing-0 text-xs">
+        <thead class="text-left text-slate-500">
+          <tr>
+            <th class="px-3 py-1.5 font-medium">
+              {{ section.id === 'request' ? 'Request' : 'Environment' }}
+            </th>
+            @for (metric of rowMetrics; track metric) {
+              <th class="px-2 py-1.5 text-right font-medium whitespace-nowrap">
+                {{ labels[metric] }}
+              </th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of section.rows; track row.key) {
+            <tr data-row [attr.data-key]="row.key">
+              <td
+                class="max-w-48 truncate border-t border-slate-200 px-3 py-1 font-medium"
+                [title]="row.key"
+              >
+                {{ row.name }}
+              </td>
+              @if (row.metrics.length) {
+                @for (metric of rowMetrics; track metric) {
+                  @let d = deltaOf(row, metric);
+                  <td
+                    class="border-t border-slate-200 px-2 py-1 text-right whitespace-nowrap"
+                    [title]="d ? deltaTitle(d) : ''"
+                  >
+                    @if (d) {
+                      <span class="block">{{ formatMetric(metric, d.current) }}</span>
+                      <span class="block font-medium" [class]="colors[d.verdict]">
+                        {{ formatChange(d) }}
+                      </span>
+                    }
+                  </td>
+                }
+              } @else {
+                <td
+                  class="border-t border-slate-200 px-2 py-1 text-slate-500 italic"
+                  [attr.colspan]="rowMetrics.length"
+                  data-missing
+                >
+                  {{ missingLabel(row) }}
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+}

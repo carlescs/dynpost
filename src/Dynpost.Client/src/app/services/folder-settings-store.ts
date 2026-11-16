@@ -4,7 +4,8 @@ import { FolderSettingsDto, InheritedSettingsDto, RequestSettingsDto } from '../
 import { KeyValue, REQUESTS_FOLDER, RequestAuth } from '../models/workspace';
 import { EMPTY_AUTH, compactSettings, fromAuthDto, toAuthDto } from '../models/request-mapping';
 import { WorkspaceStore } from './workspace-store';
-import { DISCARD, Dialogs } from './dialogs';
+import { CHANGED_ON_DISK, DISCARD, Dialogs, changedOnDisk } from './dialogs';
+import { DiskSnapshots, touches } from '../models/disk-changes';
 
 /** The file holding the headers, auth and variables a folder sets. */
 export const FOLDER_SETTINGS_FILE = '_folder.yaml';
@@ -53,6 +54,8 @@ export class FolderSettingsStore {
   readonly changed = signal(0);
 
   private readonly root = computed(() => this.workspace.workspace()?.root ?? null);
+  /** The settings files of the open drafts as last read or written, to tell real changes apart. */
+  private readonly onDisk = new DiskSnapshots();
 
   constructor() {
     effect(() => {
@@ -60,6 +63,7 @@ export class FolderSettingsStore {
       untracked(() => {
         this.workspace.removeTabs(this.drafts().map((d) => d.key));
         this.drafts.set([]);
+        this.onDisk.clear();
       });
     });
     effect(() => {
@@ -99,6 +103,7 @@ export class FolderSettingsStore {
       const settings = await this.bridge.send('folder.settings.load', { path });
       if (this.showOpen(path) || this.root() !== root) return;
       const key = this.workspace.newTabKey();
+      this.onDisk.remember(key, fromSettingsDto(settings));
       this.drafts.update((drafts) => [
         ...drafts,
         { ...fromSettingsDto(settings), path, key, dirty: false, saving: false, revision: 0 },
@@ -130,6 +135,7 @@ export class FolderSettingsStore {
           settings: { ...draft.settings },
         },
       });
+      this.onDisk.remember(key, fromSettingsDto(saved));
       this.patchDraft(key, (d) =>
         // Keep edits typed while the save was in flight; they still need saving.
         d.revision === draft.revision
@@ -175,19 +181,39 @@ export class FolderSettingsStore {
   }
 
   /** Re-reads the clean drafts whose `_folder.yaml` changed on disk (all of them without `paths`). */
+  /**
+   * Re-reads open folder settings whose `_folder.yaml` changed on disk (all when `paths` is
+   * missing). Unchanged files (such as after the app's own save) are left alone; drafts without
+   * unsaved edits reload silently, and for those with unsaved edits the user chooses.
+   */
   private async reload(paths?: string[]): Promise<void> {
-    const changed = (path: string) => !paths || paths.includes(`${path}/${FOLDER_SETTINGS_FILE}`);
+    const file = (path: string) => `${path}/${FOLDER_SETTINGS_FILE}`;
     if (paths && !paths.some((p) => p.endsWith(`/${FOLDER_SETTINGS_FILE}`))) return;
     this.changed.update((n) => n + 1);
     const root = this.root();
-    for (const draft of this.drafts().filter((d) => !d.dirty && changed(d.path))) {
+    for (const draft of this.drafts().filter((d) => touches(paths, file(d.path)))) {
       try {
         const settings = await this.bridge.send('folder.settings.load', { path: draft.path });
         if (this.root() !== root) return;
-        this.patchDraft(draft.key, (current) =>
-          current.path === draft.path && !current.dirty
-            ? { ...current, ...fromSettingsDto(settings), revision: current.revision + 1 }
-            : current,
+        const content = fromSettingsDto(settings);
+        const current = this.drafts().find((d) => d.key === draft.key);
+        if (current?.path !== draft.path || !this.onDisk.differs(draft.key, content)) continue;
+        if (current.dirty) {
+          const reload = await this.onDisk.ask(draft.key, () => {
+            this.workspace.activateTab(draft.key);
+            return this.dialogs.confirm(
+              changedOnDisk(`The settings of the folder "${this.nameOf(draft.path)}"`),
+              CHANGED_ON_DISK,
+            );
+          });
+          if (reload === null) continue;
+          this.onDisk.remember(draft.key, content);
+          if (!reload) continue;
+        } else {
+          this.onDisk.remember(draft.key, content);
+        }
+        this.patchDraft(draft.key, (d) =>
+          d.path === draft.path ? { ...d, ...content, dirty: false, revision: d.revision + 1 } : d,
         );
       } catch {
         // Keep the draft open; saving reports what is wrong.
@@ -204,6 +230,7 @@ export class FolderSettingsStore {
   private remove(drafts: FolderDraft[]): void {
     const keys = new Set(drafts.map((d) => d.key));
     if (!keys.size) return;
+    keys.forEach((key) => this.onDisk.forget(key));
     this.drafts.update((all) => all.filter((d) => !keys.has(d.key)));
     this.workspace.removeTabs([...keys]);
   }

@@ -914,6 +914,46 @@ export interface RunSummaryDto {
   throughput: number;
 }
 
+/** How a metric moved from the baseline run: `same` is within noise, or a plain count. */
+export type DeltaVerdict = 'better' | 'worse' | 'same';
+
+/** A metric compared by `run.compare`. */
+export type ComparedMetric =
+  'samples' | 'errorPercent' | 'average' | 'median' | 'p90' | 'p95' | 'p99' | 'max' | 'throughput';
+
+/** A metric of the baseline run next to the same metric of the compared run. */
+export interface MetricDeltaDto {
+  metric: ComparedMetric;
+  baseline: number;
+  current: number;
+  /** The compared value minus the baseline (percentage points for `errorPercent`). */
+  change: number;
+  /** The change relative to the baseline; `null` when the baseline is 0 and the compared value isn't. */
+  changePercent: number | null;
+  verdict: DeltaVerdict;
+}
+
+/** A row of a run comparison: the whole run, one request, or one environment. */
+export interface ComparisonRowDto {
+  /** The request's or environment's workspace path; empty for the total. */
+  key: string;
+  name: string;
+  inBaseline: boolean;
+  inCurrent: boolean;
+  /** Empty unless the row is in both runs. */
+  metrics: MetricDeltaDto[];
+}
+
+/** How a run compares with a baseline run. */
+export interface RunComparisonDto {
+  baseline: RunSummaryDto;
+  current: RunSummaryDto;
+  total: ComparisonRowDto;
+  requests: ComparisonRowDto[];
+  /** Empty when neither run lists environments. */
+  environments: ComparisonRowDto[];
+}
+
 /** Every message type with its payload and result. */
 export interface BridgeMessages {
   /** The run plans (`*.run.yaml`) of the workspace. */
@@ -971,6 +1011,11 @@ export interface BridgeMessages {
   'run.delete': { payload: { runIds: string[] }; result: null };
   /** Deletes all the earlier runs of a plan, keeping the plan; refused while it is being run. */
   'run.clear': { payload: { path: string }; result: null };
+  /** Compares a finished run with a baseline run: overall, per-request and per-environment deltas. */
+  'run.compare': {
+    payload: { baselineRunId: string; runId: string };
+    result: RunComparisonDto;
+  };
   /** Shows a folder picker and opens the chosen folder; `null` when cancelled. */
   /** Reads the per-user settings (kept in the host's settings file). */
   'settings.get': { payload: void; result: AppSettingsDto };
@@ -1291,6 +1336,12 @@ export interface BridgeEvents {
    * program, or committed, checked out or staged with other git tools — so the git status may have.
    */
   'git.changed': Record<string, never>;
+  /**
+   * Request, environment, run plan or folder settings files of the open workspace changed on
+   * disk — edited in another program, changed by git in a terminal, or saved by the app itself:
+   * the files and folders at `paths` (workspace paths), or any of them when `paths` is `null`.
+   */
+  'workspace.filesChanged': { paths: string[] | null };
 }
 
 export type BridgeEventType = keyof BridgeEvents;

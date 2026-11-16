@@ -132,9 +132,6 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
 - cURL: `Application/Interchange/Curl.cs` (`ParseCurl`, `CopyAsCurl`, `CurlCommands`) and
   `Infrastructure/Interchange/CurlConverter.cs`. Exporters that record exchanges (HAR) set
   `ICollectionExporter.NeedsExchanges`, and `ExportWorkspace` fills `RequestCollection.Exchanges`.
-- External changes: `WatchWorkingTree` reports the changed workspace paths too; the host sends them
-  as `workspace.changed`, and `WorkspaceStore.reloadFromDisk` reloads clean tabs and sets
-  `changedOnDisk` on dirty ones.
 - Search: quick open (Ctrl+P, `workspace.quickOpen`) and the Search view (`workspace.search`, client
   `modules/search`) both run in the backend (`Application/Search`) over the request files
   (`IWorkspaceRepository.ListAsync`/`ReadTextAsync`). Typo-tolerant matching goes through the
@@ -291,6 +288,12 @@ Desktop → Application
   refs and merge state count there; `.dynpost/` is ignored; bursts are debounced) and the host
   sends a `git.changed` event, on which the client's `GitStore.refreshInBackground` re-reads the
   status without a busy state, queueing behind a running operation rather than dropping the read.
+  The same watch reports the workspace files each burst changed (`WorkingTreeChange.Files`, `null`
+  when notifications were lost); those the app reads (`WatchWorkingTree.IsAppFile`) go to the UI
+  as a `workspace.filesChanged` event, on which `services/workspace-sync.ts` re-reads the tree,
+  environments and plans, and the stores reload open tabs: silently when clean, asking "Reload /
+  Keep mine" when dirty. The app's own writes are ignored by content: each store remembers what
+  its tabs last read or saved (`models/disk-changes.ts`, `DiskSnapshots`).
   Git reads run with `GIT_OPTIONAL_LOCKS=0` so they don't write `.git/index` and re-trigger it.
 - Pull always merges (`--no-rebase`); conflicts are left in the working tree and
   reported. Files under `.dynpost/` are excluded from status and commits even

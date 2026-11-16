@@ -195,6 +195,8 @@ internal static class BridgeHandlers
                 async (p, ct) => NoValue(await Use<DeleteRun>().ExecuteAsync(p.RunIds ?? [], ct)))
             .Register<RunPlanPathPayload, Unit?>(BridgeMessageTypes.RunClear,
                 async (p, ct) => NoValue(await Use<ClearRuns>().ExecuteAsync(p.Path, ct)))
+            .Register<CompareRunsPayload, RunComparisonDto>(BridgeMessageTypes.RunCompare,
+                (p, ct) => Use<CompareRuns>().ExecuteAsync(p.BaselineRunId, p.RunId, ct))
             .Register<CookieJarPayload, IReadOnlyList<CookieDto>>(BridgeMessageTypes.CookieList,
                 (p, ct) => Use<ListCookies>().ExecuteAsync(p.Environment, ct))
             .Register<DeleteCookiePayload, IReadOnlyList<CookieDto>>(BridgeMessageTypes.CookieDelete,

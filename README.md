@@ -113,7 +113,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       (switch, create, check out, delete), remotes, and clear reporting of
       merge conflicts
 - [x] Load runner: `*.run.yaml` plans that send requests from concurrent
-      virtual users, with live statistics and pass/fail thresholds (see
+      virtual users, with live statistics, pass/fail thresholds and comparison
+      of two runs (see
       [Load runs](#load-runs))
 - [x] Import from cURL, and copy requests as cURL (see [cURL](#curl))
 - [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
@@ -159,15 +160,17 @@ run plan refers to a request as `requests/users/get-user.yaml` and a body file a
 
 ### Changes made outside Dynpost
 
-Dynpost watches the workspace folder, so edits made in another editor, or by
-`git checkout`/`git pull` in a terminal, show up without reloading: the
-explorer, the Load runs tree, the environments (and Globals) and the source
-control status refresh by themselves, and open tabs without unsaved edits
-reload silently. A tab with unsaved edits keeps them and shows **This file
-changed on disk**: **Reload from disk** takes the new file, **Keep mine** keeps
-your edits (saving then replaces the file). Dynpost's own saves come back as
-the same content and change nothing. Changes inside `.dynpost/` and the `.git`
-folder are not shown as file changes.
+Dynpost watches the workspace folder, so edits made elsewhere — in another
+editor, or by `git checkout`/`git pull` in a terminal — show up without
+reopening the workspace. The explorer tree, the environments, the run plans and
+the git status follow them, and open tabs (requests, environments, folder
+settings and run plans) reload on their own when they have no unsaved changes;
+a tab whose file is deleted closes. When a tab has unsaved changes and its file
+changes on disk, Dynpost asks whether to **Reload** it from disk or **Keep
+mine** (saving then replaces the file). A file written with the content the tab
+already has — such as Dynpost's own saves — changes nothing. Changes in
+`.dynpost/` and git's own folder, and files outside `requests/`, `plans/`,
+`environments/`, `dynpost.yaml` and `.gitignore`, are not followed.
 
 ### Moving from the old layout
 
@@ -1005,6 +1008,19 @@ tick their checkboxes (shift-click ticks a range, the box above the list ticks e
 **Delete** above the list. Deleting always asks first, keeps the plan itself, and waits until a
 running plan stops.
 
+To compare two runs, tick both and press **Compare** above the list. The older
+run is the baseline. The dashboard then shows, for the whole run, the request
+count, error rate, average, median, p90, p95, p99 and maximum latency and the
+throughput of both runs with the change. The error rate changes in percentage
+points; the other metrics change as a percentage of the baseline. Below that, a
+table per request (and per environment when the plans list environments) shows
+the error rate, median, p95, p99 and throughput of the compared run with their
+changes. A request that only one of the runs sent is marked as such. Better
+changes are green and worse ones red. Small changes count as noise and stay
+grey: latencies within 5% or half a millisecond, throughput within 5%, and error
+rates within a tenth of a point. Close the comparison, or show a run, to get
+back to the dashboard.
+
 The **Requests** tab next to **Dashboard** (or the **All requests** link on the
 dashboard) shows a table of every request the run sent, in the order they
 finished: time into the run, virtual user, iteration, method and URL, status,
@@ -1133,8 +1149,8 @@ file it sent.
 Without a `status` assertion, a response with status 400 or higher counts as an
 error. A plan can use up to 5000 threads (each keeps at most one connection busy
 at a time); a run over 200 threads needs confirmation. Not yet supported:
-CSV/JSON/HTML export, comparing runs, per-thread cookie jars and folder bodies
-for multipart `form` requests.
+CSV/JSON/HTML export, per-thread cookie jars and folder bodies for multipart
+`form` requests.
 
 ## Import and export
 
@@ -1442,6 +1458,7 @@ The assistant can use these tools, always on the workspace open in the app:
 | `list_run_plans`, `read_run_plan`, `create_run_plan`, `save_run_plan`, `move_run_plan`, `delete_run_plan` | Read, create, change and organize [load run](#load-runs) plans. New plans, like new requests, are named after themselves and never replace an existing file. |
 | `start_run`, `get_run`, `cancel_run` | Start a load run of a saved plan (a run of more than 200 threads needs confirming), follow it — `get_run` can wait up to 50 seconds for it to finish — and stop it. A run the assistant starts opens in the plan's tab, where you can follow and cancel it. Only the last 120 seconds of a run's timeline are shown to the assistant. |
 | `list_runs`, `get_run_samples`, `delete_runs` | A plan's earlier runs, a run's request log (up to 100 requests at a time), and deleting saved runs. |
+| `compare_runs` | Compares a finished run with a baseline run: the change in error rate, latency percentiles and throughput, overall, per request and per environment. |
 | `git_status`, `git_diff`, `git_log`, `git_show` | Show the branch and changed files, how a changed file differs from the last commit, the commits of the branch, and one commit's message and files — so the assistant can review its changes before you commit them. |
 
 Changes the assistant makes appear in the app right away: the explorer, open

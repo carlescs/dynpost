@@ -118,11 +118,6 @@ export function fromAuthDto(auth: AuthDto): RequestAuth {
   };
 }
 
-/** A request's content as one comparable string: equal for requests the host saves the same. */
-export function contentKey(content: RequestContent): string {
-  return JSON.stringify(toRequestDto(content));
-}
-
 /** Builds the DTO the host saves. Only the fields of the chosen auth type are sent. */
 export function toRequestDto(content: RequestContent): RequestDto {
   const { auth } = content;

@@ -1,9 +1,16 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
-import { ERROR_CODES, RunPlanFileDto, RunResultDto, RunSummaryDto } from '../models/messages';
-import { isChangedPath, PLANS_FOLDER } from '../models/workspace';
+import {
+  ERROR_CODES,
+  RunComparisonDto,
+  RunPlanFileDto,
+  RunResultDto,
+  RunSummaryDto,
+} from '../models/messages';
+import { PLANS_FOLDER } from '../models/workspace';
 import { WorkspaceStore } from './workspace-store';
-import { DISCARD, Dialogs } from './dialogs';
+import { CHANGED_ON_DISK, DISCARD, Dialogs, changedOnDisk } from './dialogs';
+import { touches } from '../models/disk-changes';
 import { joinPath } from './tree-state';
 import { DateFormatStore } from './date-format-store';
 
@@ -21,6 +28,8 @@ export interface RunPlanDraft {
   run: RunResultDto | null;
   /** The plan's earlier runs. */
   history: RunSummaryDto[];
+  /** Two earlier runs compared, shown instead of the dashboard; `null` when not comparing. */
+  comparison: RunComparisonDto | null;
   saving: boolean;
   starting: boolean;
   /** Set when a very large run needs the user's go-ahead. */
@@ -76,6 +85,8 @@ export class RunStore {
     { generation: number; timer: ReturnType<typeof setTimeout> | null }
   >();
   private generation = 0;
+  /** Keys of the plans whose reload is being asked about. */
+  private readonly asking = new Set<string>();
 
   constructor() {
     effect(() => {
@@ -146,6 +157,7 @@ export class RunStore {
           savedYaml: document.yaml,
           run: null,
           history: [],
+          comparison: null,
           saving: false,
           starting: false,
           confirmation: null,
@@ -160,21 +172,35 @@ export class RunStore {
   }
 
   /**
-   * Re-reads open plans changed outside the UI (by an AI assistant): those at `paths` without
-   * unsaved edits, closing those whose file is gone, and the earlier runs of every open plan,
-   * which runs deleted outside the UI change.
+   * Re-reads open plans whose files changed on disk (in another program, through git or an AI
+   * assistant): those at `paths` (or inside folders at `paths`; all when missing). Plans without
+   * unsaved edits reload silently; for those with unsaved edits the user chooses between reloading
+   * and keeping theirs. Plans whose file is gone are closed. Also re-reads the earlier runs of
+   * every open plan, which runs deleted outside the UI change.
    */
-  async reloadFromDisk(paths: string[]): Promise<void> {
+  async reloadFromDisk(paths?: string[]): Promise<void> {
     for (const draft of this.drafts()) {
-      if (isChangedPath(draft.path, paths) && !isRunPlanDirty(draft)) {
+      if (touches(paths, draft.path)) {
         const { key, path } = draft;
         try {
           const document = await this.bridge.send('runPlan.open', { path });
-          this.patch(key, (d) =>
-            d.path === path && !isRunPlanDirty(d)
-              ? { ...d, yaml: document.yaml, savedYaml: document.yaml, error: document.error }
-              : d,
-          );
+          const current = this.find(key);
+          if (current?.path === path && document.yaml === current.savedYaml) {
+            // Unchanged on disk (such as after the app's own save), but the files it uses may have.
+            if (document.error !== current.error)
+              this.patch(key, (d) => (d.path === path ? { ...d, error: document.error } : d));
+          } else if (current?.path === path) {
+            const reload = !isRunPlanDirty(current) || (await this.askReload(key, path));
+            if (reload !== null)
+              this.patch(key, (d) =>
+                d.path !== path
+                  ? d
+                  : reload
+                    ? { ...d, yaml: document.yaml, savedYaml: document.yaml, error: document.error }
+                    : // Keep theirs; it stays unsaved, and isn't asked about again until the file changes once more.
+                      { ...d, savedYaml: document.yaml },
+              );
+          }
         } catch (error) {
           if (error instanceof BridgeError && error.code === ERROR_CODES.notFound) {
             const current = this.find(key);
@@ -188,6 +214,24 @@ export class RunStore {
       if (this.find(draft.key) && !isRunPlanRunning(this.find(draft.key)!)) {
         await this.loadHistory(draft.key);
       }
+    }
+  }
+
+  /**
+   * Asks whether to reload a plan with unsaved edits that changed on disk; `null` when that is
+   * being asked already.
+   */
+  private async askReload(key: string, path: string): Promise<boolean | null> {
+    if (this.asking.has(key)) return null;
+    this.asking.add(key);
+    try {
+      this.workspace.activateTab(key);
+      return await this.dialogs.confirm(
+        changedOnDisk(`The run plan "${this.nameOf(path)}"`),
+        CHANGED_ON_DISK,
+      );
+    } finally {
+      this.asking.delete(key);
     }
   }
 
@@ -378,10 +422,39 @@ export class RunStore {
     this.stopPolling(key);
     try {
       const run = await this.bridge.send('run.progress', { runId });
-      this.patch(key, (d) => ({ ...d, run }));
+      this.patch(key, (d) => ({ ...d, run, comparison: null }));
     } catch (error) {
       this.report(error, key);
     }
+  }
+
+  /**
+   * Compares two earlier runs of a plan: the older one is the baseline. The comparison is shown in
+   * place of the dashboard until it is closed or another run is shown.
+   */
+  async compare(key: string, runIds: string[]): Promise<void> {
+    const draft = this.find(key);
+    if (!draft || runIds.length !== 2) return;
+    if (isRunPlanRunning(draft)) {
+      this.report('Stop the running plan before comparing runs.', key);
+      return;
+    }
+    const [baselineRunId, runId] = [...runIds].sort((a, b) => {
+      const at = (id: string) =>
+        Date.parse(draft.history.find((summary) => summary.runId === id)?.startedAt ?? '') || 0;
+      return at(a) - at(b);
+    });
+    try {
+      const comparison = await this.bridge.send('run.compare', { baselineRunId, runId });
+      this.patch(key, (d) => ({ ...d, comparison, failure: null }));
+    } catch (error) {
+      this.report(error, key);
+    }
+  }
+
+  /** Closes the comparison of a plan, showing its dashboard again. */
+  closeComparison(key: string): void {
+    this.patch(key, (d) => ({ ...d, comparison: null }));
   }
 
   /** Deletes earlier runs of a plan after asking; the dashboard empties if it showed one of them. */
@@ -413,6 +486,11 @@ export class RunStore {
       this.patch(key, (d) => ({
         ...d,
         run: d.run && deleted.has(d.run.runId) ? null : d.run,
+        comparison:
+          d.comparison &&
+          (deleted.has(d.comparison.baseline.runId) || deleted.has(d.comparison.current.runId))
+            ? null
+            : d.comparison,
         history: d.history.filter((summary) => !deleted.has(summary.runId)),
       }));
     } catch (error) {
@@ -436,7 +514,7 @@ export class RunStore {
     if (!ok) return;
     try {
       await this.bridge.send('run.clear', { path: draft.path });
-      this.patch(key, (d) => ({ ...d, run: null, history: [] }));
+      this.patch(key, (d) => ({ ...d, run: null, history: [], comparison: null }));
     } catch (error) {
       this.report(error, key);
     }
@@ -527,6 +605,7 @@ export class RunStore {
 
   private async follow(key: string, runId: string): Promise<void> {
     this.stopPolling(key);
+    this.patch(key, (d) => ({ ...d, comparison: null }));
     const generation = ++this.generation;
     this.polls.set(key, { generation, timer: null });
     const current = () => this.polls.get(key)?.generation === generation;

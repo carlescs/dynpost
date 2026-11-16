@@ -30,10 +30,12 @@ describe('RunHistory', () => {
     fixture.componentRef.setInput('selected', 'r1');
     const selected: string[] = [];
     const removed: string[][] = [];
+    const compared: string[][] = [];
     let cleared = 0;
     fixture.componentInstance.select.subscribe((id) => selected.push(id));
     fixture.componentInstance.remove.subscribe((id) => removed.push(id));
     fixture.componentInstance.clear.subscribe(() => cleared++);
+    fixture.componentInstance.compare.subscribe((ids) => compared.push(ids));
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
     const buttons = [...element.querySelectorAll<HTMLElement>('button[data-select]')];
@@ -54,6 +56,7 @@ describe('RunHistory', () => {
       header,
       selected,
       removed,
+      compared,
       cleared: () => cleared,
     };
   }
@@ -107,6 +110,22 @@ describe('RunHistory', () => {
 
     expect(removed).toEqual([['r2', 'r0']]);
     expect(selected).toEqual([]);
+  });
+
+  it('compares two checked runs', () => {
+    const { fixture, checks, query, compared } = create();
+    checks[0].click();
+    fixture.detectChanges();
+    expect(query('button[data-compare]')).toBeNull();
+
+    checks[1].click();
+    fixture.detectChanges();
+    query('button[data-compare]')!.click();
+    expect(compared).toEqual([['r2', 'r1']]);
+
+    checks[2].click();
+    fixture.detectChanges();
+    expect(query('button[data-compare]')).toBeNull();
   });
 
   it('checks a range with shift-click and every run from the header', () => {
