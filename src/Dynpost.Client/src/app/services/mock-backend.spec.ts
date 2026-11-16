@@ -140,6 +140,36 @@ describe('MockBackend locale.dateFormat', () => {
   });
 });
 
+describe('MockBackend about.openLink', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('opens the named page in a new browser tab', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+    const reply = await new MockBackend().handle({
+      id: '1',
+      type: 'about.openLink',
+      payload: { link: 'repository' },
+    });
+
+    expect(reply.ok).toBe(true);
+    expect(open).toHaveBeenCalledWith('https://github.com/carlescs/dynpost', '_blank', 'noopener');
+  });
+
+  it('rejects links it does not know', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+    const reply = await new MockBackend().handle({
+      id: '1',
+      type: 'about.openLink',
+      payload: { link: 'toString' },
+    });
+
+    expect(reply.ok).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+  });
+});
+
 describe('MockBackend search', () => {
   async function call(type: BridgeMessageType, payload: Record<string, unknown>) {
     const backend = new MockBackend();

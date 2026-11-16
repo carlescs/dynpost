@@ -331,6 +331,8 @@ internal static class BridgeHandlers
                 ct => Use<RegenerateMcpToken>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.AboutGet,
                 _ => Task.FromResult(Result<AboutDto>.Success(Use<GetAboutInfo>().Execute())))
+            .Register<AboutOpenLinkPayload, Unit?>(BridgeMessageTypes.AboutOpenLink,
+                (p, _) => Task.FromResult(NoValue(Use<OpenAboutLink>().Execute(p.Link))))
             .Register(BridgeMessageTypes.LocaleDateFormat,
                 _ => Task.FromResult(Result<DateFormatDto>.Success(Use<GetDateFormat>().Execute())))
             .Register(BridgeMessageTypes.UpdateCheck,

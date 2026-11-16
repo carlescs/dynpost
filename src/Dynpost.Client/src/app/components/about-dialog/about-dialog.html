@@ -26,6 +26,31 @@
       <dt class="text-slate-500">System</dt>
       <dd class="break-words">{{ about.operatingSystem }}</dd>
     </dl>
+    <div class="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-200 pt-3">
+      <a
+        data-testid="about-homepage"
+        class="inline-flex items-center gap-1.5 text-sky-700 hover:underline"
+        [href]="about.homepage"
+        [title]="about.homepage"
+        (click)="openLink($event, 'homepage')"
+      >
+        <fa-icon [icon]="faGlobe" />
+        Website
+      </a>
+      <a
+        data-testid="about-repository"
+        class="inline-flex items-center gap-1.5 text-sky-700 hover:underline"
+        [href]="about.repository"
+        [title]="about.repository"
+        (click)="openLink($event, 'repository')"
+      >
+        <fa-icon [icon]="faCode" />
+        GitHub
+      </a>
+    </div>
+    @if (linkError(); as error) {
+      <p class="mt-2 text-rose-700">{{ error }}</p>
+    }
   } @else if (failed()) {
     <p class="text-rose-700">Could not read the version information.</p>
   } @else {
