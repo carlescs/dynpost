@@ -1,5 +1,6 @@
 using Dynpost.Application.History;
 using Dynpost.Application.Mcp;
+using Dynpost.Application.Secrets;
 
 namespace Dynpost.Application.Settings;
 
@@ -16,13 +17,15 @@ namespace Dynpost.Application.Settings;
 /// <c>null</c> is the UI's default order. The UI places views missing from it at the end.
 /// </param>
 /// <param name="Mcp">The MCP server AI assistants connect to; <c>null</c> is <see cref="McpSettings.Default"/> (off).</param>
+/// <param name="Secrets">Where secret values are kept; <c>null</c> is <see cref="SecretSettings.Default"/>.</param>
 public sealed record AppSettings(
     string? LastWorkspacePath = null,
     string? Theme = null,
     IReadOnlyList<string>? RecentWorkspaces = null,
     HistorySettings? History = null,
     IReadOnlyList<string>? ActivityOrder = null,
-    McpSettings? Mcp = null)
+    McpSettings? Mcp = null,
+    SecretSettings? Secrets = null)
 {
     public static AppSettings Default { get; } = new();
 }

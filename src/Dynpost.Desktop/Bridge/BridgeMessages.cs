@@ -4,6 +4,7 @@ using Dynpost.Application.Common;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
 using Dynpost.Application.Requests;
+using Dynpost.Application.Secrets;
 using Dynpost.Domain.Workspaces;
 
 namespace Dynpost.Desktop.Bridge;
@@ -432,6 +433,12 @@ internal static class BridgeMessageTypes
     /// <summary>Changes how responses are kept in the history. Payload: <see cref="HistorySettingsDto"/>. Result: settings.</summary>
     public const string SettingsSetHistory = "settings.setHistory";
 
+    /// <summary>Where secret values are kept and whether <c>.env</c> values are used. Payload: none. Result: <see cref="SecretSettingsDto"/>.</summary>
+    public const string SecretSettingsGet = "secrets.getSettings";
+
+    /// <summary>Changes where secret values are kept (moving the open workspace's). Payload: <see cref="SecretSettingsPayload"/>. Result: <see cref="SecretSettingsDto"/>.</summary>
+    public const string SecretSettingsSet = "secrets.setSettings";
+
     /// <summary>Sets the order of the activity bar's views. Payload: <see cref="SetActivityOrderPayload"/>. Result: settings.</summary>
     public const string SettingsSetActivityOrder = "settings.setActivityOrder";
 
@@ -572,6 +579,9 @@ internal sealed record DeleteCookiePayload(string Environment, string Name, stri
 internal sealed record CertificatesPayload(string Environment);
 
 internal sealed record SaveGlobalsPayload(GlobalVariablesDto Globals);
+
+/// <param name="Storage"><c>file</c> or <c>keychain</c>.</param>
+internal sealed record SecretSettingsPayload(string Storage, bool UseDotEnv);
 
 /// <param name="Certificates">Every certificate of the environment, in the order they are matched.</param>
 internal sealed record SaveCertificatesPayload(string Environment, IReadOnlyList<ClientCertificateDto> Certificates);

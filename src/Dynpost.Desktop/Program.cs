@@ -11,6 +11,7 @@ using Dynpost.Application.Interchange;
 using Dynpost.Application.OAuth2;
 using Dynpost.Application.Requests;
 using Dynpost.Application.Runs;
+using Dynpost.Application.Secrets;
 using Dynpost.Application.Settings;
 using Dynpost.Application.Sharing;
 using Dynpost.Application.About;
@@ -31,6 +32,7 @@ using Dynpost.Infrastructure.Http;
 using Dynpost.Infrastructure.Interchange;
 using Dynpost.Infrastructure.OAuth2;
 using Dynpost.Infrastructure.Runs;
+using Dynpost.Infrastructure.Secrets;
 using Dynpost.Infrastructure.Settings;
 using Dynpost.Infrastructure.Sharing;
 using Dynpost.Infrastructure.About;
@@ -118,7 +120,13 @@ internal static class Program
             .AddSingleton<FolderInheritance>()
             .AddSingleton<IWorkspaceLayoutStore, FileSystemWorkspaceLayoutStore>()
             .AddSingleton<IEnvironmentStore, FileSystemEnvironmentStore>()
-            .AddSingleton<ISecretStore, YamlSecretStore>()
+            .AddSingleton<YamlSecretStore>()
+            .AddSingleton(_ => SystemKeychain.Create())
+            .AddSingleton<KeychainSecretStore>()
+            .AddSingleton<ISecretStore, SelectedSecretStore>()
+            .AddSingleton<IDotEnvValues, DotEnvValues>()
+            .AddTransient<GetSecretSettings>()
+            .AddTransient<SetSecretSettings>()
             .AddSingleton<IWorkspaceVariablesStore, YamlWorkspaceVariablesStore>()
             .AddSingleton<IWorkspaceStateStore, YamlWorkspaceStateStore>()
             .AddSingleton<ICookieJarStore, JsonCookieJarStore>()

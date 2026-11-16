@@ -11,6 +11,7 @@ using Dynpost.Application.Interchange;
 using Dynpost.Application.OAuth2;
 using Dynpost.Domain.Git;
 using Dynpost.Application.Requests;
+using Dynpost.Application.Secrets;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Settings;
 using Dynpost.Application.Sharing;
@@ -312,6 +313,10 @@ internal static class BridgeHandlers
                 ct => Use<GetAppSettings>().ExecuteAsync(ct))
             .Register<SetThemePayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetTheme,
                 (p, ct) => Use<SetTheme>().ExecuteAsync(p.Theme, ct))
+            .Register(BridgeMessageTypes.SecretSettingsGet,
+                ct => Use<GetSecretSettings>().ExecuteAsync(ct))
+            .Register<SecretSettingsPayload, SecretSettingsDto>(BridgeMessageTypes.SecretSettingsSet,
+                (p, ct) => Use<SetSecretSettings>().ExecuteAsync(p.Storage, p.UseDotEnv, ct))
             .Register<HistorySettingsDto, AppSettingsDto>(BridgeMessageTypes.SettingsSetHistory,
                 (p, ct) => Use<SetHistorySettings>().ExecuteAsync(p, ct))
             .Register<SetActivityOrderPayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetActivityOrder,

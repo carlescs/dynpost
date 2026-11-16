@@ -1,4 +1,5 @@
 using Dynpost.Application.Common;
+using Dynpost.Application.Secrets;
 using Dynpost.Application.Workspaces;
 using Dynpost.Domain.Environments;
 using Dynpost.Domain.Requests;
@@ -80,7 +81,8 @@ public sealed class ActiveEnvironment(
     ICapturedValueStore captures,
     IWorkspaceStateStore state,
     CurrentWorkspace current,
-    IWorkspaceVariablesStore? globals = null)
+    IWorkspaceVariablesStore? globals = null,
+    IDotEnvValues? dotEnv = null)
 {
     /// <summary>
     /// The selected environment's variables, with the values requests captured for it taking
@@ -156,6 +158,8 @@ public sealed class ActiveEnvironment(
         }
 
         var secretValues = id is null ? null : stored.Value.GetValueOrDefault(id);
+        // Secrets without a value on this computer may take one from the workspace's .env file.
+        var dotEnvValues = dotEnv is null ? null : await dotEnv.ReadAsync(root, cancellationToken);
         var unset = new SortedSet<string>(StringComparer.Ordinal);
         var variables = new List<EnvironmentVariable>();
         foreach (var variable in environment?.Variables ?? [])
@@ -164,7 +168,7 @@ public sealed class ActiveEnvironment(
             {
                 variables.Add(variable);
             }
-            else if (secretValues?.GetValueOrDefault(variable.Name) is { Length: > 0 } value)
+            else if ((secretValues?.GetValueOrDefault(variable.Name) is { Length: > 0 } stored1 ? stored1 : dotEnvValues?.GetValueOrDefault(variable.Name)) is { Length: > 0 } value)
             {
                 variables.Add(variable with { Value = value });
             }
@@ -205,7 +209,7 @@ public sealed class ActiveEnvironment(
         var globalSecrets = new List<string>();
         if (globals is not null)
         {
-            var loaded = await GlobalVariables.LoadWithSecretsAsync(globals, secrets, root, cancellationToken);
+            var loaded = await GlobalVariables.LoadWithSecretsAsync(globals, secrets, root, cancellationToken, dotEnvValues);
             if (!loaded.IsSuccess)
             {
                 return loaded.Error!;

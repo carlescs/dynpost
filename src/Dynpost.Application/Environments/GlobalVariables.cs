@@ -41,7 +41,8 @@ public static class GlobalVariables
         IWorkspaceVariablesStore store,
         ISecretStore secrets,
         string root,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? dotEnv = null)
     {
         var globals = await store.ReadAsync(root, cancellationToken);
         if (!globals.IsSuccess)
@@ -69,7 +70,7 @@ public static class GlobalVariables
             {
                 variables.Add(variable);
             }
-            else if (values?.GetValueOrDefault(variable.Name) is { Length: > 0 } value)
+            else if ((values?.GetValueOrDefault(variable.Name) is { Length: > 0 } stored1 ? stored1 : dotEnv?.GetValueOrDefault(variable.Name)) is { Length: > 0 } value)
             {
                 variables.Add(variable with { Value = value });
             }

@@ -32,6 +32,19 @@ export interface AuthDto {
 }
 
 /** The headers, auth and variables a folder sets for every request and folder in it. */
+/** Where secret values are kept. */
+export type SecretStorage = 'file' | 'keychain';
+
+/** Where secret values are kept, and whether `.env` values are used. */
+export interface SecretSettingsDto {
+  storage: SecretStorage;
+  useDotEnv: boolean;
+  /** Whether the operating system's credential store can be used on this computer. */
+  keychainAvailable: boolean;
+  /** What the credential store is called, e.g. `Windows Credential Manager`. */
+  keychainName: string;
+}
+
 /** The shell a cURL command is quoted for. */
 export type CurlShell = 'posix' | 'cmd' | 'powershell';
 
@@ -1085,6 +1098,13 @@ export interface BridgeMessages {
   'cookie.list': { payload: { environment: string }; result: CookieDto[] };
   /** Reads the workspace-global variables (in `dynpost.yaml`), with this computer's secret values. */
   'globals.load': { payload: void; result: GlobalVariablesDto };
+  /** Where secret values are kept and whether `.env` values are used. */
+  'secrets.getSettings': { payload: void; result: SecretSettingsDto };
+  /** Changes where secret values are kept; the open workspace's move there. */
+  'secrets.setSettings': {
+    payload: { storage: SecretStorage; useDotEnv: boolean };
+    result: SecretSettingsDto;
+  };
   /** Saves the workspace-global variables; secret values stay on this computer. */
   'globals.save': { payload: { globals: GlobalVariablesDto }; result: GlobalVariablesDto };
   /** Lists the client certificates set up for an environment (passphrases are never sent back). */

@@ -511,6 +511,33 @@ dev.yaml:
   apiToken: s3cr3t
 ```
 
+**Secrets…** in the settings menu chooses where secret values are kept, for
+every workspace (a per-user setting):
+
+- **In the workspace** (the default), in the git-ignored `.dynpost/secrets.yaml`
+  shown above.
+- **In the system keychain**: Windows Credential Manager, the macOS Keychain, or
+  the Secret Service on Linux (GNOME Keyring, KWallet; it needs libsecret's
+  `secret-tool`). Each value is one item named `Dynpost:<workspace>/<environment
+  file>/<variable>` (service `Dynpost` on macOS and Linux), and
+  `.dynpost/keychain.json` lists their names, never their values. The option is
+  greyed out when no keychain can be used.
+
+After a change, each workspace's secret values move to the new place the first
+time they are read (right away for the open workspace), and are removed from
+the old one.
+
+**Use values from the workspace's `.env` file** (off by default) gives a secret
+that has no value on this computer the value of the `.env` variable with the
+same name, for environments and globals alike. The file uses the usual
+`NAME=value` lines (`export`, `#` comments and single or double quotes work);
+Dynpost only reads it, and you should keep it out of git:
+
+```sh
+# .env — git-ignored
+apiToken=s3cr3t
+```
+
 `cookieJar: true` makes requests sent with the environment keep cookies between
 them (see [Sending requests](#sending-requests)); the cookies themselves are
 local too, in `.dynpost/cookies.json`:

@@ -214,6 +214,10 @@ export class MockBackend {
   private readonly jars = new Map<string, CookieDto[]>();
   private readonly certificates = new Map<string, ClientCertificateDto[]>();
   private globals: EnvironmentVariableDto[] = [];
+  private secretSettings: { storage: 'file' | 'keychain'; useDotEnv: boolean } = {
+    storage: 'file',
+    useDotEnv: false,
+  };
   /** Values requests captured, by environment id and variable name. */
   private readonly captured = new Map<string, Map<string, string>>();
 
@@ -557,6 +561,22 @@ export class MockBackend {
           parts.push(`--data-raw ${quote(dto.body.content)}`);
         return ok(parts.join(' \\\n  '));
       }
+      case 'secrets.getSettings':
+        return ok({
+          ...this.secretSettings,
+          keychainAvailable: false,
+          keychainName: 'the system keychain',
+        });
+      case 'secrets.setSettings':
+        this.secretSettings = {
+          storage: 'file',
+          useDotEnv: !!payload?.['useDotEnv'],
+        };
+        return ok({
+          ...this.secretSettings,
+          keychainAvailable: false,
+          keychainName: 'the system keychain',
+        });
       case 'globals.load':
         return ok({ variables: structuredClone(this.globals) });
       case 'globals.save': {

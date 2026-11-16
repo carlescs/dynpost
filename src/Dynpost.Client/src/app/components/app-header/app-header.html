@@ -169,6 +169,14 @@
         <button
           type="button"
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="showSecretSettings()"
+        >
+          <fa-icon class="w-4 text-slate-500" [icon]="faKey" />
+          <span class="flex-1">Secrets…</span>
+        </button>
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
           (click)="showMcpSettings()"
         >
           <fa-icon class="w-4 text-slate-500" [icon]="faRobot" />
