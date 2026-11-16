@@ -23,4 +23,8 @@ public sealed record ImportResultDto(
     int Requests,
     int Folders,
     IReadOnlyList<string> Environments,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>The paths of the run plans created (JMeter thread groups).</summary>
+    public IReadOnlyList<string> Plans { get; init; } = [];
+}

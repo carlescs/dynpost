@@ -37,6 +37,12 @@ public interface IRunPlanFormat
     /// that isn't a valid plan is returned unchanged.
     /// </summary>
     string RewriteRequestPaths(string text, IReadOnlyDictionary<string, string> moves);
+
+    /// <summary>
+    /// The text of a plan file for <paramref name="plan"/>: its keys in the documented order,
+    /// without those that hold their defaults.
+    /// </summary>
+    string Write(RunPlan plan);
 }
 
 /// <summary>Reads a CSV file of a workspace: the header row names the variables, each other row is a set of values.</summary>

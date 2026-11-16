@@ -7,6 +7,7 @@ using Dynpost.Application.Workspaces;
 using Dynpost.Desktop.Bridge;
 using Dynpost.Domain.Requests;
 using Dynpost.Domain.Workspaces;
+using Dynpost.Application.Runs;
 using NSubstitute;
 
 namespace Dynpost.Desktop.Tests.Bridge;
@@ -53,6 +54,8 @@ public sealed class InterchangeBridgeTests : IDisposable
             .AddSingleton(_secrets)
             .AddSingleton(_files)
             .AddSingleton(_importer)
+            .AddSingleton(Substitute.For<IRunPlanStore>())
+            .AddSingleton(Substitute.For<IRunPlanFormat>())
             .AddSingleton(_exporter)
             .AddTransient<ExportWorkspace>()
             .AddTransient<ImportCollection>()
@@ -122,6 +125,7 @@ public sealed class InterchangeBridgeTests : IDisposable
         Assert.Equal("Postman collection v2.1", payload.GetProperty("format").GetString());
         Assert.Equal("requests/Shop", payload.GetProperty("folder").GetString());
         Assert.Equal(1, payload.GetProperty("requests").GetInt32());
+        Assert.Equal(0, payload.GetProperty("plans").GetArrayLength());
     }
 
     [Fact]

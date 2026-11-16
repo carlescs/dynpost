@@ -1,6 +1,7 @@
 using Dynpost.Application.Common;
 using Dynpost.Application.Interchange;
 using Dynpost.Domain.Requests;
+using Dynpost.Domain.Runs;
 using Dynpost.Infrastructure.Interchange;
 
 namespace Dynpost.Infrastructure.Tests.Interchange;
@@ -349,19 +350,24 @@ public class JMeterImportTests
             """)));
 
         var mixed = Assert.Single(parsed.Collection.Root.Folders);
-        Assert.Equal(["Kept"], mixed.Requests.Select(r => r.Name));
+
+        // A disabled request is imported, and disabled in the thread group's run plan.
+        Assert.Equal(["Kept", "Off"], mixed.Requests.Select(r => r.Name));
+        var plan = Assert.Single(parsed.Collection.Plans);
+        Assert.Equal([true, false, true], plan.Requests.Select(r => r.Enabled));
 
         // The If controller becomes a folder; the empty While controller is dropped.
         var profile = Assert.Single(mixed.Folders);
         Assert.Equal("If logged in", profile.Name);
 
         var warnings = string.Join("\n", parsed.Warnings);
-        Assert.Contains("Skipped disabled elements: 'Off' (HTTPSamplerProxy).", warnings);
+        Assert.Contains("Imported disabled requests; they are disabled in their run plan: 'Off'.", warnings);
         Assert.Contains("'Trace' (TRACE)", warnings);
         Assert.Contains("logic controllers: 'If logged in' (IfController), 'Empty loop' (WhileController).", warnings);
         Assert.Contains("Dynpost doesn't run scripts: 'Parse token' (JSR223PostProcessor).", warnings);
         Assert.Contains("only JSON Extractors become captures: 'Find id' (RegexExtractor).", warnings);
-        Assert.Contains("load run plans: 'Is 200' (ResponseAssertion), 'Think' (ConstantTimer).", warnings);
+        Assert.Contains("assertions a run plan can't check (status codes, a body text it contains or doesn't, a time limit): 'Is 200' (ResponseAssertion).", warnings);
+        Assert.Contains("timers whose delay isn't a number: 'Think' (ConstantTimer).", warnings);
         Assert.Contains("only imports HTTP requests: 'Query db' (JDBCSampler).", warnings);
         Assert.Contains("listeners", warnings);
         Assert.DoesNotContain("Cookies", warnings);
@@ -410,5 +416,171 @@ public class JMeterImportTests
         Assert.Contains("JMeter test plans", other.Error!.Message, StringComparison.Ordinal);
 
         Assert.Equal(ErrorCodes.InvalidFile, _importer.Parse("<jmeterTestPlan><hashTree/></jmeterTestPlan>", "empty.jmx").Error?.Code);
+    }
+
+    private static string Group(string name, string threads, string loops, string body, string extra = "") => $"""
+        <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="{name}">
+          <stringProp name="ThreadGroup.num_threads">{threads}</stringProp>
+          <stringProp name="ThreadGroup.ramp_time">20</stringProp>
+          <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+            <stringProp name="LoopController.loops">{loops}</stringProp>
+          </elementProp>
+          {extra}
+        </ThreadGroup>
+        <hashTree>
+          {body}
+        </hashTree>
+        """;
+
+    private static string ResponseAssertion(string name, string field, int type, params string[] strings) => $"""
+        <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="{name}">
+          <collectionProp name="Asserion.test_strings">{string.Concat(strings.Select((v, i) => $"<stringProp name=\"{i}\">{v}</stringProp>"))}</collectionProp>
+          <stringProp name="Assertion.test_field">{field}</stringProp>
+          <boolProp name="Assertion.assume_success">false</boolProp>
+          <intProp name="Assertion.test_type">{type}</intProp>
+        </ResponseAssertion>
+        <hashTree/>
+        """;
+
+    private static string Timer(string tag, string delay, string range = "") => $"""
+        <{tag} guiclass="x" testclass="{tag}" testname="{tag}">
+          <stringProp name="ConstantTimer.delay">{delay}</stringProp>
+          <stringProp name="RandomTimer.range">{range}</stringProp>
+        </{tag}>
+        <hashTree/>
+        """;
+
+    private static string Throughput(string perMinute, int calcMode) => $"""
+        <ConstantThroughputTimer guiclass="TestBeanGUI" testclass="ConstantThroughputTimer" testname="Rate">
+          <intProp name="calcMode">{calcMode}</intProp>
+          <doubleProp><name>throughput</name><value>{perMinute}</value><savedValue>0.0</savedValue></doubleProp>
+        </ConstantThroughputTimer>
+        <hashTree/>
+        """;
+
+    [Fact]
+    public void ReadsThreadGroupsAsRunPlans()
+    {
+        var csv = """
+            <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="Users">
+              <stringProp name="filename">data/users.csv</stringProp>
+              <stringProp name="variableNames">user;pass</stringProp>
+              <stringProp name="delimiter">;</stringProp>
+              <boolProp name="ignoreFirstLine">true</boolProp>
+              <boolProp name="recycle">false</boolProp>
+              <boolProp name="stopThread">true</boolProp>
+              <stringProp name="shareMode">shareMode.thread</stringProp>
+            </CSVDataSet>
+            <hashTree/>
+            """;
+        var duration = """
+            <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Fast">
+              <stringProp name="DurationAssertion.duration">1500</stringProp>
+            </DurationAssertion>
+            <hashTree/>
+            """;
+        var parsed = Parse(Plan(
+            Timer("UniformRandomTimer", "50", "200.0") + duration + Group("Browse", "10", "5", $"""
+                {Timer("ConstantTimer", "100")}
+                {Throughput("600.0", 1)}
+                {ResponseAssertion("Is 200", "Assertion.response_code", 8, "200")}
+                {csv}
+                {Sampler("List", "GET", "/list", domain: "x.test", children: ResponseAssertion("Has id", "Assertion.response_data", 16, "\"id\""))}
+                {Sampler("Error page", "GET", "/err", domain: "x.test", children: ResponseAssertion("No error", "Assertion.response_data", 6, "Exception"))}
+                """)));
+
+        var folder = Assert.Single(parsed.Collection.Root.Folders);
+        var plan = Assert.Single(parsed.Collection.Plans);
+        Assert.Equal("Browse", plan.Name);
+        Assert.Equal(
+            new RunLoad(10, 5, null, TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(350), 10),
+            plan.Load);
+        Assert.Equal(RequestOrder.Sequential, plan.Order);
+
+        // The plan names the very requests of the collection.
+        Assert.Same(folder.Requests[0], plan.Requests[0].Request);
+        Assert.Same(folder.Requests[1], plan.Requests[1].Request);
+        Assert.Equal("\"id\"", plan.Requests[0].Assertion!.BodyContains);
+        Assert.Empty(plan.Requests[0].Assertion!.Status);
+        Assert.Equal("Exception", plan.Requests[1].Assertion!.BodyNotContains);
+        Assert.Null(plan.Requests[1].Assertion!.BodyContains);
+
+        Assert.Equal(["200"], plan.Assertions!.Status);
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), plan.Assertions.MaxTime);
+        Assert.Equal(new ImportedDataFile("data/users.csv", SelectionMode.PerThread, EndBehavior.Stop, "user,pass", true, ";"), plan.Data);
+        Assert.Empty(parsed.Warnings);
+    }
+
+    [Fact]
+    public void ReadsDurationsPropertiesAndThreadGroupsWithoutPlans()
+    {
+        var scheduled = """
+            <boolProp name="ThreadGroup.scheduler">true</boolProp>
+            <stringProp name="ThreadGroup.duration">120</stringProp>
+            """;
+        var parsed = Parse(Plan(
+            Group("Timed", "${__P(threads,25)}", "-1", Sampler("A", "GET", "/a", domain: "x.test"), scheduled)
+            + Group("Forever", "${users}", "-1", Sampler("B", "GET", "/b", domain: "x.test"))
+            + $"""
+                <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="Login first"/>
+                <hashTree>{Sampler("C", "GET", "/c", domain: "x.test")}</hashTree>
+                <com.blazemeter.jmeter.threads.concurrency.ConcurrencyThreadGroup guiclass="x" testclass="x" testname="Steps">
+                  <stringProp name="TargetLevel">50</stringProp>
+                  <stringProp name="RampUp">2</stringProp>
+                  <stringProp name="Hold">5</stringProp>
+                  <stringProp name="Unit">M</stringProp>
+                </com.blazemeter.jmeter.threads.concurrency.ConcurrencyThreadGroup>
+                <hashTree>{Sampler("D", "GET", "/d", domain: "x.test")}</hashTree>
+                """,
+            variables: Variable("users", "4")));
+
+        // setUp groups stay folders of requests, without a plan.
+        Assert.Equal(["Timed", "Forever", "Login first", "Steps"], parsed.Collection.Root.Folders.Select(f => f.Name));
+        var plans = parsed.Collection.Plans;
+        Assert.Equal(["Timed", "Forever", "Steps"], plans.Select(p => p.Name));
+        Assert.Equal(new RunLoad(25, null, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(20), TimeSpan.Zero, TimeSpan.Zero, null), plans[0].Load);
+        Assert.Equal(4, plans[1].Load.Threads);
+        Assert.Equal(TimeSpan.FromMinutes(10), plans[1].Load.Duration);
+        Assert.Equal(new RunLoad(50, null, TimeSpan.FromMinutes(7), TimeSpan.FromMinutes(2), TimeSpan.Zero, TimeSpan.Zero, null), plans[2].Load);
+
+        var warnings = string.Join("\n", parsed.Warnings);
+        Assert.Contains("loop forever; their run plan runs for 10m: 'Forever'.", warnings);
+        Assert.Contains("(setUp, tearDown and arrival-based ones): 'Login first' (SetupThreadGroup).", warnings);
+        Assert.Contains("approximated by threads, ramp-up and duration: 'Steps'", warnings);
+    }
+
+    [Fact]
+    public void TurnsRandomAndThroughputControllersIntoTheRequestOrder()
+    {
+        static string Share(string name, string percent, string body) => $"""
+            <ThroughputController guiclass="ThroughputControllerGui" testclass="ThroughputController" testname="{name}">
+              <intProp name="ThroughputController.style">1</intProp>
+              <FloatProperty><name>ThroughputController.percentThroughput</name><value>{percent}</value><savedValue>0.0</savedValue></FloatProperty>
+            </ThroughputController>
+            <hashTree>{body}</hashTree>
+            """;
+
+        var parsed = Parse(Plan(
+            Group("Shuffled", "2", "3", $"""
+                <RandomOrderController guiclass="RandomOrderControllerGui" testclass="RandomOrderController" testname="Any order"/>
+                <hashTree>{Sampler("A", "GET", "/a", domain: "x.test")}{Sampler("B", "GET", "/b", domain: "x.test")}</hashTree>
+                """)
+            + Group("Mix", "10", "3", Throughput("60.0", 0)
+                + Share("Browse", "70.0", Sampler("List", "GET", "/list", domain: "x.test") + Sampler("Show", "GET", "/show", domain: "x.test"))
+                + Share("Buy", "30.0", Sampler("Buy", "POST", "/buy", domain: "x.test")))));
+
+        var shuffled = parsed.Collection.Plans[0];
+        Assert.Equal(RequestOrder.Shuffle, shuffled.Order);
+        Assert.All(shuffled.Requests, r => Assert.Null(r.Weight));
+
+        var mix = parsed.Collection.Plans[1];
+        Assert.Equal(RequestOrder.Random, mix.Order);
+        Assert.Equal([35.0, 35.0, 30.0], mix.Requests.Select(r => r.Weight!.Value));
+
+        // 60 per minute for each of the 10 threads.
+        Assert.Equal(10, mix.Load.MaxRps);
+        var warnings = string.Join("\n", parsed.Warnings);
+        Assert.Contains("Per-thread throughput targets approximated", warnings);
+        Assert.DoesNotContain("logic controllers", warnings);
     }
 }

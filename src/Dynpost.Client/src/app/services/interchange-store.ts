@@ -1,10 +1,11 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, Injector, inject, signal } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
 import { CurlShell, ExportFormatDto } from '../models/messages';
 import { fromRequestDto, toRequestDto } from '../models/request-mapping';
 import { copyText } from '../models/clipboard';
 import { REQUESTS_FOLDER, RequestDocument } from '../models/workspace';
 import { EnvironmentStore } from './environment-store';
+import { RunStore } from './run-store';
 import { WorkspaceStore } from './workspace-store';
 
 /** The outcome of an import or export, shown to the user until dismissed. */
@@ -31,6 +32,8 @@ export class InterchangeStore {
   private readonly bridge = inject(Bridge);
   private readonly workspace = inject(WorkspaceStore);
   private readonly environments = inject(EnvironmentStore);
+  /** Only needed after an import that created run plans, so it is looked up then. */
+  private readonly injector = inject(Injector);
 
   readonly formats = signal<ExportFormatDto[]>(DEFAULT_FORMATS);
   readonly busy = signal(false);
@@ -60,14 +63,16 @@ export class InterchangeStore {
       if (result.environments.length) {
         parts.push(plural(result.environments.length, 'environment'));
       }
+      if (result.plans?.length) parts.push(plural(result.plans.length, 'run plan'));
       const where = result.folder ? ` into "${result.folder}"` : '';
       this.notice.set({
-        message: `Imported ${parts.join(' and ')}${where} (${result.format}).`,
+        message: `Imported ${joinParts(parts)}${where} (${result.format}).`,
         warnings: result.warnings,
       });
       this.workspace.dismissError();
       await this.workspace.refresh();
       if (result.environments.length) await this.environments.refresh();
+      if (result.plans?.length) await this.injector.get(RunStore).refresh();
     } catch (error) {
       this.report(error);
     } finally {
@@ -190,4 +195,9 @@ export class InterchangeStore {
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+function joinParts(parts: string[]): string {
+  return parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
 }

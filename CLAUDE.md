@@ -78,7 +78,9 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   cases are in `Application/Interchange`; each format (Postman, Insomnia, HAR,
   OpenAPI) is a reader/writer of a JSON tree in `Infrastructure/Interchange`
   (YAML input is converted to the same tree). JMeter test plans are XML and are read by
-  `JMeterFormat`; an imported `CollectionFolder.Defaults` becomes the folder's `_folder.yaml`. The host shows the native file
+  `JMeterFormat`; an imported `CollectionFolder.Defaults` becomes the folder's `_folder.yaml`, and
+  `RequestCollection.Plans` (thread groups) become run plans written with `IRunPlanFormat.Write`, naming
+  their requests by reference until `ImportCollection` knows their paths. The host shows the native file
   dialogs (`Desktop/Bridge/IFileDialogs.cs`).
 - Sending: `Infrastructure/Http/HttpClientSender.cs` sends through one shared,
   pooled `SocketsHttpHandler` so connections are reused (a handler per send

@@ -84,4 +84,34 @@ describe('InterchangeStore cURL', () => {
     expect(writeText).toHaveBeenCalledWith('curl https://api.test');
     expect(store.notice()?.message).toContain('as written');
   });
+
+  it('reports the run plans an import created and reloads the plan list', async () => {
+    const lists: string[] = [];
+    respond({
+      'workspace.import': () => ({
+        format: 'JMeter test plan',
+        folder: 'requests/Shop',
+        requests: 3,
+        folders: 2,
+        environments: [],
+        plans: ['plans/Shop/browse.run.yaml', 'plans/Shop/buy.run.yaml'],
+        warnings: ['Skipped a timer'],
+      }),
+      'workspace.openLast': () => workspace,
+      'workspace.recent': () => [],
+      'runPlan.list': () => {
+        lists.push('plans');
+        return [];
+      },
+      'runFolder.list': () => [],
+    });
+
+    await store.importInto();
+
+    expect(store.notice()?.message).toBe(
+      'Imported 3 requests and 2 run plans into "requests/Shop" (JMeter test plan).',
+    );
+    expect(store.notice()?.warnings).toEqual(['Skipped a timer']);
+    expect(lists.length).toBeGreaterThan(0);
+  });
 });
