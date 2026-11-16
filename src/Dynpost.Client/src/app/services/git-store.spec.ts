@@ -120,6 +120,24 @@ describe('GitStore', () => {
     expect(store.error()?.code).toBe('git.push_rejected');
     expect(store.status()?.behind).toBe(1);
     expect(store.busy()).toBeNull();
+    expect(send).toHaveBeenCalledWith('git.fetch', { signIn: null });
+  });
+
+  it('fetches with the credentials entered for a push the remote then refused', async () => {
+    const signIn = { url: 'https://github.com', username: 'me', password: 'token' };
+    (dialogs as unknown as { open: Mock }).open = vi.fn(() => ({ closed: of(signIn) }));
+    handlers['git.push'] = (payload) => {
+      throw payload.signIn
+        ? new BridgeError('git.push_rejected', 'Pull first.')
+        : new BridgeError('git.authentication_failed', 'Denied', 'https://github.com');
+    };
+    handlers['git.fetch'] = () => status({ behind: 1, ahead: 1 });
+
+    await store.push();
+
+    expect(send).toHaveBeenCalledWith('git.fetch', { signIn });
+    expect(store.error()?.code).toBe('git.push_rejected');
+    expect(store.status()?.behind).toBe(1);
   });
 
   it('counts unsaved tabs, and saves them all', async () => {

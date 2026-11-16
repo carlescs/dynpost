@@ -1536,6 +1536,9 @@ public sealed class GitCliService : IGitService
             .ToList();
         if (rejected.Count > 0)
         {
+            // The remote signed the user in and only refused the update (it has commits this clone
+            // lacks): the credentials work, so save them for the fetch and pull that come next.
+            await ApproveAsync(workspacePath, credentials, cancellationToken);
             return GitErrors.PushRejected(string.Join('\n', rejected));
         }
 

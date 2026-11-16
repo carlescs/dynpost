@@ -77,6 +77,33 @@ public sealed class GitCredentialOverrideTests : IDisposable
         Assert.Equal("https://me:p%40ss%20w%27rd%241@example.com\n", File.ReadAllText(store));
     }
 
+    [Fact]
+    public async Task APushTheRemoteRefuses_StillSavesTheCredentialsItAccepted()
+    {
+        var store = _temp.Combine("saved-credentials");
+        var remote = _temp.Combine("remote.git");
+        TestGit.Run(_temp.Path, "init", "--quiet", "--bare", remote);
+        var other = _temp.Combine("other");
+        TestGit.Run(_temp.Path, "init", "--quiet", other);
+        TestGit.Configure(other);
+        File.WriteAllText(Path.Combine(other, "theirs.txt"), "theirs");
+        TestGit.CommitAll(other, "theirs");
+        TestGit.Run(other, "push", "--quiet", remote, "HEAD:refs/heads/main");
+        var repository = InitRepository();
+        TestGit.Configure(repository);
+        File.WriteAllText(Path.Combine(repository, "mine.txt"), "mine");
+        TestGit.CommitAll(repository, "mine");
+        TestGit.Run(repository, "remote", "add", "origin", remote);
+        TestGit.Run(repository, "fetch", "--quiet", "origin");
+        TestGit.Run(repository, "branch", "--quiet", "--set-upstream-to=origin/main");
+        UseOnlyHelper(repository, $"store --file={store.Replace('\\', '/')}");
+
+        var push = await new GitCliService().PushAsync(repository, setUpstream: false, Credentials("https://example.com"));
+
+        Assert.Equal(Dynpost.Application.Git.GitErrors.PushRejectedCode, push.Error?.Code);
+        Assert.Equal("https://me:p%40ss%20w%27rd%241@example.com\n", File.ReadAllText(store));
+    }
+
     private async Task<string> FillAsync(string repository, GitCredentials credentials, string protocol, string host)
     {
         var result = await _runner.RunAsync(
