@@ -13,7 +13,7 @@ With Dynpost you can:
   URL-encoded, GraphQL, binary), with `{{variable}}` values from the selected
   environment.
 - **Inspect responses** — status, timing breakdown with redirects, headers,
-  cookies, and a pretty-printed body with HTML and PDF previews.
+  cookies, and a pretty-printed body with HTML, PDF and image previews.
 - **Organize collections** — nested folders, drag and drop, Markdown docs per
   request, and values captured from responses into variables.
 - **Sync with git** — status, diffs, commit, pull, push and branches, with
@@ -89,8 +89,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       (JSON, raw text, form-data, `x-www-form-urlencoded`, GraphQL), saved as YAML files
 - [x] Sending requests
 - [x] Response viewer: status (hover any status code for its name and a short
-      explanation), time, size, headers and a pretty-printed body, with HTML and
-      PDF previews; copy or save the body, cookies set, a timing
+      explanation), time, size, headers and a pretty-printed body, with HTML,
+      PDF and image previews; copy or save the body, cookies set, a timing
       breakdown with redirects, and the request as sent
 - [x] Optional cookie jar per environment (kept out of git)
 - [x] Capture values from responses into variables (JSONPath or header, kept
@@ -835,7 +835,9 @@ and pick **Copy JSONPath** to copy its path (`$.items[2].id`). HTML
 responses are previewed rendered in a sandboxed frame that runs no scripts and
 loads nothing from the network
 (switch to **Source** for the markup), PDFs are rendered with pdf.js (at 100% by default,
-fit to page or width, or zoomed, with selectable text), images are previewed, and other binary bodies
+fit to page or width, or zoomed, with selectable text), images (SVG too, with **Source** for its
+markup) are shown in an image viewer with the same zoom and fit controls over a checkerboard that
+shows transparency, and other binary bodies
 are not shown (use **Save** to get them). Bodies over 20 MB are cut off. Responses are kept in memory per open
 request only; nothing is written to the workspace. The bodies of the latest
 responses (up to 64 MB in all) are kept by the backend so they can be saved.
@@ -1035,8 +1037,8 @@ turn on **Save whole responses** in the plan (`saveResponses: true`): the body
 of each logged request is written to
 `.dynpost/runs/responses/<run id>/<n>.<ext>` (named by its number in the run,
 with an extension for its media type, such as `12.json`), and its row shows
-where. A saved PDF response opens in the PDF previewer from its row; the
-previewer, here and in the response viewer, has a maximize button that makes it
+where. A saved PDF or image response opens in the PDF or image previewer from its row; the
+previewers, here and in the response viewer, has a maximize button that makes it
 fill the window (press it again or Esc to restore). Saved responses are
 deleted with the plan's runs. Each zone of the editor, the plan and
 the results, has a maximize button that gives it the full width; press it

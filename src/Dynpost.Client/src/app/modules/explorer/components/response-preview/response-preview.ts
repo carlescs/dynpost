@@ -3,9 +3,10 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { decodeBase64 } from '../../../../models/base64';
 import { ResponseDto } from '../../../../models/messages';
 import { PdfViewer } from '../../../../components/pdf-viewer/pdf-viewer';
+import { ImageViewer } from '../../../../components/image-viewer/image-viewer';
 
 /** The kind of preview a response body can be shown as, or `null` when it has none. */
-export type PreviewKind = 'html' | 'pdf';
+export type PreviewKind = 'html' | 'pdf' | 'image';
 
 /** Whether (and how) a response body can be previewed rendered instead of as code. */
 export function previewKind(r: ResponseDto): PreviewKind | null {
@@ -19,17 +20,19 @@ export function previewKind(r: ResponseDto): PreviewKind | null {
   }
   // A cut-off PDF can't be rendered, so it gets no preview.
   if (r.bodyEncoding === 'base64' && type === 'application/pdf' && !r.truncated) return 'pdf';
+  // Images likewise; SVG is XML, so it comes as text.
+  if (type.startsWith('image/') && r.body && !r.truncated) return 'image';
   return null;
 }
 
 /**
- * Renders an HTML or PDF response body. HTML goes into a fully sandboxed frame (no scripts,
- * forms, popups or access to the app); a PDF is rendered
- * with pdf.js.
+ * Renders an HTML, PDF or image response body. HTML goes into a fully sandboxed frame (no
+ * scripts, forms, popups or access to the app); a PDF is rendered with pdf.js, and an image by
+ * the image viewer.
  */
 @Component({
   selector: 'app-response-preview',
-  imports: [PdfViewer],
+  imports: [PdfViewer, ImageViewer],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './response-preview.html',
 })
@@ -52,6 +55,13 @@ export class ResponsePreview {
   protected readonly pdf = computed(() =>
     this.kind() === 'pdf' ? decodeBase64(this.response().body) : null,
   );
+
+  /** The image's bytes, decoded once per response (an SVG sent as text is encoded as UTF-8). */
+  protected readonly image = computed(() => {
+    const r = this.response();
+    if (this.kind() !== 'image') return null;
+    return r.bodyEncoding === 'base64' ? decodeBase64(r.body) : new TextEncoder().encode(r.body);
+  });
 }
 
 /**

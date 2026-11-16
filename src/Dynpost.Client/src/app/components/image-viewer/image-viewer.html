@@ -1,0 +1,116 @@
+<div
+  class="flex h-8 shrink-0 items-center gap-1 border-b border-slate-200 px-4 text-xs text-slate-600"
+>
+  @if (natural(); as size) {
+    <span class="tabular-nums">{{ size.width }} × {{ size.height }} px</span>
+  }
+  <div class="ml-auto flex items-center gap-1">
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="Zoom out"
+      aria-label="Zoom out"
+      [disabled]="!natural() || scale() <= zoomSteps[0]"
+      (click)="zoomBy(-1)"
+    >
+      <fa-icon [icon]="faMagnifyingGlassMinus" />
+    </button>
+    <span class="w-10 text-center tabular-nums">{{ percent() }}</span>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="Zoom in"
+      aria-label="Zoom in"
+      [disabled]="!natural() || scale() >= zoomSteps[zoomSteps.length - 1]"
+      (click)="zoomBy(1)"
+    >
+      <fa-icon [icon]="faMagnifyingGlassPlus" />
+    </button>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="100% zoom"
+      aria-label="100% zoom"
+      [class.bg-slate-200]="zoom() === 1"
+      [attr.aria-pressed]="zoom() === 1"
+      [disabled]="!natural()"
+      (click)="zoom.set(1)"
+    >
+      100%
+    </button>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="Fit page"
+      aria-label="Fit page"
+      [class.bg-slate-200]="zoom() === 'page'"
+      [attr.aria-pressed]="zoom() === 'page'"
+      [disabled]="!natural()"
+      (click)="zoom.set('page')"
+    >
+      <fa-icon [icon]="faExpand" />
+    </button>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200 disabled:opacity-40"
+      title="Fit to width"
+      aria-label="Fit to width"
+      [class.bg-slate-200]="zoom() === 'width'"
+      [attr.aria-pressed]="zoom() === 'width'"
+      [disabled]="!natural()"
+      (click)="zoom.set('width')"
+    >
+      <fa-icon [icon]="faLeftRight" />
+    </button>
+    <span class="mx-1 h-4 w-px bg-slate-300"></span>
+    <button
+      type="button"
+      class="rounded px-1.5 py-0.5 hover:bg-slate-200"
+      data-image-maximize
+      [title]="maximized() ? 'Restore (Esc)' : 'Maximize'"
+      [attr.aria-label]="maximized() ? 'Restore' : 'Maximize'"
+      [attr.aria-pressed]="maximized()"
+      (click)="maximized.set(!maximized())"
+    >
+      <fa-icon [icon]="maximized() ? faRestore : faMaximize" />
+    </button>
+  </div>
+</div>
+
+@if (error(); as message) {
+  <div
+    class="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-rose-700"
+    role="alert"
+  >
+    <fa-icon class="text-2xl" [icon]="faCircleExclamation" />
+    <p class="max-w-xl break-words">{{ message }}</p>
+  </div>
+} @else if (!natural()) {
+  <div class="flex flex-1 items-center justify-center gap-2 text-sm text-slate-500">
+    <fa-icon [icon]="faSpinner" animation="spin" /> Loading image…
+  </div>
+}
+<div
+  #scroller
+  class="min-h-0 flex-1 overflow-auto bg-slate-200 p-4"
+  [class.hidden]="!natural() || error()"
+  role="region"
+  tabindex="0"
+  aria-label="Image"
+>
+  @if (url(); as src) {
+    <!-- m-auto centers the image while it fits and lets it scroll from its edge when it doesn't. -->
+    <div class="flex min-h-full min-w-full w-max">
+      <img
+        class="image-frame m-auto block max-w-none"
+        alt="Response image"
+        [src]="src"
+        [style.width.px]="drawn()?.width"
+        [style.height.px]="drawn()?.height"
+        [style.image-rendering]="pixelated() ? 'pixelated' : null"
+        (load)="loaded($any($event.target))"
+        (error)="failed()"
+      />
+    </div>
+  }
+</div>

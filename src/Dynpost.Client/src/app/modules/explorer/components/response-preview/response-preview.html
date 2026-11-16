@@ -8,4 +8,6 @@
   ></iframe>
 } @else if (pdf(); as data) {
   <app-pdf-viewer [data]="data" />
+} @else if (image(); as data) {
+  <app-image-viewer [data]="data" [contentType]="response().contentType!" />
 }
