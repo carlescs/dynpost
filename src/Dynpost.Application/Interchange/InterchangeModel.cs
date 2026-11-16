@@ -12,6 +12,13 @@ public sealed record CollectionFolder(
     IReadOnlyList<CollectionFolder> Folders,
     IReadOnlyList<HttpRequestDefinition> Requests)
 {
+    /// <summary>
+    /// The headers, auth, variables and settings the folder sets for everything in it, written to
+    /// its <c>_folder.yaml</c> on import; empty for formats that have none (and on export, where
+    /// requests carry what they inherit).
+    /// </summary>
+    public FolderDefaults Defaults { get; init; } = FolderDefaults.Empty;
+
     public int RequestCount => Requests.Count + Folders.Sum(folder => folder.RequestCount);
 
     public int FolderCount => Folders.Count + Folders.Sum(folder => folder.FolderCount);

@@ -20,8 +20,8 @@ With Dynpost you can:
   clear reporting of merge conflicts, using your existing git setup.
 - **Load test** — `*.run.yaml` plans that send requests from concurrent
   virtual users, with live statistics and pass/fail thresholds.
-- **Bring your collections** — import from Postman, Insomnia, HAR and
-  OpenAPI/Swagger, and cURL; export for Postman, Insomnia, OpenAPI and HAR.
+- **Bring your collections** — import from Postman, Insomnia, HAR,
+  OpenAPI/Swagger, JMeter and cURL; export for Postman, Insomnia, OpenAPI and HAR.
 - **Work with an AI assistant** — an optional, built-in MCP server lets Claude
   and other AI assistants browse, edit and send your requests (see
   [AI assistants (MCP)](#ai-assistants-mcp)).
@@ -117,8 +117,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       of two runs (see
       [Load runs](#load-runs))
 - [x] Import from cURL, and copy requests as cURL (see [cURL](#curl))
-- [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
-      Postman, Insomnia, OpenAPI 3.0 and HAR
+- [x] Import from Postman, Insomnia, HAR, OpenAPI/Swagger and JMeter test
+      plans; export for Postman, Insomnia, OpenAPI 3.0 and HAR
 - [x] A built-in MCP server, off by default, so AI assistants can control the
       app (see [AI assistants (MCP)](#ai-assistants-mcp))
 
@@ -1159,7 +1159,7 @@ but you can bring requests in from other tools and take them out again.
 
 **Import** (the import button in the explorer header, or **Import into this folder…** in a
 folder's menu) reads a file and recognizes its format from the
-content, in JSON or YAML:
+content, in JSON or YAML (or XML, for JMeter):
 
 | Format | What is imported |
 | --- | --- |
@@ -1168,6 +1168,7 @@ content, in JSON or YAML:
 | Insomnia export v4 | Folders, requests (with their auth, OAuth 2.0 included) and environments: each sub-environment becomes an environment that includes the base environment's variables. `{{ _.name }}` references become `{{name}}`. |
 | HAR 1.2 (browser dev tools) | One request per entry, in a folder per host, without connection headers such as `Host`. |
 | OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer, API key or OAuth 2.0 auth using secret `{{username}}`/`{{password}}`, `{{token}}`, `{{apiKey}}` or `{{clientId}}`/`{{clientSecret}}` variables, which you fill in (OAuth 2.0 schemes use their client credentials or authorization code flow and the scopes the operation requires; others get a Bearer `{{token}}`). Path parameters that are whole segments become path variables (`/pets/:petId`); others without an example become `{{variables}}`. |
+| JMeter test plan (`.jmx`) | Thread groups and controllers become folders, HTTP samplers requests (query parameters, urlencoded, raw, multipart and file bodies, timeouts and redirects, comments as descriptions). Header managers and Basic/Digest authorization managers that apply to a whole thread group or controller become its folder's headers and auth; User Defined Variables become variables of the imported folder, and HTTP Request Defaults a `{{baseUrl}}` folder variable the requests' URLs start with. JSON Extractors with a simple path (`$.data.id`) become captures. `${name}` becomes `{{name}}`; `${__UUID()}`, `${__Random(a,b)}`, `${__time()}` and `${__P(name,default)}` become `{{$uuid}}`, `{{$randomInt a b}}`, `{{$timestamp}}000` and `{{name}}` (the default becomes a folder variable). Scripts, logic (If, While, Loop… controllers become plain folders), other extractors, non-HTTP samplers, listeners, timers, assertions and CSV data are listed after the import. |
 
 OAuth 2.0 settings whose redirect URL is a web page (such as Postman's own
 callback) get Dynpost's automatic loopback redirect instead, which the OAuth

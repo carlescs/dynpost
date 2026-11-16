@@ -1070,7 +1070,7 @@ export interface BridgeMessages {
     result: ExportResultDto | null;
   };
   /**
-   * Asks for a file exported by another app (Postman, Insomnia, HAR, OpenAPI) and imports it into
+   * Asks for a file exported by another app (Postman, Insomnia, HAR, OpenAPI, JMeter) and imports it into
    * a new folder inside `folder` (`requests` or a folder inside it); `null` when cancelled.
    */
   'workspace.import': { payload: { folder: string }; result: ImportResultDto | null };

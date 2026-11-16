@@ -16,10 +16,12 @@ public sealed record ImportCollectionRequest(string Source, string Folder = Work
 /// Imports a file exported by another app (Postman, Insomnia, a HAR capture, an OpenAPI
 /// description…) into the open workspace. Its requests go into a new folder named after the
 /// collection, as ordinary request files; its environments become environment files. Nothing that
-/// already exists is changed: names that are taken get a number.
+/// already exists is changed: names that are taken get a number. Folder settings (headers, auth,
+/// variables) are written to the new folders' <c>_folder.yaml</c>.
 /// </summary>
 public sealed class ImportCollection(
     IWorkspaceRepository repository,
+    IFolderDefaultsStore folderDefaults,
     IEnvironmentStore environments,
     ISecretStore secrets,
     IExternalFiles files,
@@ -139,6 +141,15 @@ public sealed class ImportCollection(
         }
 
         counts.Folders++;
+        if (!folder.Defaults.IsEmpty && ImportSanitizer.Folder(folder.Defaults, folder.Name, warnings) is { } defaults)
+        {
+            var saved = await folderDefaults.WriteAsync(root, path, defaults, cancellationToken);
+            if (!saved.IsSuccess)
+            {
+                return saved.Error!;
+            }
+        }
+
         foreach (var imported in folder.Requests)
         {
             var request = ImportSanitizer.Request(imported, warnings);

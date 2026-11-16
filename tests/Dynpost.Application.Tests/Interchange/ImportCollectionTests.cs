@@ -1,5 +1,6 @@
 using Dynpost.Application.Common;
 using Dynpost.Application.Environments;
+using Dynpost.Application.Folders;
 using Dynpost.Application.Interchange;
 using Dynpost.Application.Workspaces;
 using Dynpost.Domain.Environments;
@@ -15,6 +16,7 @@ public class ImportCollectionTests
     private const string Source = "/downloads/shop.json";
 
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
+    private readonly IFolderDefaultsStore _folderDefaults = Substitute.For<IFolderDefaultsStore>();
     private readonly IEnvironmentStore _environments = Substitute.For<IEnvironmentStore>();
     private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
     private readonly IExternalFiles _files = Substitute.For<IExternalFiles>();
@@ -28,6 +30,8 @@ public class ImportCollectionTests
         _repository.CreateFolder(Root, Arg.Any<WorkspacePath>()).Returns(Unit.Value);
         _repository.WriteRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>())
             .Returns(Result<bool>.Success(true));
+        _folderDefaults.WriteAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<FolderDefaults>(), Arg.Any<CancellationToken>())
+            .Returns(Result<bool>.Success(true));
         _environments.WriteAsync(Root, Arg.Any<string>(), Arg.Any<EnvironmentDefinition>(), Arg.Any<CancellationToken>())
             .Returns(Result<bool>.Success(true));
         _secrets.LoadAsync(Root, Arg.Any<CancellationToken>())
@@ -37,7 +41,7 @@ public class ImportCollectionTests
             .Returns(Unit.Value);
     }
 
-    private ImportCollection UseCase() => new(_repository, _environments, _secrets, _files, _importer, _current);
+    private ImportCollection UseCase() => new(_repository, _folderDefaults, _environments, _secrets, _files, _importer, _current);
 
     private void Returns(CollectionFolder root, params EnvironmentDefinition[] environments) =>
         _importer.Parse("{}", "shop.json").Returns(new ParsedCollection("Test format", new RequestCollection(root, environments), ["note"]));
@@ -186,7 +190,56 @@ public class ImportCollectionTests
     {
         Assert.Equal(ErrorCodes.NotFound, (await UseCase().ExecuteAsync(new ImportCollectionRequest(Source, "requests/missing"))).Error?.Code);
 
-        var noWorkspace = new ImportCollection(_repository, _environments, _secrets, _files, _importer, new CurrentWorkspace());
+        var noWorkspace = new ImportCollection(_repository, _folderDefaults, _environments, _secrets, _files, _importer, new CurrentWorkspace());
         Assert.Equal(ErrorCodes.NoWorkspace, (await noWorkspace.ExecuteAsync(new ImportCollectionRequest(Source))).Error?.Code);
+    }
+
+    [Fact]
+    public async Task WritesTheSettingsOfImportedFolders()
+    {
+        var defaults = new FolderDefaults(
+            headers: [new KeyValueEntry("Accept", "application/json"), new KeyValueEntry("accept", "text/plain")],
+            auth: new BasicAuth("{{user}}", "{{password}}"),
+            variables: [new KeyValueEntry("baseUrl", "https://x.test"), new KeyValueEntry("bad name", "1")]);
+        Returns(new CollectionFolder(
+            "Plan",
+            [new CollectionFolder("Users", [], [new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1")])],
+            [new HttpRequestDefinition("Health", RequestMethod.Get, "/health")])
+        {
+            Defaults = defaults,
+        });
+
+        var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _folderDefaults.Received(1).WriteAsync(
+            Root,
+            P("requests/Plan"),
+            Arg.Is<FolderDefaults>(d =>
+                d.Headers.Count == 1 && d.Headers[0].Value == "application/json"
+                && d.Auth == new BasicAuth("{{user}}", "{{password}}")
+                && d.Variables.Count == 1 && d.Variables[0].Key == "baseUrl"),
+            Arg.Any<CancellationToken>());
+
+        // Folders without settings get no _folder.yaml.
+        await _folderDefaults.DidNotReceive().WriteAsync(Root, P("requests/Plan/Users"), Arg.Any<FolderDefaults>(), Arg.Any<CancellationToken>());
+        Assert.Contains(result.Value.Warnings, w => w.Contains("repeated header 'accept'", StringComparison.Ordinal));
+        Assert.Contains(result.Value.Warnings, w => w.Contains("'bad name'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SkipsFolderSettingsThatCantBeSaved()
+    {
+        Returns(new CollectionFolder("Plan", [], [new HttpRequestDefinition("Health", RequestMethod.Get, "/health")])
+        {
+            Defaults = FolderDefaults.Empty with { Settings = new RequestSettings(MaxRedirects: -1) },
+        });
+
+        var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _folderDefaults.DidNotReceiveWithAnyArgs().WriteAsync(default!, default!, default!, default);
+        Assert.Contains(result.Value.Warnings, w => w.StartsWith("Skipped the settings of the folder 'Plan'", StringComparison.Ordinal));
+        Assert.Equal(1, result.Value.Requests);
     }
 }
