@@ -33,8 +33,8 @@ internal static class ImportSanitizer
         {
             Name = name.Length > MaxNameLength ? name[..MaxNameLength].TrimEnd() : name,
             PathParams = PathParameters.Sync(request.Url, request.PathParams),
-            Params = Entries(request.Params, "query parameter", StringComparer.Ordinal, name, warnings),
-            Headers = Entries(request.Headers, "header", StringComparer.OrdinalIgnoreCase, name, warnings),
+            Params = Entries(request.Params, "query parameter", StringComparer.Ordinal, $"'{name}'", warnings),
+            Headers = Entries(request.Headers, "header", StringComparer.OrdinalIgnoreCase, $"'{name}'", warnings),
             Description = RequestMapper.NormalizeDescription(request.Description),
         };
 
@@ -79,11 +79,47 @@ internal static class ImportSanitizer
         return new EnvironmentDefinition(name, variables.OrderBy(v => v.Secret).ToList());
     }
 
+    /// <summary>
+    /// The settings of an imported folder ready to save: repeated headers and variables and
+    /// invalid variable names are dropped; <c>null</c> (with a warning) when they still can't be saved.
+    /// </summary>
+    public static FolderDefaults? Folder(FolderDefaults defaults, string folderName, List<string> warnings)
+    {
+        var owner = $"the folder '{OneLine(folderName)}'";
+        var variables = new List<KeyValueEntry>();
+        foreach (var variable in Entries(defaults.Variables, "variable", StringComparer.Ordinal, owner, warnings))
+        {
+            if (VariableTemplate.IsValidName(variable.Key))
+            {
+                variables.Add(variable);
+            }
+            else
+            {
+                warnings.Add($"Skipped the variable '{variable.Key}' of {owner}: names can't contain spaces or braces.");
+            }
+        }
+
+        var cleaned = defaults with
+        {
+            Headers = Entries(defaults.Headers, "header", StringComparer.OrdinalIgnoreCase, owner, warnings),
+            Variables = variables,
+        };
+
+        var errors = cleaned.Validate();
+        if (errors.Count > 0)
+        {
+            warnings.Add($"Skipped the settings of {owner}: {string.Join(" ", errors)}");
+            return null;
+        }
+
+        return cleaned.IsEmpty ? null : cleaned;
+    }
+
     private static List<KeyValueEntry> Entries(
         IReadOnlyList<KeyValueEntry> entries,
         string kind,
         StringComparer comparer,
-        string requestName,
+        string owner,
         List<string> warnings)
     {
         var seen = new HashSet<string>(comparer);
@@ -95,12 +131,12 @@ internal static class ImportSanitizer
             {
                 if (entry.Value.Length > 0)
                 {
-                    warnings.Add($"Skipped a {kind} without a name in '{requestName}'.");
+                    warnings.Add($"Skipped a {kind} without a name in {owner}.");
                 }
             }
             else if (!seen.Add(key))
             {
-                warnings.Add($"Skipped the repeated {kind} '{key}' in '{requestName}'; Dynpost keeps one value per name.");
+                warnings.Add($"Skipped the repeated {kind} '{key}' in {owner}; Dynpost keeps one value per name.");
             }
             else
             {

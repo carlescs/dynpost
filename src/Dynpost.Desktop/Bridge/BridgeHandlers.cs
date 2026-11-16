@@ -347,10 +347,10 @@ internal static class BridgeHandlers
                 });
     }
 
-    /// <summary>The files the import dialog offers: Postman, Insomnia and HAR files are JSON; OpenAPI can be YAML.</summary>
+    /// <summary>The files the import dialog offers: Postman, Insomnia and HAR files are JSON; OpenAPI can be YAML; JMeter plans are XML.</summary>
     private static readonly IReadOnlyList<FileFilter> ImportFilters =
     [
-        new("Collections and API descriptions", ["*.json", "*.har", "*.yaml", "*.yml"]),
+        new("Collections, API descriptions and test plans", ["*.json", "*.har", "*.yaml", "*.yml", "*.jmx"]),
         new("All files", ["*"]),
     ];
 

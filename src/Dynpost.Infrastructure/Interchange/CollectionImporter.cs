@@ -5,15 +5,22 @@ namespace Dynpost.Infrastructure.Interchange;
 
 /// <summary>
 /// Recognizes and reads the formats Dynpost imports: Postman collections (v2.0, v2.1) and
-/// environments, Insomnia exports (v4), HAR archives and OpenAPI 3.x / Swagger 2.0 descriptions.
+/// environments, Insomnia exports (v4), HAR archives, OpenAPI 3.x / Swagger 2.0 descriptions and
+/// JMeter test plans.
 /// </summary>
 public sealed class CollectionImporter : ICollectionImporter
 {
     public const string SupportedFormats =
-        "Postman collections (v2.0, v2.1) and environments, Insomnia exports (v4), HAR files and OpenAPI 3 or Swagger 2 descriptions";
+        "Postman collections (v2.0, v2.1) and environments, Insomnia exports (v4), HAR files, OpenAPI 3 or Swagger 2 descriptions and JMeter test plans";
 
     public Result<ParsedCollection> Parse(string text, string fileName)
     {
+        // JMeter plans are XML; every other format is JSON or YAML.
+        if (JMeterFormat.IsXml(text))
+        {
+            return JMeterFormat.Import(text, fileName);
+        }
+
         var root = InterchangeDocument.Parse(text, out var error);
         if (root is null)
         {

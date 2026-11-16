@@ -23,7 +23,7 @@
       <button
         type="button"
         [class]="headerButton"
-        title="Import from Postman, Insomnia, HAR or OpenAPI"
+        title="Import from Postman, Insomnia, HAR, OpenAPI or JMeter"
         aria-label="Import"
         [disabled]="interchange.busy()"
         (click)="interchange.importInto(state.root)"
@@ -222,7 +222,7 @@
           type="button"
           role="menuitem"
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
-          title="Import from Postman, Insomnia, HAR or OpenAPI"
+          title="Import from Postman, Insomnia, HAR, OpenAPI or JMeter"
           [disabled]="interchange.busy()"
           (click)="importInto(menu.node.path)"
         >
