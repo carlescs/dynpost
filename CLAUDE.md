@@ -116,6 +116,25 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   what changed, open the plan's tab to follow the run, and open the item asked for; the item's kind
   comes from `Application/Workspaces/FindWorkspaceItem.cs`). `get_run` waits for a run through `Application/Runs/WaitForRun.cs`. Keep commit/pull/push out of the tools and
   never show secret values to the assistant; update the tool table in `README.md` when adding one.
+- Variables: built-in `{{$uuid}}`-style variables are generated per send by
+  `Domain/Requests/DynamicVariables.cs` (wrapped around the variables in `SendRequest`, `StartRun`,
+  `CopyAsCurl` and HAR exports). Workspace-global variables live in `dynpost.yaml`
+  (`Application/Environments/GlobalVariables.cs`, `Infrastructure/Workspaces/YamlWorkspaceVariablesStore.cs`)
+  and are merged by `ActiveEnvironment` below the environment's; folder variables win over them
+  (`ActiveVariables.Globals`). Path variables (`:id`) are `HttpRequestDefinition.PathParams`
+  (`Domain/Requests/PathParameters.cs`), and per-request settings (timeout, redirects, TLS, HTTP
+  version) are `RequestSettings`, inherited through folders like auth.
+- Secrets: `ISecretStore` is `Infrastructure/Secrets/SelectedSecretStore.cs`, which picks
+  `YamlSecretStore` or `KeychainSecretStore` (the `IKeychain` port: Windows Credential Manager,
+  macOS `security`, libsecret `secret-tool`) from the per-user `AppSettings.Secrets`, moving a
+  workspace's values on first read; `IDotEnvValues` supplies `.env` values for unset secrets.
+  Client certificates per environment are in `.dynpost/certificates.json` (`Application/Certificates`).
+- cURL: `Application/Interchange/Curl.cs` (`ParseCurl`, `CopyAsCurl`, `CurlCommands`) and
+  `Infrastructure/Interchange/CurlConverter.cs`. Exporters that record exchanges (HAR) set
+  `ICollectionExporter.NeedsExchanges`, and `ExportWorkspace` fills `RequestCollection.Exchanges`.
+- External changes: `WatchWorkingTree` reports the changed workspace paths too; the host sends them
+  as `workspace.changed`, and `WorkspaceStore.reloadFromDisk` reloads clean tabs and sets
+  `changedOnDisk` on dirty ones.
 - Search: quick open (Ctrl+P, `workspace.quickOpen`) and the Search view (`workspace.search`, client
   `modules/search`) both run in the backend (`Application/Search`) over the request files
   (`IWorkspaceRepository.ListAsync`/`ReadTextAsync`). Typo-tolerant matching goes through the
