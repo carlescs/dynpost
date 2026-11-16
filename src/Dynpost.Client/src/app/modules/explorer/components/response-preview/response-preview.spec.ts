@@ -29,6 +29,14 @@ describe('response preview', () => {
       expect(previewKind(response({ ...pdf, truncated: true }))).toBeNull();
       expect(previewKind(response({ ...pdf, bodyEncoding: 'text' }))).toBeNull();
     });
+
+    it('previews complete images, including SVG sent as text', () => {
+      const png = { contentType: 'image/png', bodyEncoding: 'base64' as const, body: 'iVBO' };
+      expect(previewKind(response(png))).toBe('image');
+      expect(previewKind(response({ ...png, truncated: true }))).toBeNull();
+      expect(previewKind(response({ ...png, body: '' }))).toBeNull();
+      expect(previewKind(response({ contentType: 'image/svg+xml', body: '<svg/>' }))).toBe('image');
+    });
   });
 
   describe('withPreviewPolicy', () => {

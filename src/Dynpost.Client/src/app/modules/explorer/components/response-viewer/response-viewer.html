@@ -128,16 +128,8 @@
     @switch (shownTab()) {
       @case ('body') {
         @if (r.bodyEncoding === 'base64') {
-          @if (isPdf()) {
+          @if (binaryPreview()) {
             <app-response-preview class="border-t border-slate-200" [response]="r" />
-          } @else if (isImage(r)) {
-            <div class="flex-1 overflow-auto p-4">
-              <img
-                class="max-w-full border border-slate-200 bg-white"
-                alt="Response image"
-                [src]="dataUrl(r)"
-              />
-            </div>
           } @else {
             <p class="flex flex-1 items-center justify-center text-sm text-slate-500">
               Binary content ({{ r.contentType || 'unknown type' }}) is not shown.

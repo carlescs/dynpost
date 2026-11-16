@@ -134,7 +134,8 @@ export class ResponseViewer {
   protected readonly bodyViews = computed<{ id: BodyView; label: string }[]>(() => {
     const r = this.response();
     if (!r) return [];
-    if (previewKind(r) === 'html') {
+    const kind = previewKind(r);
+    if (kind === 'html' || kind === 'image') {
       return [
         { id: 'preview', label: 'Preview' },
         { id: 'raw', label: 'Source' },
@@ -155,9 +156,10 @@ export class ResponseViewer {
     return views.find((v) => v.id === selected)?.id ?? views[0]?.id ?? 'raw';
   });
 
-  protected readonly isPdf = computed(() => {
+  /** Whether a binary body is shown in a previewer (PDFs and images). */
+  protected readonly binaryPreview = computed(() => {
     const r = this.response();
-    return !!r && previewKind(r) === 'pdf';
+    return !!r && r.bodyEncoding === 'base64' && previewKind(r) !== null;
   });
 
   /** The Monaco language for the body; JSON sent with a generic content type counts as JSON. */
@@ -288,14 +290,6 @@ export class ResponseViewer {
   }
 
   protected readonly formatSize = formatSize;
-
-  protected isImage(r: ResponseDto): boolean {
-    return !!r.contentType?.startsWith('image/') && !r.truncated;
-  }
-
-  protected dataUrl(r: ResponseDto): string {
-    return `data:${r.contentType};base64,${r.body}`;
-  }
 }
 
 /** The requests sent for a response: those that got a redirect, then the final one. */

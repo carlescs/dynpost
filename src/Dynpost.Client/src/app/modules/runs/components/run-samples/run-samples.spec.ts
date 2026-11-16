@@ -1,6 +1,7 @@
 import { Component, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { PdfViewer } from '../../../../components/pdf-viewer/pdf-viewer';
+import { ImageViewer } from '../../../../components/image-viewer/image-viewer';
 import { RunResultDto, RunSampleDto, RunSamplesPageDto } from '../../../../models/messages';
 import { Bridge } from '../../../../services/bridge';
 import { PAGE_SIZE, RunSamples } from './run-samples';
@@ -24,6 +25,13 @@ const sample = (patch: Partial<RunSampleDto> = {}): RunSampleDto => ({
 @Component({ selector: 'app-pdf-viewer', template: '{{ data().length }} bytes' })
 class FakePdfViewer {
   readonly data = input.required<Uint8Array>();
+}
+
+/** Stands in for the image viewer, which needs a real layout. */
+@Component({ selector: 'app-image-viewer', template: '{{ contentType() }} image' })
+class FakeImageViewer {
+  readonly data = input.required<Uint8Array>();
+  readonly contentType = input.required<string>();
 }
 
 const run = (patch: Partial<RunResultDto> = {}) => ({ runId: 'r1', ...patch }) as RunResultDto;
@@ -55,8 +63,8 @@ describe('RunSamples', () => {
   async function create(result: RunResultDto = run()) {
     TestBed.configureTestingModule({ providers: [{ provide: Bridge, useValue: { send } }] });
     TestBed.overrideComponent(RunSamples, {
-      remove: { imports: [PdfViewer] },
-      add: { imports: [FakePdfViewer] },
+      remove: { imports: [PdfViewer, ImageViewer] },
+      add: { imports: [FakePdfViewer, FakeImageViewer] },
     });
     const fixture = TestBed.createComponent(RunSamples);
     fixture.componentRef.setInput('run', result);
@@ -240,16 +248,42 @@ describe('RunSamples', () => {
     fixture.detectChanges();
     expect(text(element.querySelector('[data-saved]'))).toBe('.dynpost/runs/responses/r1/1.pdf');
 
-    (element.querySelector('[data-open-pdf]') as HTMLElement).click();
+    (element.querySelector('[data-open-preview]') as HTMLElement).click();
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(send).toHaveBeenLastCalledWith('run.response', { runId: 'r1', file: '1.pdf' });
-    expect(text(element.querySelector('[data-pdf]'))).toBe('4 bytes');
+    expect(text(element.querySelector('[data-preview]'))).toBe('4 bytes');
 
-    (element.querySelector('[data-open-pdf]') as HTMLElement).click();
+    (element.querySelector('[data-open-preview]') as HTMLElement).click();
     fixture.detectChanges();
-    expect(element.querySelector('[data-pdf]')).toBeNull();
+    expect(element.querySelector('[data-preview]')).toBeNull();
+  });
+
+  it('opens a saved image response in the image previewer', async () => {
+    send.mockImplementation(async (type: string) =>
+      type === 'run.response'
+        ? { body: 'iVBORw==' }
+        : page({
+            matching: 1,
+            logged: 1,
+            sent: 1,
+            samples: [
+              sample({ contentType: 'image/png', responsePreview: null, responseFile: '1.png' }),
+            ],
+          }),
+    );
+    const fixture = await create();
+    const element = fixture.nativeElement as HTMLElement;
+    (element.querySelector('[data-sample]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    (element.querySelector('[data-open-preview]') as HTMLElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(send).toHaveBeenLastCalledWith('run.response', { runId: 'r1', file: '1.png' });
+    expect(text(element.querySelector('[data-preview]'))).toBe('image/png image');
   });
 
   it('explains how to preview a PDF response that was not saved', async () => {
@@ -263,7 +297,9 @@ describe('RunSamples', () => {
     (element.querySelector('[data-sample]') as HTMLElement).click();
     fixture.detectChanges();
 
-    expect(element.querySelector('[data-open-pdf]')).toBeNull();
-    expect(text(element.querySelector('[data-pdf-not-saved]'))).toContain('Save whole responses');
+    expect(element.querySelector('[data-open-preview]')).toBeNull();
+    expect(text(element.querySelector('[data-preview-not-saved]'))).toContain(
+      'Save whole responses',
+    );
   });
 });

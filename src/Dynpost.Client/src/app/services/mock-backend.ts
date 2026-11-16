@@ -88,6 +88,17 @@ const US_DATE_FORMAT: DateFormat = {
 };
 
 /** A one-page PDF, the body of the simulated runs' saved PDF responses. */
+/** A small SVG, answered for URLs ending in `.svg`. */
+const MOCK_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160" viewBox="0 0 240 160">' +
+  '<rect x="10" y="10" width="220" height="140" rx="16" fill="#0ea5e9" fill-opacity="0.8"/>' +
+  '<circle cx="80" cy="80" r="40" fill="#f59e0b"/>' +
+  '<text x="135" y="88" font-family="sans-serif" font-size="24" fill="white">Dynpost</text></svg>';
+
+/** A 48×32 PNG of four colors around a transparent hole, answered for URLs ending in `.png`. */
+const MOCK_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAAAW0lEQVR42u3PoQ2AUBBEwe9JCB3RCb3QCI4iKAkP+igBcbmcmU2e3xnzeUdl7zGVNgAAAAAAWgEjOQAAAACAXsBy7ZEpC3jWLTIBAAAAAPQC/soeBAAAAAAo7QOE0pX1FMl3lQAAAABJRU5ErkJggg==';
+
 const MOCK_PDF =
   'JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIg' +
   'MCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBv' +
@@ -1185,6 +1196,19 @@ export class MockBackend {
       ],
       captures,
     } satisfies ResponseDto;
+    // URLs ending in .svg or .png answer with a sample image, so the image preview can be tried.
+    const image = /\.(svg|png)$/i.exec(url.pathname)?.[1].toLowerCase();
+    if (image) {
+      const svg = image === 'svg';
+      const type = svg ? 'image/svg+xml' : 'image/png';
+      Object.assign(response, {
+        headers: [{ key: 'Content-Type', value: type }, setCookie],
+        contentType: type,
+        body: svg ? MOCK_SVG : MOCK_PNG,
+        bodyEncoding: svg ? 'text' : 'base64',
+        size: svg ? MOCK_SVG.length : 148,
+      });
+    }
     return { id: envelopeId, ok: true, payload: this.recordHistory(path, dto.method, response) };
   }
 

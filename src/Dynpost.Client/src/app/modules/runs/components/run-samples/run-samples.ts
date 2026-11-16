@@ -14,8 +14,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faCircleInfo, faFilePdf, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { faCircleInfo, faFileImage, faFilePdf, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { PdfViewer } from '../../../../components/pdf-viewer/pdf-viewer';
+import { ImageViewer } from '../../../../components/image-viewer/image-viewer';
 import { decodeBase64 } from '../../../../models/base64';
 import { RunResultDto, RunSampleDto, RunSamplesPageDto } from '../../../../models/messages';
 import { HttpMethod, METHOD_COLORS } from '../../../../models/workspace';
@@ -32,8 +33,11 @@ const VIEWPORT_HEIGHT = 600;
 /** How many rows are rendered above and below the visible ones. */
 const OVERSCAN = 20;
 
-/** A saved PDF response opened in the previewer, by the row's position in the log. */
-interface OpenPdf {
+/** A response kind the run samples can open in a previewer. */
+type SampleKind = 'pdf' | 'image';
+
+/** A saved PDF or image response opened in its previewer, by the row's position in the log. */
+interface OpenPreview {
   index: number;
   data: Uint8Array<ArrayBuffer> | null;
   error: string | null;
@@ -55,12 +59,12 @@ interface Row {
  * Every request a run sent with its response, as a virtualized table read from the run's request
  * log (`run.samples`): only the rows in view (and a few around them) are rendered, and the log is
  * read a page at a time as they scroll into view. While the run goes on, the pages in view are
- * read again on each update. A PDF response the run saved (plans with `saveResponses`) opens in
- * the PDF previewer.
+ * read again on each update. A PDF or image response the run saved (plans with `saveResponses`)
+ * opens in the PDF or image previewer.
  */
 @Component({
   selector: 'app-run-samples',
-  imports: [DecimalPipe, FaIconComponent, PdfViewer],
+  imports: [DecimalPipe, FaIconComponent, PdfViewer, ImageViewer],
   host: { class: 'flex min-h-0 flex-col gap-2' },
   templateUrl: './run-samples.html',
 })
@@ -73,6 +77,7 @@ export class RunSamples {
 
   protected readonly faCircleInfo = faCircleInfo;
   protected readonly faFilePdf = faFilePdf;
+  protected readonly faFileImage = faFileImage;
   protected readonly faSpinner = faSpinner;
   protected readonly formatMs = formatMs;
   protected readonly formatElapsed = formatElapsed;
@@ -85,8 +90,8 @@ export class RunSamples {
   protected readonly error = signal<string | null>(null);
   /** The row whose response is shown, by its position in the log. */
   protected readonly expanded = signal<number | null>(null);
-  /** The saved PDF response shown in the previewer, while it loads and once it has. */
-  protected readonly pdf = signal<OpenPdf | null>(null);
+  /** The saved response shown in a previewer, while it loads and once it has. */
+  protected readonly preview = signal<OpenPreview | null>(null);
 
   /** The pages read so far, by page number. */
   private readonly pages = signal<ReadonlyMap<number, CachedPage>>(new Map());
@@ -218,12 +223,15 @@ export class RunSamples {
 
   protected toggle(index: number): void {
     this.expanded.update((current) => (current === index ? null : index));
-    this.pdf.set(null);
+    this.preview.set(null);
   }
 
-  /** Whether a sample's response is a PDF. */
-  protected isPdf(sample: RunSampleDto): boolean {
-    return sample.contentType === 'application/pdf';
+  /** Which previewer a sample's response opens in, or `null` when it has none. */
+  protected previewKind(sample: RunSampleDto): SampleKind | null {
+    const type = sample.contentType ?? '';
+    if (type === 'application/pdf') return 'pdf';
+    if (type.startsWith('image/')) return 'image';
+    return null;
   }
 
   /** Where the run saved a sample's response, relative to the workspace. */
@@ -231,30 +239,30 @@ export class RunSamples {
     return `.dynpost/runs/responses/${this.run().runId}/${file}`;
   }
 
-  /** Reads a saved PDF response and shows it in the previewer (or hides it when it is shown). */
-  protected async openPdf(index: number, sample: RunSampleDto): Promise<void> {
+  /** Reads a saved response and shows it in its previewer (or hides it when it is shown). */
+  protected async openPreview(index: number, sample: RunSampleDto): Promise<void> {
     if (!sample.responseFile) return;
-    if (this.pdf()?.index === index) {
-      this.pdf.set(null);
+    if (this.preview()?.index === index) {
+      this.preview.set(null);
       return;
     }
-    const open: OpenPdf = { index, data: null, error: null };
-    this.pdf.set(open);
+    const open: OpenPreview = { index, data: null, error: null };
+    this.preview.set(open);
     try {
       const { body } = await this.bridge.send('run.response', {
         runId: this.run().runId,
         file: sample.responseFile,
       });
-      if (this.pdf() === open) this.pdf.set({ ...open, data: decodeBase64(body) });
+      if (this.preview() === open) this.preview.set({ ...open, data: decodeBase64(body) });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (this.pdf() === open) this.pdf.set({ ...open, error: message });
+      if (this.preview() === open) this.preview.set({ ...open, error: message });
     }
   }
 
   private collapse(): void {
     this.expanded.set(null);
-    this.pdf.set(null);
+    this.preview.set(null);
   }
 
   protected methodColor(method: string): string {

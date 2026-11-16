@@ -158,16 +158,21 @@
                     </dd>
                   }
                 </dl>
-                @if (isPdf(s) && s.responseFile) {
-                  @let open = pdf()?.index === index ? pdf() : null;
+                @let kind = previewKind(s);
+                @if (kind && s.responseFile) {
+                  @let open = preview()?.index === index ? preview() : null;
                   <button
                     type="button"
                     class="mt-2 flex items-center gap-1.5 rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
-                    data-open-pdf
+                    data-open-preview
                     [attr.aria-expanded]="!!open"
-                    (click)="openPdf(index, s)"
+                    (click)="openPreview(index, s)"
                   >
-                    <fa-icon class="text-rose-700" [icon]="faFilePdf" />
+                    @if (kind === 'pdf') {
+                      <fa-icon class="text-rose-700" [icon]="faFilePdf" />
+                    } @else {
+                      <fa-icon class="text-sky-700" [icon]="faFileImage" />
+                    }
                     {{ open ? 'Close preview' : 'Open in previewer' }}
                   </button>
                   @if (open) {
@@ -179,9 +184,13 @@
                       <!-- w-0 min-w-full: the pages' width must not widen the table. -->
                       <div
                         class="mt-2 flex h-[32rem] w-0 min-w-full flex-col overflow-hidden rounded border border-slate-200 bg-white"
-                        data-pdf
+                        data-preview
                       >
-                        <app-pdf-viewer [data]="data" />
+                        @if (kind === 'pdf') {
+                          <app-pdf-viewer [data]="data" />
+                        } @else {
+                          <app-image-viewer [data]="data" [contentType]="s.contentType!" />
+                        }
                       </div>
                     } @else {
                       <p class="mt-2 flex items-center gap-2 text-slate-500">
@@ -189,10 +198,11 @@
                       </p>
                     }
                   }
-                } @else if (isPdf(s)) {
-                  <p class="mt-2 text-slate-500" data-pdf-not-saved>
-                    A PDF response. Turn on <em>Save whole responses</em> in the plan to open the
-                    PDFs of its next runs in the previewer.
+                } @else if (kind) {
+                  <p class="mt-2 text-slate-500" data-preview-not-saved>
+                    {{ kind === 'pdf' ? 'A PDF' : 'An image' }} response. Turn on
+                    <em>Save whole responses</em> in the plan to open the
+                    {{ kind === 'pdf' ? 'PDFs' : 'images' }} of its next runs in the previewer.
                   </p>
                 } @else if (s.responsePreview) {
                   <pre
