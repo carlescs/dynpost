@@ -120,6 +120,24 @@ describe('GitStore', () => {
     expect(store.error()?.code).toBe('git.push_rejected');
     expect(store.status()?.behind).toBe(1);
     expect(store.busy()).toBeNull();
+    expect(send).toHaveBeenCalledWith('git.fetch', { signIn: null });
+  });
+
+  it('fetches with the credentials entered for a push the remote then refused', async () => {
+    const signIn = { url: 'https://github.com', username: 'me', password: 'token' };
+    (dialogs as unknown as { open: Mock }).open = vi.fn(() => ({ closed: of(signIn) }));
+    handlers['git.push'] = (payload) => {
+      throw payload.signIn
+        ? new BridgeError('git.push_rejected', 'Pull first.')
+        : new BridgeError('git.authentication_failed', 'Denied', 'https://github.com');
+    };
+    handlers['git.fetch'] = () => status({ behind: 1, ahead: 1 });
+
+    await store.push();
+
+    expect(send).toHaveBeenCalledWith('git.fetch', { signIn });
+    expect(store.error()?.code).toBe('git.push_rejected');
+    expect(store.status()?.behind).toBe(1);
   });
 
   it('counts unsaved tabs, and saves them all', async () => {
@@ -193,9 +211,31 @@ describe('GitStore', () => {
 
     expect(await store.deleteRemoteBranch('origin/feature')).toBe(true);
 
-    expect(send).toHaveBeenCalledWith('git.branch.deleteRemote', { name: 'origin/feature' });
+    expect(send).toHaveBeenCalledWith('git.branch.deleteRemote', {
+      name: 'origin/feature',
+      signIn: null,
+    });
     expect(store.branches()).toEqual([main]);
     expect(store.notice()?.text).toBe('Deleted origin/feature on the remote.');
+  });
+
+  it('signs in when git cannot, and deletes the remote branch with the credentials entered', async () => {
+    const signIn = { url: 'https://github.com', username: 'me', password: 'token' };
+    (dialogs as unknown as { open: Mock }).open = vi.fn(() => ({ closed: of(signIn) }));
+    handlers['git.branch.deleteRemote'] = (payload) => {
+      if (!payload.signIn) {
+        throw new BridgeError('git.authentication_failed', 'Denied', 'https://github.com');
+      }
+      return { status: status(), branches: [main] };
+    };
+
+    expect(await store.deleteRemoteBranch('origin/feature')).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.branch.deleteRemote', {
+      name: 'origin/feature',
+      signIn,
+    });
+    expect(store.error()).toBeNull();
   });
 
   it('switches branches and reloads the workspace from disk', async () => {

@@ -1289,7 +1289,10 @@ export interface BridgeMessages {
   /** Deletes a local branch; one with unmerged commits only with `force`. */
   'git.branch.delete': { payload: { name: string; force: boolean }; result: GitBranches };
   /** Deletes a branch on its remote (`origin/x`), never forced; local branches are kept. */
-  'git.branch.deleteRemote': { payload: { name: string }; result: GitBranches };
+  'git.branch.deleteRemote': {
+    payload: { name: string; signIn?: GitSignIn | null };
+    result: GitBranches;
+  };
   /** Merges a local or remote-tracking branch into the current one; never rebases. */
   'git.branch.merge': {
     /** `remote`: whether `name` is a remote-tracking branch (a local branch can share its name). */

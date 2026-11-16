@@ -298,7 +298,8 @@ Desktop → Application
   Keep mine" when dirty. The app's own writes are ignored by content: each store remembers what
   its tabs last read or saved (`models/disk-changes.ts`, `DiskSnapshots`).
   Git reads run with `GIT_OPTIONAL_LOCKS=0` so they don't write `.git/index` and re-trigger it.
-- Signing in: clone, pull, push and fetch take optional `GitCredentials` (Domain), entered by the
+- Signing in: the commands that contact a remote (clone, pull, push, fetch, deleting a remote
+  branch) take optional `GitCredentials` (Domain), entered by the
   user when git reports a sign-in failure for an HTTP(S) URL (the `Error.Target` of
   `git.authentication_failed`; client `services/git-sign-in-prompt.ts` asks and retries).
   `Infrastructure/Git/GitCredentialOverride.cs` hands them to that one command through `-c`

@@ -487,6 +487,7 @@ public sealed class GitCliService : IGitService
     public async Task<Result<Unit>> DeleteRemoteBranchAsync(
         string workspacePath,
         GitBranch remoteBranch,
+        GitCredentials? credentials = null,
         CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
@@ -517,8 +518,9 @@ public sealed class GitCliService : IGitService
         // A full ref, so a tag of the same name can't be deleted instead.
         var push = await RunAsync(
             workspacePath,
-            ["push", "--porcelain", "--delete", "--", remote, remoteRef],
-            cancellationToken);
+            GitCredentialOverride.Arguments(["push", "--porcelain", "--delete", "--", remote, remoteRef], credentials),
+            cancellationToken,
+            GitCredentialOverride.Environment(credentials));
         if (push.IsFailure)
         {
             return push.Error!;
@@ -530,6 +532,8 @@ public sealed class GitCliService : IGitService
             var details = Details(push.Value);
             if (details.Contains("remote ref does not exist", StringComparison.OrdinalIgnoreCase))
             {
+                // The remote answered, so the sign-in worked.
+                await ApproveAsync(workspacePath, credentials, cancellationToken);
                 // Already deleted by someone else: drop the stale remote-tracking branch too.
                 return Done(await RunCheckedAsync(
                     workspacePath,
@@ -541,6 +545,7 @@ public sealed class GitCliService : IGitService
             return GitFailure.Classify("push", rejected.Count > 0 ? string.Join('\n', rejected) + "\n" + details : details);
         }
 
+        await ApproveAsync(workspacePath, credentials, cancellationToken);
         return Unit.Value;
     }
 
@@ -1531,6 +1536,9 @@ public sealed class GitCliService : IGitService
             .ToList();
         if (rejected.Count > 0)
         {
+            // The remote signed the user in and only refused the update (it has commits this clone
+            // lacks): the credentials work, so save them for the fetch and pull that come next.
+            await ApproveAsync(workspacePath, credentials, cancellationToken);
             return GitErrors.PushRejected(string.Join('\n', rejected));
         }
 

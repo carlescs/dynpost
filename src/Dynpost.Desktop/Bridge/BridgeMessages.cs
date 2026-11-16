@@ -402,7 +402,7 @@ internal static class BridgeMessageTypes
     public const string GitBranchDelete = "git.branch.delete";
 
     /// <summary>
-    /// Deletes a branch on its remote (never forced). Payload: <see cref="GitBranchNamePayload"/>
+    /// Deletes a branch on its remote (never forced). Payload: <see cref="GitDeleteRemoteBranchPayload"/>
     /// (the remote-tracking branch, e.g. <c>origin/feature</c>). Result: status and branches.
     /// </summary>
     public const string GitBranchDeleteRemote = "git.branch.deleteRemote";
@@ -546,6 +546,10 @@ internal sealed record CloneWorkspacePayload(string Url, string ParentFolder, st
 /// </summary>
 /// <param name="SignIn">Credentials the user entered after the first try couldn't sign in.</param>
 internal sealed record GitRemoteCommandPayload(GitSignIn? SignIn = null);
+
+/// <param name="Name">The remote-tracking branch to delete on its remote, e.g. <c>origin/feature</c>.</param>
+/// <param name="SignIn">Credentials the user entered after the first try couldn't sign in.</param>
+internal sealed record GitDeleteRemoteBranchPayload(string Name, GitSignIn? SignIn = null);
 /// <summary>The link to open: <c>homepage</c> or <c>repository</c>.</summary>
 internal sealed record AboutOpenLinkPayload(string Link);
 internal sealed record RemoveRecentWorkspacePayload(string Path);
