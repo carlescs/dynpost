@@ -778,7 +778,16 @@ Request and response bodies are shown in the Monaco
 editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,
 GraphQL and Markdown, chosen from the body type or the response's
 `Content-Type`); JSON request bodies are also validated as you type. JSON
-responses are pretty-printed (switch to **Raw** for the original text). HTML
+responses are pretty-printed (switch to **Raw** for the original text), and
+their objects and arrays can be folded with the arrows in the gutter.
+**Find** (or Ctrl+F in the body) searches the body, with Monaco's options for
+case, whole words and regular expressions. A pretty JSON body can be narrowed
+with a JSONPath in the filter box above it — `$.items[*].id`, `$..name`,
+`$.items[0:5]`, `$.items[?(@.price < 10)].name` (filters compare a child with a
+number, a quoted string, `true`, `false` or `null`, or test that it exists) —
+which shows the value it names, or the list of matches with their count; Esc
+clears it, and **Raw** still shows the whole body. Right-click a key or value
+and pick **Copy JSONPath** to copy its path (`$.items[2].id`). HTML
 responses are previewed rendered in a sandboxed frame that runs no scripts and
 loads nothing from the network
 (switch to **Source** for the markup), PDFs are rendered with pdf.js (fit to width
