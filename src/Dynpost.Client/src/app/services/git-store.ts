@@ -559,7 +559,8 @@ export class GitStore {
   /** Deletes a branch on its remote (`origin/x`); local branches that tracked it are kept. */
   deleteRemoteBranch(name: string): Promise<boolean> {
     return this.runBranch(
-      () => this.bridge.send('git.branch.deleteRemote', { name }),
+      () =>
+        this.signIn.run((signIn) => this.bridge.send('git.branch.deleteRemote', { name, signIn })),
       `Deleted ${name} on the remote.`,
       false,
     );

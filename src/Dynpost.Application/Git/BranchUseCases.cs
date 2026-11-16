@@ -186,8 +186,18 @@ public sealed class DeleteBranch(IGitService git, CurrentWorkspace workspace)
 public sealed class DeleteRemoteBranch(IGitService git, CurrentWorkspace workspace)
 {
     /// <param name="remoteBranch">The remote-tracking branch, e.g. <c>origin/feature</c>.</param>
-    public async Task<Result<GitBranchesResult>> ExecuteAsync(string remoteBranch, CancellationToken cancellationToken = default)
+    /// <param name="signIn">Credentials the user entered after a first try couldn't sign in to the remote.</param>
+    public async Task<Result<GitBranchesResult>> ExecuteAsync(
+        string remoteBranch,
+        GitSignIn? signIn = null,
+        CancellationToken cancellationToken = default)
     {
+        var credentials = GitSignIn.Check(signIn);
+        if (credentials.IsFailure)
+        {
+            return credentials.Error!;
+        }
+
         var context = await BranchContext.LoadAsync(git, workspace, cancellationToken);
         if (context.IsFailure)
         {
@@ -202,7 +212,7 @@ public sealed class DeleteRemoteBranch(IGitService git, CurrentWorkspace workspa
             return GitErrors.BranchNotFound(trimmed);
         }
 
-        var deleted = await git.DeleteRemoteBranchAsync(root, branch, cancellationToken);
+        var deleted = await git.DeleteRemoteBranchAsync(root, branch, credentials.Value, cancellationToken);
         return deleted.IsFailure ? deleted.Error! : await BranchContext.ReadAsync(git, root, cancellationToken);
     }
 }

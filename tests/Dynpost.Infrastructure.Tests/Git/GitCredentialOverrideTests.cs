@@ -53,6 +53,30 @@ public sealed class GitCredentialOverrideTests : IDisposable
         Assert.Equal("https://me:p%40ss%20w%27rd%241@example.com\n", File.ReadAllText(store));
     }
 
+    [Fact]
+    public async Task DeletingARemoteBranch_SavesCredentialsThatWorked()
+    {
+        var store = _temp.Combine("saved-credentials");
+        var remote = _temp.Combine("remote.git");
+        TestGit.Run(_temp.Path, "init", "--quiet", "--bare", remote);
+        var repository = InitRepository();
+        TestGit.Configure(repository);
+        File.WriteAllText(Path.Combine(repository, "a.txt"), "a");
+        TestGit.CommitAll(repository, "first");
+        TestGit.Run(repository, "remote", "add", "origin", remote);
+        TestGit.Run(repository, "push", "--quiet", "origin", "HEAD:refs/heads/topic");
+        TestGit.Run(repository, "fetch", "--quiet", "origin");
+        UseOnlyHelper(repository, $"store --file={store.Replace('\\', '/')}");
+        var git = new GitCliService();
+        var topic = (await git.ListBranchesAsync(repository)).Value.Single(b => b.IsRemote && b.Name == "origin/topic");
+
+        var deleted = await git.DeleteRemoteBranchAsync(repository, topic, Credentials("https://example.com"));
+
+        Assert.True(deleted.IsSuccess, deleted.Error?.Message);
+        Assert.Empty(TestGit.Run(remote, "branch", "--list", "topic").Trim());
+        Assert.Equal("https://me:p%40ss%20w%27rd%241@example.com\n", File.ReadAllText(store));
+    }
+
     private async Task<string> FillAsync(string repository, GitCredentials credentials, string protocol, string host)
     {
         var result = await _runner.RunAsync(
