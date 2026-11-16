@@ -11,6 +11,7 @@ import {
 import { SharingToggle } from '../../../../components/sharing-toggle/sharing-toggle';
 import { EnvironmentStore, GLOBALS_ID } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
+import { environmentColor } from '../../../../models/environment-colors';
 
 /** Lists the workspace's environments: click one to send requests with it, or its pen icon to edit it. */
 @Component({
@@ -30,6 +31,7 @@ export class EnvironmentsView {
   protected readonly faCircleCheck = faCircleCheck;
   protected readonly faCircleExclamation = faCircleExclamation;
   protected readonly example = '{{variable}}';
+  protected readonly colorOf = environmentColor;
 
   protected readonly headerButton =
     'flex size-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800';

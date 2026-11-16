@@ -91,6 +91,14 @@
           } @else {
             <span [class]="ring + ' shrink-0 text-slate-400'"></span>
           }
+          @if (colorOf(env.color); as color) {
+            <span
+              class="size-2.5 shrink-0 rounded-full"
+              [class]="color.bg"
+              [title]="color.label"
+              data-environment-color
+            ></span>
+          }
           <span class="truncate" [class.text-rose-700]="env.error">{{ env.name }}</span>
           @if (env.error) {
             <fa-icon class="shrink-0 text-rose-600" [icon]="faCircleExclamation" />

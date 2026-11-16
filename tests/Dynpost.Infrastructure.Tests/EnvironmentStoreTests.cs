@@ -66,8 +66,22 @@ public sealed class EnvironmentStoreTests : IDisposable
         Assert.False(EnvironmentYamlSerializer.Deserialize("name: Dev\ncookieJar: false\n", "dev").CookieJar);
     }
 
+    [Fact]
+    public void Color_IsWrittenAfterTheNameAndRoundTrips()
+    {
+        var colored = new EnvironmentDefinition("Prod") { Color = "red", CookieJar = true };
+
+        var yaml = EnvironmentYamlSerializer.Serialize(colored);
+
+        Assert.Equal("name: Prod\ncolor: red\ncookieJar: true\n", yaml);
+        Assert.Equal("red", EnvironmentYamlSerializer.Deserialize(yaml, "prod").Color);
+        Assert.Null(EnvironmentYamlSerializer.Deserialize("name: Prod\n", "prod").Color);
+        Assert.Equal("name: Prod\n", EnvironmentYamlSerializer.Serialize(new EnvironmentDefinition("Prod")));
+    }
+
     [Theory]
     [InlineData("cookieJar: maybe", "'cookieJar' must be true or false")]
+    [InlineData("color: magenta", "'magenta' is not an environment color")]
     [InlineData("variables: [a]", "'variables' must be a mapping")]
     [InlineData("secrets: token", "'secrets' must be a list")]
     [InlineData("variables:\n  a: 1\nsecrets:\n  - a\n", "'a' is listed both")]

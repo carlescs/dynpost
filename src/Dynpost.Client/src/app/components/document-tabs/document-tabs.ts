@@ -18,6 +18,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentDraft, EnvironmentStore } from '../../services/environment-store';
 import { METHOD_COLORS, RequestDocument } from '../../models/workspace';
+import { environmentColor } from '../../models/environment-colors';
 import { WorkspaceStore } from '../../services/workspace-store';
 import { RunPlanDraft, RunStore, isRunPlanDirty, isRunPlanRunning } from '../../services/run-store';
 import { FolderDraft, FolderSettingsStore } from '../../services/folder-settings-store';
@@ -62,6 +63,7 @@ export class DocumentTabs {
   private readonly dialogs = inject(Dialogs);
   protected readonly methodColors = METHOD_COLORS;
   protected readonly faLayerGroup = faLayerGroup;
+  protected readonly colorOf = environmentColor;
   protected readonly faGaugeHigh = faGaugeHigh;
   protected readonly faSliders = faSliders;
   protected readonly isRunning = isRunPlanRunning;

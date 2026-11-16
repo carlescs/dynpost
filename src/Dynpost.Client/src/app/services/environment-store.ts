@@ -22,6 +22,8 @@ export interface EnvironmentDraft {
   variables: EnvironmentVariableDto[];
   /** Whether requests sent with it keep cookies between them. */
   cookieJar: boolean;
+  /** The color it is marked with (see `models/environment-colors.ts`), or `null`. */
+  color: string | null;
   dirty: boolean;
   saving: boolean;
   /** Incremented on every edit, so a save can tell whether the draft changed meanwhile. */
@@ -137,6 +139,7 @@ export class EnvironmentStore {
         {
           ...environment,
           cookieJar: !!environment.cookieJar,
+          color: environment.color ?? null,
           id,
           key,
           dirty: false,
@@ -166,6 +169,7 @@ export class EnvironmentStore {
           name: 'Globals',
           variables: globals.variables,
           cookieJar: false,
+          color: null,
           dirty: false,
           saving: false,
           revision: 0,
@@ -188,6 +192,7 @@ export class EnvironmentStore {
         name: 'New environment',
         variables: [],
         cookieJar: false,
+        color: null,
         dirty: true,
         saving: false,
         revision: 0,
@@ -198,7 +203,7 @@ export class EnvironmentStore {
 
   update(
     key: string,
-    patch: Partial<Pick<EnvironmentDraft, 'name' | 'variables' | 'cookieJar'>>,
+    patch: Partial<Pick<EnvironmentDraft, 'name' | 'variables' | 'cookieJar' | 'color'>>,
   ): void {
     this.patchDraft(key, (d) => ({ ...d, ...patch, dirty: true, revision: d.revision + 1 }));
   }
@@ -217,6 +222,7 @@ export class EnvironmentStore {
         name: draft.name,
         variables: draft.variables,
         cookieJar: draft.cookieJar,
+        color: draft.color,
       };
       const saved = draft.id
         ? await this.bridge.send('environment.save', { id: draft.id, environment })
@@ -231,6 +237,7 @@ export class EnvironmentStore {
               ...base,
               ...saved.environment,
               cookieJar: !!saved.environment.cookieJar,
+              color: saved.environment.color ?? null,
               dirty: false,
             }
           : base;
@@ -450,6 +457,7 @@ export class EnvironmentStore {
                 ...candidate,
                 ...environment,
                 cookieJar: !!environment.cookieJar,
+                color: environment.color ?? null,
                 dirty: false,
                 revision: candidate.revision + 1,
               }
@@ -516,10 +524,12 @@ function onDiskContent(environment: {
   name: string;
   variables: EnvironmentVariableDto[];
   cookieJar?: boolean | null;
+  color?: string | null;
 }): unknown {
   return {
     name: environment.name,
     variables: environment.variables,
     cookieJar: !!environment.cookieJar,
+    color: environment.color ?? null,
   };
 }

@@ -157,7 +157,7 @@ internal static class McpTools
                 readOnly: true)
             .Add<CreateEnvironmentArguments, SavedEnvironmentDto>(
                 "create_environment", "Create environment",
-                "Creates an environment: { name, variables: [{ name, value, secret }], cookieJar }. Secret values are kept on this computer only, "
+                "Creates an environment: { name, variables: [{ name, value, secret }], cookieJar, color? }. color marks it in the app: red, orange, yellow, green, teal, blue, purple, pink or gray. Secret values are kept on this computer only, "
                 + "not in the file. Returns its id.",
                 (p, ct) => Use<CreateEnvironment>().ExecuteAsync(p.Environment, ct),
                 changed: (_, saved) => [$"{WorkspaceLayout.EnvironmentsFolder}/{saved.Id}"],

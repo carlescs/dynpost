@@ -38,6 +38,7 @@ import {
   WorkspaceDto,
   WorkspaceNodeDto,
 } from '../models/messages';
+import { environmentColor } from '../models/environment-colors';
 import { VARIABLE_PATTERN } from '../models/variables';
 import { PLANS_FOLDER, REQUESTS_FOLDER } from '../models/workspace';
 
@@ -182,6 +183,7 @@ export class MockBackend {
       'dev.yaml',
       {
         name: 'Development',
+        color: 'green',
         cookieJar: true,
         variables: [
           { name: 'host', value: 'localhost:5000', secret: false },
@@ -194,6 +196,7 @@ export class MockBackend {
       'prod.yaml',
       {
         name: 'Production',
+        color: 'red',
         variables: [
           { name: 'baseUrl', value: 'https://api.example.com', secret: false },
           { name: 'apiToken', value: '', secret: true },
@@ -520,6 +523,7 @@ export class MockBackend {
             .map(([id, env]) => ({
               id,
               name: env.name,
+              color: env.color ?? null,
               localOnly: this.localOnly.has(`environments/${id}`),
             }))
             .sort((a, b) => a.name.localeCompare(b.name)),
@@ -539,6 +543,9 @@ export class MockBackend {
         if (!env.name) return fail(ERROR_CODES.invalidRequest, 'The environment needs a name.');
         const bad = env.variables.find((v) => !v.name || /[{}\s]/.test(v.name));
         if (bad) return fail(ERROR_CODES.invalidRequest, `'${bad.name}' is not a valid name.`);
+        env.color = env.color?.trim().toLowerCase() || null;
+        if (env.color && !environmentColor(env.color))
+          return fail(ERROR_CODES.invalidRequest, `'${env.color}' is not an environment color.`);
         let id = payload?.['id'] as string | undefined;
         if (!id) {
           id = `${slug(env.name)}.yaml`;

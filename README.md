@@ -492,6 +492,7 @@ An environment file (`environments/dev.yaml`):
 
 ```yaml
 name: Development
+color: green
 cookieJar: true
 variables:
   host: localhost:5000
@@ -500,8 +501,9 @@ secrets:
   - apiToken
 ```
 
-Keys are written in the order `name`, `cookieJar`, `variables`, `secrets`, and
-empty sections and defaults (`cookieJar: false`) are left out. Variable names can't contain spaces or braces, and a
+Keys are written in the order `name`, `color`, `cookieJar`, `variables`, `secrets`, and
+empty sections and defaults (no color, `cookieJar: false`) are left out. `color` is one of `red`,
+`orange`, `yellow`, `green`, `teal`, `blue`, `purple`, `pink` or `gray`. Variable names can't contain spaces or braces, and a
 value can use other variables (`{{host}}` above); variables that refer to each
 other in a loop are refused. `secrets` lists only the *names* of secret
 variables: their values stay on each computer, in `.dynpost/secrets.yaml`, so
@@ -578,6 +580,12 @@ of which can be marked **Secret**. New environments are saved as a file named af
 name was chosen by hand, and its secret values, cookies, captured values and
 selection follow. Deleting an environment also removes its stored secret values,
 cookies, captured values and OAuth 2.0 tokens.
+
+To tell environments apart at a glance, give each one a **Color** in its editor
+(say, red for production). The selected environment's color runs along the bottom
+of the header and outlines the picker there, and each environment shows it next
+to its name in the **Environments** view and on its editor tab. The color is
+saved in the environment file, so the whole team sees the same one.
 
 ### Global variables
 

@@ -52,6 +52,29 @@ describe('EnvironmentStore', () => {
 
   const draft = () => store.drafts()[0];
 
+  it('loads, edits and saves the environment color', async () => {
+    expect(draft().color).toBeNull();
+
+    store.update(draft().key, { color: 'red' });
+    // The host writes the file before the save resolves.
+    onDisk = { ...dev, color: 'red' };
+    await store.save(draft().key);
+
+    expect(send).toHaveBeenCalledWith('environment.save', {
+      id: 'dev.yaml',
+      environment: expect.objectContaining({ color: 'red' }),
+    });
+    expect(draft()).toMatchObject({ color: 'red', dirty: false });
+  });
+
+  it('reloads a draft whose color changed on disk', async () => {
+    onDisk = { ...dev, color: 'blue' };
+
+    await store.refresh(['environments/dev.yaml']);
+
+    expect(draft()).toMatchObject({ color: 'blue', dirty: false });
+  });
+
   it('reloads a draft without unsaved edits silently when its file changed', async () => {
     onDisk = { ...dev, name: 'Development' };
 

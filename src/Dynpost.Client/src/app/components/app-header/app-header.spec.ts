@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Bridge } from '../../services/bridge';
+import { EnvironmentStore } from '../../services/environment-store';
 import { WorkspaceStore } from '../../services/workspace-store';
 import { AppHeader } from './app-header';
 
@@ -33,6 +34,39 @@ describe('AppHeader', () => {
 
     expect(openFolder).toHaveBeenCalled();
     expect(root.querySelector('#recent-panel')).toBeNull();
+  });
+
+  it('marks the header and the picker with the selected environment’s color', async () => {
+    const { fixture, store, send } = setup();
+    let active: string | null = null;
+    send.mockImplementation(async (type: string) => {
+      switch (type) {
+        case 'environment.list':
+          return { active, environments: [{ id: 'prod.yaml', name: 'Prod', color: 'red' }] };
+        case 'environment.load':
+          return { name: 'Prod', variables: [], color: 'red' };
+        case 'globals.load':
+        case 'capture.list':
+          return { variables: [] };
+        default:
+          return [];
+      }
+    });
+    const root: HTMLElement = fixture.nativeElement;
+    store.workspace.set({ name: 'api', root: '/home/me/api' } as never);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(root.querySelector('[data-environment-stripe]')).toBeNull();
+
+    active = 'prod.yaml';
+    await TestBed.inject(EnvironmentStore).refresh();
+    fixture.detectChanges();
+
+    expect(root.querySelector('[data-environment-stripe]')!.classList).toContain('bg-red-500');
+    expect(root.querySelector('select[aria-label="Environment"]')!.classList).toContain(
+      'border-red-500',
+    );
   });
 
   it('shows the open workspace name with its path', () => {
