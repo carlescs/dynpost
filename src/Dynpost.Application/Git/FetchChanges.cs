@@ -10,12 +10,19 @@ namespace Dynpost.Application.Git;
 /// </summary>
 public sealed class FetchChanges(IGitService git, CurrentWorkspace workspace)
 {
-    public async Task<Result<GitStatus>> ExecuteAsync(CancellationToken cancellationToken = default)
+    /// <param name="signIn">Credentials the user entered after a first try couldn't sign in to the remote.</param>
+    public async Task<Result<GitStatus>> ExecuteAsync(GitSignIn? signIn = null, CancellationToken cancellationToken = default)
     {
         var root = workspace.RequireRoot();
         if (root.IsFailure)
         {
             return root.Error!;
+        }
+
+        var credentials = GitSignIn.Check(signIn);
+        if (credentials.IsFailure)
+        {
+            return credentials.Error!;
         }
 
         var remotes = await git.ListRemotesAsync(root.Value, cancellationToken);
@@ -29,7 +36,7 @@ public sealed class FetchChanges(IGitService git, CurrentWorkspace workspace)
             return GitErrors.NoRemote();
         }
 
-        var fetch = await git.FetchAsync(root.Value, cancellationToken);
+        var fetch = await git.FetchAsync(root.Value, credentials.Value, cancellationToken);
         if (fetch.IsFailure)
         {
             return fetch.Error!;

@@ -52,6 +52,7 @@ public static class GitErrors
     public const string MergeSameBranchCode = "git.merge_same_branch";
     public const string CloneDestinationExistsCode = "git.clone_destination_exists";
     public const string InvalidCloneFolderCode = "git.invalid_clone_folder";
+    public const string InvalidCredentialsCode = "git.invalid_credentials";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -102,14 +103,22 @@ public static class GitErrors
     public static Error AmbiguousRemote() =>
         new(NoRemoteCode, "The repository has several remotes and none is named 'origin', so Dynpost can't tell which one to use. Rename the one to use to 'origin'.");
 
-    public static Error AuthenticationFailed(string details) =>
+    /// <param name="signInUrl">
+    /// The HTTP(S) URL git couldn't sign in to, when it said so: the error's
+    /// <see cref="Error.Target"/>, so the UI can ask for credentials and try again.
+    /// </param>
+    public static Error AuthenticationFailed(string details, string? signInUrl = null) =>
         new(
             AuthenticationFailedCode,
             WithDetails(
                 "Git couldn't sign in to the remote. Dynpost uses your own git credentials: for an HTTPS remote, set up a credential helper "
                     + "(such as Git Credential Manager) or sign in once from a terminal; for an SSH remote, add your key to the SSH agent "
                     + "and connect once from a terminal so the host is trusted.",
-                details));
+                details),
+            signInUrl);
+
+    public static Error InvalidCredentials(string message) =>
+        new(InvalidCredentialsCode, message);
 
     public static Error RemoteUnreachable(string details) =>
         new(RemoteUnreachableCode, WithDetails("Couldn't reach the remote. Check your network connection and the remote's URL.", details));

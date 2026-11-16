@@ -19,6 +19,7 @@ import {
   toRequestDto,
 } from '../models/request-mapping';
 import { CHANGED_ON_DISK, DISCARD, Dialogs, changedOnDisk } from './dialogs';
+import { GitSignInPrompt } from './git-sign-in-prompt';
 
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 600;
@@ -35,6 +36,7 @@ export const SIDEBAR_DEFAULT_WIDTH = 256;
 export class WorkspaceStore {
   private readonly bridge = inject(Bridge);
   private readonly dialogs = inject(Dialogs);
+  private readonly signIn = inject(GitSignInPrompt);
 
   readonly isDesktop = this.bridge.isDesktop;
   readonly workspace = signal<WorkspaceInfo | null>(null);
@@ -154,7 +156,8 @@ export class WorkspaceStore {
 
   /**
    * Clones a git repository into a new folder of `parentFolder` (named `name`, or after the
-   * repository when empty) and opens it, closing the open documents. Resolves to `null` once it is
+   * repository when empty) and opens it, closing the open documents. When git can't sign in to an
+   * HTTP(S) remote, the user is asked for credentials (`GitSignInPrompt`). Resolves to `null` once it is
    * open, `false` when the user kept their unsaved changes, or the reason the clone failed, so the
    * clone dialog can show it.
    */
@@ -165,7 +168,10 @@ export class WorkspaceStore {
   ): Promise<string | false | null> {
     const failures: string[] = [];
     const opened = await this.switchWorkspace(
-      () => this.bridge.send('workspace.clone', { url, parentFolder, name: name || null }),
+      () =>
+        this.signIn.run((signIn) =>
+          this.bridge.send('workspace.clone', { url, parentFolder, name: name || null, signIn }),
+        ),
       (error) => failures.push(messageOf(error)),
     );
     return failures[0] ?? (opened ? null : false);

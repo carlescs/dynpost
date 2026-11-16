@@ -3,6 +3,7 @@ using Dynpost.Application.Certificates;
 using Dynpost.Application.Common;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
+using Dynpost.Application.Git;
 using Dynpost.Application.Requests;
 using Dynpost.Application.Secrets;
 using Dynpost.Domain.Workspaces;
@@ -328,13 +329,13 @@ internal static class BridgeMessageTypes
     /// <summary>Commits changes. Payload: <see cref="GitCommitPayload"/>. Result: commit id and new status.</summary>
     public const string GitCommit = "git.commit";
 
-    /// <summary>Pulls the current branch (merge, never rebase). Payload: none. Result: outcome and new status.</summary>
+    /// <summary>Pulls the current branch (merge, never rebase). Payload: optional <see cref="GitRemoteCommandPayload"/>. Result: outcome and new status.</summary>
     public const string GitPull = "git.pull";
 
-    /// <summary>Pushes (or publishes) the current branch, never forcing. Payload: none. Result: new status.</summary>
+    /// <summary>Pushes (or publishes) the current branch, never forcing. Payload: optional <see cref="GitRemoteCommandPayload"/>. Result: new status.</summary>
     public const string GitPush = "git.push";
 
-    /// <summary>Downloads the remotes' latest commits without changing files. Payload: none. Result: new status.</summary>
+    /// <summary>Downloads the remotes' latest commits without changing files. Payload: optional <see cref="GitRemoteCommandPayload"/>. Result: new status.</summary>
     public const string GitFetch = "git.fetch";
 
     /// <summary>Reads the configured commit name and email. Payload: none. Result: the identity (parts may be missing).</summary>
@@ -537,7 +538,14 @@ internal sealed record OpenWorkspacePayload(string Path);
 /// <param name="Url">The repository's URL.</param>
 /// <param name="ParentFolder">The existing folder the clone is created in.</param>
 /// <param name="Name">The new folder's name; omitted takes the repository's name from the URL.</param>
-internal sealed record CloneWorkspacePayload(string Url, string ParentFolder, string? Name = null);
+/// <param name="SignIn">Credentials the user entered after the first try couldn't sign in.</param>
+internal sealed record CloneWorkspacePayload(string Url, string ParentFolder, string? Name = null, GitSignIn? SignIn = null);
+
+/// <summary>
+/// The optional payload of the git commands that contact a remote (pull, push, fetch).
+/// </summary>
+/// <param name="SignIn">Credentials the user entered after the first try couldn't sign in.</param>
+internal sealed record GitRemoteCommandPayload(GitSignIn? SignIn = null);
 /// <summary>The link to open: <c>homepage</c> or <c>repository</c>.</summary>
 internal sealed record AboutOpenLinkPayload(string Link);
 internal sealed record RemoveRecentWorkspacePayload(string Path);

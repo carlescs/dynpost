@@ -25,7 +25,16 @@ public interface IGitService
     /// that must not exist yet or be empty; its parent folder must exist. Fails with
     /// <see cref="GitErrors.CloneDestinationExistsCode"/> when the destination is not empty.
     /// </summary>
-    Task<Result<Unit>> CloneAsync(RemoteUrl url, string destination, CancellationToken cancellationToken = default);
+    /// <param name="credentials">
+    /// Credentials the user entered for the remote's host, used for this command only and offered
+    /// to their credential helpers once it succeeds; null uses their git setup as is. The same holds
+    /// for the other commands that contact a remote.
+    /// </param>
+    Task<Result<Unit>> CloneAsync(
+        RemoteUrl url,
+        string destination,
+        GitCredentials? credentials = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Stages and commits changes inside the workspace: the given <paramref name="paths"/>, or every
@@ -69,19 +78,24 @@ public interface IGitService
     Task<Result<PullOutcome>> PullAsync(
         string workspacePath,
         bool allowUnrelatedHistories = false,
+        GitCredentials? credentials = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Downloads the latest commits of every remote without changing the working tree, so the
     /// status's ahead/behind counts are current. Remote-tracking branches deleted on the remote are pruned.
     /// </summary>
-    Task<Result<Unit>> FetchAsync(string workspacePath, CancellationToken cancellationToken = default);
+    Task<Result<Unit>> FetchAsync(string workspacePath, GitCredentials? credentials = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Fetches the workspace's remote (<c>origin</c>, or the only one) and, when it has a branch named
     /// <paramref name="branch"/>, makes it the branch's upstream. Returns whether it did.
     /// </summary>
-    Task<Result<bool>> TrackRemoteBranchAsync(string workspacePath, string branch, CancellationToken cancellationToken = default);
+    Task<Result<bool>> TrackRemoteBranchAsync(
+        string workspacePath,
+        string branch,
+        GitCredentials? credentials = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>The commit identity git would use in the workspace; either part may be missing.</summary>
     Task<Result<GitIdentitySettings>> GetIdentityAsync(string workspacePath, CancellationToken cancellationToken = default);
@@ -102,7 +116,11 @@ public interface IGitService
     /// <paramref name="setUpstream"/>, publishes the branch to the workspace's remote and makes it
     /// the upstream.
     /// </summary>
-    Task<Result<Unit>> PushAsync(string workspacePath, bool setUpstream, CancellationToken cancellationToken = default);
+    Task<Result<Unit>> PushAsync(
+        string workspacePath,
+        bool setUpstream,
+        GitCredentials? credentials = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reads the base, current-branch and incoming versions of a conflicted file, and its working

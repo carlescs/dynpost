@@ -1,3 +1,4 @@
+import { of } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { Mock } from 'vitest';
 import { GitBranch, GitStatus, WorkspaceDto } from '../models/messages';
@@ -153,6 +154,24 @@ describe('GitStore', () => {
     await store.fetch();
 
     await vi.waitFor(() => expect(store.branches()).toEqual([main]));
+  });
+
+  it('signs in when git cannot, and pushes with the credentials entered', async () => {
+    const signIn = { url: 'https://github.com', username: 'me', password: 'token' };
+    (dialogs as unknown as { open: Mock }).open = vi.fn(() => ({ closed: of(signIn) }));
+    handlers['git.push'] = (payload) => {
+      if (!payload.signIn) {
+        throw new BridgeError('git.authentication_failed', 'Denied', 'https://github.com');
+      }
+      return status();
+    };
+
+    await store.push();
+
+    expect(send).toHaveBeenCalledWith('git.push', { signIn: null });
+    expect(send).toHaveBeenCalledWith('git.push', { signIn });
+    expect(store.error()).toBeNull();
+    expect(store.notice()?.text).toContain('Pushed');
   });
 
   it('reloads the shown branches after a failed pull, keeping its error', async () => {

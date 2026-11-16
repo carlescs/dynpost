@@ -63,7 +63,7 @@ internal static class GitFailure
             || Has(details, "The requested URL returned error: 403")
             || Has(details, "Invalid username or password"))
         {
-            return GitErrors.AuthenticationFailed(details);
+            return GitErrors.AuthenticationFailed(details, SignInUrl(details));
         }
 
         if (Has(details, "Could not resolve host")
@@ -118,6 +118,24 @@ internal static class GitFailure
             .Split('\n')
             .Select(line => line.Trim())
             .FirstOrDefault(line => line.Contains(containing, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The HTTP(S) URL in git's sign-in failure (<c>could not read Username for 'https://host'</c>,
+    /// <c>Authentication failed for 'https://host/repo.git/'</c>), reduced to its scheme, user name,
+    /// host and port; null for SSH and anything else.
+    /// </summary>
+    internal static string? SignInUrl(string details)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(details, @"'(https?://[^'\s]+)'");
+        if (!match.Success || !Uri.TryCreate(match.Groups[1].Value, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var user = uri.UserInfo.Length == 0 ? string.Empty : uri.UserInfo.Split(':')[0] + "@";
+        var port = uri.IsDefaultPort ? string.Empty : $":{uri.Port}";
+        return $"{uri.Scheme}://{user}{uri.Host}{port}";
+    }
 
     /// <summary>The folder in git's "destination path 'x' already exists" message.</summary>
     private static string? DestinationPath(string details)

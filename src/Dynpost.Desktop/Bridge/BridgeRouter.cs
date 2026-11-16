@@ -40,6 +40,29 @@ internal sealed class BridgeRouter
         return this;
     }
 
+    /// <summary>Registers a message whose payload may be left out: the handler then gets null.</summary>
+    public BridgeRouter RegisterOptional<TPayload, TResult>(string type, Func<TPayload?, CancellationToken, Task<Result<TResult>>> handler)
+        where TPayload : class
+    {
+        _handlers.Add(type, async (payload, cancellationToken) =>
+        {
+            TPayload? typed;
+            try
+            {
+                typed = payload is { ValueKind: not JsonValueKind.Null and not JsonValueKind.Undefined } element
+                    ? element.Deserialize<TPayload>(JsonOptions)
+                    : null;
+            }
+            catch (JsonException ex)
+            {
+                return new Error(BridgeErrorCodes.BadPayload, $"Invalid payload for '{type}': {ex.Message}");
+            }
+
+            return Box(await handler(typed, cancellationToken));
+        });
+        return this;
+    }
+
     public BridgeRouter Register<TResult>(string type, Func<CancellationToken, Task<Result<TResult>>> handler)
     {
         _handlers.Add(type, async (_, cancellationToken) => Box(await handler(cancellationToken)));

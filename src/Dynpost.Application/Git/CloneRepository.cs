@@ -10,7 +10,8 @@ namespace Dynpost.Application.Git;
 /// <param name="Name">
 /// The new folder's name; when omitted, the repository's name taken from the URL, as git would.
 /// </param>
-public sealed record CloneRepositoryRequest(string Url, string ParentFolder, string? Name = null);
+/// <param name="SignIn">Credentials the user entered after a first try couldn't sign in.</param>
+public sealed record CloneRepositoryRequest(string Url, string ParentFolder, string? Name = null, GitSignIn? SignIn = null);
 
 /// <summary>
 /// Clones a remote repository into a new folder and opens that folder as the workspace, using the
@@ -37,8 +38,14 @@ public sealed class CloneRepository(IGitService git, IWorkspaceRepository reposi
             return GitErrors.InvalidCloneFolder(nameError);
         }
 
+        var credentials = GitSignIn.Check(request.SignIn);
+        if (credentials.IsFailure)
+        {
+            return credentials.Error!;
+        }
+
         var destination = Path.Combine(request.ParentFolder, name!);
-        var clone = await git.CloneAsync(url, destination, cancellationToken);
+        var clone = await git.CloneAsync(url, destination, credentials.Value, cancellationToken);
         if (clone.IsFailure)
         {
             return clone.Error!;
