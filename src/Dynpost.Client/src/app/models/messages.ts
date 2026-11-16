@@ -694,6 +694,26 @@ export interface GitStashes {
 
 export type StashApplyOutcome = 'applied' | 'conflicted';
 
+/** One of the repository's working trees: the main one, or a linked one in its own folder. */
+export interface GitWorktree {
+  /** The worktree's folder, which names it in later messages. */
+  path: string;
+  /** The workspace folder in it, opened to work there. */
+  workspaceFolder: string;
+  /** The checked-out branch; `null` when HEAD is detached. */
+  branch: string | null;
+  /** The checked-out commit; empty before the first commit. */
+  head: string;
+  /** Whether it is the main worktree, which holds the repository itself. */
+  main: boolean;
+  /** Whether it is the worktree of the open workspace. */
+  current: boolean;
+  /** Whether it is locked against removal. */
+  locked: boolean;
+  /** Whether its folder is gone, so removing it only makes git forget it. */
+  prunable: boolean;
+}
+
 export interface GitRemote {
   name: string;
   fetchUrl: string;
@@ -1331,6 +1351,19 @@ export interface BridgeMessages {
   };
   /** Deletes a stash entry. */
   'git.stash.drop': { payload: { id: string }; result: GitStashes };
+  /** The repository's worktrees, the main one first. */
+  'git.worktree.list': { payload: void; result: GitWorktree[] };
+  /** Asks for the folder a new worktree is created in; `null` when cancelled. */
+  'git.worktree.pickFolder': { payload: void; result: string | null };
+  /** Checks out a branch in a new worktree, copying secrets, `.env` and client certificates. */
+  'git.worktree.add': {
+    /** `createBranch`: create `branch` at the current commit instead of checking out an existing one. */
+    payload: { parentFolder: string; name: string; branch: string; createBranch?: boolean };
+    /** `warning`: what went wrong after the worktree was created, if anything. */
+    result: { worktree: GitWorktree; worktrees: GitWorktree[]; warning: string | null };
+  };
+  /** Removes a worktree and its folder; its branch is kept. One with changes only with `force`. */
+  'git.worktree.remove': { payload: { path: string; force?: boolean }; result: GitWorktree[] };
   /** The repository's remotes, sorted by name. */
   'git.remote.list': { payload: void; result: GitRemote[] };
   /** Adds a remote; nothing is fetched or pushed. */

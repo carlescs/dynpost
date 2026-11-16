@@ -304,6 +304,11 @@ Desktop → Application
   `Infrastructure/Git/GitCredentialOverride.cs` hands them to that one command through `-c`
   settings scoped to the host and a helper reading environment variables, then the user's helpers
   save them with `git credential approve`. Never put credentials in arguments, URLs or files.
+- Worktrees (`Application/Git/WorktreeUseCases.cs`): `CreateWorktree` copies the local data git
+  doesn't carry (secrets through `ISecretStore`, client certificates, `.env` through
+  `IDotEnvValues.CopyAsync`) to the new worktree's workspace folder, and `RemoveWorktree` clears its
+  secrets before git deletes the folder (the keychain names them by folder path), putting them
+  back if git refuses. Opening one is a plain `workspace.open` of its workspace folder.
 - Pull always merges (`--no-rebase`); conflicts are left in the working tree and
   reported. Files under `.dynpost/` are excluded from status and commits even
   if the `.gitignore` entry is missing.

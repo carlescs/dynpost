@@ -315,6 +315,15 @@ internal static class BridgeHandlers
                 async (p, ct) => (await Use<ApplyStash>().ExecuteAsync(new ApplyStashRequest(p.Id, p.Pop), ct)).Map(GitStashApplyDto.From))
             .Register<GitStashIdPayload, GitStashesDto>(BridgeMessageTypes.GitStashDrop,
                 async (p, ct) => (await Use<DropStash>().ExecuteAsync(p.Id, ct)).Map(GitStashesDto.From))
+            .Register(BridgeMessageTypes.GitWorktreeList,
+                async ct => (await Use<ListWorktrees>().ExecuteAsync(ct)).Map(GitWorktreeDto.From))
+            .Register(BridgeMessageTypes.GitWorktreePickFolder,
+                async _ => Result<string?>.Success(await dialogs.PickFolderAsync("Choose where to create the worktree")))
+            .Register<GitAddWorktreePayload, GitCreateWorktreeDto>(BridgeMessageTypes.GitWorktreeAdd,
+                async (p, ct) => (await Use<CreateWorktree>().ExecuteAsync(
+                    new CreateWorktreeRequest(p.ParentFolder, p.Name, p.Branch, p.CreateBranch), ct)).Map(GitCreateWorktreeDto.From))
+            .Register<GitRemoveWorktreePayload, IReadOnlyList<GitWorktreeDto>>(BridgeMessageTypes.GitWorktreeRemove,
+                async (p, ct) => (await Use<RemoveWorktree>().ExecuteAsync(new RemoveWorktreeRequest(p.Path, p.Force), ct)).Map(GitWorktreeDto.From))
             .Register(BridgeMessageTypes.GitRemoteList,
                 async ct => (await Use<ListRemotes>().ExecuteAsync(ct)).Map(GitRemoteDto.From))
             .Register<GitAddRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteAdd,

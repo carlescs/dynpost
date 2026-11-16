@@ -52,6 +52,12 @@ public interface IDotEnvValues
 {
     /// <summary>The <c>.env</c> values, or none when the file is missing or reading it is turned off.</summary>
     Task<IReadOnlyDictionary<string, string>> ReadAsync(string root, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Copies the <c>.env</c> file of <paramref name="fromRoot"/> to <paramref name="toRoot"/>, whatever
+    /// the setting, unless the destination has one already. Returns whether it copied.
+    /// </summary>
+    Task<Result<bool>> CopyAsync(string fromRoot, string toRoot, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The secret settings as the UI shows them.</summary>

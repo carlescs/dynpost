@@ -963,6 +963,191 @@ public sealed class GitCliService : IGitService
             : GitErrors.StashNotFound();
     }
 
+    public async Task<Result<IReadOnlyList<GitWorktree>>> ListWorktreesAsync(
+        string workspacePath,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var top = await RunCheckedAsync(workspacePath, "rev-parse", ["rev-parse", "--show-toplevel"], cancellationToken);
+        if (top.IsFailure)
+        {
+            return top.Error!;
+        }
+
+        var list = await RunCheckedAsync(workspacePath, "worktree list", ["worktree", "list", "--porcelain", "-z"], cancellationToken);
+        return list.IsFailure
+            ? list.Error!
+            : Result<IReadOnlyList<GitWorktree>>.Success(
+                ParseWorktrees(list.Value.StandardOutput, top.Value.StandardOutput.TrimEnd('\r', '\n'), prefix.Value));
+    }
+
+    /// <summary>
+    /// Parses <c>git worktree list --porcelain -z</c>: one record per worktree, ended by an empty
+    /// field, of NUL-ended <c>key value</c> fields (<c>worktree</c>, <c>HEAD</c>,
+    /// <c>branch refs/heads/x</c> or <c>detached</c>, <c>bare</c>, <c>locked</c>, <c>prunable</c>).
+    /// The first record is the main worktree.
+    /// </summary>
+    /// <param name="currentTop">The open workspace's worktree folder, as git reports it.</param>
+    /// <param name="prefix">The workspace folder's path inside its worktree (<c>api/</c>), or empty.</param>
+    internal static IReadOnlyList<GitWorktree> ParseWorktrees(string output, string currentTop, string prefix)
+    {
+        var worktrees = new List<GitWorktree>();
+        var fields = new List<string>();
+        var first = true;
+        foreach (var field in output.Split('\0'))
+        {
+            if (field.Length > 0)
+            {
+                fields.Add(field);
+                continue;
+            }
+
+            if (fields.Count == 0)
+            {
+                continue;
+            }
+
+            var record = fields;
+            fields = [];
+            var isMain = first;
+            first = false;
+            string? Value(string key) =>
+                record.FirstOrDefault(f => f == key || f.StartsWith(key + " ", StringComparison.Ordinal)) is { } found
+                    ? found.Length > key.Length ? found[(key.Length + 1)..] : string.Empty
+                    : null;
+
+            if (Value("worktree") is not { Length: > 0 } path || Value("bare") is not null)
+            {
+                continue;
+            }
+
+            var branch = Value("branch") is { } reference && reference.StartsWith("refs/heads/", StringComparison.Ordinal)
+                ? reference["refs/heads/".Length..]
+                : null;
+            var workspaceFolder = prefix.Length == 0
+                ? path
+                : System.IO.Path.Combine(path, prefix.TrimEnd('/').Replace('/', System.IO.Path.DirectorySeparatorChar));
+            worktrees.Add(new GitWorktree(
+                path,
+                workspaceFolder,
+                branch,
+                Value("HEAD") ?? string.Empty,
+                isMain,
+                SamePath(path, currentTop),
+                Value("locked") is not null,
+                Value("prunable") is not null));
+        }
+
+        return worktrees;
+    }
+
+    /// <summary>Compares two folders git reported, which may differ in separators or a trailing one.</summary>
+    private static bool SamePath(string a, string b)
+    {
+        static string Normalize(string path) => path.Replace('\\', '/').TrimEnd('/');
+        return string.Equals(
+            Normalize(a),
+            Normalize(b),
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    public async Task<Result<Unit>> AddWorktreeAsync(
+        string workspacePath,
+        string folder,
+        string branch,
+        bool createBranch,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // A local branch's short name checks it out (git looks for refs/heads/<name> first); its full
+        // ref would detach HEAD instead. The use case only passes existing local branches.
+        IReadOnlyList<string> arguments = createBranch
+            ? ["worktree", "add", "-b", branch, "--", folder, "HEAD"]
+            : ["worktree", "add", "--", folder, branch];
+        var added = await RunAsync(workspacePath, arguments, cancellationToken);
+        if (added.IsFailure)
+        {
+            return added.Error!;
+        }
+
+        if (added.Value.Succeeded)
+        {
+            return Unit.Value;
+        }
+
+        var details = Details(added.Value);
+        if (details.Contains("' already exists", StringComparison.Ordinal) && !details.Contains("a branch named", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.WorktreeFolderExists(folder);
+        }
+
+        if (details.Contains("a branch named", StringComparison.OrdinalIgnoreCase) && details.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.BranchExists(branch);
+        }
+
+        return GitFailure.Classify("worktree add", details);
+    }
+
+    public async Task<Result<Unit>> RemoveWorktreeAsync(
+        string workspacePath,
+        GitWorktree worktree,
+        bool force,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // One --force only: a locked worktree takes two, and stays.
+        IReadOnlyList<string> arguments = force
+            ? ["worktree", "remove", "--force", "--", worktree.Path]
+            : ["worktree", "remove", "--", worktree.Path];
+        var removed = await RunAsync(workspacePath, arguments, cancellationToken);
+        if (removed.IsFailure)
+        {
+            return removed.Error!;
+        }
+
+        if (removed.Value.Succeeded)
+        {
+            return Unit.Value;
+        }
+
+        var details = Details(removed.Value);
+        if (details.Contains("contains modified or untracked files", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.WorktreeHasChanges(worktree.Path);
+        }
+
+        return details.Contains("locked working tree", StringComparison.OrdinalIgnoreCase)
+            ? GitErrors.WorktreeLocked(worktree.Path)
+            : GitFailure.Classify("worktree remove", details);
+    }
+
+    public async Task<Result<Unit>> PruneWorktreesAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        return Done(await RunCheckedAsync(workspacePath, "worktree prune", ["worktree", "prune"], cancellationToken));
+    }
+
     public async Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(
         string workspacePath,
         CancellationToken cancellationToken = default)

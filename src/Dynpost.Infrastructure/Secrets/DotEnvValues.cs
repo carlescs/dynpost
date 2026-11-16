@@ -1,3 +1,4 @@
+using Dynpost.Application.Common;
 using System.Text;
 using Dynpost.Application.Secrets;
 using Dynpost.Application.Settings;
@@ -31,6 +32,26 @@ public sealed class DotEnvValues(IAppSettingsStore settings) : IDotEnvValues
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new Dictionary<string, string>();
+        }
+    }
+
+    public async Task<Result<bool>> CopyAsync(string fromRoot, string toRoot, CancellationToken cancellationToken = default)
+    {
+        var source = FullPath(fromRoot, WorkspacePath.Root.Combine(FileName));
+        var destination = FullPath(toRoot, WorkspacePath.Root.Combine(FileName));
+        try
+        {
+            if (!File.Exists(source) || File.Exists(destination))
+            {
+                return false;
+            }
+
+            File.Copy(source, destination);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not copy the {FileName} file: {ex.Message}");
         }
     }
 

@@ -16,7 +16,7 @@ With Dynpost you can:
   cookies, and a pretty-printed body with HTML, PDF and image previews.
 - **Organize collections** — nested folders, drag and drop, Markdown docs per
   request, and values captured from responses into variables.
-- **Sync with git** — status, diffs, commit, pull, push, branches and stashes, with
+- **Sync with git** — status, diffs, commit, pull, push, branches, stashes and worktrees, with
   clear reporting of merge conflicts, using your existing git setup.
 - **Load test** — `*.run.yaml` plans that send requests from concurrent
   virtual users, with live statistics and pass/fail thresholds.
@@ -111,7 +111,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Watch the workspace folder, so edits made in other programs show up
       (see [Changes made outside Dynpost](#changes-made-outside-dynpost))
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
-      (switch, create, check out, delete), stashes, remotes, and clear reporting of
+      (switch, create, check out, delete), stashes, worktrees, remotes, and clear reporting of
       merge conflicts
 - [x] Load runner: `*.run.yaml` plans that send requests from concurrent
       virtual users, with live statistics, pass/fail thresholds and comparison
@@ -1261,8 +1261,8 @@ exports diff cleanly.
 
 When the workspace folder is a git repository, Dynpost shows which request and
 environment files changed, lets you commit them with a message, pulls and
-pushes the current branch, switches, creates, merges and deletes branches (local or on the remote), and stashes
-uncommitted changes. It uses your existing git credentials. Dynpost never
+pushes the current branch, switches, creates, merges and deletes branches (local or on the remote), stashes
+uncommitted changes, and checks branches out in worktrees of their own. It uses your existing git credentials. Dynpost never
 force-pushes and never resolves conflicts automatically: conflicting files are
 reported so you can resolve them (in Dynpost's editor or your own tools).
 
@@ -1420,6 +1420,34 @@ configuration, hooks and credential helpers apply as usual. In detail:
   - **Drop** deletes an entry after a confirmation; its changes are lost.
   - Entries are acted on by their commit, so if another git tool changed the
     stash list meanwhile, Dynpost refuses rather than act on the wrong entry.
+- **Worktrees** lists the repository's worktrees (`git worktree`): other
+  folders, linked to the same repository, each with its own branch checked out,
+  so you can work on two branches side by side without stashing or switching.
+  Each shows its folder and branch, and whether it is the open one, the main
+  one, locked, or gone from disk.
+  - **Create** (the + button) checks out an existing local branch that no
+    worktree has yet, or a new branch at the current commit, in a new folder.
+    The folder is suggested next to the main worktree and named after the
+    branch (`api-feature-login`); you can change both. Dynpost copies what git
+    doesn't carry to the new worktree's workspace folder: your secret values
+    (into `.dynpost/` or the system credential store, wherever you keep them),
+    the `.env` file (unless the branch has one) and the client certificate
+    settings, whose workspace-relative files that aren't in the new worktree are
+    named by their full path in the original. Cookies and response history start
+    empty. Dynpost then offers to open it.
+  - **Open** opens a worktree's workspace folder in place of the current one
+    (the workspace's place in the repository, when it is a subfolder), asking
+    first about unsaved tabs.
+  - **Remove** deletes a worktree's folder after a confirmation
+    (`git worktree remove`); its branch and commits stay. Its secret values are
+    deleted too, so none are left behind in the credential store. If it has
+    uncommitted changes or new files, git keeps it and Dynpost asks a second
+    time before removing it anyway. The main worktree, the open one and locked
+    ones can't be removed; a worktree whose folder was deleted is just
+    forgotten (`git worktree prune`).
+  - A branch can be checked out in only one worktree: switching to, checking
+    out or deleting a branch another worktree has is refused, naming that
+    worktree.
 - **Remotes** lists the repository's remotes with their URLs. You can add one,
   rename it or change its URL (`git remote add`, `rename`, `set-url`), or
   remove it after confirming (`git remote remove`, which also drops its

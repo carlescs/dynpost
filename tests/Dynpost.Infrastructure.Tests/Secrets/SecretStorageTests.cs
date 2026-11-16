@@ -85,6 +85,29 @@ public sealed class SecretStorageTests : IDisposable
     }
 
     [Fact]
+    public async Task DotEnv_IsCopiedToAnotherFolder_UnlessItHasOne()
+    {
+        var other = Directory.CreateTempSubdirectory("dynpost-tests-").FullName;
+        try
+        {
+            var values = new DotEnvValues(_settings);
+            Assert.False((await values.CopyAsync(_root, other)).Value);
+
+            File.WriteAllText(Path.Combine(_root, ".env"), "token=abc\n");
+            Assert.True((await values.CopyAsync(_root, other)).Value);
+            Assert.Equal("token=abc\n", File.ReadAllText(Path.Combine(other, ".env")));
+
+            File.WriteAllText(Path.Combine(_root, ".env"), "token=changed\n");
+            Assert.False((await values.CopyAsync(_root, other)).Value);
+            Assert.Equal("token=abc\n", File.ReadAllText(Path.Combine(other, ".env")));
+        }
+        finally
+        {
+            Directory.Delete(other, recursive: true);
+        }
+    }
+
+    [Fact]
     public void DotEnv_ParsesQuotesCommentsAndExport()
     {
         var values = DotEnvValues.Parse("""

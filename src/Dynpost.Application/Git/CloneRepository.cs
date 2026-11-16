@@ -55,7 +55,7 @@ public sealed class CloneRepository(IGitService git, IWorkspaceRepository reposi
     }
 
     /// <summary>Why <paramref name="name"/> can't name the new folder, or null when it can.</summary>
-    private static string? CheckFolderName(string? name)
+    internal static string? CheckFolderName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {

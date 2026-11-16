@@ -1,6 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Common;
+using Dynpost.Application.Environments;
+using Dynpost.Application.Secrets;
 using Dynpost.Application.Git;
 using Dynpost.Application.History;
 using Dynpost.Application.Requests;
@@ -83,6 +86,12 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<StashChanges>()
             .AddTransient<ApplyStash>()
             .AddTransient<DropStash>()
+            .AddTransient<ListWorktrees>()
+            .AddTransient<CreateWorktree>()
+            .AddTransient<RemoveWorktree>()
+            .AddSingleton(Substitute.For<ISecretStore>())
+            .AddSingleton(Substitute.For<IClientCertificateStore>())
+            .AddSingleton(Substitute.For<IDotEnvValues>())
             .AddTransient<ListRemotes>()
             .AddTransient<AddRemote>()
             .AddTransient<UpdateRemote>()
@@ -695,6 +704,83 @@ public sealed class GitBridgeTests : IDisposable
         Assert.True(dropped.GetProperty("ok").GetBoolean(), dropped.ToString());
         await _git.Received(1).DropStashAsync(Folder, Stash, Arg.Any<CancellationToken>());
         Assert.Equal(GitErrors.StashNotFoundCode, ErrorCode(unknown));
+    }
+
+    private static readonly GitWorktree MainWorktree = new("/work", Folder, "main", "a1", IsMain: true, IsCurrent: true);
+    private static readonly GitWorktree FeatureWorktree = new("/work-feature", "/work-feature/my-api", "feature", "b2", false, false);
+
+    [Fact]
+    public async Task GitWorktreeList_SendsEveryFieldTheClientReads()
+    {
+        _current.Open(Folder);
+        _git.ListWorktreesAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<GitWorktree>>.Success([MainWorktree, FeatureWorktree]));
+
+        var response = await SendAsync("git.worktree.list");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var worktree = response.GetProperty("payload")[1];
+        // The fields of GitWorktree in models/messages.ts.
+        Assert.Equal(
+            ["path", "workspaceFolder", "branch", "head", "main", "current", "locked", "prunable"],
+            worktree.EnumerateObject().Select(p => p.Name));
+        Assert.Equal("/work-feature/my-api", worktree.GetProperty("workspaceFolder").GetString());
+    }
+
+    [Fact]
+    public async Task GitWorktreePickFolder_ReturnsTheChosenFolder()
+    {
+        _dialogs.PickFolderAsync(Arg.Any<string>()).Returns("/work");
+
+        var response = await SendAsync("git.worktree.pickFolder");
+
+        Assert.Equal("/work", response.GetProperty("payload").GetString());
+    }
+
+    [Fact]
+    public async Task GitWorktreeAdd_CreatesTheWorktree()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", null, 0, 0, false, [])));
+        _git.ListBranchesAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<GitBranch>>.Success([
+            new GitBranch("main", null, true, null, "a1", null, "Init"),
+        ]));
+        _repository.FolderExists(Arg.Any<string>()).Returns(true);
+        _git.AddWorktreeAsync(default!, default!, default!, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+        _git.ListWorktreesAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<GitWorktree>>.Success([MainWorktree, FeatureWorktree]));
+        var secrets = _services.GetRequiredService<ISecretStore>();
+        secrets.LoadAsync(default!).ReturnsForAnyArgs(
+            Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
+                new Dictionary<string, IReadOnlyDictionary<string, string>>()));
+        _services.GetRequiredService<IClientCertificateStore>().LoadAsync(default!).ReturnsForAnyArgs(
+            Result<IReadOnlyDictionary<string, IReadOnlyList<Domain.Http.ClientCertificateSetting>>>.Success(
+                new Dictionary<string, IReadOnlyList<Domain.Http.ClientCertificateSetting>>()));
+        _services.GetRequiredService<IDotEnvValues>().CopyAsync(default!, default!).ReturnsForAnyArgs(Result<bool>.Success(false));
+
+        var response = await SendAsync(
+            "git.worktree.add",
+            """{ "parentFolder": "/", "name": "work-feature", "branch": "feature", "createBranch": true }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var payload = response.GetProperty("payload");
+        Assert.Equal(["worktree", "worktrees", "warning"], payload.EnumerateObject().Select(p => p.Name));
+        Assert.Equal("/work-feature", payload.GetProperty("worktree").GetProperty("path").GetString());
+        await _git.Received(1).AddWorktreeAsync(Folder, Path.Combine("/", "work-feature"), "feature", true, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GitWorktreeRemove_RefusesTheOpenWorktree()
+    {
+        _current.Open(Folder);
+        _git.ListWorktreesAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<GitWorktree>>.Success([MainWorktree, FeatureWorktree with { IsCurrent = true }]));
+
+        var response = await SendAsync("git.worktree.remove", """{ "path": "/work-feature", "force": true }""");
+
+        Assert.Equal(GitErrors.WorktreeInUseCode, ErrorCode(response));
+        await _git.DidNotReceiveWithAnyArgs().RemoveWorktreeAsync(default!, default!, default);
     }
 
     private async Task<JsonElement> SendAsync(string type, string? payload = null)

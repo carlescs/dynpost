@@ -429,6 +429,108 @@ describe('GitStore', () => {
     expect(store.failedOperation()).toBe('stash');
   });
 
+  it('creates a worktree, keeping its list and reporting what was copied', async () => {
+    const linked = {
+      path: '/home/me/api-login',
+      workspaceFolder: '/home/me/api-login',
+      branch: 'login',
+      head: 'a1',
+      main: false,
+      current: false,
+      locked: false,
+      prunable: false,
+    };
+    handlers['git.worktree.add'] = () => ({ worktree: linked, worktrees: [linked], warning: null });
+
+    expect(await store.addWorktree('/home/me', ' api-login ', ' login ', true)).toEqual(linked);
+
+    expect(send).toHaveBeenCalledWith('git.worktree.add', {
+      parentFolder: '/home/me',
+      name: 'api-login',
+      branch: 'login',
+      createBranch: true,
+    });
+    expect(store.worktrees()).toEqual([linked]);
+    expect(store.notice()?.text).toContain('with your secrets, .env file and client certificates');
+  });
+
+  it('shows the warning of a worktree whose local data could not all be copied', async () => {
+    const linked = {
+      path: '/x',
+      workspaceFolder: '/x',
+      branch: 'b',
+      head: 'a1',
+      main: false,
+      current: false,
+      locked: false,
+      prunable: false,
+    };
+    handlers['git.worktree.add'] = () => ({
+      worktree: linked,
+      worktrees: [linked],
+      warning: "Dynpost couldn't copy secret values.",
+    });
+
+    await store.addWorktree('/', 'x', 'b', false);
+
+    expect(store.notice()).toEqual({
+      kind: 'warning',
+      text: "Dynpost couldn't copy secret values.",
+    });
+  });
+
+  it('reports a worktree that could not be created', async () => {
+    handlers['git.worktree.add'] = () => {
+      throw new BridgeError(
+        'git.branch_in_worktree',
+        "'b' is checked out in the worktree at '/y'.",
+      );
+    };
+
+    expect(await store.addWorktree('/', 'x', 'b', false)).toBeNull();
+
+    expect(store.failedOperation()).toBe('worktree');
+  });
+
+  it('removes a worktree, forcing only when asked', async () => {
+    const linked = {
+      path: '/x',
+      workspaceFolder: '/x',
+      branch: 'b',
+      head: 'a1',
+      main: false,
+      current: false,
+      locked: false,
+      prunable: false,
+    };
+    handlers['git.worktree.remove'] = () => [];
+
+    expect(await store.removeWorktree(linked)).toBe(true);
+    expect(await store.removeWorktree(linked, true)).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.worktree.remove', { path: '/x', force: false });
+    expect(send).toHaveBeenCalledWith('git.worktree.remove', { path: '/x', force: true });
+    expect(store.worktrees()).toEqual([]);
+    expect(store.notice()?.text).toBe('Removed the worktree at /x.');
+  });
+
+  it('opens a worktree through its workspace folder', async () => {
+    const open = vi.spyOn(workspaceStore, 'openRecent').mockResolvedValue();
+
+    await store.openWorktree({
+      path: '/x',
+      workspaceFolder: '/x/api',
+      branch: 'b',
+      head: 'a1',
+      main: false,
+      current: false,
+      locked: false,
+      prunable: false,
+    });
+
+    expect(open).toHaveBeenCalledWith('/x/api');
+  });
+
   it('asks for an identity when a merge commit has none', async () => {
     handlers['git.branch.merge'] = () => {
       throw new BridgeError('git.identity_unknown', 'Git does not know who you are.');

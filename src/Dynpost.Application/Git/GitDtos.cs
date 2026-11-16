@@ -264,6 +264,33 @@ public sealed record GitStashApplyDto(
             result.ConflictsOutsideWorkspace);
 }
 
+/// <param name="Path">The worktree's folder, which names it in later messages.</param>
+/// <param name="WorkspaceFolder">The workspace folder in it, opened to work there.</param>
+/// <param name="Branch">The checked-out branch; <c>null</c> when HEAD is detached.</param>
+/// <param name="Prunable">Whether its folder is gone, so removing it only makes git forget it.</param>
+public sealed record GitWorktreeDto(
+    string Path,
+    string WorkspaceFolder,
+    string? Branch,
+    string Head,
+    bool Main,
+    bool Current,
+    bool Locked,
+    bool Prunable)
+{
+    public static GitWorktreeDto From(GitWorktree w) =>
+        new(w.Path, w.WorkspaceFolder, w.Branch, w.Head, w.IsMain, w.IsCurrent, w.IsLocked, w.IsPrunable);
+
+    public static IReadOnlyList<GitWorktreeDto> From(IReadOnlyList<GitWorktree> worktrees) => worktrees.Select(From).ToList();
+}
+
+/// <param name="Warning">What went wrong after the worktree was created, if anything.</param>
+public sealed record GitCreateWorktreeDto(GitWorktreeDto Worktree, IReadOnlyList<GitWorktreeDto> Worktrees, string? Warning)
+{
+    public static GitCreateWorktreeDto From(CreateWorktreeResult result) =>
+        new(GitWorktreeDto.From(result.Worktree), GitWorktreeDto.From(result.Worktrees), result.Warning);
+}
+
 public sealed record GitIdentityDto(string? Name, string? Email)
 {
     public static GitIdentityDto From(GitIdentitySettings identity) => new(identity.Name, identity.Email);

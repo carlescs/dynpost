@@ -12,6 +12,7 @@ import {
   GitStash,
   GitStashes,
   GitStatus,
+  GitWorktree,
   MergeOutcome,
   PullOutcome,
   StashApplyOutcome,
@@ -36,7 +37,8 @@ export type GitOperation =
   | 'abort'
   | 'remote'
   | 'branch'
-  | 'stash';
+  | 'stash'
+  | 'worktree';
 
 export interface GitNotice {
   kind: 'info' | 'warning';
@@ -82,6 +84,8 @@ export class GitStore {
   readonly branches = signal<GitBranch[] | null>(null);
   /** Stash entries, newest first; `null` until read. */
   readonly stashes = signal<GitStash[] | null>(null);
+  /** The repository's worktrees, the main one first; `null` until read. */
+  readonly worktrees = signal<GitWorktree[] | null>(null);
   /** The commit identity git uses here; `null` until it is read. */
   readonly identity = signal<GitIdentity | null>(null);
 
@@ -143,6 +147,7 @@ export class GitStore {
         this.remotes.set(null);
         this.branches.set(null);
         this.stashes.set(null);
+        this.worktrees.set(null);
         this.identity.set(null);
         this.backgroundQueued = false;
         if (root && this.available) void this.refresh();
@@ -186,6 +191,7 @@ export class GitStore {
         void this.loadRemotes();
         this.reloadBranchesIfShown();
         this.reloadStashesIfShown();
+        this.reloadWorktreesIfShown();
         void this.loadIdentity();
       },
     );
@@ -219,6 +225,7 @@ export class GitStore {
       // Other git tools may have created, deleted or moved branches, or stashed.
       this.reloadBranchesIfShown();
       this.reloadStashesIfShown();
+      this.reloadWorktreesIfShown();
     } catch (error) {
       if (overtaken()) return;
       this.reportError('refresh', error);
@@ -723,6 +730,99 @@ export class GitStore {
       this.notice.set({ kind: 'info', text });
       if (reload) this.reloadWorkspaceFiles();
     });
+  }
+
+  /** Worktrees are read once the Worktrees section is opened, then kept current. */
+  private reloadWorktreesIfShown(): void {
+    if (this.worktrees() !== null) void this.loadWorktrees();
+  }
+
+  /** Reads the worktrees; failures leave the last list (the status shows git errors). */
+  async loadWorktrees(): Promise<void> {
+    const root = this.root();
+    if (!root) return;
+    try {
+      const worktrees = await this.bridge.send('git.worktree.list');
+      if (this.root() === root) this.worktrees.set(worktrees);
+    } catch {
+      if (this.root() === root) this.worktrees.set(null);
+    }
+  }
+
+  /** Asks for the folder a new worktree goes in; `null` when cancelled or failed. */
+  async pickWorktreeFolder(): Promise<string | null> {
+    try {
+      return await this.bridge.send('git.worktree.pickFolder');
+    } catch (error) {
+      this.reportError('worktree', error);
+      return null;
+    }
+  }
+
+  /**
+   * Checks out a branch (or a new one, at the current commit) in a new worktree folder. The host
+   * copies the workspace's secrets, `.env` file and client certificates to it. Resolves to the new
+   * worktree, or `null` when it failed.
+   */
+  async addWorktree(
+    parentFolder: string,
+    name: string,
+    branch: string,
+    createBranch: boolean,
+  ): Promise<GitWorktree | null> {
+    let created: GitWorktree | null = null;
+    await this.run(
+      'worktree',
+      () =>
+        this.bridge.send('git.worktree.add', {
+          parentFolder,
+          name: name.trim(),
+          branch: branch.trim(),
+          createBranch,
+        }),
+      (result) => {
+        created = result.worktree;
+        this.worktrees.set(result.worktrees);
+        this.notice.set(
+          result.warning
+            ? { kind: 'warning', text: result.warning }
+            : {
+                kind: 'info',
+                text:
+                  `Created a worktree for ${result.worktree.branch} at ${result.worktree.path}, ` +
+                  'with your secrets, .env file and client certificates.',
+              },
+        );
+        // A new branch shows up in the Branches section.
+        this.reloadBranchesIfShown();
+      },
+    );
+    return created;
+  }
+
+  /**
+   * Removes a worktree and its folder; its branch is kept. Without `force`, git keeps a worktree
+   * with changes or new files; the error code is then `git.worktree_has_changes`.
+   */
+  removeWorktree(worktree: GitWorktree, force = false): Promise<boolean> {
+    return this.run(
+      'worktree',
+      () => this.bridge.send('git.worktree.remove', { path: worktree.path, force }),
+      (worktrees) => {
+        this.worktrees.set(worktrees);
+        this.notice.set({
+          kind: 'info',
+          text: worktree.prunable
+            ? `Forgot the worktree at ${worktree.path}.`
+            : `Removed the worktree at ${worktree.path}.`,
+        });
+      },
+    );
+  }
+
+  /** Opens a worktree's workspace folder in place of this one (asking about unsaved tabs first). */
+  openWorktree(worktree: GitWorktree): Promise<void> {
+    return this.workspace.openRecent(worktree.workspaceFolder);
   }
 
   /** After git changed the workspace files: they can be requests, environments or run plans. */
