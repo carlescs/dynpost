@@ -9,9 +9,12 @@ import {
   GitFileDiff,
   GitIdentity,
   GitRemote,
+  GitStash,
+  GitStashes,
   GitStatus,
   MergeOutcome,
   PullOutcome,
+  StashApplyOutcome,
 } from '../models/messages';
 import { EnvironmentStore } from './environment-store';
 import { RunStore, isRunPlanDirty } from './run-store';
@@ -32,7 +35,8 @@ export type GitOperation =
   | 'resolve'
   | 'abort'
   | 'remote'
-  | 'branch';
+  | 'branch'
+  | 'stash';
 
 export interface GitNotice {
   kind: 'info' | 'warning';
@@ -76,6 +80,8 @@ export class GitStore {
   readonly remotes = signal<GitRemote[] | null>(null);
   /** Local and remote-tracking branches; `null` until read. */
   readonly branches = signal<GitBranch[] | null>(null);
+  /** Stash entries, newest first; `null` until read. */
+  readonly stashes = signal<GitStash[] | null>(null);
   /** The commit identity git uses here; `null` until it is read. */
   readonly identity = signal<GitIdentity | null>(null);
 
@@ -136,6 +142,7 @@ export class GitStore {
         this.closeDiff();
         this.remotes.set(null);
         this.branches.set(null);
+        this.stashes.set(null);
         this.identity.set(null);
         this.backgroundQueued = false;
         if (root && this.available) void this.refresh();
@@ -178,6 +185,7 @@ export class GitStore {
         this.status.set(status);
         void this.loadRemotes();
         this.reloadBranchesIfShown();
+        this.reloadStashesIfShown();
         void this.loadIdentity();
       },
     );
@@ -208,8 +216,9 @@ export class GitStore {
       this.status.set(status);
       // A failed read's error is out of date now, but other operations' errors stay.
       if (this.failedOperation() === 'refresh') this.dismissError();
-      // Other git tools may have created, deleted or moved branches.
+      // Other git tools may have created, deleted or moved branches, or stashed.
       this.reloadBranchesIfShown();
+      this.reloadStashesIfShown();
     } catch (error) {
       if (overtaken()) return;
       this.reportError('refresh', error);
@@ -620,6 +629,109 @@ export class GitStore {
     });
   }
 
+  /** Stashes are read once the Stashes section is opened, then kept current. */
+  private reloadStashesIfShown(): void {
+    if (this.stashes() !== null) void this.loadStashes();
+  }
+
+  /** Reads the stash list; failures leave the last list (the status shows git errors). */
+  async loadStashes(): Promise<void> {
+    const root = this.root();
+    if (!root) return;
+    try {
+      const result = await this.bridge.send('git.stash.list');
+      if (this.root() === root) this.stashes.set(result.stashes);
+    } catch {
+      if (this.root() === root) this.stashes.set(null);
+    }
+  }
+
+  /**
+   * Sets every uncommitted change in the workspace aside, new files included, then reloads the
+   * workspace and open tabs from disk. Resolves to whether it stashed.
+   */
+  async stash(message = ''): Promise<boolean> {
+    if (!(await this.confirmUnsavedTabs('Stash your changes?', UNSAVED_NOT_STASHED))) return false;
+    return this.pushStash(message);
+  }
+
+  /**
+   * Stashes the changes, then switches branch: for a switch refused over uncommitted changes.
+   * Resolves to whether it switched.
+   */
+  async stashAndSwitch(name: string): Promise<boolean> {
+    const question = `Stash your changes and switch to ${name}?`;
+    if (!(await this.confirmUnsavedTabs(question, UNSAVED_NOT_STASHED))) return false;
+    if (!(await this.pushStash(''))) return false;
+    return this.runBranch(
+      () => this.bridge.send('git.branch.switch', { name }),
+      `Stashed your changes and switched to ${name}. Apply or pop the stash to bring them back.`,
+      true,
+    );
+  }
+
+  private pushStash(message: string): Promise<boolean> {
+    const trimmed = message.trim();
+    return this.runStash(
+      () => this.bridge.send('git.stash.push', trimmed ? { message: trimmed } : {}),
+      'Stashed your changes. The workspace is back to the last commit.',
+      true,
+    );
+  }
+
+  /**
+   * Brings a stash entry's changes back, and with `pop` drops the entry unless it conflicted, then
+   * reloads the workspace and open tabs from disk. Conflicts are left for the user to resolve.
+   * Resolves to whether it ran (including when it stopped on conflicts).
+   */
+  async applyStash(stash: GitStash, pop: boolean): Promise<boolean> {
+    const question = `${pop ? 'Pop' : 'Apply'} the stash "${stash.message}"?`;
+    const consequence =
+      "Applying it won't update them, and saving them afterwards would overwrite its changes.";
+    if (!(await this.confirmUnsavedTabs(question, consequence))) return false;
+    return this.run(
+      'stash',
+      () => this.bridge.send('git.stash.apply', { id: stash.id, pop }),
+      (result) => {
+        this.status.set(result.status);
+        this.stashes.set(result.stashes);
+        this.notice.set(
+          stashNotice(result.outcome, stash.message, pop, result.conflictsOutsideWorkspace ?? []),
+        );
+        this.reloadWorkspaceFiles();
+      },
+    );
+  }
+
+  /** Deletes a stash entry; its changes are lost. */
+  dropStash(stash: GitStash): Promise<boolean> {
+    return this.runStash(
+      () => this.bridge.send('git.stash.drop', { id: stash.id }),
+      `Dropped the stash "${stash.message}".`,
+      false,
+    );
+  }
+
+  private runStash(
+    call: () => Promise<GitStashes>,
+    text: string,
+    reload: boolean,
+  ): Promise<boolean> {
+    return this.run('stash', call, (result) => {
+      this.status.set(result.status);
+      this.stashes.set(result.stashes);
+      this.notice.set({ kind: 'info', text });
+      if (reload) this.reloadWorkspaceFiles();
+    });
+  }
+
+  /** After git changed the workspace files: they can be requests, environments or run plans. */
+  private reloadWorkspaceFiles(): void {
+    void this.workspace.refresh();
+    void this.workspace.reloadFromDisk();
+    void this.environments.refresh();
+  }
+
   /** Asks before a checkout when open tabs have unsaved edits, which git can't see. */
   private confirmUnsavedTabs(
     question: string,
@@ -741,6 +853,35 @@ function mergeNotice(
       };
   }
 }
+
+function stashNotice(
+  outcome: StashApplyOutcome,
+  message: string,
+  pop: boolean,
+  outside: string[],
+): GitNotice {
+  if (outcome === 'applied') {
+    return {
+      kind: 'info',
+      text: pop
+        ? `Popped the stash "${message}": its changes are back, and it was dropped.`
+        : `Applied the stash "${message}". It stays in the list; drop it when you no longer need it.`,
+    };
+  }
+  return {
+    kind: 'warning',
+    text:
+      `The stash "${message}" conflicts with the current files. Open each conflicted file below ` +
+      `to resolve it. The stash was kept${pop ? '; drop it once you are done' : ''}.` +
+      (outside.length
+        ? ` These conflicted files are outside the workspace folder; resolve them with your own ` +
+          `git tools: ${outside.join(', ')}.`
+        : ''),
+  };
+}
+
+const UNSAVED_NOT_STASHED =
+  "Their edits aren't stashed: they stay in their tabs, and saving them writes them to disk again.";
 
 const PULL_NOTICES: Record<PullOutcome, GitNotice> = {
   upToDate: { kind: 'info', text: 'Already up to date.' },

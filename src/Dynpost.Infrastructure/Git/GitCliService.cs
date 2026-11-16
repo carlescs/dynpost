@@ -773,6 +773,196 @@ public sealed class GitCliService : IGitService
         return GitFailure.Classify("switch", details);
     }
 
+    public async Task<Result<IReadOnlyList<GitStash>>> ListStashesAsync(
+        string workspacePath,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // Entries are listed newest first, so a line's position is its index: no need to read
+        // %gd, which a date option could turn into stash@{<date>}.
+        var list = await RunCheckedAsync(
+            workspacePath,
+            "stash list",
+            ["stash", "list", "--format=%H%x00%cI%x00%gs"],
+            cancellationToken);
+        return list.IsFailure
+            ? list.Error!
+            : Result<IReadOnlyList<GitStash>>.Success(ParseStashes(list.Value.StandardOutput));
+    }
+
+    /// <summary>Parses the <c>git stash list</c> output of <see cref="ListStashesAsync"/>: one entry per line.</summary>
+    internal static IReadOnlyList<GitStash> ParseStashes(string output)
+    {
+        var lines = output.ReplaceLineEndings("\n").TrimEnd('\n').Split('\n');
+        var stashes = new List<GitStash>();
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var fields = lines[index].Split('\0');
+            if (fields.Length < 3)
+            {
+                continue;
+            }
+
+            DateTimeOffset? date = DateTimeOffset.TryParse(fields[1], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+                ? parsed
+                : null;
+            var (branch, message) = ParseStashSubject(fields[2]);
+            stashes.Add(new GitStash(index, fields[0], message, branch, date));
+        }
+
+        return stashes;
+    }
+
+    /// <summary>
+    /// Splits a stash's reflog subject, <c>On main: message</c> (saved with a message) or
+    /// <c>WIP on main: abc1234 Last commit</c>, into its branch and message. Branch names can't
+    /// contain <c>:</c>, so the first <c>": "</c> ends the branch.
+    /// </summary>
+    internal static (string? Branch, string Message) ParseStashSubject(string subject)
+    {
+        var rest = subject.StartsWith("WIP on ", StringComparison.Ordinal)
+            ? subject["WIP on ".Length..]
+            : subject.StartsWith("On ", StringComparison.Ordinal)
+                ? subject["On ".Length..]
+                : null;
+        var colon = rest?.IndexOf(": ", StringComparison.Ordinal) ?? -1;
+        if (rest is null || colon < 0)
+        {
+            return (null, subject);
+        }
+
+        var branch = rest[..colon];
+        return (branch == "(no branch)" ? null : branch, rest[(colon + 2)..]);
+    }
+
+    public async Task<Result<Unit>> StashAsync(string workspacePath, string? message, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        List<string> arguments = ["stash", "push", "--include-untracked"];
+        if (message is not null)
+        {
+            arguments.AddRange(["--message", message]);
+        }
+
+        // Only the workspace's files: the pathspec is relative to the workspace folder.
+        arguments.AddRange(["--", ".", ExcludeLocalFolder]);
+        return Done(await RunCheckedAsync(workspacePath, "stash", arguments, cancellationToken));
+    }
+
+    public async Task<Result<StashApplyResult>> ApplyStashAsync(
+        string workspacePath,
+        GitStash stash,
+        bool pop,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var verified = await VerifyStashAsync(workspacePath, stash, cancellationToken);
+        if (verified.IsFailure)
+        {
+            return verified.Error!;
+        }
+
+        var command = pop ? "pop" : "apply";
+        var applied = await RunAsync(workspacePath, ["stash", command, stash.Ref], cancellationToken);
+        if (applied.IsFailure)
+        {
+            return applied.Error!;
+        }
+
+        if (applied.Value.Succeeded)
+        {
+            return StashApplyResult.Of(StashApplyOutcome.Applied);
+        }
+
+        // Paths relative to the repository root, the whole repository.
+        var conflicts = await RunAsync(workspacePath, ["diff", "--name-only", "--diff-filter=U", "-z"], cancellationToken);
+        if (conflicts.IsFailure)
+        {
+            return conflicts.Error!;
+        }
+
+        if (conflicts.Value.Succeeded && conflicts.Value.StandardOutput.Length > 0)
+        {
+            var outside = conflicts.Value.StandardOutput
+                .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+                .Where(path => !path.StartsWith(prefix.Value, StringComparison.Ordinal))
+                .ToList();
+            return new StashApplyResult(StashApplyOutcome.Conflicted, outside);
+        }
+
+        var details = Details(applied.Value);
+        if (details.Contains("would be overwritten", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.UncommittedChangesBeforeStashApply(GitFailure.OverwrittenPaths(details));
+        }
+
+        const string Exists = " already exists, no checkout";
+        if (details.Contains(Exists, StringComparison.Ordinal))
+        {
+            var existing = details.ReplaceLineEndings("\n")
+                .Split('\n')
+                .Where(line => line.EndsWith(Exists, StringComparison.Ordinal))
+                .Select(line => line[..^Exists.Length])
+                .ToList();
+            return GitErrors.UncommittedChangesBeforeStashApply(existing);
+        }
+
+        return GitFailure.Classify("stash " + command, details);
+    }
+
+    public async Task<Result<Unit>> DropStashAsync(string workspacePath, GitStash stash, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var verified = await VerifyStashAsync(workspacePath, stash, cancellationToken);
+        if (verified.IsFailure)
+        {
+            return verified.Error!;
+        }
+
+        return Done(await RunCheckedAsync(workspacePath, "stash drop", ["stash", "drop", "--quiet", stash.Ref], cancellationToken));
+    }
+
+    /// <summary>
+    /// Makes sure the entry is still at its index, since git names entries by position: another
+    /// git tool may have added or dropped one since the list was read.
+    /// </summary>
+    private async Task<Result<Unit>> VerifyStashAsync(string workspacePath, GitStash stash, CancellationToken cancellationToken)
+    {
+        var resolved = await RunAsync(
+            workspacePath,
+            ["rev-parse", "--quiet", "--verify", $"refs/{stash.Ref}^{{commit}}"],
+            cancellationToken);
+        if (resolved.IsFailure)
+        {
+            return resolved.Error!;
+        }
+
+        return resolved.Value.Succeeded
+               && string.Equals(resolved.Value.StandardOutput.Trim(), stash.Id, StringComparison.OrdinalIgnoreCase)
+            ? Unit.Value
+            : GitErrors.StashNotFound();
+    }
+
     public async Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(
         string workspacePath,
         CancellationToken cancellationToken = default)

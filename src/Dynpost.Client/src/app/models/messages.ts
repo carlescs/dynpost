@@ -672,6 +672,28 @@ export interface GitBranches {
   branches: GitBranch[];
 }
 
+/** A stash entry: uncommitted changes set aside, to bring back later. */
+export interface GitStash {
+  /** The stash commit's id, which names the entry in later messages. */
+  id: string;
+  /** Its position in the list, newest first (`stash@{0}`). */
+  index: number;
+  /** The message it was saved with, or git's own (`abc1234 Last commit subject`). */
+  message: string;
+  /** The branch it was made on; `null` on a detached HEAD. */
+  branch: string | null;
+  /** ISO date it was made. */
+  date: string | null;
+}
+
+export interface GitStashes {
+  status: GitStatus;
+  /** Newest first. */
+  stashes: GitStash[];
+}
+
+export type StashApplyOutcome = 'applied' | 'conflicted';
+
 export interface GitRemote {
   name: string;
   fetchUrl: string;
@@ -1297,6 +1319,18 @@ export interface BridgeMessages {
     /** `conflictsOutsideWorkspace`: conflicted files outside the workspace folder (repository paths). */
     result: GitBranches & { outcome: MergeOutcome; conflictsOutsideWorkspace: string[] };
   };
+  /** The stash entries, newest first, with the status. */
+  'git.stash.list': { payload: void; result: GitStashes };
+  /** Stashes every uncommitted change in the workspace, new files included. */
+  'git.stash.push': { payload: { message?: string | null }; result: GitStashes };
+  /** Applies a stash entry, and with `pop` drops it unless it conflicted; refused with changes. */
+  'git.stash.apply': {
+    payload: { id: string; pop?: boolean };
+    /** `conflictsOutsideWorkspace`: conflicted files outside the workspace folder (repository paths). */
+    result: GitStashes & { outcome: StashApplyOutcome; conflictsOutsideWorkspace: string[] };
+  };
+  /** Deletes a stash entry. */
+  'git.stash.drop': { payload: { id: string }; result: GitStashes };
   /** The repository's remotes, sorted by name. */
   'git.remote.list': { payload: void; result: GitRemote[] };
   /** Adds a remote; nothing is fetched or pushed. */

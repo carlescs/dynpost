@@ -307,6 +307,14 @@ internal static class BridgeHandlers
                 async (p, ct) => (await Use<DeleteRemoteBranch>().ExecuteAsync(p.Name, ct)).Map(GitBranchesDto.From))
             .Register<GitMergeBranchPayload, GitMergeDto>(BridgeMessageTypes.GitBranchMerge,
                 async (p, ct) => (await Use<MergeBranch>().ExecuteAsync(new MergeBranchRequest(p.Name, p.Remote), ct)).Map(GitMergeDto.From))
+            .Register(BridgeMessageTypes.GitStashList,
+                async ct => (await Use<ListStashes>().ExecuteAsync(ct)).Map(GitStashesDto.From))
+            .Register<GitStashPushPayload, GitStashesDto>(BridgeMessageTypes.GitStashPush,
+                async (p, ct) => (await Use<StashChanges>().ExecuteAsync(new StashChangesRequest(p.Message), ct)).Map(GitStashesDto.From))
+            .Register<GitStashApplyPayload, GitStashApplyDto>(BridgeMessageTypes.GitStashApply,
+                async (p, ct) => (await Use<ApplyStash>().ExecuteAsync(new ApplyStashRequest(p.Id, p.Pop), ct)).Map(GitStashApplyDto.From))
+            .Register<GitStashIdPayload, GitStashesDto>(BridgeMessageTypes.GitStashDrop,
+                async (p, ct) => (await Use<DropStash>().ExecuteAsync(p.Id, ct)).Map(GitStashesDto.From))
             .Register(BridgeMessageTypes.GitRemoteList,
                 async ct => (await Use<ListRemotes>().ExecuteAsync(ct)).Map(GitRemoteDto.From))
             .Register<GitAddRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteAdd,

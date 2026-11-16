@@ -16,7 +16,7 @@ With Dynpost you can:
   cookies, and a pretty-printed body with HTML, PDF and image previews.
 - **Organize collections** — nested folders, drag and drop, Markdown docs per
   request, and values captured from responses into variables.
-- **Sync with git** — status, diffs, commit, pull, push and branches, with
+- **Sync with git** — status, diffs, commit, pull, push, branches and stashes, with
   clear reporting of merge conflicts, using your existing git setup.
 - **Load test** — `*.run.yaml` plans that send requests from concurrent
   virtual users, with live statistics and pass/fail thresholds.
@@ -111,7 +111,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Watch the workspace folder, so edits made in other programs show up
       (see [Changes made outside Dynpost](#changes-made-outside-dynpost))
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
-      (switch, create, check out, delete), remotes, and clear reporting of
+      (switch, create, check out, delete), stashes, remotes, and clear reporting of
       merge conflicts
 - [x] Load runner: `*.run.yaml` plans that send requests from concurrent
       virtual users, with live statistics, pass/fail thresholds and comparison
@@ -1261,7 +1261,8 @@ exports diff cleanly.
 
 When the workspace folder is a git repository, Dynpost shows which request and
 environment files changed, lets you commit them with a message, pulls and
-pushes the current branch, and switches, creates, merges and deletes branches (local or on the remote). It uses your existing git credentials. Dynpost never
+pushes the current branch, switches, creates, merges and deletes branches (local or on the remote), and stashes
+uncommitted changes. It uses your existing git credentials. Dynpost never
 force-pushes and never resolves conflicts automatically: conflicting files are
 reported so you can resolve them (in Dynpost's editor or your own tools).
 
@@ -1397,6 +1398,28 @@ configuration, hooks and credential helpers apply as usual. In detail:
     already deleted is simply dropped from the list. The branch to delete is worked out from
     the remote's fetch settings, so a renamed mapping deletes the right branch;
     if they don't map it to exactly one branch, nothing is deleted.
+  - **Stash and switch**: when a switch is refused over uncommitted changes,
+    Dynpost offers to stash them first (see **Stashes**), then switches.
+- **Stashes** sets uncommitted changes aside and brings them back later
+  (`git stash`), say to switch branches in the middle of something. The list
+  shows every stash entry of the repository, newest first, with its message,
+  the branch it was made on and when.
+  - **Stash** (the + button) stashes every change in the workspace folder,
+    new files included, with an optional message (git describes it by the last
+    commit otherwise), and puts the workspace back to the last commit. Files
+    outside the workspace folder, git-ignored files (such as local-only ones) and
+    `.dynpost/` are left alone. Open tabs with unsaved edits keep them: only
+    saved files are stashed. It is refused before the first commit, during a
+    merge and while files are conflicted.
+  - **Pop** brings an entry's changes back and drops it; **Apply** brings them
+    back and keeps it. Both are refused while the workspace has uncommitted
+    changes (they are named), so a stash never mixes with your edits or is
+    left half applied. If the changes conflict with the current commit, the
+    conflicted files are resolved as after a pull (see below), and the entry
+    is kept even when popping; drop it once you are done.
+  - **Drop** deletes an entry after a confirmation; its changes are lost.
+  - Entries are acted on by their commit, so if another git tool changed the
+    stash list meanwhile, Dynpost refuses rather than act on the wrong entry.
 - **Remotes** lists the repository's remotes with their URLs. You can add one,
   rename it or change its URL (`git remote add`, `rename`, `set-url`), or
   remove it after confirming (`git remote remove`, which also drops its
@@ -1452,6 +1475,10 @@ Once every file is resolved, **Commit all** completes the merge; the commit
 message is pre-filled with git's merge message. **Abort merge** abandons the
 merge instead (`git merge --abort`) and puts your branch back as it was before
 the pull or merge, after asking you to confirm.
+
+A stash that conflicts leaves no merge in progress: its conflicted files are
+marked and resolved the same way, and once they are resolved they are ordinary
+uncommitted changes, with nothing to complete or abort.
 
 Dynpost reopens the last workspace at the next launch, if its folder still
 exists. It also keeps the ten most recently opened workspaces, listed on the

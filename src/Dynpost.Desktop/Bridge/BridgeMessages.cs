@@ -414,6 +414,25 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string GitBranchMerge = "git.branch.merge";
 
+    /// <summary>Lists the stash entries, newest first. Payload: none. Result: status and stashes.</summary>
+    public const string GitStashList = "git.stash.list";
+
+    /// <summary>
+    /// Stashes every uncommitted change in the workspace, new files included. Payload:
+    /// <see cref="GitStashPushPayload"/>. Result: status and stashes.
+    /// </summary>
+    public const string GitStashPush = "git.stash.push";
+
+    /// <summary>
+    /// Applies a stash entry, and with <c>pop</c> drops it unless it conflicted; refused with
+    /// uncommitted changes. Payload: <see cref="GitStashApplyPayload"/>. Result: outcome, status,
+    /// stashes and any conflicts outside the workspace folder.
+    /// </summary>
+    public const string GitStashApply = "git.stash.apply";
+
+    /// <summary>Deletes a stash entry. Payload: <see cref="GitStashIdPayload"/>. Result: status and stashes.</summary>
+    public const string GitStashDrop = "git.stash.drop";
+
     /// <summary>Lists the repository's remotes. Payload: none. Result: remotes.</summary>
     public const string GitRemoteList = "git.remote.list";
 
@@ -717,6 +736,15 @@ internal sealed record GitDeleteBranchPayload(string Name, bool Force = false);
 
 /// <param name="Remote">Whether <c>Name</c> is a remote-tracking branch (a local branch can share its name).</param>
 internal sealed record GitMergeBranchPayload(string Name, bool Remote = false);
+
+/// <param name="Message">What the changes are; blank lets git describe them by the last commit.</param>
+internal sealed record GitStashPushPayload(string? Message = null);
+
+/// <param name="Id">The stash entry's commit id.</param>
+/// <param name="Pop">Whether to drop the entry once it applied without conflicts.</param>
+internal sealed record GitStashApplyPayload(string Id, bool Pop = false);
+
+internal sealed record GitStashIdPayload(string Id);
 
 internal static class BridgeErrorCodes
 {

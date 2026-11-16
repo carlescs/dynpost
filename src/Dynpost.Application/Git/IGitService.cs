@@ -232,6 +232,36 @@ public interface IGitService
     /// </summary>
     Task<Result<BranchMergeResult>> MergeBranchAsync(string workspacePath, GitBranch branch, CancellationToken cancellationToken = default);
 
+    /// <summary>Lists the repository's stash entries, newest first.</summary>
+    Task<Result<IReadOnlyList<GitStash>>> ListStashesAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the workspace's uncommitted changes aside in a new stash entry (<c>git stash push</c>),
+    /// new untracked files included, leaving the workspace files as last committed. Files outside
+    /// the workspace folder and its <c>.dynpost/</c> folder are left alone.
+    /// </summary>
+    /// <param name="message">The entry's message; <c>null</c> lets git write its own.</param>
+    Task<Result<Unit>> StashAsync(string workspacePath, string? message, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies a stash entry to the working tree (<c>git stash apply</c>), and with
+    /// <paramref name="pop"/> drops it once applied. Fails with
+    /// <see cref="GitErrors.StashNotFoundCode"/> when the entry is no longer at its index. Conflicts
+    /// are left in the working tree for the user, and the entry is kept; they are reported as
+    /// <see cref="StashApplyOutcome.Conflicted"/>.
+    /// </summary>
+    Task<Result<StashApplyResult>> ApplyStashAsync(
+        string workspacePath,
+        GitStash stash,
+        bool pop,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a stash entry (<c>git stash drop</c>). Fails with
+    /// <see cref="GitErrors.StashNotFoundCode"/> when it is no longer at its index.
+    /// </summary>
+    Task<Result<Unit>> DropStashAsync(string workspacePath, GitStash stash, CancellationToken cancellationToken = default);
+
     /// <summary>Lists the repository's remotes, sorted by name.</summary>
     Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(string workspacePath, CancellationToken cancellationToken = default);
 

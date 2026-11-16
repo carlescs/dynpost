@@ -28,6 +28,7 @@ describe('GitBranches', () => {
     error: ReturnType<typeof signal<BridgeErrorShape | null>>;
     failedOperation: ReturnType<typeof signal<string | null>>;
     switchBranch: any;
+    stashAndSwitch: any;
     checkoutRemoteBranch: any;
     deleteBranch: any;
     deleteRemoteBranch: any;
@@ -74,6 +75,7 @@ describe('GitBranches', () => {
       error: signal<BridgeErrorShape | null>(null),
       failedOperation: signal<string | null>(null),
       switchBranch: vi.fn().mockResolvedValue(true),
+      stashAndSwitch: vi.fn().mockResolvedValue(true),
       checkoutRemoteBranch: vi.fn().mockResolvedValue(true),
       deleteBranch: vi.fn().mockResolvedValue(true),
       deleteRemoteBranch: vi.fn().mockResolvedValue(true),
@@ -98,6 +100,55 @@ describe('GitBranches', () => {
     expect(git.checkoutRemoteBranch).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'origin/topic' }),
     );
+  });
+
+  it('offers to stash the changes when a switch is refused over them', async () => {
+    const confirm = vi.fn().mockResolvedValue(true);
+    dialogs.confirm = confirm;
+    git.switchBranch.mockImplementation(async () => {
+      git.error.set({ code: 'git.uncommitted_changes', message: 'You have uncommitted changes.' });
+      return false;
+    });
+    const fixture = await render();
+
+    button(fixture.nativeElement, 'Switch to old')!.click();
+    await fixture.whenStable();
+
+    expect(confirm.mock.calls[0][0]).toContain("Stash them and switch to 'old'?");
+    expect(confirm.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ confirmLabel: 'Stash and switch' }),
+    );
+    expect(git.dismissError).toHaveBeenCalled();
+    expect(git.stashAndSwitch).toHaveBeenCalledWith('old');
+  });
+
+  it('keeps the changes and the error when stashing before a switch is declined', async () => {
+    dialogs.confirm = vi.fn().mockResolvedValue(false);
+    git.switchBranch.mockImplementation(async () => {
+      git.error.set({ code: 'git.uncommitted_changes', message: 'You have uncommitted changes.' });
+      return false;
+    });
+    const fixture = await render();
+
+    button(fixture.nativeElement, 'Switch to old')!.click();
+    await fixture.whenStable();
+
+    expect(git.stashAndSwitch).not.toHaveBeenCalled();
+    expect(git.dismissError).not.toHaveBeenCalled();
+  });
+
+  it('does not offer to stash when a switch fails for another reason', async () => {
+    git.switchBranch.mockImplementation(async () => {
+      git.error.set({ code: 'git.branch_during_merge', message: 'A merge is in progress.' });
+      return false;
+    });
+    const fixture = await render();
+
+    button(fixture.nativeElement, 'Switch to old')!.click();
+    await fixture.whenStable();
+
+    expect(dialogs.confirm).not.toHaveBeenCalled();
+    expect(git.stashAndSwitch).not.toHaveBeenCalled();
   });
 
   it('asks a second time before force-deleting an unmerged branch', async () => {

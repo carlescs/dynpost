@@ -58,6 +58,31 @@ public class MergeUseCasesTests
     }
 
     [Fact]
+    public async Task Resolve_ConflictsLeftByAStash_WithoutAMerge_AreResolved()
+    {
+        var after = Status(changes: [new GitChange("a.yaml", GitFileStatus.Modified)]);
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
+            .Returns(Ok(Status(changes: [new GitChange("a.yaml", GitFileStatus.Conflicted)])), Ok(after));
+        _git.ResolveConflictAsync(default!, default!, default, default).ReturnsForAnyArgs(Ok(Unit.Value));
+
+        var result = await new ResolveConflict(_git, _workspace)
+            .ExecuteAsync(new ResolveConflictRequest("a.yaml", ConflictResolution.Theirs));
+
+        Assert.Same(after, result.Value);
+    }
+
+    [Fact]
+    public async Task Abort_WithConflictsButNoMerge_IsRejected()
+    {
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
+            .Returns(Ok(Status(changes: [new GitChange("a.yaml", GitFileStatus.Conflicted)])));
+
+        var result = await new AbortMerge(_git, _workspace).ExecuteAsync();
+
+        Assert.Equal(GitErrors.NotMergingCode, result.Error?.Code);
+    }
+
+    [Fact]
     public async Task Resolve_AsEdited_WithMarkersLeft_IsRefused()
     {
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())

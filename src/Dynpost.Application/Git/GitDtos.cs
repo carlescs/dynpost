@@ -229,6 +229,41 @@ public sealed record GitMergeDto(
     }
 }
 
+/// <param name="Id">The stash commit's id, which names the entry in later messages.</param>
+/// <param name="Index">Its position in the list, newest first (<c>stash@{0}</c>).</param>
+/// <param name="Branch">The branch it was made on; <c>null</c> on a detached HEAD.</param>
+public sealed record GitStashDto(string Id, int Index, string Message, string? Branch, DateTimeOffset? Date)
+{
+    public static IReadOnlyList<GitStashDto> From(IReadOnlyList<GitStash> stashes) =>
+        stashes.Select(s => new GitStashDto(s.Id, s.Index, s.Message, s.Branch, s.CreatedAt)).ToList();
+}
+
+public sealed record GitStashesDto(GitStatusDto Status, IReadOnlyList<GitStashDto> Stashes)
+{
+    public static GitStashesDto From(GitStashesResult result) =>
+        new(GitStatusDto.From(result.Status), GitStashDto.From(result.Stashes));
+}
+
+/// <param name="Outcome"><c>applied</c> or <c>conflicted</c> (the entry is then kept).</param>
+/// <param name="ConflictsOutsideWorkspace">Conflicted files outside the workspace folder, relative to the repository root.</param>
+public sealed record GitStashApplyDto(
+    string Outcome,
+    GitStatusDto Status,
+    IReadOnlyList<GitStashDto> Stashes,
+    IReadOnlyList<string> ConflictsOutsideWorkspace)
+{
+    public static GitStashApplyDto From(ApplyStashResult result) =>
+        new(
+            result.Outcome switch
+            {
+                StashApplyOutcome.Applied => "applied",
+                _ => "conflicted",
+            },
+            GitStatusDto.From(result.Status),
+            GitStashDto.From(result.Stashes),
+            result.ConflictsOutsideWorkspace);
+}
+
 public sealed record GitIdentityDto(string? Name, string? Email)
 {
     public static GitIdentityDto From(GitIdentitySettings identity) => new(identity.Name, identity.Email);

@@ -30,12 +30,13 @@ import { WorkspaceStore } from '../../../../services/workspace-store';
 import { GitHistoryList } from '../git-history-list/git-history-list';
 import { GitRemotes } from '../git-remotes/git-remotes';
 import { GitBranches } from '../git-branches/git-branches';
+import { GitStashes } from '../git-stashes/git-stashes';
 import { Dialogs } from '../../../../services/dialogs';
 import { openCloneDialog } from '../../../../components/clone-dialog/open-clone-dialog';
 
 @Component({
   selector: 'app-git-view',
-  imports: [FaIconComponent, GitHistoryList, GitRemotes, GitBranches],
+  imports: [FaIconComponent, GitHistoryList, GitRemotes, GitBranches, GitStashes],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './git-view.html',
 })

@@ -53,6 +53,8 @@ public static class GitErrors
     public const string CloneDestinationExistsCode = "git.clone_destination_exists";
     public const string InvalidCloneFolderCode = "git.invalid_clone_folder";
     public const string InvalidCredentialsCode = "git.invalid_credentials";
+    public const string NothingToStashCode = "git.nothing_to_stash";
+    public const string StashNotFoundCode = "git.stash_not_found";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -216,6 +218,25 @@ public static class GitErrors
 
     public static Error UnrelatedBranchHistories(string name) =>
         new(UnrelatedHistoriesCode, $"'{name}' has a history unrelated to the current branch, so git won't merge it.");
+
+    public static Error NothingToStash() =>
+        new(NothingToStashCode, "There are no changes to stash.");
+
+    public static Error NoCommitsToStash() =>
+        new(NoCommitsCode, "The branch has no commits yet, so there is nothing to go back to. Commit first.");
+
+    public static Error StashDuringMerge() =>
+        new(BranchDuringMergeCode, "A merge is in progress; complete it or abort it before stashing or applying a stash.");
+
+    public static Error StashNotFound() =>
+        new(StashNotFoundCode, "That stash no longer exists; the stash list was changed elsewhere. Look at the list again.");
+
+    public static Error UncommittedChangesBeforeStashApply(IReadOnlyList<string> paths) =>
+        new(
+            UncommittedChangesCode,
+            paths.Count == 0
+                ? "You have uncommitted changes. Commit, stash or discard them, then apply the stash, so its changes don't mix with yours."
+                : $"You have uncommitted changes to: {string.Join(", ", paths)}. Commit, stash or discard them, then apply the stash, so its changes don't mix with yours.");
 
     public static Error PushRejected(string details) =>
         new(PushRejectedCode, WithDetails("The remote rejected the push. Pull the latest changes and try again.", details));
