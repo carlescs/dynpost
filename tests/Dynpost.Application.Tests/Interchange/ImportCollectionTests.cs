@@ -306,7 +306,8 @@ public class ImportCollectionTests
                 [new ImportedPlanRequest(list)],
                 Load,
                 Data: new ImportedDataFile("data/users.csv", SelectionMode.PerThread, EndBehavior.Stop, "user,pass", SkipFirstLine: true, Delimiter: ";")));
-        _files.ReadTextAsync("/downloads/data/users.csv", Arg.Any<CancellationToken>())
+        // The CSV path is relative to the imported file, joined with the platform's separator.
+        _files.ReadTextAsync(Path.Combine(Path.GetDirectoryName(Source)!, "data/users.csv"), Arg.Any<CancellationToken>())
             .Returns(Result<string>.Success("name;pw\r\nann;1\r\nbo;x,y\r\n"));
         _repository.EntryExists(Root, P("data/Shop")).Returns(true);
 
