@@ -376,6 +376,8 @@ export interface EnvironmentDto {
   variables: EnvironmentVariableDto[];
   /** Whether requests sent with it keep cookies between them (stored in `.dynpost/`). */
   cookieJar?: boolean;
+  /** The color it is marked with (see `models/environment-colors.ts`), or none. */
+  color?: string | null;
 }
 
 export interface SavedEnvironmentDto {
@@ -392,6 +394,8 @@ export interface EnvironmentSummaryDto {
   error?: string | null;
   /** Whether the file is kept on this computer only, never committed. */
   localOnly?: boolean;
+  /** The environment's color, or none. */
+  color?: string | null;
 }
 
 export interface EnvironmentListDto {

@@ -26,7 +26,7 @@ describe('EnvironmentsView', () => {
   beforeEach(() => {
     store = {
       environments: signal([
-        { id: 'dev.yaml', name: 'Dev', error: null },
+        { id: 'dev.yaml', name: 'Dev', error: null, color: 'green' },
         { id: 'broken.yaml', name: 'Broken', error: 'Invalid YAML' },
       ]),
       activeId: signal<string | null>(null),
@@ -50,6 +50,14 @@ describe('EnvironmentsView', () => {
     button(fixture, 'Edit Dev').click();
     expect(store.edit).toHaveBeenCalledWith('dev.yaml');
     expect(store.select).not.toHaveBeenCalled();
+  });
+
+  it('shows each environment’s color next to its name', () => {
+    const fixture = render();
+    const dots = fixture.nativeElement.querySelectorAll('[data-environment-color]');
+    expect(dots.length).toBe(1);
+    expect(dots[0].classList).toContain('bg-green-500');
+    expect(button(fixture, 'Use Dev').contains(dots[0])).toBe(true);
   });
 
   it('disables both actions for an environment that can’t be read', () => {

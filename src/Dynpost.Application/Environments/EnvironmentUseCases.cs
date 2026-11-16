@@ -34,7 +34,7 @@ public sealed class ListEnvironments(
         var localOnly = LocalOnlyPaths.ListOrEmpty(localFiles, root.Value);
         var summaries = files.Value
             .Select(file => file.Environment.IsSuccess
-                ? new EnvironmentSummaryDto(file.Id, file.Environment.Value.Name)
+                ? new EnvironmentSummaryDto(file.Id, file.Environment.Value.Name, Color: file.Environment.Value.Color)
                 : new EnvironmentSummaryDto(file.Id, file.Id, file.Environment.Error!.Message))
             .Select(summary => summary with { LocalOnly = localOnly.Contains(LocalOnlyPaths.Environment(summary.Id)) })
             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)

@@ -68,6 +68,26 @@ public class EnvironmentTests
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("red")]
+    [InlineData("gray")]
+    public void Validate_AcceptsAKnownColorOrNone(string? color)
+    {
+        Assert.Empty(new EnvironmentDefinition("Dev") { Color = color }.Validate());
+    }
+
+    [Theory]
+    [InlineData("Red")]
+    [InlineData("#ff0000")]
+    [InlineData("")]
+    public void Validate_RejectsAnUnknownColor(string color)
+    {
+        var errors = new EnvironmentDefinition("Dev") { Color = color }.Validate();
+
+        Assert.Contains(errors, e => e.StartsWith($"'{color}' is not an environment color", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData("", "a", "The environment needs a name.")]
     [InlineData("Dev", " ", "Every variable needs a name.")]
     [InlineData("Dev", "base url", "'base url' is not a valid variable name")]

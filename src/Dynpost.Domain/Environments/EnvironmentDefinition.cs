@@ -28,6 +28,12 @@ public sealed record EnvironmentDefinition
     public bool CookieJar { get; init; }
 
     /// <summary>
+    /// The color the app marks the environment with (one of <see cref="EnvironmentColors.All"/>),
+    /// or <c>null</c> for none.
+    /// </summary>
+    public string? Color { get; init; }
+
+    /// <summary>
     /// Checks the rules an environment must satisfy before it can be saved. Returns an empty list
     /// when the environment is valid.
     /// </summary>
@@ -42,6 +48,11 @@ public sealed record EnvironmentDefinition
         if (string.IsNullOrWhiteSpace(Name))
         {
             errors.Add("The environment needs a name.");
+        }
+
+        if (Color is not null && !EnvironmentColors.IsValid(Color))
+        {
+            errors.Add($"'{Color}' is not an environment color: use one of {string.Join(", ", EnvironmentColors.All)}.");
         }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);

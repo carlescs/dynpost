@@ -1,3 +1,12 @@
+@if (activeColor(); as color) {
+  <span
+    class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5"
+    [class]="color.bg"
+    [title]="environments.active()?.name"
+    aria-hidden="true"
+    data-environment-stripe
+  ></span>
+}
 <fa-icon class="text-sky-400" [icon]="faPaperPlane" />
 <span class="text-sm font-semibold tracking-wide text-white">Dynpost</span>
 @if (store.workspace(); as workspace) {
@@ -33,10 +42,11 @@
       class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300"
       title="The environment whose variables requests are sent with"
     >
-      <fa-icon [icon]="faLayerGroup" />
+      <fa-icon [class]="activeColor()?.text ?? ''" [icon]="faLayerGroup" />
       <span class="sr-only">Environment</span>
       <select
-        class="max-w-48 rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+        [class]="activeColor()?.border ?? 'border-slate-600'"
+        class="max-w-48 rounded border bg-slate-800 px-1.5 py-0.5 text-sm text-white focus:border-sky-500 focus:outline-none"
         aria-label="Environment"
         [value]="environments.activeId() ?? ''"
         (change)="environments.select($any($event.target).value || null)"

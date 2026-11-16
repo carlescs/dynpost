@@ -61,6 +61,44 @@
   </div>
 
   <section class="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+    @if (!globals()) {
+      <div
+        class="mb-3 flex flex-wrap items-center gap-1.5"
+        role="radiogroup"
+        aria-label="Environment color"
+      >
+        <span class="mr-1 text-xs font-medium text-slate-500">Color</span>
+        <button
+          type="button"
+          role="radio"
+          [class]="swatch"
+          class="border-slate-400 bg-transparent text-slate-400"
+          title="No color"
+          aria-label="No color"
+          [attr.aria-checked]="!draft.color"
+          [class.outline-2]="!draft.color"
+          (click)="store.update(draft.key, { color: null })"
+        >
+          <fa-icon class="text-[9px]" [icon]="faBan" />
+        </button>
+        @for (name of colorNames; track name) {
+          @let style = colors[name];
+          <button
+            type="button"
+            role="radio"
+            [class]="swatch + ' border-transparent ' + style.bg"
+            [title]="style.label"
+            [attr.aria-label]="style.label"
+            [attr.aria-checked]="draft.color === name"
+            [class.outline-2]="draft.color === name"
+            (click)="store.update(draft.key, { color: name })"
+          ></button>
+        }
+        <span class="ml-1 text-xs text-slate-500">
+          Shown next to the environment wherever it is picked, so you can tell them apart.
+        </span>
+      </div>
+    }
     <table class="w-full table-fixed border-collapse text-sm">
       <thead>
         <tr class="text-left text-xs text-slate-500">

@@ -23,6 +23,7 @@ import { McpSettingsDialog } from '../mcp-settings-dialog/mcp-settings-dialog';
 import { ShortcutsDialog } from '../shortcuts-dialog/shortcuts-dialog';
 import { Dialogs } from '../../services/dialogs';
 import { EnvironmentStore } from '../../services/environment-store';
+import { environmentColor } from '../../models/environment-colors';
 import { Shortcuts } from '../../services/shortcuts';
 import { formatCombo } from '../../models/shortcuts';
 import { ThemeStore } from '../../services/theme-store';
@@ -35,7 +36,7 @@ import { WorkspaceStore } from '../../services/workspace-store';
   imports: [FaIconComponent],
   host: {
     class:
-      'always-dark flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
+      'always-dark relative flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
     role: 'banner',
     '(document:click)': 'onDocumentClick($event)',
     '(document:keydown.escape)': 'onEscape()',
@@ -54,6 +55,10 @@ export class AppHeader {
   protected readonly recentOpen = signal(false);
   /** Always rendered, unlike the panel, so it contains the click that opens the panel. */
   private readonly recentMenu = viewChild.required<ElementRef<HTMLElement>>('recentMenu');
+  /** The selected environment's color, shown on the picker and along the header's bottom edge. */
+  protected readonly activeColor = computed(() =>
+    environmentColor(this.environments.active()?.color),
+  );
   /** Recent workspaces other than the open one. */
   protected readonly otherRecent = computed(() =>
     this.store.recent().filter((r) => r.path !== this.store.workspace()?.root),

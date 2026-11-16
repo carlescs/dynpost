@@ -77,7 +77,7 @@ public class EnvironmentUseCaseTests
     {
         _store.ListAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<EnvironmentFile>>.Success([
             new EnvironmentFile("broken.yaml", new Error(ErrorCodes.InvalidFile, "bad")),
-            new EnvironmentFile("prod.yaml", new EnvironmentDefinition("Production")),
+            new EnvironmentFile("prod.yaml", new EnvironmentDefinition("Production") { Color = "red" }),
             new EnvironmentFile("dev.yaml", new EnvironmentDefinition("development")),
         ]));
         _state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("prod.yaml"));
@@ -89,7 +89,7 @@ public class EnvironmentUseCaseTests
             [
                 new EnvironmentSummaryDto("broken.yaml", "broken.yaml", "bad"),
                 new EnvironmentSummaryDto("dev.yaml", "development"),
-                new EnvironmentSummaryDto("prod.yaml", "Production"),
+                new EnvironmentSummaryDto("prod.yaml", "Production", Color: "red"),
             ],
             result.Value.Environments);
     }
@@ -286,6 +286,35 @@ public class EnvironmentUseCaseTests
             Root,
             Arg.Is<Jars>(j => j.Count == 1 && j["local.yaml"].Single() == Session),
             Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(" Red ", "red")]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public async Task Save_NormalizesTheColor(string? color, string? expected)
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev"));
+
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync(
+            "dev.yaml",
+            Dto("Dev") with { Color = color });
+
+        Assert.Equal(expected, result.Value.Environment.Color);
+        await _store.Received(1).WriteAsync(Root, "dev.yaml", Arg.Is<EnvironmentDefinition>(e => e.Color == expected), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Save_RejectsAnUnknownColor()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev"));
+
+        var result = await new SaveEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync(
+            "dev.yaml",
+            Dto("Dev") with { Color = "magenta" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error!.Code);
     }
 
     [Fact]
