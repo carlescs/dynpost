@@ -4,12 +4,15 @@ using Dynpost.Domain.Git;
 
 namespace Dynpost.Application.Git;
 
-/// <summary>Reads both sides of a conflicted file so the user can compare them.</summary>
+/// <summary>
+/// Reads both sides of a conflicted file so the user can compare them: after a merge, or after a
+/// stash that conflicted (git leaves no merge in progress then).
+/// </summary>
 public sealed class GetConflict(IGitService git, CurrentWorkspace workspace)
 {
     public async Task<Result<GitConflict>> ExecuteAsync(string path, CancellationToken cancellationToken = default)
     {
-        var context = await MergeContext.LoadAsync(git, workspace, cancellationToken);
+        var context = await MergeContext.LoadAsync(git, workspace, cancellationToken, allowConflictsOnly: true);
         if (context.IsFailure)
         {
             return context.Error!;
@@ -37,7 +40,7 @@ public sealed class ResolveConflict(IGitService git, CurrentWorkspace workspace)
 {
     public async Task<Result<GitStatus>> ExecuteAsync(ResolveConflictRequest request, CancellationToken cancellationToken = default)
     {
-        var context = await MergeContext.LoadAsync(git, workspace, cancellationToken);
+        var context = await MergeContext.LoadAsync(git, workspace, cancellationToken, allowConflictsOnly: true);
         if (context.IsFailure)
         {
             return context.Error!;
@@ -150,10 +153,14 @@ public sealed class AbortMerge(IGitService git, CurrentWorkspace workspace)
 /// <summary>The open workspace and its status, required to be in the middle of a merge.</summary>
 internal static class MergeContext
 {
+    /// <param name="allowConflictsOnly">
+    /// Also accept conflicted files without a merge in progress, as a stash that conflicted leaves them.
+    /// </param>
     public static async Task<Result<(string Root, GitStatus Status)>> LoadAsync(
         IGitService git,
         CurrentWorkspace workspace,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowConflictsOnly = false)
     {
         var root = workspace.RequireRoot();
         if (root.IsFailure)
@@ -167,7 +174,7 @@ internal static class MergeContext
             return status.Error!;
         }
 
-        if (!status.Value.IsMerging)
+        if (!status.Value.IsMerging && !(allowConflictsOnly && status.Value.HasConflicts))
         {
             return GitErrors.NotMerging();
         }

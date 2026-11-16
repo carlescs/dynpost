@@ -1,0 +1,217 @@
+<div class="flex h-8 items-center gap-1 px-3">
+  <button
+    type="button"
+    class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase hover:text-slate-800"
+    [attr.aria-expanded]="expanded()"
+    (click)="toggle()"
+  >
+    <fa-icon class="w-3" [icon]="expanded() ? faChevronDown : faChevronRight" />
+    Worktrees
+    @if (git.worktrees(); as worktrees) {
+      ({{ worktrees.length }})
+    }
+  </button>
+  <button
+    type="button"
+    class="flex size-6 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-200 enabled:hover:text-slate-800 disabled:opacity-50"
+    [title]="
+      git.status()?.unborn
+        ? 'Commit first: there is nothing to check out yet'
+        : 'Check out a branch in a new worktree'
+    "
+    aria-label="Create a worktree"
+    [disabled]="git.busy() !== null || !!git.status()?.unborn"
+    (click)="startCreate()"
+  >
+    <fa-icon [icon]="faPlus" />
+  </button>
+</div>
+
+@if (expanded()) {
+  <div class="max-h-80 overflow-y-auto pb-2 text-sm">
+    @if (git.failedOperation() === 'worktree' && git.error(); as error) {
+      <div
+        class="mx-3 mb-2 flex items-start gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-800"
+        role="alert"
+      >
+        <fa-icon class="mt-0.5" [icon]="faCircleExclamation" />
+        <p class="min-w-0 flex-1 break-words whitespace-pre-line">{{ error.message }}</p>
+        <button
+          type="button"
+          class="shrink-0 text-rose-500 hover:text-rose-800"
+          title="Dismiss"
+          aria-label="Dismiss"
+          (click)="git.dismissError()"
+        >
+          <fa-icon [icon]="faXmark" />
+        </button>
+      </div>
+    }
+
+    @if (form(); as f) {
+      <form class="mx-3 mb-2 space-y-1.5 text-xs" (submit)="$event.preventDefault(); create()">
+        <div class="flex gap-3 text-slate-600" role="radiogroup" aria-label="Branch to check out">
+          <label class="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="worktree-mode"
+              [checked]="!f.createBranch"
+              [disabled]="!freeBranches().length"
+              (change)="setMode(false)"
+            />
+            Existing branch
+          </label>
+          <label class="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="worktree-mode"
+              [checked]="f.createBranch"
+              (change)="setMode(true)"
+            />
+            New branch
+          </label>
+        </div>
+        @if (f.createBranch) {
+          <input
+            class="block w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none"
+            placeholder="New branch, e.g. feature/login"
+            aria-label="New branch name"
+            spellcheck="false"
+            autocomplete="off"
+            [value]="f.branch"
+            (input)="patch({ branch: $any($event.target).value })"
+            (keydown.escape)="cancel()"
+          />
+          <p class="text-slate-500">Starts at the current commit.</p>
+        } @else {
+          <select
+            class="block w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none"
+            aria-label="Branch"
+            [value]="f.branch"
+            (change)="patch({ branch: $any($event.target).value })"
+          >
+            @for (name of freeBranches(); track name) {
+              <option [value]="name" [selected]="name === f.branch">{{ name }}</option>
+            }
+          </select>
+        }
+        <div class="flex gap-1">
+          <input
+            class="block min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none"
+            placeholder="Parent folder"
+            aria-label="Parent folder"
+            spellcheck="false"
+            autocomplete="off"
+            [value]="f.parentFolder"
+            (input)="patch({ parentFolder: $any($event.target).value })"
+          />
+          <button
+            type="button"
+            class="shrink-0 rounded border border-slate-300 bg-white px-2 py-0.5 enabled:hover:bg-slate-100"
+            (click)="browse()"
+          >
+            Browse…
+          </button>
+        </div>
+        <input
+          class="block w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none"
+          placeholder="Folder name"
+          aria-label="Folder name"
+          spellcheck="false"
+          autocomplete="off"
+          [value]="f.name"
+          (input)="patch({ name: $any($event.target).value, nameEdited: true })"
+        />
+        <p class="text-slate-500">
+          Your secrets, .env file and client certificates are copied to it; cookies and response
+          history start empty.
+        </p>
+        <div class="flex gap-2">
+          <button
+            type="submit"
+            class="flex flex-1 items-center justify-center gap-1.5 rounded bg-sky-600 px-2 py-0.5 text-sm text-white enabled:hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+            [disabled]="git.busy() !== null || !canCreate(f)"
+          >
+            @if (git.busy() === 'worktree') {
+              <fa-icon [icon]="faSpinner" animation="spin" />
+            }
+            Create worktree
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm enabled:hover:bg-slate-100"
+            (click)="cancel()"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    }
+
+    <ul aria-label="Worktrees">
+      @for (worktree of git.worktrees() ?? []; track worktree.path) {
+        <li class="group flex items-center gap-2 px-3 py-1 hover:bg-slate-200">
+          <fa-icon
+            class="shrink-0 text-xs"
+            [class]="worktree.current ? 'text-sky-600' : 'text-slate-400'"
+            [icon]="faFolderTree"
+          />
+          <div class="min-w-0 flex-1">
+            <p class="truncate" [class.font-semibold]="worktree.current" [title]="worktree.path">
+              {{ name(worktree) }}
+              @if (worktree.current) {
+                <span class="text-xs font-normal text-sky-700">(open)</span>
+              }
+              @if (worktree.main) {
+                <span class="text-xs font-normal text-slate-500">(main)</span>
+              }
+              @if (worktree.locked) {
+                <span class="text-xs font-normal text-amber-700">(locked)</span>
+              }
+              @if (worktree.prunable) {
+                <span class="text-xs font-normal text-amber-700">(folder missing)</span>
+              }
+            </p>
+            <p class="truncate text-xs text-slate-500" [title]="worktree.path">
+              {{ worktree.branch ?? 'Detached at ' + worktree.head.slice(0, 7) }} ·
+              {{ worktree.path }}
+            </p>
+          </div>
+          @if (!worktree.current && !worktree.prunable) {
+            <button
+              type="button"
+              class="flex size-6 shrink-0 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+              [title]="'Open ' + worktree.workspaceFolder"
+              [attr.aria-label]="'Open ' + name(worktree)"
+              [disabled]="git.busy() !== null"
+              (click)="open(worktree)"
+            >
+              <fa-icon
+                [icon]="pending() === worktree.path ? faSpinner : faFolderOpen"
+                [animation]="pending() === worktree.path ? 'spin' : undefined"
+              />
+            </button>
+          }
+          @if (!worktree.main && !worktree.current && !worktree.locked) {
+            <button
+              type="button"
+              class="flex size-6 shrink-0 items-center justify-center rounded text-slate-500 enabled:hover:bg-rose-100 enabled:hover:text-rose-700 disabled:opacity-50"
+              [title]="(worktree.prunable ? 'Forget ' : 'Remove ') + worktree.path"
+              [attr.aria-label]="'Remove ' + name(worktree)"
+              [disabled]="git.busy() !== null"
+              (click)="remove(worktree)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          }
+        </li>
+      }
+    </ul>
+    @if ((git.worktrees() ?? []).length <= 1) {
+      <p class="px-3 py-1 text-slate-500">
+        Check out another branch in a folder of its own to work on it next to this one, without
+        stashing or switching.
+      </p>
+    }
+  </div>
+}

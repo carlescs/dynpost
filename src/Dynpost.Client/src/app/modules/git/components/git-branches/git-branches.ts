@@ -97,7 +97,19 @@ export class GitBranches {
   }
 
   protected async switchTo(name: string): Promise<void> {
-    await this.track(name, () => this.git.switchBranch(name));
+    await this.track(name, async () => {
+      if (await this.git.switchBranch(name)) return true;
+      if (this.git.error()?.code !== 'git.uncommitted_changes') return false;
+      // Git refused over uncommitted changes: offer to set them aside first.
+      const ok = await this.dialogs.confirm(
+        `${this.git.error()?.message}\n\nStash them and switch to '${name}'? You can bring ` +
+          'them back later from Stashes.',
+        { title: 'Uncommitted changes', confirmLabel: 'Stash and switch' },
+      );
+      if (!ok) return false;
+      this.git.dismissError();
+      return this.git.stashAndSwitch(name);
+    });
   }
 
   protected async checkout(branch: GitBranch): Promise<void> {

@@ -1,7 +1,7 @@
 import { of } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { Mock } from 'vitest';
-import { GitBranch, GitStatus, WorkspaceDto } from '../models/messages';
+import { GitBranch, GitStash, GitStatus, WorkspaceDto } from '../models/messages';
 import { Bridge, BridgeError } from './bridge';
 import { GitStore } from './git-store';
 import { WorkspaceStore } from './workspace-store';
@@ -29,6 +29,13 @@ const main: GitBranch = {
   subject: 'Init',
 };
 const feature: GitBranch = { ...main, name: 'feature', current: false, upstream: null };
+const saved: GitStash = {
+  id: 'aaa111',
+  index: 0,
+  message: 'Login work',
+  branch: 'main',
+  date: null,
+};
 
 describe('GitStore', () => {
   let dialogs: { confirm: Mock };
@@ -335,6 +342,233 @@ describe('GitStore', () => {
     expect(confirm.mock.calls[0][0]).toContain('Merge feature into main?');
     expect(confirm.mock.calls[0][0]).toContain('overwrite the merged versions');
     expect(send).not.toHaveBeenCalledWith('git.branch.merge', expect.anything());
+  });
+
+  it('reads the stashes when asked, then keeps them current with the status', async () => {
+    handlers['git.stash.list'] = () => ({ status: status(), stashes: [saved] });
+    expect(store.stashes()).toBeNull();
+
+    await store.loadStashes();
+    expect(store.stashes()).toEqual([saved]);
+
+    handlers['git.stash.list'] = () => ({ status: status(), stashes: [] });
+    await store.refresh();
+    await vi.waitFor(() => expect(store.stashes()).toEqual([]));
+  });
+
+  it('stashes the changes with their message and reloads the workspace from disk', async () => {
+    handlers['git.stash.push'] = () => ({ status: status(), stashes: [saved] });
+    const reload = vi.spyOn(workspaceStore, 'reloadFromDisk').mockResolvedValue();
+
+    expect(await store.stash('  Login work ')).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.stash.push', { message: 'Login work' });
+    expect(store.stashes()).toEqual([saved]);
+    expect(store.notice()?.text).toContain('Stashed your changes');
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('lets git describe a stash without a message', async () => {
+    handlers['git.stash.push'] = () => ({ status: status(), stashes: [saved] });
+    vi.spyOn(workspaceStore, 'reloadFromDisk').mockResolvedValue();
+
+    await store.stash('  ');
+
+    expect(send).toHaveBeenCalledWith('git.stash.push', {});
+  });
+
+  it('asks before stashing with unsaved tabs, which are not stashed', async () => {
+    workspaceStore.documents.set([
+      { id: 'a.yaml', key: 'a', path: 'a.yaml', dirty: true, saving: false } as never,
+    ]);
+    const confirm = vi.fn().mockResolvedValue(false);
+    dialogs.confirm = confirm;
+
+    expect(await store.stash('Login work')).toBe(false);
+
+    expect(confirm.mock.calls[0][0]).toContain("Their edits aren't stashed");
+    expect(send).not.toHaveBeenCalledWith('git.stash.push', expect.anything());
+  });
+
+  it('pops a stash and reloads the workspace from disk', async () => {
+    handlers['git.stash.apply'] = () => ({
+      outcome: 'applied',
+      status: status({ changes: [{ path: 'a.yaml', status: 'modified' }] }),
+      stashes: [],
+      conflictsOutsideWorkspace: [],
+    });
+    const reload = vi.spyOn(workspaceStore, 'reloadFromDisk').mockResolvedValue();
+
+    expect(await store.applyStash(saved, true)).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.stash.apply', { id: 'aaa111', pop: true });
+    expect(store.stashes()).toEqual([]);
+    expect(store.changeCount()).toBe(1);
+    expect(store.notice()).toEqual({
+      kind: 'info',
+      text: 'Popped the stash "Login work": its changes are back, and it was dropped.',
+    });
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('warns when a stash conflicts, saying it was kept', async () => {
+    handlers['git.stash.apply'] = () => ({
+      outcome: 'conflicted',
+      status: status({ changes: [{ path: 'a.yaml', status: 'conflicted' }] }),
+      stashes: [saved],
+      conflictsOutsideWorkspace: ['docs/notes.md'],
+    });
+    vi.spyOn(workspaceStore, 'reloadFromDisk').mockResolvedValue();
+
+    expect(await store.applyStash(saved, true)).toBe(true);
+
+    expect(store.notice()?.kind).toBe('warning');
+    expect(store.notice()?.text).toContain('conflicts with the current files');
+    expect(store.notice()?.text).toContain('The stash was kept; drop it once you are done');
+    expect(store.notice()?.text).toContain('docs/notes.md');
+    expect(store.conflicts()).toHaveLength(1);
+  });
+
+  it('drops a stash', async () => {
+    handlers['git.stash.drop'] = () => ({ status: status(), stashes: [] });
+
+    expect(await store.dropStash(saved)).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.stash.drop', { id: 'aaa111' });
+    expect(store.stashes()).toEqual([]);
+    expect(store.notice()?.text).toBe('Dropped the stash "Login work".');
+  });
+
+  it('stashes the changes, then switches branch', async () => {
+    handlers['git.stash.push'] = () => ({ status: status(), stashes: [saved] });
+    handlers['git.branch.switch'] = () => ({
+      status: status({ branch: 'feature' }),
+      branches: [
+        { ...main, current: false },
+        { ...feature, current: true },
+      ],
+    });
+    vi.spyOn(workspaceStore, 'reloadFromDisk').mockResolvedValue();
+
+    expect(await store.stashAndSwitch('feature')).toBe(true);
+
+    const types = send.mock.calls.map(([type]) => type);
+    expect(types.indexOf('git.stash.push')).toBeLessThan(types.indexOf('git.branch.switch'));
+    expect(store.status()?.branch).toBe('feature');
+    expect(store.notice()?.text).toContain('Stashed your changes and switched to feature');
+  });
+
+  it('does not switch when stashing fails', async () => {
+    handlers['git.stash.push'] = () => {
+      throw new BridgeError('git.nothing_to_stash', 'There are no changes to stash.');
+    };
+
+    expect(await store.stashAndSwitch('feature')).toBe(false);
+
+    expect(send).not.toHaveBeenCalledWith('git.branch.switch', expect.anything());
+    expect(store.failedOperation()).toBe('stash');
+  });
+
+  it('creates a worktree, keeping its list and reporting what was copied', async () => {
+    const linked = {
+      path: '/home/me/api-login',
+      workspaceFolder: '/home/me/api-login',
+      branch: 'login',
+      head: 'a1',
+      main: false,
+      current: false,
+      locked: false,
+      prunable: false,
+    };
+    handlers['git.worktree.add'] = () => ({ worktree: linked, worktrees: [linked], warning: null });
+
+    expect(await store.addWorktree('/home/me', ' api-login ', ' login ', true)).toEqual(linked);
+
+    expect(send).toHaveBeenCalledWith('git.worktree.add', {
+      parentFolder: '/home/me',
+      name: 'api-login',
+      branch: 'login',
+      createBranch: true,
+    });
+    expect(store.worktrees()).toEqual([linked]);
+    expect(store.notice()?.text).toContain('with your secrets, .env file and client certificates');
+  });
+
+  it('shows the warning of a worktree whose local data could not all be copied', async () => {
+    const linked = {
+      path: '/x',
+      workspaceFolder: '/x',
+      branch: 'b',
+      head: 'a1',
+      main: false,
+      current: false,
+      locked: false,
+      prunable: false,
+    };
+    handlers['git.worktree.add'] = () => ({
+      worktree: linked,
+      worktrees: [linked],
+      warning: "Dynpost couldn't copy secret values.",
+    });
+
+    await store.addWorktree('/', 'x', 'b', false);
+
+    expect(store.notice()).toEqual({
+      kind: 'warning',
+      text: "Dynpost couldn't copy secret values.",
+    });
+  });
+
+  it('reports a worktree that could not be created', async () => {
+    handlers['git.worktree.add'] = () => {
+      throw new BridgeError(
+        'git.branch_in_worktree',
+        "'b' is checked out in the worktree at '/y'.",
+      );
+    };
+
+    expect(await store.addWorktree('/', 'x', 'b', false)).toBeNull();
+
+    expect(store.failedOperation()).toBe('worktree');
+  });
+
+  it('removes a worktree, forcing only when asked', async () => {
+    const linked = {
+      path: '/x',
+      workspaceFolder: '/x',
+      branch: 'b',
+      head: 'a1',
+      main: false,
+      current: false,
+      locked: false,
+      prunable: false,
+    };
+    handlers['git.worktree.remove'] = () => [];
+
+    expect(await store.removeWorktree(linked)).toBe(true);
+    expect(await store.removeWorktree(linked, true)).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.worktree.remove', { path: '/x', force: false });
+    expect(send).toHaveBeenCalledWith('git.worktree.remove', { path: '/x', force: true });
+    expect(store.worktrees()).toEqual([]);
+    expect(store.notice()?.text).toBe('Removed the worktree at /x.');
+  });
+
+  it('opens a worktree through its workspace folder', async () => {
+    const open = vi.spyOn(workspaceStore, 'openRecent').mockResolvedValue();
+
+    await store.openWorktree({
+      path: '/x',
+      workspaceFolder: '/x/api',
+      branch: 'b',
+      head: 'a1',
+      main: false,
+      current: false,
+      locked: false,
+      prunable: false,
+    });
+
+    expect(open).toHaveBeenCalledWith('/x/api');
   });
 
   it('asks for an identity when a merge commit has none', async () => {

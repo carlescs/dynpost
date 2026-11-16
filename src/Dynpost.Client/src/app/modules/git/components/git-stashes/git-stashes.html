@@ -1,0 +1,139 @@
+<div class="flex h-8 items-center gap-1 px-3">
+  <button
+    type="button"
+    class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase hover:text-slate-800"
+    [attr.aria-expanded]="expanded()"
+    (click)="toggle()"
+  >
+    <fa-icon class="w-3" [icon]="expanded() ? faChevronDown : faChevronRight" />
+    Stashes
+    @if (git.stashes(); as stashes) {
+      ({{ stashes.length }})
+    }
+  </button>
+  <button
+    type="button"
+    class="flex size-6 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-200 enabled:hover:text-slate-800 disabled:opacity-50"
+    [title]="stashBlocker() ?? 'Stash your changes'"
+    aria-label="Stash your changes"
+    [disabled]="git.busy() !== null || stashBlocker() !== null"
+    (click)="startStash()"
+  >
+    <fa-icon [icon]="faPlus" />
+  </button>
+</div>
+
+@if (expanded()) {
+  <div class="max-h-80 overflow-y-auto pb-2 text-sm">
+    @if (git.failedOperation() === 'stash' && git.error(); as error) {
+      <div
+        class="mx-3 mb-2 flex items-start gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-800"
+        role="alert"
+      >
+        <fa-icon class="mt-0.5" [icon]="faCircleExclamation" />
+        <p class="min-w-0 flex-1 break-words whitespace-pre-line">{{ error.message }}</p>
+        <button
+          type="button"
+          class="shrink-0 text-rose-500 hover:text-rose-800"
+          title="Dismiss"
+          aria-label="Dismiss"
+          (click)="git.dismissError()"
+        >
+          <fa-icon [icon]="faXmark" />
+        </button>
+      </div>
+    }
+
+    <!-- An empty message is an open form too, so compare with null. -->
+    @if (form() !== null) {
+      <form class="mx-3 mb-2 space-y-1.5" (submit)="$event.preventDefault(); stash()">
+        <input
+          class="block w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none"
+          placeholder="Message (optional), e.g. Half-done login"
+          aria-label="Stash message"
+          autocomplete="off"
+          [value]="form()"
+          (input)="form.set($any($event.target).value)"
+          (keydown.escape)="cancel()"
+        />
+        <p class="text-xs text-slate-500">
+          Sets every change in the workspace aside, new files included, and goes back to the last
+          commit.
+        </p>
+        <div class="flex gap-2">
+          <button
+            type="submit"
+            class="flex flex-1 items-center justify-center gap-1.5 rounded bg-sky-600 px-2 py-0.5 text-sm text-white enabled:hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+            [disabled]="git.busy() !== null || stashBlocker() !== null"
+          >
+            @if (git.busy() === 'stash') {
+              <fa-icon [icon]="faSpinner" animation="spin" />
+            }
+            Stash changes
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-sm enabled:hover:bg-slate-100"
+            (click)="cancel()"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    }
+
+    <ul aria-label="Stashes">
+      @for (stash of git.stashes() ?? []; track stash.id) {
+        <li class="group flex items-center gap-2 px-3 py-1 hover:bg-slate-200">
+          <fa-icon class="shrink-0 text-xs text-slate-400" [icon]="faBoxArchive" />
+          <div class="min-w-0 flex-1">
+            <p class="truncate" [title]="stash.message">{{ stash.message }}</p>
+            <p class="truncate text-xs text-slate-500">
+              {{ stash.branch ? 'On ' + stash.branch : 'Detached HEAD' }}
+              @if (dates.date(stash.date); as date) {
+                · {{ date }}
+              }
+            </p>
+          </div>
+          <button
+            type="button"
+            class="flex size-6 shrink-0 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+            [title]="applyTitle(stash, true)"
+            [attr.aria-label]="'Pop ' + stash.message"
+            [disabled]="git.busy() !== null || applyBlocker() !== null"
+            (click)="apply(stash, true)"
+          >
+            <fa-icon
+              [icon]="pending() === stash.id ? faSpinner : faBoxOpen"
+              [animation]="pending() === stash.id ? 'spin' : undefined"
+            />
+          </button>
+          <button
+            type="button"
+            class="flex size-6 shrink-0 items-center justify-center rounded text-slate-500 enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+            [title]="applyTitle(stash, false)"
+            [attr.aria-label]="'Apply ' + stash.message"
+            [disabled]="git.busy() !== null || applyBlocker() !== null"
+            (click)="apply(stash, false)"
+          >
+            <fa-icon [icon]="faFileImport" />
+          </button>
+          <button
+            type="button"
+            class="flex size-6 shrink-0 items-center justify-center rounded text-slate-500 enabled:hover:bg-rose-100 enabled:hover:text-rose-700 disabled:opacity-50"
+            [title]="'Drop ' + stash.message"
+            [attr.aria-label]="'Drop ' + stash.message"
+            [disabled]="git.busy() !== null"
+            (click)="drop(stash)"
+          >
+            <fa-icon [icon]="faTrash" />
+          </button>
+        </li>
+      } @empty {
+        <li class="px-3 py-1 text-slate-500">
+          No stashes. Stash your changes to set them aside, e.g. to switch branches.
+        </li>
+      }
+    </ul>
+  </div>
+}

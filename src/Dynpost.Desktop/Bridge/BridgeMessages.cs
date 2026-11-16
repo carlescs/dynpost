@@ -414,6 +414,47 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string GitBranchMerge = "git.branch.merge";
 
+    /// <summary>Lists the stash entries, newest first. Payload: none. Result: status and stashes.</summary>
+    public const string GitStashList = "git.stash.list";
+
+    /// <summary>
+    /// Stashes every uncommitted change in the workspace, new files included. Payload:
+    /// <see cref="GitStashPushPayload"/>. Result: status and stashes.
+    /// </summary>
+    public const string GitStashPush = "git.stash.push";
+
+    /// <summary>
+    /// Applies a stash entry, and with <c>pop</c> drops it unless it conflicted; refused with
+    /// uncommitted changes. Payload: <see cref="GitStashApplyPayload"/>. Result: outcome, status,
+    /// stashes and any conflicts outside the workspace folder.
+    /// </summary>
+    public const string GitStashApply = "git.stash.apply";
+
+    /// <summary>Deletes a stash entry. Payload: <see cref="GitStashIdPayload"/>. Result: status and stashes.</summary>
+    public const string GitStashDrop = "git.stash.drop";
+
+    /// <summary>Lists the repository's worktrees, the main one first. Payload: none. Result: worktrees.</summary>
+    public const string GitWorktreeList = "git.worktree.list";
+
+    /// <summary>
+    /// Shows a folder picker for the folder a new worktree is created in. Payload: none. Result: the
+    /// chosen folder, or <c>null</c> when cancelled.
+    /// </summary>
+    public const string GitWorktreePickFolder = "git.worktree.pickFolder";
+
+    /// <summary>
+    /// Checks out a branch in a new worktree, copying the workspace's secrets, <c>.env</c> file and
+    /// client certificates to it. Payload: <see cref="GitAddWorktreePayload"/>. Result: the new
+    /// worktree, every worktree and any warning.
+    /// </summary>
+    public const string GitWorktreeAdd = "git.worktree.add";
+
+    /// <summary>
+    /// Removes a worktree and its folder; one with changes only with <c>force</c>. Payload:
+    /// <see cref="GitRemoveWorktreePayload"/>. Result: worktrees.
+    /// </summary>
+    public const string GitWorktreeRemove = "git.worktree.remove";
+
     /// <summary>Lists the repository's remotes. Payload: none. Result: remotes.</summary>
     public const string GitRemoteList = "git.remote.list";
 
@@ -721,6 +762,25 @@ internal sealed record GitDeleteBranchPayload(string Name, bool Force = false);
 
 /// <param name="Remote">Whether <c>Name</c> is a remote-tracking branch (a local branch can share its name).</param>
 internal sealed record GitMergeBranchPayload(string Name, bool Remote = false);
+
+/// <param name="Message">What the changes are; blank lets git describe them by the last commit.</param>
+internal sealed record GitStashPushPayload(string? Message = null);
+
+/// <param name="Id">The stash entry's commit id.</param>
+/// <param name="Pop">Whether to drop the entry once it applied without conflicts.</param>
+internal sealed record GitStashApplyPayload(string Id, bool Pop = false);
+
+internal sealed record GitStashIdPayload(string Id);
+
+/// <param name="ParentFolder">The existing folder the worktree's folder is created in.</param>
+/// <param name="Name">The new folder's name.</param>
+/// <param name="Branch">The local branch to check out, or the new branch's name.</param>
+/// <param name="CreateBranch">Whether to create the branch at the current commit.</param>
+internal sealed record GitAddWorktreePayload(string ParentFolder, string Name, string Branch, bool CreateBranch = false);
+
+/// <param name="Path">The worktree's folder, as listed.</param>
+/// <param name="Force">Remove it even with changes (after a second confirmation).</param>
+internal sealed record GitRemoveWorktreePayload(string Path, bool Force = false);
 
 internal static class BridgeErrorCodes
 {

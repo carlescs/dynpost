@@ -778,6 +778,381 @@ public sealed class GitCliService : IGitService
         return GitFailure.Classify("switch", details);
     }
 
+    public async Task<Result<IReadOnlyList<GitStash>>> ListStashesAsync(
+        string workspacePath,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // Entries are listed newest first, so a line's position is its index: no need to read
+        // %gd, which a date option could turn into stash@{<date>}.
+        var list = await RunCheckedAsync(
+            workspacePath,
+            "stash list",
+            ["stash", "list", "--format=%H%x00%cI%x00%gs"],
+            cancellationToken);
+        return list.IsFailure
+            ? list.Error!
+            : Result<IReadOnlyList<GitStash>>.Success(ParseStashes(list.Value.StandardOutput));
+    }
+
+    /// <summary>Parses the <c>git stash list</c> output of <see cref="ListStashesAsync"/>: one entry per line.</summary>
+    internal static IReadOnlyList<GitStash> ParseStashes(string output)
+    {
+        var lines = output.ReplaceLineEndings("\n").TrimEnd('\n').Split('\n');
+        var stashes = new List<GitStash>();
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var fields = lines[index].Split('\0');
+            if (fields.Length < 3)
+            {
+                continue;
+            }
+
+            DateTimeOffset? date = DateTimeOffset.TryParse(fields[1], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+                ? parsed
+                : null;
+            var (branch, message) = ParseStashSubject(fields[2]);
+            stashes.Add(new GitStash(index, fields[0], message, branch, date));
+        }
+
+        return stashes;
+    }
+
+    /// <summary>
+    /// Splits a stash's reflog subject, <c>On main: message</c> (saved with a message) or
+    /// <c>WIP on main: abc1234 Last commit</c>, into its branch and message. Branch names can't
+    /// contain <c>:</c>, so the first <c>": "</c> ends the branch.
+    /// </summary>
+    internal static (string? Branch, string Message) ParseStashSubject(string subject)
+    {
+        var rest = subject.StartsWith("WIP on ", StringComparison.Ordinal)
+            ? subject["WIP on ".Length..]
+            : subject.StartsWith("On ", StringComparison.Ordinal)
+                ? subject["On ".Length..]
+                : null;
+        var colon = rest?.IndexOf(": ", StringComparison.Ordinal) ?? -1;
+        if (rest is null || colon < 0)
+        {
+            return (null, subject);
+        }
+
+        var branch = rest[..colon];
+        return (branch == "(no branch)" ? null : branch, rest[(colon + 2)..]);
+    }
+
+    public async Task<Result<Unit>> StashAsync(string workspacePath, string? message, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        List<string> arguments = ["stash", "push", "--include-untracked"];
+        if (message is not null)
+        {
+            arguments.AddRange(["--message", message]);
+        }
+
+        // Only the workspace's files: the pathspec is relative to the workspace folder.
+        arguments.AddRange(["--", ".", ExcludeLocalFolder]);
+        return Done(await RunCheckedAsync(workspacePath, "stash", arguments, cancellationToken));
+    }
+
+    public async Task<Result<StashApplyResult>> ApplyStashAsync(
+        string workspacePath,
+        GitStash stash,
+        bool pop,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var verified = await VerifyStashAsync(workspacePath, stash, cancellationToken);
+        if (verified.IsFailure)
+        {
+            return verified.Error!;
+        }
+
+        var command = pop ? "pop" : "apply";
+        var applied = await RunAsync(workspacePath, ["stash", command, stash.Ref], cancellationToken);
+        if (applied.IsFailure)
+        {
+            return applied.Error!;
+        }
+
+        if (applied.Value.Succeeded)
+        {
+            return StashApplyResult.Of(StashApplyOutcome.Applied);
+        }
+
+        // Paths relative to the repository root, the whole repository.
+        var conflicts = await RunAsync(workspacePath, ["diff", "--name-only", "--diff-filter=U", "-z"], cancellationToken);
+        if (conflicts.IsFailure)
+        {
+            return conflicts.Error!;
+        }
+
+        if (conflicts.Value.Succeeded && conflicts.Value.StandardOutput.Length > 0)
+        {
+            var outside = conflicts.Value.StandardOutput
+                .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+                .Where(path => !path.StartsWith(prefix.Value, StringComparison.Ordinal))
+                .ToList();
+            return new StashApplyResult(StashApplyOutcome.Conflicted, outside);
+        }
+
+        var details = Details(applied.Value);
+        if (details.Contains("would be overwritten", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.UncommittedChangesBeforeStashApply(GitFailure.OverwrittenPaths(details));
+        }
+
+        const string Exists = " already exists, no checkout";
+        if (details.Contains(Exists, StringComparison.Ordinal))
+        {
+            var existing = details.ReplaceLineEndings("\n")
+                .Split('\n')
+                .Where(line => line.EndsWith(Exists, StringComparison.Ordinal))
+                .Select(line => line[..^Exists.Length])
+                .ToList();
+            return GitErrors.UncommittedChangesBeforeStashApply(existing);
+        }
+
+        return GitFailure.Classify("stash " + command, details);
+    }
+
+    public async Task<Result<Unit>> DropStashAsync(string workspacePath, GitStash stash, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var verified = await VerifyStashAsync(workspacePath, stash, cancellationToken);
+        if (verified.IsFailure)
+        {
+            return verified.Error!;
+        }
+
+        return Done(await RunCheckedAsync(workspacePath, "stash drop", ["stash", "drop", "--quiet", stash.Ref], cancellationToken));
+    }
+
+    /// <summary>
+    /// Makes sure the entry is still at its index, since git names entries by position: another
+    /// git tool may have added or dropped one since the list was read.
+    /// </summary>
+    private async Task<Result<Unit>> VerifyStashAsync(string workspacePath, GitStash stash, CancellationToken cancellationToken)
+    {
+        var resolved = await RunAsync(
+            workspacePath,
+            ["rev-parse", "--quiet", "--verify", $"refs/{stash.Ref}^{{commit}}"],
+            cancellationToken);
+        if (resolved.IsFailure)
+        {
+            return resolved.Error!;
+        }
+
+        return resolved.Value.Succeeded
+               && string.Equals(resolved.Value.StandardOutput.Trim(), stash.Id, StringComparison.OrdinalIgnoreCase)
+            ? Unit.Value
+            : GitErrors.StashNotFound();
+    }
+
+    public async Task<Result<IReadOnlyList<GitWorktree>>> ListWorktreesAsync(
+        string workspacePath,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var top = await RunCheckedAsync(workspacePath, "rev-parse", ["rev-parse", "--show-toplevel"], cancellationToken);
+        if (top.IsFailure)
+        {
+            return top.Error!;
+        }
+
+        var list = await RunCheckedAsync(workspacePath, "worktree list", ["worktree", "list", "--porcelain", "-z"], cancellationToken);
+        return list.IsFailure
+            ? list.Error!
+            : Result<IReadOnlyList<GitWorktree>>.Success(
+                ParseWorktrees(list.Value.StandardOutput, top.Value.StandardOutput.TrimEnd('\r', '\n'), prefix.Value));
+    }
+
+    /// <summary>
+    /// Parses <c>git worktree list --porcelain -z</c>: one record per worktree, ended by an empty
+    /// field, of NUL-ended <c>key value</c> fields (<c>worktree</c>, <c>HEAD</c>,
+    /// <c>branch refs/heads/x</c> or <c>detached</c>, <c>bare</c>, <c>locked</c>, <c>prunable</c>).
+    /// The first record is the main worktree.
+    /// </summary>
+    /// <param name="currentTop">The open workspace's worktree folder, as git reports it.</param>
+    /// <param name="prefix">The workspace folder's path inside its worktree (<c>api/</c>), or empty.</param>
+    internal static IReadOnlyList<GitWorktree> ParseWorktrees(string output, string currentTop, string prefix)
+    {
+        var worktrees = new List<GitWorktree>();
+        var fields = new List<string>();
+        var first = true;
+        foreach (var field in output.Split('\0'))
+        {
+            if (field.Length > 0)
+            {
+                fields.Add(field);
+                continue;
+            }
+
+            if (fields.Count == 0)
+            {
+                continue;
+            }
+
+            var record = fields;
+            fields = [];
+            var isMain = first;
+            first = false;
+            string? Value(string key) =>
+                record.FirstOrDefault(f => f == key || f.StartsWith(key + " ", StringComparison.Ordinal)) is { } found
+                    ? found.Length > key.Length ? found[(key.Length + 1)..] : string.Empty
+                    : null;
+
+            if (Value("worktree") is not { Length: > 0 } path || Value("bare") is not null)
+            {
+                continue;
+            }
+
+            var branch = Value("branch") is { } reference && reference.StartsWith("refs/heads/", StringComparison.Ordinal)
+                ? reference["refs/heads/".Length..]
+                : null;
+            var workspaceFolder = prefix.Length == 0
+                ? path
+                : System.IO.Path.Combine(path, prefix.TrimEnd('/').Replace('/', System.IO.Path.DirectorySeparatorChar));
+            worktrees.Add(new GitWorktree(
+                path,
+                workspaceFolder,
+                branch,
+                Value("HEAD") ?? string.Empty,
+                isMain,
+                SamePath(path, currentTop),
+                Value("locked") is not null,
+                Value("prunable") is not null));
+        }
+
+        return worktrees;
+    }
+
+    /// <summary>Compares two folders git reported, which may differ in separators or a trailing one.</summary>
+    private static bool SamePath(string a, string b)
+    {
+        static string Normalize(string path) => path.Replace('\\', '/').TrimEnd('/');
+        return string.Equals(
+            Normalize(a),
+            Normalize(b),
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    public async Task<Result<Unit>> AddWorktreeAsync(
+        string workspacePath,
+        string folder,
+        string branch,
+        bool createBranch,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // A local branch's short name checks it out (git looks for refs/heads/<name> first); its full
+        // ref would detach HEAD instead. The use case only passes existing local branches.
+        IReadOnlyList<string> arguments = createBranch
+            ? ["worktree", "add", "-b", branch, "--", folder, "HEAD"]
+            : ["worktree", "add", "--", folder, branch];
+        var added = await RunAsync(workspacePath, arguments, cancellationToken);
+        if (added.IsFailure)
+        {
+            return added.Error!;
+        }
+
+        if (added.Value.Succeeded)
+        {
+            return Unit.Value;
+        }
+
+        var details = Details(added.Value);
+        if (details.Contains("' already exists", StringComparison.Ordinal) && !details.Contains("a branch named", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.WorktreeFolderExists(folder);
+        }
+
+        if (details.Contains("a branch named", StringComparison.OrdinalIgnoreCase) && details.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.BranchExists(branch);
+        }
+
+        return GitFailure.Classify("worktree add", details);
+    }
+
+    public async Task<Result<Unit>> RemoveWorktreeAsync(
+        string workspacePath,
+        GitWorktree worktree,
+        bool force,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // One --force only: a locked worktree takes two, and stays.
+        IReadOnlyList<string> arguments = force
+            ? ["worktree", "remove", "--force", "--", worktree.Path]
+            : ["worktree", "remove", "--", worktree.Path];
+        var removed = await RunAsync(workspacePath, arguments, cancellationToken);
+        if (removed.IsFailure)
+        {
+            return removed.Error!;
+        }
+
+        if (removed.Value.Succeeded)
+        {
+            return Unit.Value;
+        }
+
+        var details = Details(removed.Value);
+        if (details.Contains("contains modified or untracked files", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.WorktreeHasChanges(worktree.Path);
+        }
+
+        return details.Contains("locked working tree", StringComparison.OrdinalIgnoreCase)
+            ? GitErrors.WorktreeLocked(worktree.Path)
+            : GitFailure.Classify("worktree remove", details);
+    }
+
+    public async Task<Result<Unit>> PruneWorktreesAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        return Done(await RunCheckedAsync(workspacePath, "worktree prune", ["worktree", "prune"], cancellationToken));
+    }
+
     public async Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(
         string workspacePath,
         CancellationToken cancellationToken = default)

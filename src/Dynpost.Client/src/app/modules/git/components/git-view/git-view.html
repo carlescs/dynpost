@@ -136,6 +136,17 @@
           <fa-icon [icon]="busyIcon('abort', faBan)" [animation]="spin('abort')" /> Abort merge
         </button>
       </div>
+    } @else if (git.conflicts().length) {
+      <div
+        class="mx-3 mb-2 flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800"
+      >
+        <fa-icon class="mt-0.5" [icon]="faTriangleExclamation" />
+        <span>
+          {{ git.conflicts().length }} conflicted file(s), left by a stash that didn't apply cleanly
+          (or another git tool). Open each one below to keep a version or mark your own edit as
+          resolved.
+        </span>
+      </div>
     }
 
     @if (git.needsIdentity()) {
@@ -420,6 +431,8 @@
       </ul>
     }
     <app-git-branches />
+    <app-git-stashes />
+    <app-git-worktrees />
     <app-git-remotes />
   } @else if (git.busy() === 'refresh') {
     <p class="px-3 text-sm text-slate-500">

@@ -43,6 +43,11 @@ internal static class GitFailure
             return GitErrors.IdentityUnknown();
         }
 
+        if (BranchInWorktree(details) is { } inWorktree)
+        {
+            return inWorktree;
+        }
+
         if (Has(details, "would be overwritten by merge"))
         {
             return GitErrors.LocalChangesOverwritten(OverwrittenPaths(details));
@@ -108,6 +113,21 @@ internal static class GitFailure
         }
 
         return paths.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
+    /// Git's refusal to check out or delete a branch that another worktree has checked out:
+    /// <c>'x' is already used by worktree at '/path'</c> (older versions: <c>is already checked out at</c>),
+    /// or <c>cannot delete branch 'x' used by worktree at '/path'</c>.
+    /// </summary>
+    internal static Error? BranchInWorktree(string details)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            details,
+            @"'(?<branch>[^']+)' (?:is already used by worktree|is already checked out|used by worktree|checked out) at '(?<path>[^']+)'");
+        return match.Success
+            ? GitErrors.BranchInWorktree(match.Groups["branch"].Value, match.Groups["path"].Value)
+            : null;
     }
 
     private static bool Has(string details, string text) => details.Contains(text, StringComparison.OrdinalIgnoreCase);

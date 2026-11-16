@@ -19,6 +19,9 @@ public class GitFailureTests
     [InlineData("fatal: detected dubious ownership in repository at '/w'\nTo add an exception for this directory, call:\n\n\tgit config --global --add safe.directory /w", GitErrors.UnsafeRepositoryCode)]
     [InlineData("fatal: Unable to create '/w/.git/index.lock': File exists.\n\nAnother git process seems to be running", GitErrors.RepositoryLockedCode)]
     [InlineData("fatal: destination path '/w/api' already exists and is not an empty directory.", GitErrors.CloneDestinationExistsCode)]
+    [InlineData("fatal: 'feat' is already used by worktree at '/w/api-feat'", GitErrors.BranchInWorktreeCode)]
+    [InlineData("fatal: 'feat' is already checked out at '/w/api-feat'", GitErrors.BranchInWorktreeCode)]
+    [InlineData("error: cannot delete branch 'feat' used by worktree at '/w/api-feat'", GitErrors.BranchInWorktreeCode)]
     [InlineData("error: something else entirely", GitErrors.CommandFailedCode)]
     public void Classify_RecognizesCommonFailures(string details, string code)
     {
@@ -67,5 +70,13 @@ public class GitFailureTests
         Assert.Equal(GitErrors.LocalChangesOverwrittenCode, error.Code);
         Assert.Equal(["api/a.yaml", "b.yaml", "c.yaml"], GitFailure.OverwrittenPaths(details));
         Assert.Contains("api/a.yaml, b.yaml, c.yaml", error.Message);
+    }
+
+    [Fact]
+    public void BranchInWorktree_NamesTheBranchAndTheWorktree()
+    {
+        var error = GitFailure.Classify("switch", "fatal: 'feat' is already used by worktree at '/w/api-feat'");
+
+        Assert.Contains("'feat' is checked out in the worktree at '/w/api-feat'", error.Message);
     }
 }

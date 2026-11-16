@@ -53,6 +53,15 @@ public static class GitErrors
     public const string CloneDestinationExistsCode = "git.clone_destination_exists";
     public const string InvalidCloneFolderCode = "git.invalid_clone_folder";
     public const string InvalidCredentialsCode = "git.invalid_credentials";
+    public const string NothingToStashCode = "git.nothing_to_stash";
+    public const string StashNotFoundCode = "git.stash_not_found";
+    public const string BranchInWorktreeCode = "git.branch_in_worktree";
+    public const string InvalidWorktreeFolderCode = "git.invalid_worktree_folder";
+    public const string WorktreeFolderExistsCode = "git.worktree_folder_exists";
+    public const string WorktreeNotFoundCode = "git.worktree_not_found";
+    public const string WorktreeHasChangesCode = "git.worktree_has_changes";
+    public const string WorktreeLockedCode = "git.worktree_locked";
+    public const string WorktreeInUseCode = "git.worktree_in_use";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -216,6 +225,59 @@ public static class GitErrors
 
     public static Error UnrelatedBranchHistories(string name) =>
         new(UnrelatedHistoriesCode, $"'{name}' has a history unrelated to the current branch, so git won't merge it.");
+
+    public static Error NothingToStash() =>
+        new(NothingToStashCode, "There are no changes to stash.");
+
+    public static Error NoCommitsToStash() =>
+        new(NoCommitsCode, "The branch has no commits yet, so there is nothing to go back to. Commit first.");
+
+    public static Error StashDuringMerge() =>
+        new(BranchDuringMergeCode, "A merge is in progress; complete it or abort it before stashing or applying a stash.");
+
+    public static Error StashNotFound() =>
+        new(StashNotFoundCode, "That stash no longer exists; the stash list was changed elsewhere. Look at the list again.");
+
+    public static Error UncommittedChangesBeforeStashApply(IReadOnlyList<string> paths) =>
+        new(
+            UncommittedChangesCode,
+            paths.Count == 0
+                ? "You have uncommitted changes. Commit, stash or discard them, then apply the stash, so its changes don't mix with yours."
+                : $"You have uncommitted changes to: {string.Join(", ", paths)}. Commit, stash or discard them, then apply the stash, so its changes don't mix with yours.");
+
+    /// <param name="branch">The branch, when git named it.</param>
+    /// <param name="worktree">The folder of the worktree that has it checked out.</param>
+    public static Error BranchInWorktree(string? branch, string worktree) =>
+        new(
+            BranchInWorktreeCode,
+            $"{(branch is null ? "The branch" : $"'{branch}'")} is checked out in the worktree at '{worktree}'. "
+                + "A branch can be checked out in only one worktree: open that worktree, or switch it to another branch first.");
+
+    public static Error InvalidWorktreeFolder(string message) =>
+        new(InvalidWorktreeFolderCode, message);
+
+    public static Error WorktreeFolderExists(string path) =>
+        new(WorktreeFolderExistsCode, $"The folder '{path}' already exists. Choose another name or location.");
+
+    public static Error NoCommitsForWorktree() =>
+        new(NoCommitsCode, "The current branch has no commits yet, so there is nothing to check out in a worktree. Commit first.");
+
+    public static Error WorktreeNotFound(string path) =>
+        new(WorktreeNotFoundCode, $"There is no worktree at '{path}'; it may have been removed with other git tools.");
+
+    public static Error WorktreeHasChanges(string path) =>
+        new(
+            WorktreeHasChangesCode,
+            $"The worktree at '{path}' has uncommitted changes or new files; removing it would lose them.");
+
+    public static Error WorktreeLocked(string path) =>
+        new(WorktreeLockedCode, $"The worktree at '{path}' is locked against removal. Unlock it with your own git tools (git worktree unlock) first.");
+
+    public static Error MainWorktree() =>
+        new(WorktreeInUseCode, "The main worktree holds the repository itself and can't be removed.");
+
+    public static Error CurrentWorktree() =>
+        new(WorktreeInUseCode, "That worktree is the open workspace. Open another worktree first, then remove this one.");
 
     public static Error PushRejected(string details) =>
         new(PushRejectedCode, WithDetails("The remote rejected the push. Pull the latest changes and try again.", details));
