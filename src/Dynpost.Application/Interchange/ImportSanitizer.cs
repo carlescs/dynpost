@@ -48,6 +48,14 @@ internal static class ImportSanitizer
         return cleaned;
     }
 
+    /// <summary>A run plan's name on one line, at most as long as a request's.</summary>
+    public static string PlanName(string name)
+    {
+        var line = OneLine(name);
+        line = line.Length > MaxNameLength ? line[..MaxNameLength].TrimEnd() : line;
+        return line.Length == 0 ? "Imported plan" : line;
+    }
+
     public static EnvironmentDefinition Environment(EnvironmentDefinition environment, List<string> warnings)
     {
         var name = OneLine(environment.Name);

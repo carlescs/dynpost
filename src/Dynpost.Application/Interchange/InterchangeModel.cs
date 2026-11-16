@@ -1,5 +1,6 @@
 using Dynpost.Domain.Environments;
 using Dynpost.Domain.Requests;
+using Dynpost.Domain.Runs;
 
 namespace Dynpost.Application.Interchange;
 
@@ -39,7 +40,54 @@ public sealed record RequestCollection(CollectionFolder Root, IReadOnlyList<Envi
     /// <see cref="ICollectionExporter.NeedsExchanges"/>); empty for the others.
     /// </summary>
     public IReadOnlyList<ExportedExchange> Exchanges { get; init; } = [];
+
+    /// <summary>Load run plans that come with the requests (JMeter thread groups); empty for most formats.</summary>
+    public IReadOnlyList<ImportedRunPlan> Plans { get; init; } = [];
 }
+
+/// <summary>
+/// A load run plan read from another app's file. It names its requests by the very
+/// <see cref="HttpRequestDefinition"/> instances in the collection, since their file paths are
+/// only known once the import has written them.
+/// </summary>
+/// <param name="Name">The plan's name, which also names its file.</param>
+/// <param name="Requests">The requests in the order a virtual user sends them.</param>
+/// <param name="Assertions">Checks on every request (the plan's <c>"*"</c> entry); <c>null</c> for none.</param>
+/// <param name="Data">A CSV file of values to copy into the workspace; <c>null</c> for none.</param>
+public sealed record ImportedRunPlan(
+    string Name,
+    IReadOnlyList<ImportedPlanRequest> Requests,
+    RunLoad Load,
+    RequestOrder Order = RequestOrder.Sequential,
+    RunAssertion? Assertions = null,
+    ImportedDataFile? Data = null);
+
+/// <summary>A request of an imported plan.</summary>
+/// <param name="Request">The request, as it is in the collection (compared by reference).</param>
+/// <param name="Enabled">Whether it is sent; disabled ones stay in the plan's list.</param>
+/// <param name="Weight">Its relative chance with <see cref="RequestOrder.Random"/>; <c>null</c> for the default.</param>
+/// <param name="Assertion">Checks on its responses only; <c>null</c> for none.</param>
+public sealed record ImportedPlanRequest(
+    HttpRequestDefinition Request,
+    bool Enabled = true,
+    double? Weight = null,
+    RunAssertion? Assertion = null);
+
+/// <summary>A CSV data file an imported plan reads, outside the workspace.</summary>
+/// <param name="Source">Its path as the other app wrote it: absolute, or relative to the imported file.</param>
+/// <param name="Header">
+/// The header line to write first (the variable names, comma-separated), for files whose own first
+/// line isn't one; <c>null</c> when the file's first line names the variables.
+/// </param>
+/// <param name="SkipFirstLine">Whether the file's first line is dropped (a header replaced by <paramref name="Header"/>).</param>
+/// <param name="Delimiter">The file's column separator; values are rewritten comma-separated.</param>
+public sealed record ImportedDataFile(
+    string Source,
+    SelectionMode Mode,
+    EndBehavior OnEof,
+    string? Header = null,
+    bool SkipFirstLine = false,
+    string Delimiter = ",");
 
 /// <summary>A request as it is sent, with the latest response kept for it, for formats such as HAR.</summary>
 /// <param name="Name">The request's name.</param>

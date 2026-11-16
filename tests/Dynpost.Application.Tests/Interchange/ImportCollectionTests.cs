@@ -2,9 +2,11 @@ using Dynpost.Application.Common;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
 using Dynpost.Application.Interchange;
+using Dynpost.Application.Runs;
 using Dynpost.Application.Workspaces;
 using Dynpost.Domain.Environments;
 using Dynpost.Domain.Requests;
+using Dynpost.Domain.Runs;
 using Dynpost.Domain.Workspaces;
 using NSubstitute;
 
@@ -17,6 +19,8 @@ public class ImportCollectionTests
 
     private readonly IWorkspaceRepository _repository = Substitute.For<IWorkspaceRepository>();
     private readonly IFolderDefaultsStore _folderDefaults = Substitute.For<IFolderDefaultsStore>();
+    private readonly IRunPlanStore _plans = Substitute.For<IRunPlanStore>();
+    private readonly IRunPlanFormat _planFormat = Substitute.For<IRunPlanFormat>();
     private readonly IEnvironmentStore _environments = Substitute.For<IEnvironmentStore>();
     private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
     private readonly IExternalFiles _files = Substitute.For<IExternalFiles>();
@@ -30,6 +34,9 @@ public class ImportCollectionTests
         _repository.CreateFolder(Root, Arg.Any<WorkspacePath>()).Returns(Unit.Value);
         _repository.WriteRequestAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<HttpRequestDefinition>(), Arg.Any<CancellationToken>())
             .Returns(Result<bool>.Success(true));
+        _plans.WriteAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Result<bool>.Success(true));
+        _planFormat.Write(Arg.Any<RunPlan>()).Returns(call => $"plan {call.Arg<RunPlan>().Name}\n");
+        _files.WriteTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Unit.Value);
         _folderDefaults.WriteAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<FolderDefaults>(), Arg.Any<CancellationToken>())
             .Returns(Result<bool>.Success(true));
         _environments.WriteAsync(Root, Arg.Any<string>(), Arg.Any<EnvironmentDefinition>(), Arg.Any<CancellationToken>())
@@ -41,7 +48,7 @@ public class ImportCollectionTests
             .Returns(Unit.Value);
     }
 
-    private ImportCollection UseCase() => new(_repository, _folderDefaults, _environments, _secrets, _files, _importer, _current);
+    private ImportCollection UseCase() => new(_repository, _folderDefaults, _plans, _planFormat, _environments, _secrets, _files, _importer, _current);
 
     private void Returns(CollectionFolder root, params EnvironmentDefinition[] environments) =>
         _importer.Parse("{}", "shop.json").Returns(new ParsedCollection("Test format", new RequestCollection(root, environments), ["note"]));
@@ -190,7 +197,7 @@ public class ImportCollectionTests
     {
         Assert.Equal(ErrorCodes.NotFound, (await UseCase().ExecuteAsync(new ImportCollectionRequest(Source, "requests/missing"))).Error?.Code);
 
-        var noWorkspace = new ImportCollection(_repository, _folderDefaults, _environments, _secrets, _files, _importer, new CurrentWorkspace());
+        var noWorkspace = new ImportCollection(_repository, _folderDefaults, _plans, _planFormat, _environments, _secrets, _files, _importer, new CurrentWorkspace());
         Assert.Equal(ErrorCodes.NoWorkspace, (await noWorkspace.ExecuteAsync(new ImportCollectionRequest(Source))).Error?.Code);
     }
 
@@ -241,5 +248,112 @@ public class ImportCollectionTests
         await _folderDefaults.DidNotReceiveWithAnyArgs().WriteAsync(default!, default!, default!, default);
         Assert.Contains(result.Value.Warnings, w => w.StartsWith("Skipped the settings of the folder 'Plan'", StringComparison.Ordinal));
         Assert.Equal(1, result.Value.Requests);
+    }
+
+    private static readonly RunLoad Load = new(5, 10, null, TimeSpan.FromSeconds(2), TimeSpan.Zero, TimeSpan.Zero, null);
+
+    private void ReturnsPlans(CollectionFolder root, params ImportedRunPlan[] plans) =>
+        _importer.Parse("{}", "shop.json").Returns(new ParsedCollection("Test format", new RequestCollection(root, []) { Plans = plans }, []));
+
+    private RunPlan WrittenPlan()
+    {
+        var call = _planFormat.ReceivedCalls().Single(c => c.GetMethodInfo().Name == nameof(IRunPlanFormat.Write));
+        return (RunPlan)call.GetArguments()[0]!;
+    }
+
+    [Fact]
+    public async Task WritesRunPlansWithThePathsTheirRequestsWereSavedAt()
+    {
+        var list = new HttpRequestDefinition("List", RequestMethod.Get, "/list");
+        var buy = new HttpRequestDefinition("Buy", RequestMethod.Post, "/buy");
+        var off = new HttpRequestDefinition("Off", RequestMethod.Get, "/off");
+        var ok = new RunAssertion(["2xx"], null, null, null);
+        ReturnsPlans(
+            new CollectionFolder("Shop", [new CollectionFolder("Cart", [], [buy, off])], [list]),
+            new ImportedRunPlan(
+                "Browse load",
+                [new ImportedPlanRequest(list, Weight: 3), new ImportedPlanRequest(buy, Assertion: ok with { Status = ["201"] }), new ImportedPlanRequest(off, Enabled: false)],
+                Load,
+                RequestOrder.Random,
+                ok));
+
+        var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(["plans/Shop/browse-load.run.yaml"], result.Value.Plans);
+        await _plans.Received(1).WriteAsync(Root, P("plans/Shop/browse-load.run.yaml"), "plan Browse load\n", Arg.Any<CancellationToken>());
+
+        var plan = WrittenPlan();
+        Assert.Equal(["requests/Shop/list.yaml", "requests/Shop/Cart/buy.yaml", "requests/Shop/Cart/off.yaml"], plan.Requests.Select(r => r.Value));
+        Assert.Equal(["requests/Shop/Cart/off.yaml"], plan.DisabledRequests);
+        Assert.Equal(RequestOrder.Random, plan.Order);
+        Assert.Equal(3, plan.RequestWeights["requests/Shop/list.yaml"]);
+        Assert.Single(plan.RequestWeights);
+        Assert.Equal(ok, plan.Assertions[RunPlan.AllRequests]);
+        Assert.Equal(["201"], plan.Assertions["requests/Shop/Cart/buy.yaml"].Status);
+        Assert.Equal(Load, plan.Load);
+        Assert.Null(plan.Data);
+    }
+
+    [Fact]
+    public async Task CopiesThePlansCsvFileIntoTheWorkspaceAsCommaSeparatedValues()
+    {
+        var list = new HttpRequestDefinition("List", RequestMethod.Get, "/list");
+        ReturnsPlans(
+            new CollectionFolder("Shop", [], [list]),
+            new ImportedRunPlan(
+                "Load",
+                [new ImportedPlanRequest(list)],
+                Load,
+                Data: new ImportedDataFile("data/users.csv", SelectionMode.PerThread, EndBehavior.Stop, "user,pass", SkipFirstLine: true, Delimiter: ";")));
+        _files.ReadTextAsync("/downloads/data/users.csv", Arg.Any<CancellationToken>())
+            .Returns(Result<string>.Success("name;pw\r\nann;1\r\nbo;x,y\r\n"));
+        _repository.EntryExists(Root, P("data/Shop")).Returns(true);
+
+        var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _files.Received(1).WriteTextAsync(
+            Path.Combine(Root, "data/Shop 2/users.csv"),
+            "user,pass\nann,1\nbo,\"x,y\"\n",
+            Arg.Any<CancellationToken>());
+        Assert.Equal(new RunDataSource(P("data/Shop 2/users.csv"), SelectionMode.PerThread, EndBehavior.Stop), WrittenPlan().Data);
+    }
+
+    [Fact]
+    public async Task WritesPlansWithoutTheirDataFileWhenItCantBeRead()
+    {
+        var list = new HttpRequestDefinition("List", RequestMethod.Get, "/list");
+        ReturnsPlans(
+            new CollectionFolder("Shop", [], [list]),
+            new ImportedRunPlan("Load", [new ImportedPlanRequest(list)], Load, Data: new ImportedDataFile("/elsewhere/missing.csv", SelectionMode.Sequential, EndBehavior.Recycle)));
+        _files.ReadTextAsync("/elsewhere/missing.csv", Arg.Any<CancellationToken>()).Returns(new Error(ErrorCodes.NotFound, "The file '/elsewhere/missing.csv' does not exist."));
+
+        var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Single(result.Value.Plans);
+        Assert.Null(WrittenPlan().Data);
+        Assert.Contains(result.Value.Warnings, w => w.Contains("has no data file", StringComparison.Ordinal) && w.Contains("missing.csv", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SkipsPlansThatCantBeSaved()
+    {
+        var list = new HttpRequestDefinition("List", RequestMethod.Get, "/list");
+        var notImported = new HttpRequestDefinition("Gone", RequestMethod.Get, "/gone");
+        ReturnsPlans(
+            new CollectionFolder("Shop", [], [list]),
+            new ImportedRunPlan("Orphan", [new ImportedPlanRequest(notImported)], Load),
+            new ImportedRunPlan("Off", [new ImportedPlanRequest(list, Enabled: false)], Load),
+            new ImportedRunPlan("Partly", [new ImportedPlanRequest(list), new ImportedPlanRequest(notImported)], Load));
+
+        var result = await UseCase().ExecuteAsync(new ImportCollectionRequest(Source));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(["plans/Shop/partly.run.yaml"], result.Value.Plans);
+        Assert.Contains("Skipped the run plan 'Orphan': none of its requests was imported.", result.Value.Warnings);
+        Assert.Contains(result.Value.Warnings, w => w.StartsWith("Skipped the run plan 'Off': Enable at least one request", StringComparison.Ordinal));
+        Assert.Contains("The run plan 'Partly' leaves out 1 request(s) that were not imported.", result.Value.Warnings);
     }
 }

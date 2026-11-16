@@ -1170,11 +1170,28 @@ content, in JSON or YAML (or XML, for JMeter):
 | Insomnia export v4 | Folders, requests (with their auth, OAuth 2.0 included) and environments: each sub-environment becomes an environment that includes the base environment's variables. `{{ _.name }}` references become `{{name}}`. |
 | HAR 1.2 (browser dev tools) | One request per entry, in a folder per host, without connection headers such as `Host`. |
 | OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer, API key or OAuth 2.0 auth using secret `{{username}}`/`{{password}}`, `{{token}}`, `{{apiKey}}` or `{{clientId}}`/`{{clientSecret}}` variables, which you fill in (OAuth 2.0 schemes use their client credentials or authorization code flow and the scopes the operation requires; others get a Bearer `{{token}}`). Path parameters that are whole segments become path variables (`/pets/:petId`); others without an example become `{{variables}}`. |
-| JMeter test plan (`.jmx`) | Thread groups and controllers become folders, HTTP samplers requests (query parameters, urlencoded, raw, multipart and file bodies, timeouts and redirects, comments as descriptions). Header managers and Basic/Digest authorization managers that apply to a whole thread group or controller become its folder's headers and auth; User Defined Variables become variables of the imported folder, and HTTP Request Defaults a `{{baseUrl}}` folder variable the requests' URLs start with. JSON Extractors with a simple path (`$.data.id`) become captures. `${name}` becomes `{{name}}`; `${__UUID()}`, `${__Random(a,b)}`, `${__time()}` and `${__P(name,default)}` become `{{$uuid}}`, `{{$randomInt a b}}`, `{{$timestamp}}000` and `{{name}}` (the default becomes a folder variable). Scripts, logic (If, While, Loop… controllers become plain folders), other extractors, non-HTTP samplers, listeners, timers, assertions and CSV data are listed after the import. |
+| JMeter test plan (`.jmx`) | Thread groups and controllers become folders, HTTP samplers requests (query parameters, urlencoded, raw, multipart and file bodies, timeouts and redirects, comments as descriptions). Header managers and Basic/Digest authorization managers that apply to a whole thread group or controller become its folder's headers and auth; User Defined Variables become variables of the imported folder, and HTTP Request Defaults a `{{baseUrl}}` folder variable the requests' URLs start with. JSON Extractors with a simple path (`$.data.id`) become captures. `${name}` becomes `{{name}}`; `${__UUID()}`, `${__Random(a,b)}`, `${__time()}` and `${__P(name,default)}` become `{{$uuid}}`, `{{$randomInt a b}}`, `{{$timestamp}}000` and `{{name}}` (the default becomes a folder variable). Each thread group also becomes a load run plan in `plans/<collection>/` (see below). Scripts, logic (If, While, Loop… controllers become plain folders), other extractors, non-HTTP samplers, listeners and what a run plan can't express are listed after the import. |
 
 OAuth 2.0 settings whose redirect URL is a web page (such as Postman's own
 callback) get Dynpost's automatic loopback redirect instead, which the OAuth
 client may need to allow; this is listed after the import.
+
+A JMeter thread group becomes a run plan with its requests, in the plan's order:
+
+| JMeter | Run plan |
+| --- | --- |
+| Number of threads, ramp-up, loop count or scheduler duration | `load.threads`, `rampUp`, `iterations` or `duration` (a group that loops forever without a duration runs for 10 minutes; a loop count wins over a duration) |
+| Constant, Uniform Random and Gaussian Random Timers of the thread group or the test plan | `thinkTime` (added up; a Gaussian timer becomes the delay ± the deviation) |
+| Constant Throughput Timer (per minute) / Precise Throughput Timer | `maxRps` (a per-thread target is multiplied by the threads) |
+| CSV Data Set Config | `data`: the file is copied into `data/<collection>/` as comma-separated values with a header line (from *Variable Names* when set); *Sharing mode* "current thread" is `perThread`, others `sequential`; *Recycle on EOF* off is `onEof: stop` |
+| A single Random Order Controller / Random Controller, or Throughput Controllers in percent mode | `order: shuffle` / `random` / `random` with `weights` (each controller's percentage shared by its requests) |
+| Response Assertion on the response code (`200`, `2..`, `2\d\d`) or on the response text (a plain substring, or *Not*) | `assert` `status` / `bodyContains` / `bodyNotContains`: for every request when the assertion is on the thread group or the test plan, else for the requests in its scope |
+| Duration Assertion | `assert` `maxTime` |
+| Disabled HTTP samplers | Imported, and listed in `disabled` |
+
+setUp, tearDown and arrival-based thread groups keep their requests but get no plan; the
+Concurrency and Ultimate Thread Group plugins get one with their threads, ramp-up and total
+duration, approximately.
 
 Request descriptions are imported from Postman and Insomnia, and from an
 OpenAPI operation's `description` (its `summary` names the request).

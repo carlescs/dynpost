@@ -3,6 +3,7 @@ using Dynpost.Application.Runs;
 using Dynpost.Domain.Runs;
 using Dynpost.Domain.Workspaces;
 using Dynpost.Infrastructure.Yaml;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Core;
@@ -90,6 +91,208 @@ public sealed partial class YamlRunPlanFormat : IRunPlanFormat
 
     [GeneratedRegex(@"^[A-Za-z0-9_][A-Za-z0-9_./-]*$")]
     private static partial Regex PlainPath();
+
+    public string Write(RunPlan plan)
+    {
+        var writer = new YamlWriter();
+        writer.Scalar("name", plan.Name);
+        writer.Sequence("requests", plan.Requests.Select(r => r.Value));
+        if (plan.DisabledRequests.Count > 0)
+        {
+            writer.Sequence("disabled", plan.DisabledRequests);
+        }
+
+        if (plan.Order != RequestOrder.Sequential)
+        {
+            writer.Plain("order", OrderName(plan.Order));
+        }
+
+        if (plan.RequestWeights.Count > 0)
+        {
+            writer.Mapping("weights", w => WriteNumbers(w, plan.RequestWeights));
+        }
+
+        if (plan.EnvironmentList.Count > 0)
+        {
+            writer.Sequence("environments", plan.EnvironmentList.Select(e => e.Value));
+        }
+
+        if (plan.DisabledEnvironmentList.Count > 0)
+        {
+            writer.Sequence("disabledEnvironments", plan.DisabledEnvironmentList);
+        }
+
+        if (plan.EnvironmentOrder != RequestOrder.Sequential)
+        {
+            writer.Plain("environmentOrder", OrderName(plan.EnvironmentOrder));
+        }
+
+        if (plan.EnvironmentWeightsByPath.Count > 0)
+        {
+            writer.Mapping("environmentWeights", w => WriteNumbers(w, plan.EnvironmentWeightsByPath));
+        }
+
+        writer.Mapping("load", load =>
+        {
+            load.Plain("threads", plan.Load.Threads.ToString(CultureInfo.InvariantCulture));
+            if (plan.Load.Iterations is { } iterations)
+            {
+                load.Plain("iterations", iterations.ToString(CultureInfo.InvariantCulture));
+            }
+
+            if (plan.Load.Duration is { } duration)
+            {
+                load.Plain("duration", RunText.FormatDuration(duration));
+            }
+
+            if (plan.Load.RampUp > TimeSpan.Zero)
+            {
+                load.Plain("rampUp", RunText.FormatDuration(plan.Load.RampUp));
+            }
+
+            if (plan.Load.ThinkMin == plan.Load.ThinkMax && plan.Load.ThinkMax > TimeSpan.Zero)
+            {
+                load.Plain("thinkTime", RunText.FormatDuration(plan.Load.ThinkMax));
+            }
+            else if (plan.Load.ThinkMin != plan.Load.ThinkMax)
+            {
+                load.Mapping("thinkTime", think => think
+                    .Plain("min", RunText.FormatDuration(plan.Load.ThinkMin))
+                    .Plain("max", RunText.FormatDuration(plan.Load.ThinkMax)));
+            }
+
+            if (plan.Load.MaxRps is { } maxRps)
+            {
+                load.Plain("maxRps", FormatNumber(maxRps));
+            }
+        });
+
+        if (plan.Data is { } data)
+        {
+            writer.Mapping("data", d =>
+            {
+                d.Scalar("file", data.File.Value);
+                WriteSelection(d, data.Mode, data.OnEof);
+            });
+        }
+
+        if (plan.BodySources.Count > 0)
+        {
+            writer.Mapping("bodies", bodies =>
+            {
+                foreach (var (path, source) in plan.BodySources)
+                {
+                    bodies.Mapping(path, b =>
+                    {
+                        b.Scalar("folder", source.Folder.Value);
+                        if (source.Pattern is not null)
+                        {
+                            b.Scalar("pattern", source.Pattern);
+                        }
+
+                        WriteSelection(b, source.Mode, source.OnEof);
+                    });
+                }
+            });
+        }
+
+        if (plan.SaveResponses)
+        {
+            writer.Boolean("saveResponses", true);
+        }
+
+        var assertions = plan.Assertions.Where(a => !a.Value.IsEmpty).ToList();
+        if (assertions.Count > 0)
+        {
+            writer.Mapping("assert", assert =>
+            {
+                // The checks for every request come first, then each request's in the list's order.
+                foreach (var (key, assertion) in assertions.OrderBy(a => a.Key == RunPlan.AllRequests ? -1 : plan.Requests.ToList().FindIndex(r => r.Value == a.Key)))
+                {
+                    assert.Mapping(key, a =>
+                    {
+                        if (assertion.Status.Count > 0)
+                        {
+                            a.Plain("status", string.Join(", ", assertion.Status));
+                        }
+
+                        if (assertion.MaxTime is { } maxTime)
+                        {
+                            a.Plain("maxTime", RunText.FormatDuration(maxTime));
+                        }
+
+                        if (assertion.BodyContains is not null)
+                        {
+                            a.Scalar("bodyContains", assertion.BodyContains);
+                        }
+
+                        if (assertion.BodyNotContains is not null)
+                        {
+                            a.Scalar("bodyNotContains", assertion.BodyNotContains);
+                        }
+                    });
+                }
+            });
+        }
+
+        if (!plan.Thresholds.IsEmpty)
+        {
+            var t = plan.Thresholds;
+            writer.Mapping("thresholds", th =>
+            {
+                foreach (var (key, value) in new[] { ("p50", t.P50), ("p90", t.P90), ("p95", t.P95), ("p99", t.P99), ("average", t.Average) })
+                {
+                    if (value is { } duration)
+                    {
+                        th.Plain(key, RunText.FormatDuration(duration));
+                    }
+                }
+
+                if (t.ErrorRatePercent is { } errorRate)
+                {
+                    th.Plain("errorRate", FormatNumber(errorRate) + "%");
+                }
+
+                if (t.MinThroughput is { } throughput)
+                {
+                    th.Plain("throughput", FormatNumber(throughput));
+                }
+            });
+        }
+
+        return writer.ToString();
+    }
+
+    private static void WriteNumbers(YamlWriter writer, IReadOnlyDictionary<string, double> values)
+    {
+        foreach (var (key, value) in values)
+        {
+            writer.Plain(key, FormatNumber(value));
+        }
+    }
+
+    private static void WriteSelection(YamlWriter writer, SelectionMode mode, EndBehavior onEof)
+    {
+        if (mode != SelectionMode.Sequential)
+        {
+            writer.Plain("mode", mode == SelectionMode.Random ? "random" : "perThread");
+        }
+
+        if (onEof != EndBehavior.Recycle)
+        {
+            writer.Plain("onEof", "stop");
+        }
+    }
+
+    private static string OrderName(RequestOrder order) => order switch
+    {
+        RequestOrder.Shuffle => "shuffle",
+        RequestOrder.Random => "random",
+        RequestOrder.RoundRobin => "roundRobin",
+        _ => "sequential",
+    };
+
+    private static string FormatNumber(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
 
     public Result<RunPlan> Parse(string text)
     {

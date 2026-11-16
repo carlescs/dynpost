@@ -515,6 +515,8 @@ export interface ImportResultDto {
   folders: number;
   /** Ids of the environments created. */
   environments: string[];
+  /** Paths of the run plans created (JMeter thread groups). */
+  plans: string[];
   /** What was skipped or imported only approximately. */
   warnings: string[];
 }

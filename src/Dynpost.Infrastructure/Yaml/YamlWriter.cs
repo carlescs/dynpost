@@ -51,6 +51,17 @@ internal sealed partial class YamlWriter
         return this;
     }
 
+    /// <summary>
+    /// Writes <c>key: value</c> with the value unquoted, for values the caller formats itself and
+    /// that read back as intended: numbers, durations (<c>10s</c>), percentages, status codes.
+    /// </summary>
+    public YamlWriter Plain(string key, string value)
+    {
+        Indent();
+        _builder.Append(FormatKey(key)).Append(": ").Append(value).Append('\n');
+        return this;
+    }
+
     /// <summary>Writes <c>key:</c> and indents what <paramref name="body"/> writes under it.</summary>
     public YamlWriter Mapping(string key, Action<YamlWriter> body)
     {

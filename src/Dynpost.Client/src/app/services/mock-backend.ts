@@ -510,6 +510,7 @@ export class MockBackend {
           requests: 1,
           folders: 1,
           environments: [],
+          plans: [],
           warnings: ['Browser preview: a sample collection was imported instead of a file.'],
         });
       }

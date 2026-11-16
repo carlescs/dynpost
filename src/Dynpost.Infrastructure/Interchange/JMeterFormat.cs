@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using Dynpost.Application.Common;
 using Dynpost.Application.Interchange;
 using Dynpost.Domain.Requests;
+using Dynpost.Domain.Runs;
 
 namespace Dynpost.Infrastructure.Interchange;
 
@@ -14,13 +15,15 @@ namespace Dynpost.Infrastructure.Interchange;
 /// variable), authorization managers and User Defined Variables become folder settings; JSON
 /// Extractors become captures. <c>${name}</c> references become <c>{{name}}</c>, and the JMeter
 /// functions Dynpost has built-in variables for are rewritten. Everything else (scripts, logic
-/// controllers, timers, assertions, listeners…) is listed in the warnings.
+/// controllers, listeners, what a run plan can't express…) is listed in the warnings.
 /// </summary>
 /// <remarks>
 /// A plan is XML in which each element is followed by a <c>hashTree</c> holding its children.
 /// Config elements apply to their siblings and everything below them, so they are read level by
-/// level. Load settings (threads, timers, assertions, CSV data) belong to run plans and are not
-/// imported here.
+/// level. Each thread group also becomes a run plan (<see cref="ImportedRunPlan"/>): its threads,
+/// ramp-up and loops or duration, timers as think time, throughput timers as a request rate, its
+/// CSV Data Set, the order its random or throughput controllers give, and the assertions a plan can
+/// check.
 /// </remarks>
 internal static class JMeterFormat
 {
@@ -80,6 +83,18 @@ internal static class JMeterFormat
         /// <summary>Variables for the whole plan: User Defined Variables and property defaults.</summary>
         private readonly List<KeyValueEntry> _planVariables = [];
 
+        /// <summary>Timers, throughput, CSV data and assertions of the test plan, for every thread group.</summary>
+        private readonly LoadSettings _planWide = new();
+
+        /// <summary>The run plans of the thread groups, in the plan's order.</summary>
+        private readonly List<PlanBuilder> _plans = [];
+
+        /// <summary>The thread group being read, or <c>null</c> outside one.</summary>
+        private PlanBuilder? _plan;
+
+        /// <summary>Controllers whose logic a run plan's order keeps, so they get no warning.</summary>
+        private readonly HashSet<XElement> _mapped = [];
+
         public Importer(string fallbackName)
         {
             _fallbackName = fallbackName;
@@ -114,7 +129,8 @@ internal static class JMeterFormat
                 name = _fallbackName.Length > 0 ? _fallbackName : DefaultPlanName;
             }
 
-            var folder = ReadLevel(name, tree.Tree, Scope.Root, isPlan: true) ?? new CollectionFolder(name, [], []);
+            var folder = ReadLevel(name, tree.Tree, Scope.Root, LevelKind.Plan) ?? new CollectionFolder(name, [], []);
+            var runPlans = _plans.Select(BuildPlan).OfType<ImportedRunPlan>().ToList();
             var rootVariables = _planVariables.Select(v => v with { Value = _rewriter.Rewrite(v.Value, $"the variable '{v.Key}'") }).ToList();
 
             // The rewriter may have found property defaults (__P) while reading the requests.
@@ -129,7 +145,7 @@ internal static class JMeterFormat
                 _warnings.Add($"The plan reads JMeter properties without a default value; set them in an environment: {string.Join(", ", properties)}.");
             }
 
-            return new ParsedCollection(FormatName, new RequestCollection(folder, []), _warnings);
+            return new ParsedCollection(FormatName, new RequestCollection(folder, []) { Plans = runPlans }, _warnings);
         }
 
         private void CollectVariables(XElement? arguments)
@@ -149,11 +165,23 @@ internal static class JMeterFormat
         /// Reads the children of a folder-like element (the plan, a thread group, a controller)
         /// into a folder; <c>null</c> when nothing in it was imported.
         /// </summary>
-        private CollectionFolder? ReadLevel(string name, XElement? tree, Scope parent, bool isPlan = false)
+        private CollectionFolder? ReadLevel(string name, XElement? tree, Scope parent, LevelKind levelKind)
         {
             var children = Children(tree).ToList();
             var level = parent.Inner();
             var defaults = FolderDefaults.Empty;
+
+            // Load settings at the plan's or a thread group's level apply to the whole run plan.
+            var load = levelKind switch
+            {
+                LevelKind.Plan => _planWide,
+                LevelKind.ThreadGroup => _plan?.Settings,
+                _ => null,
+            };
+            if (levelKind == LevelKind.ThreadGroup && _plan is not null)
+            {
+                _plan.Order = PlanOrder(children);
+            }
 
             // Config elements first: they apply to every sibling, whatever its position.
             foreach (var (element, _) in children.Where(c => Enabled(c.Element)))
@@ -186,6 +214,12 @@ internal static class JMeterFormat
                     case ElementKind.JsonExtractor:
                         level.Captures.AddRange(Captures(element));
                         break;
+                    case ElementKind.Assertion when load is null:
+                        level.Assertions.Add(Assertion(element));
+                        break;
+                    case ElementKind.Timer or ElementKind.ThroughputTimer or ElementKind.Assertion or ElementKind.CsvData:
+                        ReadLoadElement(element, load);
+                        break;
                 }
             }
 
@@ -201,7 +235,14 @@ internal static class JMeterFormat
             foreach (var (element, subtree) in children)
             {
                 var kind = Kind(element);
-                if (!Enabled(element))
+                if (levelKind == LevelKind.ThreadGroup && _plan is not null)
+                {
+                    _plan.CurrentTop = element;
+                }
+
+                // A disabled request of a thread group is imported, and disabled in its run plan.
+                var enabled = Enabled(element);
+                if (!enabled && !(kind == ElementKind.Sampler && _plan is not null))
                 {
                     _notes.Add("Skipped disabled elements", Label(element));
                     continue;
@@ -210,21 +251,40 @@ internal static class JMeterFormat
                 switch (kind)
                 {
                     case ElementKind.Sampler:
-                        if (ReadRequest(element, subtree, level) is { } request)
+                        if (ReadRequest(element, subtree, level) is { } read)
                         {
-                            requests.Add(request);
+                            requests.Add(read.Request);
+                            _plan?.Requests.Add(new PlanRequest(read.Request, enabled, _plan.CurrentTop, read.Assertion));
+                            if (!enabled)
+                            {
+                                _notes.Add("Imported disabled requests; they are disabled in their run plan", $"'{read.Request.Name}'");
+                            }
                         }
 
                         break;
                     case ElementKind.ThreadGroup:
+                        _plan = StartPlan(element);
+                        var group = ReadLevel(TestName(element), subtree, level, LevelKind.ThreadGroup);
+                        if (_plan is not null && group is not null)
+                        {
+                            _plans.Add(_plan);
+                        }
+
+                        _plan = null;
+                        if (group is not null)
+                        {
+                            folders.Add(group);
+                        }
+
+                        break;
                     case ElementKind.Controller:
                     case ElementKind.LogicController:
-                        if (kind == ElementKind.LogicController)
+                        if (kind == ElementKind.LogicController && !_mapped.Contains(element))
                         {
                             _notes.Add("Imported as plain folders; Dynpost doesn't run JMeter's logic controllers", Label(element));
                         }
 
-                        if (ReadLevel(TestName(element), subtree, level) is { } folder)
+                        if (ReadLevel(TestName(element), subtree, level, LevelKind.Controller) is { } folder)
                         {
                             folders.Add(folder);
                         }
@@ -236,7 +296,7 @@ internal static class JMeterFormat
                 }
             }
 
-            if (!isPlan && requests.Count == 0 && folders.Count == 0)
+            if (levelKind != LevelKind.Plan && requests.Count == 0 && folders.Count == 0)
             {
                 return null;
             }
@@ -251,11 +311,12 @@ internal static class JMeterFormat
             return new CollectionFolder(name, folders, requests) { Defaults = defaults };
         }
 
-        private HttpRequestDefinition? ReadRequest(XElement sampler, XElement? tree, Scope parent)
+        private (HttpRequestDefinition Request, RunAssertion? Assertion)? ReadRequest(XElement sampler, XElement? tree, Scope parent)
         {
             var name = TestName(sampler);
             var own = parent.Inner();
             var ownHeaders = new List<KeyValueEntry>();
+            var assertions = new List<RunAssertion?>();
             foreach (var (element, _) in Children(tree))
             {
                 var kind = Kind(element);
@@ -278,6 +339,12 @@ internal static class JMeterFormat
                         break;
                     case ElementKind.HttpDefaults:
                         own.Defaults.Add(HttpFields.Read(element));
+                        break;
+                    case ElementKind.Assertion:
+                        assertions.Add(Assertion(element));
+                        break;
+                    case ElementKind.Timer or ElementKind.ThroughputTimer or ElementKind.CsvData:
+                        ReadLoadElement(element, null);
                         break;
                     default:
                         NoteSkipped(element, kind);
@@ -323,8 +390,414 @@ internal static class JMeterFormat
                 Description = Comments(sampler),
             };
 
-            return InterchangeText.MapText(request, text => _rewriter.Rewrite(text, $"'{name}'"));
+            var assertion = MergeAssertions([.. parent.AllAssertions(), .. assertions], name);
+            return (InterchangeText.MapText(request, text => _rewriter.Rewrite(text, $"'{name}'")), assertion);
         }
+
+        /// <summary>
+        /// A run plan for a thread group, with its threads, ramp-up and iterations or duration;
+        /// <c>null</c> (with a warning) for thread groups a run plan can't stand for.
+        /// </summary>
+        private PlanBuilder? StartPlan(XElement group)
+        {
+            var name = TestName(group);
+            var tag = group.Name.LocalName;
+            int threads;
+            TimeSpan rampUp;
+            int? iterations = null;
+            TimeSpan? duration = null;
+            switch (tag)
+            {
+                case "ThreadGroup":
+                    threads = (int)Math.Round(Number(Str(group, "ThreadGroup.num_threads")) ?? 1);
+                    rampUp = Seconds(Number(Str(group, "ThreadGroup.ramp_time")));
+                    var loops = Number(Str(Elem(group, "ThreadGroup.main_controller"), "LoopController.loops")) ?? 1;
+                    var scheduled = Bool(group, "ThreadGroup.scheduler") == true ? Number(Str(group, "ThreadGroup.duration")) : null;
+                    if (loops > 0)
+                    {
+                        iterations = (int)Math.Min(Math.Round(loops), RunPlan.MaxIterations);
+                        if (scheduled is > 0)
+                        {
+                            _notes.Add("Thread groups with both a loop count and a duration; their run plan counts iterations", $"'{name}'");
+                        }
+                    }
+                    else if (scheduled is > 0)
+                    {
+                        duration = Seconds(scheduled);
+                    }
+                    else
+                    {
+                        duration = DefaultDuration;
+                        _notes.Add($"Thread groups that loop forever; their run plan runs for {RunText.FormatDuration(DefaultDuration)}", $"'{name}'");
+                    }
+
+                    break;
+                case "com.blazemeter.jmeter.threads.concurrency.ConcurrencyThreadGroup":
+                    var minutes = Str(group, "Unit") == "M";
+                    TimeSpan Time(string key) => minutes ? TimeSpan.FromMinutes(Number(Str(group, key)) ?? 0) : Seconds(Number(Str(group, key)));
+                    threads = (int)Math.Round(Number(Str(group, "TargetLevel")) ?? 1);
+                    rampUp = Time("RampUp");
+                    duration = rampUp + Time("Hold");
+                    _notes.Add("Plugin thread groups approximated by threads, ramp-up and duration", Label(group));
+                    break;
+                case "kg.apc.jmeter.threads.UltimateThreadGroup":
+                    var rows = Prop(group, "ultimatethreadgroupdata")?.Elements()
+                        .Select(row => row.Elements().Select(cell => Number(cell.Value) ?? 0).ToList())
+                        .Where(row => row.Count >= 4)
+                        .ToList() ?? [];
+                    threads = (int)rows.Sum(row => row[0]);
+                    rampUp = Seconds(rows.Select(row => row[2]).DefaultIfEmpty(0).Max());
+                    duration = Seconds(rows.Select(row => row.Take(5).Skip(1).Sum()).DefaultIfEmpty(0).Max());
+                    _notes.Add("Plugin thread groups approximated by threads, ramp-up and duration", Label(group));
+                    break;
+                default:
+                    _notes.Add("Thread groups not turned into run plans (setUp, tearDown and arrival-based ones)", Label(group));
+                    return null;
+            }
+
+            if (threads > RunPlan.MaxThreads)
+            {
+                _notes.Add($"Thread groups with more than {RunPlan.MaxThreads} threads; their run plan uses {RunPlan.MaxThreads}", $"'{name}'");
+            }
+
+            if (duration > RunPlan.MaxDuration)
+            {
+                duration = RunPlan.MaxDuration;
+            }
+
+            if (duration <= TimeSpan.Zero)
+            {
+                duration = DefaultDuration;
+            }
+
+            var load = new RunLoad(Math.Clamp(threads, 1, RunPlan.MaxThreads), iterations, duration, rampUp, TimeSpan.Zero, TimeSpan.Zero, null);
+            return new PlanBuilder(name.Length > 0 ? name : "Thread Group", load);
+        }
+
+        /// <summary>
+        /// How a thread group's virtual users take its requests: a single Random Order Controller
+        /// shuffles them, a single Random Controller picks one, and Throughput Controllers in
+        /// percent mode pick one by their percentages.
+        /// </summary>
+        private RequestOrder PlanOrder(List<(XElement Element, XElement? Tree)> children)
+        {
+            var units = children
+                .Where(c => Enabled(c.Element) && Kind(c.Element) is ElementKind.Sampler or ElementKind.Controller or ElementKind.LogicController)
+                .Select(c => c.Element)
+                .ToList();
+            if (units is [{ Name.LocalName: "RandomOrderController" } shuffled])
+            {
+                _mapped.Add(shuffled);
+                return RequestOrder.Shuffle;
+            }
+
+            if (units is [{ Name.LocalName: "RandomController" } random])
+            {
+                _mapped.Add(random);
+                return RequestOrder.Random;
+            }
+
+            if (units.Count > 0 && units.All(u => u.Name.LocalName == "ThroughputController" && Str(u, "ThroughputController.style") == "1"))
+            {
+                _mapped.UnionWith(units);
+                return RequestOrder.Random;
+            }
+
+            return RequestOrder.Sequential;
+        }
+
+        /// <summary>A timer, throughput timer, assertion or CSV Data Set for a run plan; <paramref name="load"/> is <c>null</c> below its level.</summary>
+        private void ReadLoadElement(XElement element, LoadSettings? load)
+        {
+            var kind = Kind(element);
+            // A CSV Data Set anywhere in a thread group feeds its run plan.
+            if (load is null && kind == ElementKind.CsvData && _plan is not null)
+            {
+                load = _plan.Settings;
+            }
+
+            if (load is null)
+            {
+                _notes.Add(
+                    kind == ElementKind.CsvData
+                        ? "Not imported: CSV Data Sets outside thread groups that become run plans"
+                        : "Not imported: timers inside controllers or requests, or in thread groups that don't become run plans (a run plan's think time and rate apply to all its requests)",
+                    Label(element));
+                return;
+            }
+
+            switch (kind)
+            {
+                case ElementKind.Timer:
+                    if (Timer(element) is { } timer)
+                    {
+                        load.Timers.Add(timer);
+                    }
+
+                    break;
+                case ElementKind.ThroughputTimer:
+                    ReadThroughput(element, load);
+                    break;
+                case ElementKind.Assertion:
+                    load.Assertions.Add(Assertion(element));
+                    break;
+                case ElementKind.CsvData:
+                    if (load.Data is not null)
+                    {
+                        _notes.Add("Only the first CSV Data Set of a thread group is used", Label(element));
+                    }
+                    else
+                    {
+                        load.Data = DataFile(element);
+                    }
+
+                    break;
+            }
+        }
+
+        private (TimeSpan Min, TimeSpan Max)? Timer(XElement element)
+        {
+            var delay = Number(Str(element, "ConstantTimer.delay"));
+            var range = Number(Str(element, "RandomTimer.range")) ?? 0;
+            if (delay is null || delay < 0 || range < 0)
+            {
+                _notes.Add("Not imported: timers whose delay isn't a number", Label(element));
+                return null;
+            }
+
+            switch (element.Name.LocalName)
+            {
+                case "UniformRandomTimer":
+                    return (TimeSpan.FromMilliseconds(delay.Value), TimeSpan.FromMilliseconds(delay.Value + range));
+                case "GaussianRandomTimer":
+                    _notes.Add("Gaussian timers approximated by a uniform think time of the delay plus or minus the deviation", Label(element));
+                    return (TimeSpan.FromMilliseconds(Math.Max(0, delay.Value - range)), TimeSpan.FromMilliseconds(delay.Value + range));
+                default:
+                    return (TimeSpan.FromMilliseconds(delay.Value), TimeSpan.FromMilliseconds(delay.Value));
+            }
+        }
+
+        private void ReadThroughput(XElement element, LoadSettings load)
+        {
+            var throughput = Number(Value(element, "throughput"));
+            if (throughput is not > 0)
+            {
+                _notes.Add("Not imported: throughput timers whose target isn't a number", Label(element));
+                return;
+            }
+
+            if (element.Name.LocalName == "PreciseThroughputTimer")
+            {
+                var period = Number(Value(element, "throughputPeriod")) ?? 3600;
+                load.Rates.Add((throughput.Value / Math.Max(period, 1), false));
+                return;
+            }
+
+            // Constant Throughput Timer: samples per minute, for one thread (calcMode 0) or all of them.
+            var perThread = Value(element, "calcMode") is null or "0";
+            if (perThread)
+            {
+                _notes.Add("Per-thread throughput targets approximated by a total rate (target × threads)", Label(element));
+            }
+
+            load.Rates.Add((throughput.Value / 60, perThread));
+        }
+
+        private ImportedDataFile? DataFile(XElement element)
+        {
+            var file = (Str(element, "filename") ?? string.Empty).Trim();
+            if (file.Length == 0 || file.Contains("${", StringComparison.Ordinal))
+            {
+                _notes.Add("Not imported: CSV Data Sets whose file name is empty or uses variables", Label(element));
+                return null;
+            }
+
+            var delimiter = Str(element, "delimiter") ?? ",";
+            delimiter = delimiter is "\\t" or "\t" ? "\t" : delimiter.Length == 0 ? "," : delimiter;
+            var names = (Str(element, "variableNames") ?? string.Empty).Trim();
+            string? header = null;
+            if (names.Length > 0)
+            {
+                var list = names.Split(delimiter).Select(n => n.Trim()).ToList();
+                if (list.Any(n => !VariableTemplate.IsValidName(n)))
+                {
+                    _notes.Add("Not imported: CSV Data Sets with variable names Dynpost can't use", $"{Label(element)}: {names}");
+                    return null;
+                }
+
+                header = string.Join(',', list);
+            }
+
+            var mode = Str(element, "shareMode") switch
+            {
+                "shareMode.thread" => SelectionMode.PerThread,
+                _ => SelectionMode.Sequential,
+            };
+            var onEof = Bool(element, "recycle") == false ? EndBehavior.Stop : EndBehavior.Recycle;
+            return new ImportedDataFile(file, mode, onEof, header, header is not null && Bool(element, "ignoreFirstLine") == true, delimiter);
+        }
+
+        /// <summary>
+        /// The checks of a Response Assertion (status codes, or text the body contains or doesn't)
+        /// or a Duration Assertion; <c>null</c> (with a warning) for checks a run plan can't express.
+        /// </summary>
+        private RunAssertion? Assertion(XElement element)
+        {
+            if (element.Name.LocalName == "DurationAssertion")
+            {
+                var ms = Number(Str(element, "DurationAssertion.duration"));
+                if (ms is > 0)
+                {
+                    return new RunAssertion([], TimeSpan.FromMilliseconds(ms.Value), null, null);
+                }
+
+                _notes.Add("Not imported: assertions a run plan can't check", Label(element));
+                return null;
+            }
+
+            var field = Str(element, "Assertion.test_field");
+            var type = (int)(Number(Str(element, "Assertion.test_type")) ?? 0);
+            var strings = Prop(element, "Asserion.test_strings")?.Elements().Select(e => e.Value).Where(v => v.Length > 0).ToList() ?? [];
+            const int Match = 1, Contains = 2, Not = 4, Equals = 8, Substring = 16;
+            var negated = (type & Not) != 0;
+            if (strings.Count > 0 && strings.All(v => !v.Contains("${", StringComparison.Ordinal)))
+            {
+                if (field == "Assertion.response_code" && !negated)
+                {
+                    var codes = strings.Select(StatusPattern).ToList();
+                    if (codes.All(c => c is not null))
+                    {
+                        return new RunAssertion(codes!, null, null, null);
+                    }
+                }
+                else if (field == "Assertion.response_data" && strings.Count == 1 && (type & Equals) == 0
+                    && ((type & Substring) != 0 || ((type & (Match | Contains)) != 0 && !HasRegexSyntax(strings[0]))))
+                {
+                    return negated
+                        ? new RunAssertion([], null, null, strings[0])
+                        : new RunAssertion([], null, strings[0], null);
+                }
+            }
+
+            _notes.Add("Not imported: assertions a run plan can't check (status codes, a body text it contains or doesn't, a time limit)", Label(element));
+            return null;
+        }
+
+        private static string? StatusPattern(string text)
+        {
+            var value = text.Trim();
+            if (value.Length == 3 && value.All(char.IsAsciiDigit) && value[0] is >= '1' and <= '5')
+            {
+                return value;
+            }
+
+            foreach (var suffix in new[] { "xx", "XX", "..", "\\d\\d", "[0-9][0-9]" })
+            {
+                if (value.Length == 1 + suffix.Length && value[0] is >= '1' and <= '5' && value.EndsWith(suffix, StringComparison.Ordinal))
+                {
+                    return value[0] + "xx";
+                }
+            }
+
+            return null;
+        }
+
+        private static bool HasRegexSyntax(string text) => text.IndexOfAny(['\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|', '^', '$']) >= 0;
+
+        /// <summary>Several assertions as one: their status codes, the shortest time limit and the first texts.</summary>
+        private RunAssertion? MergeAssertions(IReadOnlyList<RunAssertion?> assertions, string owner)
+        {
+            var list = assertions.OfType<RunAssertion>().ToList();
+            if (list.Count == 0)
+            {
+                return null;
+            }
+
+            var contains = list.Select(a => a.BodyContains).OfType<string>().Distinct().ToList();
+            var notContains = list.Select(a => a.BodyNotContains).OfType<string>().Distinct().ToList();
+            if (contains.Count > 1 || notContains.Count > 1)
+            {
+                _notes.Add("Only the first body text check of a request is kept", owner);
+            }
+
+            return new RunAssertion(
+                list.SelectMany(a => a.Status).Distinct().ToList(),
+                list.Select(a => a.MaxTime).Where(t => t is not null).DefaultIfEmpty(null).Min(),
+                contains.FirstOrDefault(),
+                notContains.FirstOrDefault());
+        }
+
+        private ImportedRunPlan? BuildPlan(PlanBuilder builder)
+        {
+            if (builder.Requests.Count == 0)
+            {
+                return null;
+            }
+
+            var timers = _planWide.Timers.Concat(builder.Settings.Timers).ToList();
+            var think = (Min: TimeSpan.FromTicks(timers.Sum(t => t.Min.Ticks)), Max: TimeSpan.FromTicks(timers.Sum(t => t.Max.Ticks)));
+            var rates = _planWide.Rates.Concat(builder.Settings.Rates)
+                .Select(rate => rate.PerThread ? rate.PerSecond * builder.Load.Threads : rate.PerSecond)
+                .ToList();
+            var load = builder.Load with
+            {
+                ThinkMin = think.Min,
+                ThinkMax = think.Max,
+                MaxRps = rates.Count == 0 ? null : Math.Round(rates.Min(), 3),
+            };
+
+            // Throughput Controllers share their percentage among their requests.
+            var weights = builder.Order == RequestOrder.Random && builder.Requests.Any(r => r.Top?.Name.LocalName == "ThroughputController")
+                ? builder.Requests.GroupBy(r => r.Top).ToDictionary(
+                    g => g.Key!,
+                    g => Math.Round((Number(Value(g.Key, "ThroughputController.percentThroughput")) ?? 100) / g.Count(), 3))
+                : null;
+
+            return new ImportedRunPlan(
+                builder.Name,
+                builder.Requests.Select(r => new ImportedPlanRequest(
+                    r.Request,
+                    r.Enabled,
+                    weights is not null && r.Top is not null ? weights[r.Top] : null,
+                    r.Assertion)).ToList(),
+                load,
+                builder.Order,
+                MergeAssertions([.. _planWide.Assertions, .. builder.Settings.Assertions], $"'{builder.Name}'"),
+                builder.Settings.Data ?? _planWide.Data);
+        }
+
+        /// <summary>
+        /// A number written in the plan: plain, or a <c>${var}</c> User Defined Variable or a
+        /// <c>${__P(name,default)}</c> property whose value or default is one; <c>null</c> otherwise.
+        /// </summary>
+        private double? Number(string? text)
+        {
+            var value = (text ?? string.Empty).Trim();
+            for (var depth = 0; depth < 5 && value.StartsWith("${", StringComparison.Ordinal) && value.EndsWith('}'); depth++)
+            {
+                var inner = value[2..^1].Trim();
+                if (inner.StartsWith("__P(", StringComparison.Ordinal) && inner.EndsWith(')'))
+                {
+                    var args = inner[4..^1].Split(',');
+                    value = args.Length > 1 ? args[1].Trim() : string.Empty;
+                }
+                else if (inner.StartsWith("__property(", StringComparison.Ordinal) && inner.EndsWith(')'))
+                {
+                    var args = inner[11..^1].Split(',');
+                    value = args.Length > 2 ? args[2].Trim() : string.Empty;
+                }
+                else
+                {
+                    value = _planVariables.FirstOrDefault(v => v.Key == inner)?.Value.Trim() ?? string.Empty;
+                }
+            }
+
+            return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number)
+                ? number
+                : null;
+        }
+
+        private static TimeSpan Seconds(double? seconds) => seconds is > 0 ? TimeSpan.FromSeconds(Math.Min(seconds.Value, RunPlan.MaxDuration.TotalSeconds)) : TimeSpan.Zero;
 
         /// <summary>
         /// The request's URL as it is saved (with <c>{{baseUrl}}</c> when HTTP Request Defaults
@@ -448,7 +921,8 @@ internal static class JMeterFormat
                 ElementKind.Script => "Not imported: Dynpost doesn't run scripts",
                 ElementKind.OtherSampler => "Not imported: Dynpost only imports HTTP requests",
                 ElementKind.Extractor => "Not imported: only JSON Extractors become captures",
-                ElementKind.LoadElement => "Not imported: timers, assertions and CSV data belong to load run plans",
+                ElementKind.LoadElement => "Not imported: timers and assertions run plans can't express",
+                ElementKind.Timer or ElementKind.ThroughputTimer or ElementKind.Assertion or ElementKind.CsvData => null,
                 ElementKind.Listener => "Not imported: listeners (Dynpost shows responses and run results itself)",
                 ElementKind.Ignored => null,
                 ElementKind.Variables => null,
@@ -498,7 +972,13 @@ internal static class JMeterFormat
 
         public List<CaptureRule> Captures { get; } = [];
 
+        /// <summary>Assertions of controllers, which apply to each request below them.</summary>
+        public List<RunAssertion?> Assertions { get; } = [];
+
         public Scope Inner() => new(this);
+
+        /// <summary>The controllers' assertions in scope, the outermost first.</summary>
+        public IEnumerable<RunAssertion?> AllAssertions() => OuterFirst().SelectMany(s => s.Assertions);
 
         private IEnumerable<Scope> OuterFirst() => _parent is null ? [this] : [.. _parent.OuterFirst(), this];
 
@@ -582,6 +1062,49 @@ internal static class JMeterFormat
 
         public RequestAuth? Match(string url) =>
             Entries.FirstOrDefault(e => e.Url.Length == 0 || url.StartsWith(e.Url, StringComparison.OrdinalIgnoreCase)).Auth;
+    }
+
+    /// <summary>What a folder-like element is: the test plan, a thread group or a controller.</summary>
+    private enum LevelKind
+    {
+        Plan,
+        ThreadGroup,
+        Controller,
+    }
+
+    /// <summary>How long a run plan runs when its thread group loops forever.</summary>
+    private static readonly TimeSpan DefaultDuration = TimeSpan.FromMinutes(10);
+
+    /// <summary>Timers, throughput targets, assertions and CSV data of a thread group or the whole test plan.</summary>
+    private sealed class LoadSettings
+    {
+        public List<(TimeSpan Min, TimeSpan Max)> Timers { get; } = [];
+
+        /// <summary>Request rates per second; <c>PerThread</c> ones are multiplied by the threads.</summary>
+        public List<(double PerSecond, bool PerThread)> Rates { get; } = [];
+
+        public List<RunAssertion?> Assertions { get; } = [];
+
+        public ImportedDataFile? Data { get; set; }
+    }
+
+    /// <param name="Top">The thread group's child the request is in (itself, or a controller), for Throughput Controller weights.</param>
+    private sealed record PlanRequest(HttpRequestDefinition Request, bool Enabled, XElement? Top, RunAssertion? Assertion);
+
+    /// <summary>A thread group's run plan as it is read.</summary>
+    private sealed class PlanBuilder(string name, RunLoad load)
+    {
+        public string Name { get; } = name;
+
+        public RunLoad Load { get; } = load;
+
+        public RequestOrder Order { get; set; }
+
+        public LoadSettings Settings { get; } = new();
+
+        public List<PlanRequest> Requests { get; } = [];
+
+        public XElement? CurrentTop { get; set; }
     }
 
     private sealed record Argument(string Name, string Value, bool Encode);
@@ -697,6 +1220,10 @@ internal static class JMeterFormat
         OtherSampler,
         Extractor,
         LoadElement,
+        Timer,
+        ThroughputTimer,
+        Assertion,
+        CsvData,
         Listener,
         Unknown,
     }
@@ -723,7 +1250,10 @@ internal static class JMeterFormat
 
             // Dynpost keeps cookies and connections itself.
             "CookieManager" or "CacheManager" or "DNSCacheManager" => ElementKind.Ignored,
-            "CSVDataSet" => ElementKind.LoadElement,
+            "CSVDataSet" => ElementKind.CsvData,
+            "ConstantTimer" or "UniformRandomTimer" or "GaussianRandomTimer" => ElementKind.Timer,
+            "ConstantThroughputTimer" or "PreciseThroughputTimer" => ElementKind.ThroughputTimer,
+            "ResponseAssertion" or "DurationAssertion" => ElementKind.Assertion,
             "RegexExtractor" or "BoundaryExtractor" or "XPathExtractor" or "XPath2Extractor" or "HtmlExtractor" or "JMESPathExtractor" => ElementKind.Extractor,
             _ when tag.Contains("ThreadGroup", StringComparison.Ordinal) => ElementKind.ThreadGroup,
             _ when tag.EndsWith("Controller", StringComparison.Ordinal) || tag is "InterleaveControl" or "RunTime" => ElementKind.LogicController,
@@ -775,6 +1305,11 @@ internal static class JMeterFormat
         element?.Elements().FirstOrDefault(e => e.Name.LocalName.EndsWith("Prop", StringComparison.Ordinal) && e.Attribute("name")?.Value == name);
 
     private static string? Str(XElement? element, string name) => Prop(element, name) is { Name.LocalName: not ("elementProp" or "collectionProp") } prop ? prop.Value : null;
+
+    /// <summary>A property's text, also for <c>doubleProp</c>/<c>FloatProperty</c>, which name it in a child element.</summary>
+    private static string? Value(XElement? element, string name) =>
+        Str(element, name)
+        ?? element?.Elements().FirstOrDefault(e => e.Element("name")?.Value == name)?.Element("value")?.Value;
 
     private static bool? Bool(XElement element, string name) =>
         Str(element, name)?.Trim().ToLowerInvariant() switch
