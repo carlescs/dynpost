@@ -28,7 +28,8 @@ public interface IGitService
     /// <param name="credentials">
     /// Credentials the user entered for the remote's host, used for this command only and offered
     /// to their credential helpers once it succeeds; null uses their git setup as is. The same holds
-    /// for the other commands that contact a remote.
+    /// for the other commands that contact a remote (pull, push, fetch, tracking a remote branch and
+    /// deleting a branch on the remote).
     /// </param>
     Task<Result<Unit>> CloneAsync(
         RemoteUrl url,
@@ -219,7 +220,11 @@ public interface IGitService
     /// its remote-tracking branch. Local branches that tracked it are kept.
     /// </summary>
     /// <param name="remoteBranch">The remote-tracking branch, e.g. <c>origin/feature</c>.</param>
-    Task<Result<Unit>> DeleteRemoteBranchAsync(string workspacePath, GitBranch remoteBranch, CancellationToken cancellationToken = default);
+    Task<Result<Unit>> DeleteRemoteBranchAsync(
+        string workspacePath,
+        GitBranch remoteBranch,
+        GitCredentials? credentials = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Merges a local or remote-tracking branch into the current branch (<c>git merge --no-edit

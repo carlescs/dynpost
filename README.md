@@ -1277,7 +1277,8 @@ configuration, hooks and credential helpers apply as usual. In detail:
   repository (you can rename it; the folder must not exist or be empty) and
   opens it as the workspace. Private repositories sign in as described under
   **Signing in** below.
-- **Signing in**: clone, pull, push and fetch first use your git setup as is
+- **Signing in**: clone, pull, push, fetch and deleting a branch on the remote
+  first use your git setup as is
   (a credential manager such as Git Credential Manager, a saved login, or your
   SSH keys). When git can't sign in to an HTTP(S) remote by itself, Dynpost
   asks for a user name and a password or personal access token (GitHub,

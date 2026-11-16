@@ -9,6 +9,7 @@ import {
   GitFileDiff,
   GitIdentity,
   GitRemote,
+  GitSignIn,
   GitStash,
   GitStashes,
   GitStatus,
@@ -381,9 +382,16 @@ export class GitStore {
   }
 
   async push(): Promise<void> {
+    // The credentials the user entered for the push, if asked: the remote accepted them even when
+    // it refused the push, and the fetch below needs them when no credential helper saved them.
+    let signedIn: GitSignIn | null = null;
     const ok = await this.run(
       'push',
-      () => this.signIn.run((signIn) => this.bridge.send('git.push', { signIn })),
+      () =>
+        this.signIn.run((signIn) => {
+          signedIn = signIn;
+          return this.bridge.send('git.push', { signIn });
+        }),
       (status) => {
         this.status.set(status);
         // Pushing a new branch creates its remote-tracking branch.
@@ -397,7 +405,7 @@ export class GitStore {
       const root = this.root();
       this.busy.set('fetch');
       try {
-        const status = await this.bridge.send('git.fetch', {});
+        const status = await this.bridge.send('git.fetch', { signIn: signedIn });
         if (this.root() === root) {
           this.status.set(status);
           this.reloadBranchesIfShown();
@@ -575,7 +583,8 @@ export class GitStore {
   /** Deletes a branch on its remote (`origin/x`); local branches that tracked it are kept. */
   deleteRemoteBranch(name: string): Promise<boolean> {
     return this.runBranch(
-      () => this.bridge.send('git.branch.deleteRemote', { name }),
+      () =>
+        this.signIn.run((signIn) => this.bridge.send('git.branch.deleteRemote', { name, signIn })),
       `Deleted ${name} on the remote.`,
       false,
     );

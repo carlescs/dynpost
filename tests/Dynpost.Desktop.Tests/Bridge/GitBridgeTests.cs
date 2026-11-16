@@ -594,12 +594,15 @@ public sealed class GitBridgeTests : IDisposable
             new GitBranch("main", null, true, null, "a1", null, "Init"),
             topic,
         ]));
-        _git.DeleteRemoteBranchAsync(default!, default!).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+        _git.DeleteRemoteBranchAsync(default!, default!, default, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
 
-        var response = await SendAsync("git.branch.deleteRemote", """{ "name": "origin/topic" }""");
+        var response = await SendAsync(
+            "git.branch.deleteRemote",
+            """{ "name": "origin/topic", "signIn": { "url": "https://github.com", "username": "me", "password": "token" } }""");
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
-        await _git.Received(1).DeleteRemoteBranchAsync(Folder, topic, Arg.Any<CancellationToken>());
+        await _git.Received(1).DeleteRemoteBranchAsync(
+            Folder, topic, Arg.Is<GitCredentials?>(c => c != null && c.Password == "token"), Arg.Any<CancellationToken>());
     }
 
     [Fact]

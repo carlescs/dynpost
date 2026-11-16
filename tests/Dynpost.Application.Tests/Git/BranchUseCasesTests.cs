@@ -26,7 +26,7 @@ public class BranchUseCasesTests
         _git.CreateBranchAsync(default!, default!, default).ReturnsForAnyArgs(Ok(Unit.Value));
         _git.CheckoutRemoteBranchAsync(default!, default!, default!).ReturnsForAnyArgs(Ok(Unit.Value));
         _git.DeleteBranchAsync(default!, default!, default).ReturnsForAnyArgs(Ok(Unit.Value));
-        _git.DeleteRemoteBranchAsync(default!, default!).ReturnsForAnyArgs(Ok(Unit.Value));
+        _git.DeleteRemoteBranchAsync(default!, default!, default, default).ReturnsForAnyArgs(Ok(Unit.Value));
         _git.MergeBranchAsync(default!, default!).ReturnsForAnyArgs(Ok(BranchMergeResult.Of(MergeOutcome.Merged)));
     }
 
@@ -215,7 +215,31 @@ public class BranchUseCasesTests
         var result = await new DeleteRemoteBranch(_git, _workspace).ExecuteAsync(" origin/topic ");
 
         Assert.True(result.IsSuccess, result.Error?.Message);
-        await _git.Received(1).DeleteRemoteBranchAsync(WorkspacePath, RemoteTopic, Arg.Any<CancellationToken>());
+        await _git.Received(1).DeleteRemoteBranchAsync(WorkspacePath, RemoteTopic, Arg.Any<GitCredentials?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteRemote_SignsInWithTheCredentialsGiven()
+    {
+        var result = await new DeleteRemoteBranch(_git, _workspace)
+            .ExecuteAsync("origin/topic", new GitSignIn("https://github.com", "me", "token"));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _git.Received(1).DeleteRemoteBranchAsync(
+            WorkspacePath,
+            RemoteTopic,
+            Arg.Is<GitCredentials?>(c => c != null && c.Scope == "https://github.com" && c.Password == "token"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteRemote_WithUnusableCredentials_IsReportedWithoutContactingTheRemote()
+    {
+        var result = await new DeleteRemoteBranch(_git, _workspace)
+            .ExecuteAsync("origin/topic", new GitSignIn("git@github.com:team/api.git", "me", "token"));
+
+        Assert.Equal(GitErrors.InvalidCredentialsCode, result.Error?.Code);
+        await _git.DidNotReceiveWithAnyArgs().DeleteRemoteBranchAsync(default!, default!, default, default);
     }
 
     [Fact]
@@ -224,7 +248,7 @@ public class BranchUseCasesTests
         var result = await new DeleteRemoteBranch(_git, _workspace).ExecuteAsync("feature");
 
         Assert.Equal(GitErrors.BranchNotFoundCode, result.Error?.Code);
-        await _git.DidNotReceiveWithAnyArgs().DeleteRemoteBranchAsync(default!, default!);
+        await _git.DidNotReceiveWithAnyArgs().DeleteRemoteBranchAsync(default!, default!, default, default);
     }
 
     [Theory]
