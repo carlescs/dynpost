@@ -134,6 +134,8 @@ internal static class Program
             .AddSingleton<ICurlConverter, CurlConverter>()
             .AddSingleton<ICollectionExporter, PostmanCollectionExporter>()
             .AddSingleton<ICollectionExporter, InsomniaExporter>()
+            .AddSingleton<ICollectionExporter, OpenApiExporter>()
+            .AddSingleton<ICollectionExporter, HarExporter>()
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath, JsonAppSettingsStore.LegacyDefaultFilePath))
             .AddSingleton<IAppUpdater>(new VelopackAppUpdater(ReleasesRepository))
             .AddSingleton<IAppInfo, AssemblyAppInfo>()

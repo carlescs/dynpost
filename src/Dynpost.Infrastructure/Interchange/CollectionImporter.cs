@@ -79,6 +79,32 @@ public sealed class InsomniaExporter : ICollectionExporter
     public ExportOutput Export(RequestCollection collection) => InsomniaFormat.Export(collection);
 }
 
+/// <summary>Exports OpenAPI 3.0 documents: one operation per request.</summary>
+public sealed class OpenApiExporter : ICollectionExporter
+{
+    public string Id => "openapi";
+
+    public string Name => "OpenAPI 3.0";
+
+    public string Extension => ".openapi.json";
+
+    public ExportOutput Export(RequestCollection collection) => OpenApiExportFormat.Export(collection);
+}
+
+/// <summary>Exports HAR 1.2 logs: each request as sent, with its latest response.</summary>
+public sealed class HarExporter : ICollectionExporter
+{
+    public string Id => "har";
+
+    public string Name => "HAR 1.2";
+
+    public string Extension => ".har";
+
+    public bool NeedsExchanges => true;
+
+    public ExportOutput Export(RequestCollection collection) => HarExportFormat.Export(collection);
+}
+
 /// <summary>Reads and writes files the user picked, anywhere on disk.</summary>
 public sealed class LocalExternalFiles : IExternalFiles
 {

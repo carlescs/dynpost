@@ -21,7 +21,7 @@ With Dynpost you can:
 - **Load test** — `*.run.yaml` plans that send requests from concurrent
   virtual users, with live statistics and pass/fail thresholds.
 - **Bring your collections** — import from Postman, Insomnia, HAR and
-  OpenAPI/Swagger; export for Postman and Insomnia.
+  OpenAPI/Swagger, and cURL; export for Postman, Insomnia, OpenAPI and HAR.
 - **Work with an AI assistant** — an optional, built-in MCP server lets Claude
   and other AI assistants browse, edit and send your requests (see
   [AI assistants (MCP)](#ai-assistants-mcp)).
@@ -115,7 +115,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
       [Load runs](#load-runs))
 - [x] Import from cURL, and copy requests as cURL (see [cURL](#curl))
 - [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
-      Postman and Insomnia
+      Postman, Insomnia, OpenAPI 3.0 and HAR
 - [x] A built-in MCP server, off by default, so AI assistants can control the
       app (see [AI assistants (MCP)](#ai-assistants-mcp))
 
@@ -1097,11 +1097,11 @@ content, in JSON or YAML:
 
 | Format | What is imported |
 | --- | --- |
-| Postman collection v2.0 / v2.1 | Folders, requests, auth (inherited from folders and the collection, OAuth 2.0 included), bodies; collection variables become an environment. Path variables (`/users/:id`) become their value, or `{{id}}` if they have none. |
+| Postman collection v2.0 / v2.1 | Folders, requests, auth (inherited from folders and the collection, OAuth 2.0 included), bodies; collection variables become an environment. Path variables (`/users/:id`) stay path variables, with their values. Dynamic variables such as `{{$guid}}` become Dynpost's built-in ones. |
 | Postman environment | An environment; `secret` variables stay secret (their values go to `.dynpost/secrets.yaml`). |
 | Insomnia export v4 | Folders, requests (with their auth, OAuth 2.0 included) and environments: each sub-environment becomes an environment that includes the base environment's variables. `{{ _.name }}` references become `{{name}}`. |
 | HAR 1.2 (browser dev tools) | One request per entry, in a folder per host, without connection headers such as `Host`. |
-| OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer, API key or OAuth 2.0 auth using secret `{{username}}`/`{{password}}`, `{{token}}`, `{{apiKey}}` or `{{clientId}}`/`{{clientSecret}}` variables, which you fill in (OAuth 2.0 schemes use their client credentials or authorization code flow and the scopes the operation requires; others get a Bearer `{{token}}`). Path parameters without an example become `{{variables}}`. |
+| OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer, API key or OAuth 2.0 auth using secret `{{username}}`/`{{password}}`, `{{token}}`, `{{apiKey}}` or `{{clientId}}`/`{{clientSecret}}` variables, which you fill in (OAuth 2.0 schemes use their client credentials or authorization code flow and the scopes the operation requires; others get a Bearer `{{token}}`). Path parameters that are whole segments become path variables (`/pets/:petId`); others without an example become `{{variables}}`. |
 
 OAuth 2.0 settings whose redirect URL is a web page (such as Postman's own
 callback) get Dynpost's automatic loopback redirect instead, which the OAuth
@@ -1120,7 +1120,7 @@ Imported requests are saved as ordinary request files in a new folder named
 after the collection (`Shop`, or `Shop 2` if that name is taken), and
 environments as new environment files; nothing that already exists is changed.
 What Dynpost can't represent is skipped and listed after the import: other auth
-types (digest, OAuth 1, the OAuth 2 implicit and password grants, …), file uploads, scripts, and HTTP methods other than
+types (OAuth 1, Hawk, the OAuth 2 implicit and password grants, …), file uploads, scripts, and HTTP methods other than
 `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` and `OPTIONS`. Repeated query
 parameters or headers keep their first value. GraphQL bodies are kept as a
 separate query and variables object and can be sent and edited without embedding
@@ -1135,6 +1135,24 @@ workspace to a file you choose:
   (`dev.postman_environment.json`; a name that is taken gets a number).
 - **Insomnia v4** (`.insomnia.json`), a single file with the requests and the
   environments, using Insomnia's `{{ _.name }}` references.
+- **OpenAPI 3.0** (`.openapi.json`): one operation per request (its name is the
+  summary, its description the description, and `operationId` a slug of the
+  name), tagged with its folders (`users / admin`). `{{baseUrl}}` is the
+  server, taken from the first environment that defines it (other leading
+  `{{variables}}` become server variables, and absolute URLs their own
+  server); `:id` path variables and `{{variables}}` in the path become `{id}`
+  parameters, with the path variable's value as example. Query parameters and
+  headers (except `Accept`, `Content-Type` and `Authorization`) become
+  parameters with their values as examples, JSON bodies examples, form and
+  urlencoded bodies object schemas (file fields as binary), and auth security
+  schemes (Basic, Digest, Bearer, API key, OAuth 2.0); a request without auth
+  has an empty `security`. A second request with the same method and path is
+  skipped, and settings, captures and file bodies are reported.
+- **HAR 1.2** (`.har`): each request as it is sent with the selected
+  environment (and its folders' variables and the globals), with secret values
+  and credentials masked, and the latest response kept in its history (requests
+  without one get an empty response). Requests that can't be resolved, such as
+  ones using undefined variables, are skipped and reported.
 
 Each request is exported with the headers and auth it inherits from its folders
 (see [Folder settings](#folder-settings)); folder variables are not exported. Request descriptions are exported too. Untick **Include environments** to

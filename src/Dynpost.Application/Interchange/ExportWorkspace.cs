@@ -1,8 +1,10 @@
 using Dynpost.Application.Common;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
+using Dynpost.Application.History;
 using Dynpost.Application.Workspaces;
 using Dynpost.Domain.Environments;
+using Dynpost.Domain.Http;
 using Dynpost.Domain.Requests;
 using Dynpost.Domain.Workspaces;
 
@@ -25,7 +27,10 @@ public sealed class ExportWorkspace(
     IExternalFiles files,
     IEnumerable<ICollectionExporter> exporters,
     CurrentWorkspace current,
-    FolderInheritance inheritance)
+    FolderInheritance inheritance,
+    ActiveEnvironment? environment = null,
+    IHistoryStore? history = null,
+    TimeProvider? time = null)
 {
     private const int MaxAttempts = 1000;
 
@@ -61,7 +66,32 @@ public sealed class ExportWorkspace(
 
         var name = WorkspaceTreeBuilder.WorkspaceName(root.Value);
         var foldersWithVariables = new List<WorkspacePath>();
-        var folder = await ToFolderAsync(root.Value, name, WorkspaceLayout.RequestsRoot, entries.Value, warnings, foldersWithVariables, cancellationToken);
+        List<ExportedExchange>? exchanges = null;
+        ActiveVariables? variables = null;
+        if (exporter.NeedsExchanges)
+        {
+            exchanges = [];
+            if (environment is not null)
+            {
+                var loaded = await environment.LoadAsync(cancellationToken);
+                if (!loaded.IsSuccess)
+                {
+                    return loaded.Error!;
+                }
+
+                variables = loaded.Value;
+            }
+        }
+
+        var folder = await ToFolderAsync(
+            root.Value,
+            name,
+            WorkspaceLayout.RequestsRoot,
+            entries.Value,
+            warnings,
+            foldersWithVariables,
+            exchanges is null ? null : (exchanges, variables ?? ActiveVariables.None),
+            cancellationToken);
 
         var exported = new List<EnvironmentDefinition>();
         if (request.IncludeEnvironments)
@@ -91,7 +121,7 @@ public sealed class ExportWorkspace(
             }
         }
 
-        var output = exporter.Export(new RequestCollection(folder, exported));
+        var output = exporter.Export(new RequestCollection(folder, exported) { Exchanges = exchanges ?? [] });
         warnings.AddRange(output.Warnings);
         var withVariables = foldersWithVariables.Count;
         if (withVariables > 0)
@@ -149,6 +179,7 @@ public sealed class ExportWorkspace(
         IReadOnlyList<WorkspaceEntry> entries,
         List<string> warnings,
         List<WorkspacePath> withVariables,
+        (List<ExportedExchange> List, ActiveVariables Variables)? exchanges,
         CancellationToken cancellationToken)
     {
         var inherited = await inheritance.ForFolderAsync(root, path, cancellationToken);
@@ -170,10 +201,16 @@ public sealed class ExportWorkspace(
             switch (entry)
             {
                 case FolderEntry folder:
-                    folders.Add(await ToFolderAsync(root, folder.Path.FileName, folder.Path, folder.Children, warnings, withVariables, cancellationToken));
+                    folders.Add(await ToFolderAsync(root, folder.Path.FileName, folder.Path, folder.Children, warnings, withVariables, exchanges, cancellationToken));
                     break;
                 case RequestFileEntry { Request.IsSuccess: true } file:
-                    requests.Add(defaults.Apply(file.Request.Value));
+                    var applied = defaults.Apply(file.Request.Value);
+                    requests.Add(applied);
+                    if (exchanges is { } recorded)
+                    {
+                        recorded.List.Add(await ExchangeAsync(root, file.Path, applied, defaults, recorded.Variables, cancellationToken));
+                    }
+
                     break;
                 case RequestFileEntry file:
                     warnings.Add($"Skipped '{file.Path}': {file.Request.Error!.Message}");
@@ -182,6 +219,51 @@ public sealed class ExportWorkspace(
         }
 
         return new CollectionFolder(name, folders, requests);
+    }
+
+    /// <summary>
+    /// A request resolved as it is sent (secrets and credentials masked), with the latest response
+    /// of its history.
+    /// </summary>
+    private async Task<ExportedExchange> ExchangeAsync(
+        string root,
+        WorkspacePath path,
+        HttpRequestDefinition request,
+        InheritedDefaults defaults,
+        ActiveVariables environment,
+        CancellationToken cancellationToken)
+    {
+        HistoryEntryDetailsDto? latest = null;
+        if (history is not null)
+        {
+            var entries = await history.ListAsync(root, path, cancellationToken);
+            if (entries.IsSuccess && entries.Value.Count > 0)
+            {
+                var loaded = await history.LoadAsync(root, path, entries.Value[0].Id, cancellationToken);
+                latest = loaded.IsSuccess ? loaded.Value : null;
+            }
+        }
+
+        var variables = FolderInheritance.WithVariables(defaults, environment);
+        if (!variables.IsSuccess)
+        {
+            return new ExportedExchange(request.Name, path.Value, null, latest, variables.Error!.Message);
+        }
+
+        var values = DynamicVariables.With(variables.Value.Values, (time ?? TimeProvider.System).GetUtcNow(), Random.Shared);
+        var prepared = RequestPreparation.Prepare(request, values, request.Auth is OAuth2Auth ? CopyAsCurl.AccessTokenPlaceholder : null, root);
+        if (!prepared.IsValid)
+        {
+            return new ExportedExchange(
+                request.Name,
+                path.Value,
+                null,
+                latest,
+                variables.Value.Explain(prepared.Errors, prepared.MissingVariables));
+        }
+
+        var command = CurlCommands.Masked(CurlCommands.Resolved(prepared.Request!), request.Auth, values, variables.Value.SecretValues ?? []);
+        return new ExportedExchange(request.Name, path.Value, command, latest);
     }
 
     private static bool HasExtension(string path) => Path.GetExtension(path).Length > 1;

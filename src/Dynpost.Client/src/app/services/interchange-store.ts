@@ -18,6 +18,8 @@ export interface InterchangeNotice {
 const DEFAULT_FORMATS: ExportFormatDto[] = [
   { id: 'postman', name: 'Postman collection v2.1', extension: '.postman_collection.json' },
   { id: 'insomnia', name: 'Insomnia v4', extension: '.insomnia.json' },
+  { id: 'openapi', name: 'OpenAPI 3.0', extension: '.openapi.json' },
+  { id: 'har', name: 'HAR 1.2', extension: '.har' },
 ];
 
 /**

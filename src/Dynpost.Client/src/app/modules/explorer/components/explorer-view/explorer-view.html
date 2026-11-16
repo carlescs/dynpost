@@ -140,6 +140,16 @@
       Include environments
     </label>
     <p class="text-xs text-slate-500">Secret values are never exported.</p>
+    @if (selectedFormat() === 'har') {
+      <p class="text-xs text-slate-500">
+        HAR records each request as sent with the selected environment (secrets and credentials
+        masked) and its latest response from the history.
+      </p>
+    } @else if (selectedFormat() === 'openapi') {
+      <p class="text-xs text-slate-500">
+        OpenAPI takes its servers from the environments' <code>baseUrl</code>.
+      </p>
+    }
     <div class="flex justify-end gap-2">
       <button
         type="button"

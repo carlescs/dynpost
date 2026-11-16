@@ -124,4 +124,35 @@ public class ExportWorkspaceTests
     {
         Assert.Equal([new ExportFormatDto("test", "Test format", ".test.json")], UseCase().Formats());
     }
+
+    [Fact]
+    public async Task FormatsThatRecordExchanges_GetEachRequestResolvedWithItsLatestResponse()
+    {
+        _exporter.NeedsExchanges.Returns(true);
+        var secrets = Substitute.For<ISecretStore>();
+        var captures = Substitute.For<ICapturedValueStore>();
+        var state = Substitute.For<IWorkspaceStateStore>();
+        var history = Substitute.For<Dynpost.Application.History.IHistoryStore>();
+        state.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(new WorkspaceState("dev.yaml"));
+        _environments.Exists(Root, "dev.yaml").Returns(true);
+        _environments.ReadAsync(Root, "dev.yaml", Arg.Any<CancellationToken>()).Returns(new EnvironmentDefinition("Dev", [new EnvironmentVariable("baseUrl", "https://api.test")]));
+        var none = Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(new Dictionary<string, IReadOnlyDictionary<string, string>>());
+        secrets.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(none);
+        captures.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(none);
+        history.ListAsync(Root, Arg.Any<WorkspacePath>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<Dynpost.Application.History.HistoryEntryDto>>.Success([]));
+        var useCase = new ExportWorkspace(
+            _repository, _environments, _files, [_exporter], _current, new FolderInheritance(_folders),
+            new ActiveEnvironment(_environments, secrets, captures, state, _current), history);
+
+        var result = await useCase.ExecuteAsync(new ExportWorkspaceRequest("test", "/out/api.har"));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        var get = Assert.Single(_exported!.Exchanges, e => e.Name == "Get user");
+        Assert.Equal("https://api.test/users/1", get.Request!.Url);
+        Assert.Null(get.Latest);
+        var health = Assert.Single(_exported.Exchanges, e => e.Name == "Health");
+        Assert.Null(health.Request);
+        Assert.NotNull(health.Error);
+    }
 }
