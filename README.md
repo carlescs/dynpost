@@ -107,6 +107,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       client certificates (mutual TLS) per environment
 - [x] Local response history per request, compared with the latest response
       in a diff view (kept out of git, see [Response history](#response-history))
+- [x] Watch the workspace folder, so edits made in other programs show up
+      (see [Changes made outside Dynpost](#changes-made-outside-dynpost))
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
       (switch, create, check out, delete), remotes, and clear reporting of
       merge conflicts
@@ -154,6 +156,18 @@ Requests and their collection folders live in `requests/`, run plans in
 always relative to the workspace folder (`requests/users/get-user.yaml`), so a
 run plan refers to a request as `requests/users/get-user.yaml` and a body file as
 `uploads/report.pdf`. Dynpost leaves every other file and folder alone.
+
+### Changes made outside Dynpost
+
+Dynpost watches the workspace folder, so edits made in another editor, or by
+`git checkout`/`git pull` in a terminal, show up without reloading: the
+explorer, the Load runs tree, the environments (and Globals) and the source
+control status refresh by themselves, and open tabs without unsaved edits
+reload silently. A tab with unsaved edits keeps them and shows **This file
+changed on disk**: **Reload from disk** takes the new file, **Keep mine** keeps
+your edits (saving then replaces the file). Dynpost's own saves come back as
+the same content and change nothing. Changes inside `.dynpost/` and the `.git`
+folder are not shown as file changes.
 
 ### Moving from the old layout
 

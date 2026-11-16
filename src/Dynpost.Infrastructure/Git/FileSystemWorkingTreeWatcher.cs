@@ -18,7 +18,7 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
     {
     }
 
-    public IDisposable Watch(string workspacePath, Action changed)
+    public IDisposable Watch(string workspacePath, Action<IReadOnlyCollection<string>?> changed)
     {
         var workspace = Path.GetFullPath(workspacePath);
         var gitFolders = GitFolders.Find(workspace);
@@ -59,16 +59,21 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
 
     private sealed class Subscription : IDisposable
     {
+        private readonly string _workspace;
         private readonly string _localFolder;
         private readonly IReadOnlyList<string> _gitFolders;
-        private readonly Action _changed;
+        private readonly Action<IReadOnlyCollection<string>?> _changed;
+        private readonly Lock _gate = new();
+        private HashSet<string> _paths = new(StringComparer.Ordinal);
+        private bool _overflowed;
         private readonly TimeSpan _settleDelay;
         private readonly List<FileSystemWatcher> _watchers = [];
         private readonly Timer _timer;
         private volatile bool _disposed;
 
-        public Subscription(string workspace, IReadOnlyList<string> gitFolders, TimeSpan settleDelay, Action changed)
+        public Subscription(string workspace, IReadOnlyList<string> gitFolders, TimeSpan settleDelay, Action<IReadOnlyCollection<string>?> changed)
         {
+            _workspace = workspace;
             _localFolder = Path.Combine(workspace, ".dynpost");
             _gitFolders = gitFolders;
             _settleDelay = settleDelay;
@@ -89,7 +94,15 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
             watcher.Deleted += OnEvent;
             watcher.Renamed += OnRenamed;
             // A lost batch of events (buffer overflow) may have held a change: re-read to be sure.
-            watcher.Error += (_, _) => Schedule();
+            watcher.Error += (_, _) =>
+            {
+                lock (_gate)
+                {
+                    _overflowed = true;
+                }
+
+                Schedule();
+            };
             _watchers.Add(watcher);
             watcher.EnableRaisingEvents = true;
         }
@@ -98,15 +111,40 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
         {
             if (Counts(e.FullPath))
             {
+                Record(e.FullPath);
                 Schedule();
             }
         }
 
         private void OnRenamed(object sender, RenamedEventArgs e)
         {
-            if (Counts(e.FullPath) || Counts(e.OldFullPath))
+            var counts = Counts(e.FullPath);
+            var countedBefore = Counts(e.OldFullPath);
+            if (counts || countedBefore)
             {
+                Record(e.FullPath);
+                Record(e.OldFullPath);
                 Schedule();
+            }
+        }
+
+        /// <summary>Keeps the workspace path of a changed file inside the workspace (not in a git folder or <c>.dynpost</c>).</summary>
+        private void Record(string path)
+        {
+            if (!IsUnder(path, _workspace) || IsUnder(path, _localFolder) || _gitFolders.Any(git => IsUnder(path, git)))
+            {
+                return;
+            }
+
+            var relative = Path.GetRelativePath(_workspace, path).Replace('\\', '/');
+            if (relative == "." || relative.StartsWith("../", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                _paths.Add(relative);
             }
         }
 
@@ -159,10 +197,22 @@ public sealed class FileSystemWorkingTreeWatcher(TimeSpan settleDelay) : IWorkin
 
         private void Fire()
         {
-            if (!_disposed)
+            if (_disposed)
             {
-                _changed();
+                return;
             }
+
+            HashSet<string> paths;
+            bool overflowed;
+            lock (_gate)
+            {
+                paths = _paths;
+                overflowed = _overflowed;
+                _paths = new HashSet<string>(StringComparer.Ordinal);
+                _overflowed = false;
+            }
+
+            _changed(overflowed ? null : paths);
         }
     }
 

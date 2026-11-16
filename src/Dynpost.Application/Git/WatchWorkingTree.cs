@@ -10,12 +10,15 @@ namespace Dynpost.Application.Git;
 public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWatcher watcher) : IDisposable
 {
     private readonly Lock _gate = new();
-    private Action? _changed;
+    private Action<IReadOnlyCollection<string>?>? _changed;
     private IDisposable? _watch;
     private bool _disposed;
 
-    /// <summary>Calls <paramref name="changed"/> whenever the open workspace's files or git state change.</summary>
-    public void Start(Action changed)
+    /// <summary>
+    /// Calls <paramref name="changed"/> whenever the open workspace's files or git state change, with
+    /// the workspace paths that changed (see <see cref="IWorkingTreeWatcher.Watch"/>).
+    /// </summary>
+    public void Start(Action<IReadOnlyCollection<string>?> changed)
     {
         lock (_gate)
         {

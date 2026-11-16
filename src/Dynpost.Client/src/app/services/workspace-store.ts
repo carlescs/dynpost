@@ -3,6 +3,7 @@ import { Bridge, BridgeError } from './bridge';
 import { ERROR_CODES, RecentWorkspaceDto, WorkspaceDto } from '../models/messages';
 import { describeMigration } from '../models/layout-migration';
 import {
+  isChangedPath,
   REQUESTS_FOLDER,
   RequestContent,
   RequestDocument,
@@ -14,6 +15,7 @@ import {
   EMPTY_AUTH,
   fromNodeDto,
   fromRequestDto,
+  contentKey,
   syncPathParams,
   toRequestDto,
 } from '../models/request-mapping';
@@ -180,15 +182,32 @@ export class WorkspaceStore {
   async reloadFromDisk(paths?: string[]): Promise<void> {
     this.reloaded.set({ paths });
     const targets = this.documents().filter(
-      (d) => d.path && !d.dirty && (!paths || paths.includes(d.path)),
+      (d) => d.path && !d.saving && (!paths || isChangedPath(d.path, paths)),
     );
     for (const doc of targets) {
       try {
         const content = fromRequestDto(await this.bridge.send('request.load', { path: doc.path! }));
+        const key = contentKey(content);
         this.documents.update((docs) =>
-          docs.map((d) =>
-            d.id === doc.id && !d.dirty ? { ...d, ...content, revision: d.revision + 1 } : d,
-          ),
+          docs.map((d) => {
+            if (d.id !== doc.id || d.saving) return d;
+            if (!d.dirty) {
+              // Unchanged files (such as the app's own saves coming back) change nothing.
+              return key === contentKey(d)
+                ? { ...d, baseline: key }
+                : {
+                    ...d,
+                    ...content,
+                    baseline: key,
+                    changedOnDisk: null,
+                    revision: d.revision + 1,
+                  };
+            }
+            // Unsaved edits are kept; the editor asks what to do when the file really changed.
+            return key === (d.baseline ?? key) || key === contentKey(d)
+              ? d
+              : { ...d, changedOnDisk: content };
+          }),
         );
       } catch (error) {
         // Keep unreadable files open, but reconcile files removed by git.
@@ -208,6 +227,35 @@ export class WorkspaceStore {
         }
       }
     }
+  }
+
+  /** Replaces a document's unsaved edits with its file's new content from disk. */
+  reloadChangedFile(id: string): void {
+    this.documents.update((docs) =>
+      docs.map((d) =>
+        d.id === id && d.changedOnDisk
+          ? {
+              ...d,
+              ...d.changedOnDisk,
+              baseline: contentKey(d.changedOnDisk),
+              changedOnDisk: null,
+              dirty: false,
+              revision: d.revision + 1,
+            }
+          : d,
+      ),
+    );
+  }
+
+  /** Keeps a document's unsaved edits over its file's new content; saving overwrites the file. */
+  keepEditsOverChangedFile(id: string): void {
+    this.documents.update((docs) =>
+      docs.map((d) =>
+        d.id === id && d.changedOnDisk
+          ? { ...d, baseline: contentKey(d.changedOnDisk), changedOnDisk: null }
+          : d,
+      ),
+    );
   }
 
   /** Shows or hides the sidebar; which panel it shows is chosen by the route. */
@@ -270,6 +318,7 @@ export class WorkspaceStore {
       } else {
         const doc: RequestDocument = {
           ...content,
+          baseline: contentKey(content),
           id: node.path,
           key: this.newTabKey(),
           path: node.path,
@@ -307,11 +356,17 @@ export class WorkspaceStore {
       this.documents.update((docs) =>
         docs.map((d) => {
           if (d.id !== id) return d;
-          const base = { ...d, id: saved.path, path: saved.path, saving: false };
+          const content = fromRequestDto(saved.request);
+          const base = {
+            ...d,
+            id: saved.path,
+            path: saved.path,
+            saving: false,
+            baseline: contentKey(content),
+            changedOnDisk: null,
+          };
           // Keep edits typed while the save was in flight; they still need saving.
-          return d.revision === doc.revision
-            ? { ...base, ...fromRequestDto(saved.request), dirty: false }
-            : base;
+          return d.revision === doc.revision ? { ...base, ...content, dirty: false } : base;
         }),
       );
       this.error.set(null);

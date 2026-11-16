@@ -87,7 +87,22 @@ internal static class Program
         var events = services.GetRequiredService<HostEvents>();
         bridge.Attach(BridgeHandlers.Create(services, bridge, bridge), events);
         // Keep the source control view current as files and git state change, whoever changes them.
-        services.GetRequiredService<WatchWorkingTree>().Start(() => _ = events.GitChangedAsync());
+        services.GetRequiredService<WatchWorkingTree>().Start(paths =>
+        {
+            _ = events.GitChangedAsync();
+            // Files edited outside Dynpost (another editor, git in a terminal) are re-read by the
+            // UI; its own saves come back too, and change nothing there. Too many paths, or
+            // missed events, re-read everything.
+            if (paths is null || paths.Count > 500)
+            {
+                // The UI re-reads what is open inside these folders and files.
+                _ = events.WorkspaceChangedAsync(["dynpost.yaml", "environments", "plans", "requests"]);
+            }
+            else if (paths.Count > 0)
+            {
+                _ = events.WorkspaceChangedAsync(paths.Order(StringComparer.Ordinal).ToList());
+            }
+        });
         // Off unless the user turned it on; a failure to start is shown in its settings.
         _ = services.GetRequiredService<StartMcpServer>().ExecuteAsync();
 

@@ -86,6 +86,30 @@
   </div>
 </div>
 
+@if (doc.changedOnDisk) {
+  <div
+    class="mx-4 mt-2 flex items-center gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-900"
+    role="alert"
+  >
+    <span class="flex-1">This file changed on disk while you were editing it.</span>
+    <button
+      type="button"
+      class="rounded border border-amber-400 px-2 py-0.5 hover:bg-amber-100"
+      (click)="reloadChangedFile()"
+    >
+      Reload from disk
+    </button>
+    <button
+      type="button"
+      class="rounded border border-amber-400 px-2 py-0.5 hover:bg-amber-100"
+      title="Keep your edits; saving replaces the file"
+      (click)="keepEdits()"
+    >
+      Keep mine
+    </button>
+  </div>
+}
+
 <!-- Method, URL and send -->
 <div class="flex gap-2 px-4 py-3">
   <div class="flex min-w-0 flex-1 rounded border border-slate-300 focus-within:border-sky-500">

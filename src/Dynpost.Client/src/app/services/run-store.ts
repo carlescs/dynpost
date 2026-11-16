@@ -1,7 +1,7 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
 import { ERROR_CODES, RunPlanFileDto, RunResultDto, RunSummaryDto } from '../models/messages';
-import { PLANS_FOLDER } from '../models/workspace';
+import { isChangedPath, PLANS_FOLDER } from '../models/workspace';
 import { WorkspaceStore } from './workspace-store';
 import { DISCARD, Dialogs } from './dialogs';
 import { joinPath } from './tree-state';
@@ -166,7 +166,7 @@ export class RunStore {
    */
   async reloadFromDisk(paths: string[]): Promise<void> {
     for (const draft of this.drafts()) {
-      if (paths.includes(draft.path) && !isRunPlanDirty(draft)) {
+      if (isChangedPath(draft.path, paths) && !isRunPlanDirty(draft)) {
         const { key, path } = draft;
         try {
           const document = await this.bridge.send('runPlan.open', { path });

@@ -68,6 +68,54 @@ describe('WorkspaceStore', () => {
     expect(store.error()).toBeNull();
   });
 
+  describe('files changed on disk', () => {
+    const node = { path: 'users/get.yaml', name: 'Get user', kind: 'request' } as const;
+
+    it('reloads a clean tab, and leaves it alone when the file is the same', async () => {
+      let onDisk = request;
+      respond({ 'request.load': () => onDisk });
+      await store.openRequest(node);
+      const revision = store.activeDocument()!.revision;
+
+      await store.reloadFromDisk(['users/get.yaml']);
+      expect(store.activeDocument()!.revision).toBe(revision);
+
+      onDisk = { ...request, url: 'https://example.com/users/2' };
+      await store.reloadFromDisk(['users']);
+      expect(store.activeDocument()!.url).toBe('https://example.com/users/2');
+      expect(store.activeDocument()!.dirty).toBe(false);
+    });
+
+    it('keeps unsaved edits and asks when the file changed, then reloads or keeps them', async () => {
+      let onDisk = request;
+      respond({ 'request.load': () => onDisk });
+      await store.openRequest(node);
+      const id = store.activeDocument()!.id;
+      store.update(id, { url: 'https://example.com/mine' });
+
+      await store.reloadFromDisk(['users/get.yaml']);
+      expect(store.activeDocument()!.changedOnDisk).toBeFalsy();
+
+      onDisk = { ...request, url: 'https://example.com/theirs' };
+      await store.reloadFromDisk(['users/get.yaml']);
+      expect(store.activeDocument()!.url).toBe('https://example.com/mine');
+      expect(store.activeDocument()!.changedOnDisk?.url).toBe('https://example.com/theirs');
+
+      store.keepEditsOverChangedFile(id);
+      expect(store.activeDocument()!.changedOnDisk).toBeNull();
+      await store.reloadFromDisk(['users/get.yaml']);
+      expect(store.activeDocument()!.changedOnDisk).toBeFalsy();
+
+      onDisk = { ...request, url: 'https://example.com/again' };
+      await store.reloadFromDisk(['users/get.yaml']);
+      store.reloadChangedFile(id);
+      expect(store.activeDocument()).toMatchObject({
+        url: 'https://example.com/again',
+        dirty: false,
+      });
+    });
+  });
+
   it('opens a request once and focuses its tab when opened again', async () => {
     respond({ 'request.load': () => request });
     const node = { path: 'users/get.yaml', name: 'Get user', kind: 'request' } as const;

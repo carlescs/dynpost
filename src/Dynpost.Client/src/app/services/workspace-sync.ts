@@ -8,7 +8,8 @@ import { WorkspaceStore } from './workspace-store';
 
 /**
  * Shows changes made to the open workspace outside the UI — by an AI assistant through the MCP
- * server — as the host reports them: re-reads the tree, the open requests and environments that
+ * server, or by other programs (an editor, git in a terminal), which the host watches for — as the
+ * host reports them: re-reads the tree, the open requests and environments that
  * changed (keeping unsaved edits), run plans and their runs, and the git status; and follows the
  * load runs it starts, and opens the files it asks to show. It also re-reads the git status
  * whenever the host sees the workspace's files or git state change, whoever changed them. The app

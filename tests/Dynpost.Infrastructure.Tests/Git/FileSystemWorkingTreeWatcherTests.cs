@@ -24,6 +24,8 @@ public sealed class FileSystemWorkingTreeWatcherTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(workspace, "requests", "health.yaml"), "name: Health\n");
 
         Assert.True(await changes.NextAsync(Wait));
+        Assert.Contains("requests/health.yaml", changes.Paths);
+        Assert.DoesNotContain(changes.Paths, p => p is not null && p.StartsWith(".git", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -152,7 +154,25 @@ public sealed class FileSystemWorkingTreeWatcherTests : IDisposable
     {
         private readonly SemaphoreSlim _reported = new(0);
 
-        public void Report() => _reported.Release();
+        /// <summary>Every path reported so far; <c>null</c> entries are "anything may have changed".</summary>
+        public System.Collections.Concurrent.ConcurrentQueue<string?> Paths { get; } = new();
+
+        public void Report(IReadOnlyCollection<string>? paths)
+        {
+            if (paths is null)
+            {
+                Paths.Enqueue(null);
+            }
+            else
+            {
+                foreach (var path in paths)
+                {
+                    Paths.Enqueue(path);
+                }
+            }
+
+            _reported.Release();
+        }
 
         public Task<bool> NextAsync(TimeSpan timeout) => _reported.WaitAsync(timeout);
 

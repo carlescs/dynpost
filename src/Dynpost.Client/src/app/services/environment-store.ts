@@ -1,3 +1,4 @@
+import { isChangedPath } from '../models/workspace';
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
 import {
@@ -385,7 +386,8 @@ export class EnvironmentStore {
   ): Promise<void> {
     const available = new Set(environments.map((environment) => environment.id));
     const globals = this.drafts().find(
-      (draft) => isGlobals(draft) && !draft.dirty && (!paths || paths.includes('dynpost.yaml')),
+      (draft) =>
+        isGlobals(draft) && !draft.dirty && (!paths || isChangedPath('dynpost.yaml', paths)),
     );
     if (globals) {
       try {
@@ -402,7 +404,9 @@ export class EnvironmentStore {
     }
     const targets = this.drafts().filter(
       (draft) =>
-        draft.id && !isGlobals(draft) && (!paths || paths.includes(`environments/${draft.id}`)),
+        draft.id &&
+        !isGlobals(draft) &&
+        (!paths || isChangedPath(`environments/${draft.id}`, paths)),
     );
     for (const draft of targets) {
       if (load !== this.loadCount || this.root() !== root) return;
