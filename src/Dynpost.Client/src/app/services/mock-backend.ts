@@ -47,6 +47,12 @@ const EMPTY_FOLDER_SETTINGS: FolderSettingsDto = {
   variables: [],
 };
 
+/** The project's pages, as the host's `AboutLinks` names them. */
+const ABOUT_LINKS = {
+  homepage: 'https://carlescs.github.io/dynpost/',
+  repository: 'https://github.com/carlescs/dynpost',
+};
+
 const US_MONTHS = [
   'January',
   'February',
@@ -403,7 +409,18 @@ export class MockBackend {
         version: 'browser preview',
         runtime: navigator.userAgent,
         operatingSystem: navigator.platform,
+        homepage: ABOUT_LINKS.homepage,
+        repository: ABOUT_LINKS.repository,
       });
+    }
+    if (request.type === 'about.openLink') {
+      const link = payload?.['link'] as string;
+      const url = Object.hasOwn(ABOUT_LINKS, link)
+        ? ABOUT_LINKS[link as keyof typeof ABOUT_LINKS]
+        : undefined;
+      if (!url) return fail(ERROR_CODES.invalidRequest, `Unknown link '${link}'.`);
+      window.open(url, '_blank', 'noopener');
+      return ok(null);
     }
     // The browser preview has no regional settings to read; it formats dates as en-US does.
     if (request.type === 'locale.dateFormat') return ok(US_DATE_FORMAT);

@@ -416,6 +416,12 @@ internal static class BridgeMessageTypes
     /// <summary>Reads the app version and platform. Payload: none. Result: about info.</summary>
     public const string AboutGet = "about.get";
 
+    /// <summary>
+    /// Opens one of the About page's links in the system browser. Payload: <see cref="AboutOpenLinkPayload"/>.
+    /// Result: none.
+    /// </summary>
+    public const string AboutOpenLink = "about.openLink";
+
     /// <summary>Reads how the operating system formats dates and times. Payload: none. Result: date format.</summary>
     public const string LocaleDateFormat = "locale.dateFormat";
 
@@ -515,6 +521,8 @@ internal sealed record BridgeRequest(string Id, string Type, JsonElement? Payloa
 internal sealed record BridgeResponse(string Id, bool Ok, object? Payload = null, Error? Error = null);
 
 internal sealed record OpenWorkspacePayload(string Path);
+/// <summary>The link to open: <c>homepage</c> or <c>repository</c>.</summary>
+internal sealed record AboutOpenLinkPayload(string Link);
 internal sealed record RemoveRecentWorkspacePayload(string Path);
 
 /// <param name="Query">Words to look for; empty lists the first requests in the tree's order.</param>

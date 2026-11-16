@@ -678,7 +678,14 @@ export interface AboutInfo {
   version: string;
   runtime: string;
   operatingSystem: string;
+  /** The Dynpost homepage. */
+  homepage: string;
+  /** The source code on GitHub. */
+  repository: string;
 }
+
+/** A link on the About page, opened in the system browser by `about.openLink`. */
+export type AboutLink = 'homepage' | 'repository';
 
 /**
  * How the operating system formats dates and times: .NET custom format patterns (such as
@@ -1287,6 +1294,8 @@ export interface BridgeMessages {
   'git.remote.remove': { payload: { name: string }; result: GitRemote[] };
   /** Reads the app version and the platform it runs on. */
   'about.get': { payload: void; result: AboutInfo };
+  /** Opens one of the About page's links in the system browser. */
+  'about.openLink': { payload: { link: AboutLink }; result: null };
   /** Reads how the operating system formats dates and times. */
   'locale.dateFormat': { payload: void; result: DateFormat };
   /** Looks for a newer version of the app and downloads it, without installing it. */
