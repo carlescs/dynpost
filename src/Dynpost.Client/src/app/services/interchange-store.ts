@@ -1,7 +1,9 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
-import { ExportFormatDto } from '../models/messages';
-import { REQUESTS_FOLDER } from '../models/workspace';
+import { CurlShell, ExportFormatDto } from '../models/messages';
+import { fromRequestDto, toRequestDto } from '../models/request-mapping';
+import { copyText } from '../models/clipboard';
+import { REQUESTS_FOLDER, RequestDocument } from '../models/workspace';
 import { EnvironmentStore } from './environment-store';
 import { WorkspaceStore } from './workspace-store';
 
@@ -16,6 +18,8 @@ export interface InterchangeNotice {
 const DEFAULT_FORMATS: ExportFormatDto[] = [
   { id: 'postman', name: 'Postman collection v2.1', extension: '.postman_collection.json' },
   { id: 'insomnia', name: 'Insomnia v4', extension: '.insomnia.json' },
+  { id: 'openapi', name: 'OpenAPI 3.0', extension: '.openapi.json' },
+  { id: 'har', name: 'HAR 1.2', extension: '.har' },
 ];
 
 /**
@@ -92,6 +96,83 @@ export class InterchangeStore {
       this.report(error);
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  /** The shell cURL commands are written for: PowerShell on Windows, else bash/zsh, until changed. */
+  readonly curlShell = signal<CurlShell>(
+    typeof navigator !== 'undefined' && /windows/i.test(navigator.userAgent)
+      ? 'powershell'
+      : 'posix',
+  );
+
+  /**
+   * Replaces the method, URL, parameters, headers, auth, body and settings of the open request
+   * `id` with those of a pasted cURL command; its name, docs and captures stay.
+   */
+  async importCurl(id: string, command: string): Promise<boolean> {
+    try {
+      const parsed = await this.bridge.send('request.parseCurl', { command });
+      const content = fromRequestDto(parsed.request);
+      this.workspace.update(id, {
+        method: content.method,
+        url: content.url,
+        pathParams: content.pathParams,
+        params: content.params,
+        headers: content.headers,
+        auth: content.auth,
+        bodyType: content.bodyType,
+        body: content.body,
+        bodyVariables: content.bodyVariables,
+        bodyFields: content.bodyFields,
+        settings: content.settings,
+      });
+      this.notice.set({
+        message: 'Filled in the request from the cURL command.',
+        warnings: parsed.warnings,
+      });
+      this.workspace.dismissError();
+      return true;
+    } catch (error) {
+      this.report(error);
+      return false;
+    }
+  }
+
+  /** Opens a new request filled in from a cURL command. */
+  async newRequestFromCurl(command: string, folder = REQUESTS_FOLDER): Promise<boolean> {
+    this.workspace.newRequest(folder);
+    const doc = this.workspace.documents().at(-1);
+    return doc ? this.importCurl(doc.id, command) : false;
+  }
+
+  /** Copies the request in the editor as a cURL command; the result says whether it was copied. */
+  async copyAsCurl(
+    doc: RequestDocument,
+    options: { resolve: boolean; includeSecrets: boolean },
+  ): Promise<boolean> {
+    try {
+      const command = await this.bridge.send('request.copyAsCurl', {
+        request: toRequestDto(doc),
+        path: doc.path,
+        folder: doc.folder,
+        resolve: options.resolve,
+        includeSecrets: options.includeSecrets,
+        shell: this.curlShell(),
+      });
+      if (!(await copyText(command))) throw new Error('Could not copy to the clipboard.');
+      this.notice.set({
+        message: options.resolve
+          ? options.includeSecrets
+            ? 'Copied the request as a cURL command, with its secret values.'
+            : 'Copied the request as a cURL command (secret values and credentials are masked).'
+          : 'Copied the request as a cURL command, with its {{variables}} as written.',
+        warnings: [],
+      });
+      return true;
+    } catch (error) {
+      this.report(error);
+      return false;
     }
   }
 

@@ -10,8 +10,13 @@ import {
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentVariableDto } from '../../../../models/messages';
-import { EnvironmentDraft, EnvironmentStore } from '../../../../services/environment-store';
+import {
+  isGlobals,
+  EnvironmentDraft,
+  EnvironmentStore,
+} from '../../../../services/environment-store';
 import { CookieJar } from '../cookie-jar/cookie-jar';
+import { ClientCertificates } from '../client-certificates/client-certificates';
 import { CapturedValues } from '../captured-values/captured-values';
 
 const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
@@ -19,7 +24,7 @@ const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
 /** Edits an environment open in a tab: its name, variables and cookie jar, and shows its captured values. */
 @Component({
   selector: 'app-environment-editor',
-  imports: [FaIconComponent, CookieJar, CapturedValues],
+  imports: [FaIconComponent, CookieJar, CapturedValues, ClientCertificates],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './environment-editor.html',
 })
@@ -34,6 +39,8 @@ export class EnvironmentEditor {
   });
   protected readonly rows = computed(() => [...this.draft().variables, BLANK]);
   protected readonly hasSecrets = computed(() => this.draft().variables.some((v) => v.secret));
+  /** Whether the tab edits the workspace-global variables rather than an environment. */
+  protected readonly globals = computed(() => isGlobals(this.draft()));
   protected readonly isActive = computed(() => {
     const id = this.draft().id;
     return !!id && id === this.store.activeId();

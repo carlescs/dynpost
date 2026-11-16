@@ -41,7 +41,7 @@ internal static partial class PostmanFormat
 
         var variables = root.Arr("variable")
             .Where(v => !v.Bool("disabled"))
-            .Select(v => new EnvironmentVariable(v.Str("key") ?? v.Str("id") ?? string.Empty, v.Get("value").AnyText(), v.Str("type") == "secret"))
+            .Select(v => new EnvironmentVariable(v.Str("key") ?? v.Str("id") ?? string.Empty, FromPostmanValue(v.Get("value").AnyText()), v.Str("type") == "secret"))
             .Where(v => v.Name.Length > 0)
             .ToList();
         IReadOnlyList<EnvironmentDefinition> environments = variables.Count > 0 ? [new EnvironmentDefinition(name, variables)] : [];
@@ -57,7 +57,7 @@ internal static partial class PostmanFormat
     {
         var variables = root.Arr("values")
             .Where(v => v.Get("enabled") is not JsonValue enabled || enabled.Text() != "false")
-            .Select(v => new EnvironmentVariable(v.Str("key") ?? string.Empty, v.Get("value").AnyText(), v.Str("type") == "secret"))
+            .Select(v => new EnvironmentVariable(v.Str("key") ?? string.Empty, FromPostmanValue(v.Get("value").AnyText()), v.Str("type") == "secret"))
             .ToList();
         var environment = new EnvironmentDefinition(root.Str("name") ?? string.Empty, variables);
         return new ParsedCollection(
@@ -84,13 +84,17 @@ internal static partial class PostmanFormat
                 {
                     // Postman keeps a request's description on its request, older exports on the item.
                     var description = Description(request.Get("description")) ?? Description(item.Get("description"));
-                    requests.Add(description is null ? imported : imported with { Description = description });
+                    var withSettings = imported with { Settings = ImportSettings(item.Obj("protocolProfileBehavior")) };
+                    requests.Add(description is null ? withSettings : withSettings with { Description = description });
                 }
             }
         }
 
         return new CollectionFolder(name, folders, requests);
     }
+
+    private static string FromPostmanValue(string value) =>
+        InterchangeText.RenameVariables(value, InterchangeText.FromPostmanDynamic);
 
     /// <summary>A description is text, or an object with the text in <c>content</c>.</summary>
     private static string? Description(JsonNode? description) =>
@@ -102,7 +106,9 @@ internal static partial class PostmanFormat
         if (request is JsonValue)
         {
             var (plainUrl, plainQuery) = InterchangeText.SplitQuery(request.Text() ?? string.Empty);
-            return new HttpRequestDefinition(name, RequestMethod.Get, plainUrl, plainQuery);
+            return InterchangeText.MapText(
+                new HttpRequestDefinition(name, RequestMethod.Get, plainUrl, plainQuery),
+                text => InterchangeText.RenameVariables(text, InterchangeText.FromPostmanDynamic));
         }
 
         var methodName = request.Str("method") ?? "GET";
@@ -112,31 +118,36 @@ internal static partial class PostmanFormat
             return null;
         }
 
-        var (url, query) = ImportUrl(request.Get("url"));
+        var (url, query, pathParams) = ImportUrl(request.Get("url"));
         var headers = ImportHeaders(request.Get("header"));
         var auth = ImportAuth(request.Obj("auth"), name, warnings) ?? inherited;
         var body = ImportBody(request.Obj("body"), headers, name, warnings);
 
-        return new HttpRequestDefinition(
+        var imported = new HttpRequestDefinition(
             name,
             method,
             url,
             query,
             InterchangeText.WithoutImpliedContentType(headers, body.Type),
             auth,
-            body);
+            body)
+        {
+            PathParams = pathParams,
+        };
+        return InterchangeText.MapText(imported, text => InterchangeText.RenameVariables(text, InterchangeText.FromPostmanDynamic));
     }
 
-    private static (string Url, List<KeyValueEntry> Query) ImportUrl(JsonNode? url)
+    private static (string Url, List<KeyValueEntry> Query, IReadOnlyList<KeyValueEntry> PathParams) ImportUrl(JsonNode? url)
     {
         if (url is JsonValue)
         {
-            return InterchangeText.SplitQuery(url.Text() ?? string.Empty);
+            var (plain, plainQuery) = InterchangeText.SplitQuery(url.Text() ?? string.Empty);
+            return (plain, plainQuery, PathParameters.Sync(plain, []));
         }
 
         if (url is not JsonObject)
         {
-            return (string.Empty, []);
+            return (string.Empty, [], []);
         }
 
         var raw = url.Str("raw") ?? BuildRaw(url);
@@ -151,18 +162,13 @@ internal static partial class PostmanFormat
                 .ToList()
             : rawQuery;
 
-        // Path variables (/users/:id) become their value, or a {{variable}} when they have none.
-        var values = url.Arr("variable")
+        // Path variables (/users/:id) stay in the URL, with their values as Dynpost path variables.
+        var pathParams = url.Arr("variable")
             .Where(v => v.Str("key") is not null)
-            .GroupBy(v => v.Str("key")!)
-            .ToDictionary(g => g.Key, g => g.First().Str("value") ?? string.Empty, StringComparer.Ordinal);
-        var resolved = PathVariable().Replace(baseUrl, match =>
-        {
-            var key = match.Groups["name"].Value;
-            return values.TryGetValue(key, out var value) && value.Length > 0 ? value : "{{" + key + "}}";
-        });
+            .Select(v => new KeyValueEntry(v.Str("key")!, v.Get("value").AnyText()))
+            .ToList();
 
-        return (resolved, query);
+        return (baseUrl, query, PathParameters.Sync(baseUrl, pathParams));
     }
 
     private static string BuildRaw(JsonNode url)
@@ -221,6 +227,8 @@ internal static partial class PostmanFormat
                 return RequestAuth.None;
             case "basic":
                 return new BasicAuth(AuthParam(auth!, type, "username"), AuthParam(auth!, type, "password"));
+            case "digest":
+                return new DigestAuth(AuthParam(auth!, type, "username"), AuthParam(auth!, type, "password"));
             case "bearer":
                 return new BearerAuth(AuthParam(auth!, type, "token"));
             case "apikey":
@@ -388,16 +396,68 @@ internal static partial class PostmanFormat
 
         foreach (var request in folder.Requests)
         {
-            items.Add(new JsonObject { ["name"] = request.Name, ["request"] = ExportRequest(request) });
+            var exported = new JsonObject { ["name"] = request.Name, ["request"] = ExportRequest(request) };
+            if (ExportSettings(request.Settings) is { } behavior)
+            {
+                exported["protocolProfileBehavior"] = behavior;
+            }
+
+            items.Add(exported);
         }
 
         return items;
     }
 
+    /// <summary>
+    /// Postman's <c>protocolProfileBehavior</c>: whether redirects are followed (and how many),
+    /// and whether certificates are checked (<c>strictSSL</c>). Timeouts and HTTP versions are
+    /// app-wide in Postman, so they aren't read.
+    /// </summary>
+    private static RequestSettings ImportSettings(JsonObject? behavior)
+    {
+        if (behavior is null)
+        {
+            return RequestSettings.Inherit;
+        }
+
+        static bool? Flag(JsonObject behavior, string key) =>
+            behavior.Get(key) is JsonValue value && value.TryGetValue<bool>(out var flag) ? flag : null;
+
+        int? maxRedirects = behavior.Get("maxRedirects") is JsonValue max && max.TryGetValue<int>(out var count)
+            && count is >= 0 and <= RequestSettings.MaxRedirectsLimit
+            ? count
+            : null;
+        return new RequestSettings(
+            FollowRedirects: Flag(behavior, "followRedirects"),
+            MaxRedirects: maxRedirects,
+            VerifyTls: Flag(behavior, "strictSSL"));
+    }
+
+    private static JsonObject? ExportSettings(RequestSettings settings)
+    {
+        var behavior = new JsonObject();
+        if (settings.FollowRedirects is { } follow)
+        {
+            behavior["followRedirects"] = follow;
+        }
+
+        if (settings.MaxRedirects is { } max)
+        {
+            behavior["maxRedirects"] = max;
+        }
+
+        if (settings.VerifyTls is { } verify)
+        {
+            behavior["strictSSL"] = verify;
+        }
+
+        return behavior.Count == 0 ? null : behavior;
+    }
+
     private static JsonObject ExportRequest(HttpRequestDefinition original)
     {
-        // Postman doesn't read references with spaces inside the braces.
-        var request = InterchangeText.MapText(original, text => InterchangeText.RenameVariables(text, name => name));
+        // Postman doesn't read references with spaces inside the braces, and names its built-in variables its own way.
+        var request = InterchangeText.MapText(original, text => InterchangeText.RenameVariables(text, InterchangeText.ToPostmanDynamic));
         var result = new JsonObject
         {
             ["method"] = request.Method.ToName(),
@@ -414,7 +474,7 @@ internal static partial class PostmanFormat
             result["body"] = body;
         }
 
-        result["url"] = ExportUrl(request.Url, request.Params);
+        result["url"] = ExportUrl(request.Url, request.Params, request.PathParams);
         if (original.Description.Length > 0)
         {
             result["description"] = original.Description;
@@ -447,6 +507,7 @@ internal static partial class PostmanFormat
         return auth switch
         {
             BasicAuth basic => Auth("basic", ("username", basic.Username), ("password", basic.Password)),
+            DigestAuth digest => Auth("digest", ("username", digest.Username), ("password", digest.Password)),
             BearerAuth bearer => Auth("bearer", ("token", bearer.Token)),
             ApiKeyAuth apiKey => Auth("apikey",
                 ("key", apiKey.Key),
@@ -517,7 +578,7 @@ internal static partial class PostmanFormat
     }
 
     /// <summary>The URL as Postman writes it: the raw text and its parts.</summary>
-    private static JsonObject ExportUrl(string url, IReadOnlyList<KeyValueEntry> parameters)
+    private static JsonObject ExportUrl(string url, IReadOnlyList<KeyValueEntry> parameters, IReadOnlyList<KeyValueEntry> pathParams)
     {
         var result = new JsonObject { ["raw"] = InterchangeText.JoinQuery(url, parameters) };
 
@@ -564,6 +625,14 @@ internal static partial class PostmanFormat
                 .ToArray());
         }
 
+        var variables = PathParameters.Sync(url, pathParams);
+        if (variables.Count > 0)
+        {
+            result["variable"] = new JsonArray(variables
+                .Select(p => (JsonNode)new JsonObject { ["key"] = p.Key, ["value"] = p.Value })
+                .ToArray());
+        }
+
         return result;
     }
 
@@ -575,7 +644,7 @@ internal static partial class PostmanFormat
             .Select(v => (JsonNode)new JsonObject
             {
                 ["key"] = v.Name,
-                ["value"] = v.Secret ? string.Empty : InterchangeText.RenameVariables(v.Value, name => name),
+                ["value"] = v.Secret ? string.Empty : InterchangeText.RenameVariables(v.Value, InterchangeText.ToPostmanDynamic),
                 ["type"] = v.Secret ? "secret" : "default",
                 ["enabled"] = true,
             })
@@ -594,9 +663,6 @@ internal static partial class PostmanFormat
         bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
         return new Guid(bytes, bigEndian: true).ToString();
     }
-
-    [GeneratedRegex(@"(?<=/):(?<name>[A-Za-z_][A-Za-z0-9_.-]*)")]
-    private static partial Regex PathVariable();
 
     [GeneratedRegex(@"^(?<scheme>[A-Za-z][A-Za-z0-9+.-]*)://")]
     private static partial Regex Scheme();

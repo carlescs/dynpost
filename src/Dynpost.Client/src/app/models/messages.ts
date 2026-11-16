@@ -11,7 +11,7 @@ export interface KeyValueDto {
 
 export interface AuthDto {
   /** `inherit` uses the auth of the closest folder above that sets one. */
-  type: 'inherit' | 'none' | 'basic' | 'bearer' | 'apiKey' | 'oauth2';
+  type: 'inherit' | 'none' | 'basic' | 'digest' | 'bearer' | 'apiKey' | 'oauth2';
   username?: string | null;
   password?: string | null;
   token?: string | null;
@@ -32,12 +32,68 @@ export interface AuthDto {
 }
 
 /** The headers, auth and variables a folder sets for every request and folder in it. */
+/** Where secret values are kept. */
+export type SecretStorage = 'file' | 'keychain';
+
+/** Where secret values are kept, and whether `.env` values are used. */
+export interface SecretSettingsDto {
+  storage: SecretStorage;
+  useDotEnv: boolean;
+  /** Whether the operating system's credential store can be used on this computer. */
+  keychainAvailable: boolean;
+  /** What the credential store is called, e.g. `Windows Credential Manager`. */
+  keychainName: string;
+}
+
+/** The shell a cURL command is quoted for. */
+export type CurlShell = 'posix' | 'cmd' | 'powershell';
+
+/** A request read from a cURL command. */
+export interface ParsedCurlDto {
+  request: RequestDto;
+  /** Options that were skipped or not carried over exactly. */
+  warnings: string[];
+}
+
+/** The workspace-global variables: they apply with every environment, and without one. */
+export interface GlobalVariablesDto {
+  variables: EnvironmentVariableDto[];
+}
+
+/** A client certificate of an environment (mutual TLS). */
+export interface ClientCertificateDto {
+  /** The host it is for (`*.example.com`, `host:port`); empty for every host. */
+  host: string;
+  /** The certificate file (PKCS#12 or PEM), workspace-relative or absolute. */
+  certificate: string;
+  /** The PEM private key file, when the key is in its own file. */
+  key?: string | null;
+  /** Whether a passphrase is stored (results only). */
+  hasPassphrase?: boolean;
+  /** When saving: the new passphrase, `''` for none, `null` to keep the stored one. */
+  passphrase?: string | null;
+}
+
+/** How a request is sent; unset values are inherited from the folders, or the default. */
+export interface RequestSettingsDto {
+  /** The timeout in milliseconds; 0 for none. */
+  timeoutMs?: number | null;
+  followRedirects?: boolean | null;
+  maxRedirects?: number | null;
+  /** Whether the server's TLS certificate must be valid and trusted. */
+  verifyTls?: boolean | null;
+  /** `1.1` or `2`. */
+  httpVersion?: string | null;
+}
+
 export interface FolderSettingsDto {
   headers: KeyValueDto[];
   /** Type `inherit` passes on the auth of the folders above. */
   auth: AuthDto;
   /** Variables for the requests below it; the selected environment's win over them. */
   variables?: KeyValueDto[] | null;
+  /** How the requests below it are sent. */
+  settings?: RequestSettingsDto | null;
 }
 
 /** A header inherited from a folder. */
@@ -66,6 +122,8 @@ export interface InheritedSettingsDto {
   authFolder: string | null;
   /** The inherited variables (the selected environment's win over them). */
   variables: InheritedVariableDto[];
+  /** The inherited request settings; unset values are not set by any folder. */
+  settings?: RequestSettingsDto | null;
 }
 
 /** A cached OAuth 2.0 token, as far as the UI needs to know (the token itself stays in the host). */
@@ -142,6 +200,10 @@ export interface RequestDto {
   description?: string | null;
   /** Values to capture from a successful response. */
   captures?: CaptureDto[] | null;
+  /** The values of the URL's `:name` path variables, in the URL's order. */
+  pathParams?: KeyValueDto[] | null;
+  /** How the request is sent; unset values are inherited. */
+  settings?: RequestSettingsDto | null;
 }
 
 export interface SavedRequestDto {
@@ -1015,6 +1077,22 @@ export interface BridgeMessages {
   'request.load': { payload: { path: string }; result: RequestDto };
   /** Shows the native file picker for a request body; `null` when cancelled. */
   'request.pickFile': { payload: void; result: PickedFileDto | null };
+  /** Reads a `curl …` command into a request (not saved), with what it couldn't represent. */
+  'request.parseCurl': { payload: { command: string }; result: ParsedCurlDto };
+  /** Writes the request in the editor as a cURL command for a shell. */
+  'request.copyAsCurl': {
+    payload: {
+      request: RequestDto;
+      path?: string | null;
+      folder?: string | null;
+      /** Resolve `{{variables}}` with the selected environment (else keep them as written). */
+      resolve: boolean;
+      /** Write secret values and credentials as they are (else masked). */
+      includeSecrets: boolean;
+      shell: CurlShell;
+    };
+    result: string;
+  };
   /** Picks files for the file fields of a form body; empty when cancelled. */
   'request.pickFiles': { payload: { multiple: boolean }; result: PickedFileDto[] };
   /** Describes the files a request body sends: size, missing, outside the workspace. */
@@ -1063,6 +1141,24 @@ export interface BridgeMessages {
   'response.saveBody': { payload: { id: string }; result: { path: string } | null };
   /** The cookies kept for an environment (`environment` is its id), without expired ones. */
   'cookie.list': { payload: { environment: string }; result: CookieDto[] };
+  /** Reads the workspace-global variables (in `dynpost.yaml`), with this computer's secret values. */
+  'globals.load': { payload: void; result: GlobalVariablesDto };
+  /** Where secret values are kept and whether `.env` values are used. */
+  'secrets.getSettings': { payload: void; result: SecretSettingsDto };
+  /** Changes where secret values are kept; the open workspace's move there. */
+  'secrets.setSettings': {
+    payload: { storage: SecretStorage; useDotEnv: boolean };
+    result: SecretSettingsDto;
+  };
+  /** Saves the workspace-global variables; secret values stay on this computer. */
+  'globals.save': { payload: { globals: GlobalVariablesDto }; result: GlobalVariablesDto };
+  /** Lists the client certificates set up for an environment (passphrases are never sent back). */
+  'certificate.list': { payload: { environment: string }; result: ClientCertificateDto[] };
+  /** Replaces the client certificates of an environment; a `null` passphrase keeps the stored one. */
+  'certificate.save': {
+    payload: { environment: string; certificates: ClientCertificateDto[] };
+    result: ClientCertificateDto[];
+  };
   /** Deletes one cookie from an environment's jar; the result is what is left. */
   'cookie.delete': {
     payload: { environment: string; name: string; domain: string; path: string };

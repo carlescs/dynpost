@@ -19,7 +19,9 @@ public static class RequestMapper
             request.Body.Type == BodyType.Graphql ? request.Body.Variables : null,
             request.Body.Fields?.Select(ToDto).ToList()),
         request.Description,
-        request.Captures.Select(c => new CaptureDto(c.Variable, c.Expression)).ToList());
+        request.Captures.Select(c => new CaptureDto(c.Variable, c.Expression)).ToList(),
+        PathParameters.Sync(request.Url, request.PathParams).Select(ToDto).ToList(),
+        ToDto(request.Settings));
 
     /// <summary>
     /// Builds a valid domain request from a DTO. Rows with neither key nor value (the blank row the
@@ -43,6 +45,12 @@ public static class RequestMapper
             return Invalid($"'{dto.Body?.Type}' is not a supported body type.");
         }
 
+        var settings = ToDomain(dto.Settings);
+        if (!settings.IsSuccess)
+        {
+            return settings.Error!;
+        }
+
         var request = new HttpRequestDefinition(
             (dto.Name ?? string.Empty).Trim(),
             method,
@@ -52,7 +60,11 @@ public static class RequestMapper
             auth.Value,
             ToDomain(bodyType, dto.Body!))
         {
+            PathParams = PathParameters.Sync(
+                dto.Url ?? string.Empty,
+                (dto.PathParams ?? []).Select(row => new KeyValueEntry((row.Key ?? string.Empty).Trim(), row.Value ?? string.Empty)).ToList()),
             Description = NormalizeDescription(dto.Description),
+            Settings = settings.Value,
             Captures = (dto.Captures ?? [])
                 .Where(c => !string.IsNullOrWhiteSpace(c.Variable) || !string.IsNullOrWhiteSpace(c.Expression))
                 .Select(c => new CaptureRule((c.Variable ?? string.Empty).Trim(), (c.Expression ?? string.Empty).Trim()))
@@ -61,6 +73,46 @@ public static class RequestMapper
 
         var errors = request.Validate();
         return errors.Count == 0 ? request : Invalid(string.Join(" ", errors));
+    }
+
+    /// <summary>The DTO of request settings.</summary>
+    public static RequestSettingsDto ToDto(RequestSettings settings) => new(
+        settings.Timeout is { } timeout ? (long)timeout.TotalMilliseconds : null,
+        settings.FollowRedirects,
+        settings.MaxRedirects,
+        settings.VerifyTls,
+        settings.HttpVersion is { } version ? RequestSettings.VersionName(version) : null);
+
+    /// <summary>The request settings of a DTO; <c>null</c> sets nothing.</summary>
+    public static Result<RequestSettings> ToDomain(RequestSettingsDto? dto)
+    {
+        if (dto is null)
+        {
+            return RequestSettings.Inherit;
+        }
+
+        HttpVersionPreference? version = null;
+        if (!string.IsNullOrWhiteSpace(dto.HttpVersion))
+        {
+            if (!RequestSettings.TryParseVersion(dto.HttpVersion, out var parsed))
+            {
+                return Invalid($"'{dto.HttpVersion}' is not a supported HTTP version (use 1.1 or 2).");
+            }
+
+            version = parsed;
+        }
+
+        if (dto.TimeoutMs is < 0)
+        {
+            return Invalid("The timeout can't be negative.");
+        }
+
+        return new RequestSettings(
+            dto.TimeoutMs is { } ms ? TimeSpan.FromMilliseconds(Math.Min(ms, (long)RequestSettings.MaxTimeout.TotalMilliseconds + 1)) : null,
+            dto.FollowRedirects,
+            dto.MaxRedirects,
+            dto.VerifyTls,
+            version);
     }
 
     private static RequestBody ToDomain(BodyType type, BodyDto dto)
@@ -148,6 +200,7 @@ public static class RequestMapper
     {
         BasicAuth basic => new AuthDto("basic", Username: basic.Username, Password: basic.Password),
         BearerAuth bearer => new AuthDto("bearer", Token: bearer.Token),
+        DigestAuth digest => new AuthDto("digest", Username: digest.Username, Password: digest.Password),
         ApiKeyAuth apiKey => new AuthDto("apiKey", Key: apiKey.Key, Value: apiKey.Value, In: apiKey.In == ApiKeyLocation.Query ? "query" : "header"),
         OAuth2Auth oauth => new AuthDto(
             "oauth2",
@@ -194,6 +247,7 @@ public static class RequestMapper
         "none" => RequestAuth.None,
         "basic" => new BasicAuth(auth.Username ?? string.Empty, auth.Password ?? string.Empty),
         "bearer" => new BearerAuth(auth.Token ?? string.Empty),
+        "digest" => new DigestAuth(auth.Username ?? string.Empty, auth.Password ?? string.Empty),
         "apikey" => auth.In?.ToLowerInvariant() switch
         {
             null or "" or "header" => new ApiKeyAuth(auth.Key ?? string.Empty, auth.Value ?? string.Empty, ApiKeyLocation.Header),

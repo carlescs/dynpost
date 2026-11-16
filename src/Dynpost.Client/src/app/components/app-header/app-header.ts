@@ -5,6 +5,7 @@ import {
   faCircleArrowUp,
   faCircleInfo,
   faClockRotateLeft,
+  faKey,
   faGear,
   faKeyboard,
   faMoon,
@@ -17,6 +18,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { AboutDialog } from '../about-dialog/about-dialog';
 import { HistorySettingsDialog } from '../history-settings-dialog/history-settings-dialog';
+import { SecretSettingsDialog } from '../secret-settings-dialog/secret-settings-dialog';
 import { McpSettingsDialog } from '../mcp-settings-dialog/mcp-settings-dialog';
 import { ShortcutsDialog } from '../shortcuts-dialog/shortcuts-dialog';
 import { Dialogs } from '../../services/dialogs';
@@ -60,6 +62,7 @@ export class AppHeader {
   protected readonly faGear = faGear;
   protected readonly faCircleInfo = faCircleInfo;
   protected readonly faClockRotateLeft = faClockRotateLeft;
+  protected readonly faKey = faKey;
   protected readonly faMoon = faMoon;
   protected readonly faKeyboard = faKeyboard;
   protected readonly faCircleArrowUp = faCircleArrowUp;
@@ -106,6 +109,11 @@ export class AppHeader {
   protected showHistorySettings(): void {
     this.menuOpen.set(false);
     this.dialogs.open(HistorySettingsDialog, { ariaLabelledBy: 'history-settings-title' });
+  }
+
+  protected showSecretSettings(): void {
+    this.menuOpen.set(false);
+    this.dialogs.open(SecretSettingsDialog, { ariaLabelledBy: 'secret-settings-title' });
   }
 
   protected showMcpSettings(): void {

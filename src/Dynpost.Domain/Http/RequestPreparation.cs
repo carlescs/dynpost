@@ -36,10 +36,14 @@ public static class RequestPreparation
         var missing = new SortedSet<string>(StringComparer.Ordinal);
         string Resolve(string text) => VariableTemplate.Resolve(text, variables, missing);
 
-        var url = Resolve(request.Url).Trim();
+        // Path variables first: their values are percent-encoded, so they can't add segments.
+        var url = Resolve(PathParameters.Apply(request.Url, request.PathParams, Resolve)).Trim();
         var query = Resolved(request.Params, Resolve);
         var headers = Resolved(request.Headers, Resolve);
         ApplyAuth(request.Auth, Resolve, headers, query, errors, accessToken);
+        var digest = request.Auth is DigestAuth digestAuth
+            ? new DigestCredentials(Resolve(digestAuth.Username), Resolve(digestAuth.Password))
+            : null;
         var body = BuildBody(request.Body, Resolve, errors, workspaceRoot);
 
         if (missing.Count > 0)
@@ -55,7 +59,7 @@ public static class RequestPreparation
                 request.Body.Type == BodyType.Graphql ? "POST" : request.Method.ToName(),
                 uri,
                 headers,
-                body), [], [])
+                body) { Settings = request.Settings, Digest = digest }, [], [])
             : new PreparedRequest(null, errors, [.. missing]);
     }
 
@@ -78,6 +82,15 @@ public static class RequestPreparation
             case BasicAuth basic:
                 var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{resolve(basic.Username)}:{resolve(basic.Password)}"));
                 AddHeaderUnlessSet(headers, AuthorizationHeader, $"Basic {credentials}");
+                break;
+
+            case DigestAuth digest:
+                // Sent once the server answers with a Digest challenge (see DigestChallenge).
+                if (resolve(digest.Username).Length == 0)
+                {
+                    errors.Add("Enter a user name for Digest auth, or set auth to 'No auth'.");
+                }
+
                 break;
 
             case BearerAuth bearer:

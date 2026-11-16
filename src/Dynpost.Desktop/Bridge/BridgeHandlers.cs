@@ -1,5 +1,6 @@
 using Dynpost.Application.Captures;
 using Dynpost.Application.Common;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Cookies;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
@@ -10,6 +11,7 @@ using Dynpost.Application.Interchange;
 using Dynpost.Application.OAuth2;
 using Dynpost.Domain.Git;
 using Dynpost.Application.Requests;
+using Dynpost.Application.Secrets;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Settings;
 using Dynpost.Application.Sharing;
@@ -115,6 +117,22 @@ internal static class BridgeHandlers
                 (p, _) => Task.FromResult(Use<MoveRequest>().Execute(p.Path, p.Folder)))
             .Register<SendRequestPayload, ResponseDto>(BridgeMessageTypes.RequestSend,
                 (p, ct) => Use<SendRequest>().ExecuteAsync(p.Id, p.Request, p.Path, p.Folder, ct))
+            .Register<ParseCurlPayload, ParsedCurlDto>(BridgeMessageTypes.RequestParseCurl,
+                (p, _) => Task.FromResult(Use<ParseCurl>().Execute(p.Command)))
+            .Register<CopyAsCurlPayload, string>(BridgeMessageTypes.RequestCopyAsCurl,
+                (p, ct) => Use<CopyAsCurl>().ExecuteAsync(
+                    p.Request,
+                    p.Path,
+                    p.Folder,
+                    p.Resolve,
+                    p.IncludeSecrets,
+                    p.Shell?.ToLowerInvariant() switch
+                    {
+                        "cmd" => CurlShell.Cmd,
+                        "powershell" => CurlShell.PowerShell,
+                        _ => CurlShell.Posix,
+                    },
+                    ct))
             .Register<HistoryPathPayload, IReadOnlyList<HistoryEntryDto>>(BridgeMessageTypes.HistoryList,
                 (p, ct) => Use<ListResponseHistory>().ExecuteAsync(p.Path, ct))
             .Register<HistoryEntryPayload, HistoryEntryDetailsDto>(BridgeMessageTypes.HistoryGet,
@@ -185,6 +203,10 @@ internal static class BridgeHandlers
                 (p, ct) => Use<DeleteCookie>().ExecuteAsync(p.Environment, p.Name, p.Domain, p.Path, ct))
             .Register<CookieJarPayload, Unit?>(BridgeMessageTypes.CookieClear,
                 async (p, ct) => NoValue(await Use<ClearCookies>().ExecuteAsync(p.Environment, ct)))
+            .Register<CertificatesPayload, IReadOnlyList<ClientCertificateDto>>(BridgeMessageTypes.CertificateList,
+                (p, ct) => Use<ListClientCertificates>().ExecuteAsync(p.Environment, ct))
+            .Register<SaveCertificatesPayload, IReadOnlyList<ClientCertificateDto>>(BridgeMessageTypes.CertificateSave,
+                (p, ct) => Use<SaveClientCertificates>().ExecuteAsync(p.Environment, p.Certificates ?? [], ct))
             .Register<CapturedValuesPayload, IReadOnlyList<CapturedValueDto>>(BridgeMessageTypes.CaptureList,
                 (p, ct) => Use<ListCapturedValues>().ExecuteAsync(p.Environment, ct))
             .Register<ClearCapturedValuesPayload, IReadOnlyList<CapturedValueDto>>(BridgeMessageTypes.CaptureClear,
@@ -221,6 +243,10 @@ internal static class BridgeHandlers
                 ct => Use<ListEnvironments>().ExecuteAsync(ct))
             .Register<EnvironmentIdPayload, EnvironmentDto>(BridgeMessageTypes.EnvironmentLoad,
                 (p, ct) => Use<LoadEnvironment>().ExecuteAsync(p.Id, ct))
+            .Register(BridgeMessageTypes.GlobalsLoad,
+                ct => Use<LoadGlobalVariables>().ExecuteAsync(ct))
+            .Register<SaveGlobalsPayload, GlobalVariablesDto>(BridgeMessageTypes.GlobalsSave,
+                (p, ct) => Use<SaveGlobalVariables>().ExecuteAsync(p.Globals, ct))
             .Register<CreateEnvironmentPayload, SavedEnvironmentDto>(BridgeMessageTypes.EnvironmentCreate,
                 (p, ct) => Use<CreateEnvironment>().ExecuteAsync(p.Environment, ct))
             .Register<SaveEnvironmentPayload, SavedEnvironmentDto>(BridgeMessageTypes.EnvironmentSave,
@@ -289,6 +315,10 @@ internal static class BridgeHandlers
                 ct => Use<GetAppSettings>().ExecuteAsync(ct))
             .Register<SetThemePayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetTheme,
                 (p, ct) => Use<SetTheme>().ExecuteAsync(p.Theme, ct))
+            .Register(BridgeMessageTypes.SecretSettingsGet,
+                ct => Use<GetSecretSettings>().ExecuteAsync(ct))
+            .Register<SecretSettingsPayload, SecretSettingsDto>(BridgeMessageTypes.SecretSettingsSet,
+                (p, ct) => Use<SetSecretSettings>().ExecuteAsync(p.Storage, p.UseDotEnv, ct))
             .Register<HistorySettingsDto, AppSettingsDto>(BridgeMessageTypes.SettingsSetHistory,
                 (p, ct) => Use<SetHistorySettings>().ExecuteAsync(p, ct))
             .Register<SetActivityOrderPayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetActivityOrder,

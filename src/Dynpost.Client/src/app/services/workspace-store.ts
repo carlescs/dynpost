@@ -11,7 +11,13 @@ import {
   WorkspaceInfo,
   WorkspaceNode,
 } from '../models/workspace';
-import { EMPTY_AUTH, fromNodeDto, fromRequestDto, toRequestDto } from '../models/request-mapping';
+import {
+  EMPTY_AUTH,
+  fromNodeDto,
+  fromRequestDto,
+  syncPathParams,
+  toRequestDto,
+} from '../models/request-mapping';
 import { CHANGED_ON_DISK, DISCARD, Dialogs, changedOnDisk } from './dialogs';
 
 export const SIDEBAR_MIN_WIDTH = 180;
@@ -257,6 +263,7 @@ export class WorkspaceStore {
       name: `New request ${this.untitledCount}`,
       method: 'GET',
       url: '',
+      pathParams: [],
       params: [],
       headers: [],
       auth: { ...EMPTY_AUTH },
@@ -266,6 +273,7 @@ export class WorkspaceStore {
       bodyFields: null,
       description: '',
       captures: [],
+      settings: {},
       dirty: true,
       saving: false,
       sendId: null,
@@ -655,9 +663,14 @@ export class WorkspaceStore {
 
   update(id: string, patch: Partial<RequestContent>): void {
     this.documents.update((docs) =>
-      docs.map((d) =>
-        d.id === id ? { ...d, ...patch, dirty: true, revision: d.revision + 1 } : d,
-      ),
+      docs.map((d) => {
+        if (d.id !== id) return d;
+        const updated = { ...d, ...patch, dirty: true, revision: d.revision + 1 };
+        // The path variable rows follow the `:name` segments of the URL.
+        if (patch.url !== undefined || patch.pathParams !== undefined)
+          updated.pathParams = syncPathParams(updated.url, updated.pathParams);
+        return updated;
+      }),
     );
   }
 

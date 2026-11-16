@@ -38,14 +38,18 @@ public sealed record FolderDefaults
     /// </summary>
     public IReadOnlyList<KeyValueEntry> Variables { get; init; }
 
+    /// <summary>How the requests below the folder are sent, unless a closer level sets the same value.</summary>
+    public RequestSettings Settings { get; init; } = RequestSettings.Inherit;
+
     /// <summary>Whether the folder sets nothing, so it needs no file.</summary>
-    public bool IsEmpty => Headers.Count == 0 && Auth is InheritAuth && Variables.Count == 0;
+    public bool IsEmpty => Headers.Count == 0 && Auth is InheritAuth && Variables.Count == 0 && Settings.IsEmpty;
 
     /// <summary>Checks the rules folder defaults must satisfy before they can be saved; empty when valid.</summary>
     public IReadOnlyList<string> Validate()
     {
         var errors = new List<string>();
         HttpRequestDefinition.CheckHeaders(Headers, errors);
+        errors.AddRange(Settings.Validate());
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var variable in Variables)
         {
@@ -90,6 +94,9 @@ public sealed record InheritedDefaults(IReadOnlyList<InheritedHeader> Headers, R
     /// <summary>The variables set by the folders, the closest one's when several set the same name.</summary>
     public IReadOnlyList<InheritedVariable> Variables { get; init; } = [];
 
+    /// <summary>The settings set by the folders, each value the closest one's.</summary>
+    public RequestSettings Settings { get; init; } = RequestSettings.Inherit;
+
     /// <summary>Combines the defaults of a chain of folders, the outermost first.</summary>
     public static InheritedDefaults From(IEnumerable<(WorkspacePath Folder, FolderDefaults Defaults)> chain)
     {
@@ -97,6 +104,7 @@ public sealed record InheritedDefaults(IReadOnlyList<InheritedHeader> Headers, R
         var variables = new List<InheritedVariable>();
         RequestAuth auth = RequestAuth.Inherit;
         WorkspacePath? authFolder = null;
+        var settings = RequestSettings.Inherit;
         foreach (var (folder, defaults) in chain)
         {
             foreach (var header in defaults.Headers.Where(header => header.Enabled))
@@ -116,9 +124,11 @@ public sealed record InheritedDefaults(IReadOnlyList<InheritedHeader> Headers, R
                 auth = defaults.Auth;
                 authFolder = folder;
             }
+
+            settings = defaults.Settings.Over(settings);
         }
 
-        return new InheritedDefaults(headers, auth, authFolder) { Variables = variables };
+        return new InheritedDefaults(headers, auth, authFolder) { Variables = variables, Settings = settings };
     }
 
     /// <summary>
@@ -128,12 +138,26 @@ public sealed record InheritedDefaults(IReadOnlyList<InheritedHeader> Headers, R
     /// variables; environment values are final and are not expanded again. Folder variables that
     /// refer to each other in a loop are left out and listed in <see cref="ResolvedVariables.Cycle"/>.
     /// </summary>
-    public ResolvedVariables ResolveVariables(IReadOnlyDictionary<string, string> environment)
+    /// <param name="overridable">
+    /// Names in <paramref name="environment"/> that a folder variable wins over: those that come
+    /// from the workspace-global variables, which are less specific than a folder's.
+    /// </param>
+    public ResolvedVariables ResolveVariables(IReadOnlyDictionary<string, string> environment, IReadOnlySet<string>? overridable = null)
     {
-        var own = Variables.Where(variable => !environment.ContainsKey(variable.Name)).ToList();
+        var own = Variables
+            .Where(variable => !environment.ContainsKey(variable.Name) || overridable?.Contains(variable.Name) == true)
+            .ToList();
         if (own.Count == 0)
         {
             return new ResolvedVariables(environment, []);
+        }
+
+        if (overridable is { Count: > 0 })
+        {
+            var replaced = own.Select(variable => variable.Name).ToHashSet(StringComparer.Ordinal);
+            environment = environment
+                .Where(pair => !replaced.Contains(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         }
 
         // Environment values take part as placeholders no folder value can contain, so they are
@@ -179,6 +203,7 @@ public sealed record InheritedDefaults(IReadOnlyList<InheritedHeader> Headers, R
         {
             Headers = [.. inherited, .. request.Headers],
             Auth = request.Auth is InheritAuth ? EffectiveAuth : request.Auth,
+            Settings = request.Settings.Over(Settings),
         };
     }
 

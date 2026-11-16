@@ -28,6 +28,14 @@ export interface EnvironmentDraft {
   revision: number;
 }
 
+/** The draft id of the workspace-global variables (never an environment's file name). */
+export const GLOBALS_ID = ':globals';
+
+/** Whether a draft edits the workspace-global variables rather than an environment. */
+export function isGlobals(draft: Pick<EnvironmentDraft, 'id'>): boolean {
+  return draft.id === GLOBALS_ID;
+}
+
 /**
  * The open workspace's environments: the list, the selected one (whose variables requests are
  * sent with) and the environments open in editor tabs, next to the request tabs. Files are read
@@ -142,6 +150,33 @@ export class EnvironmentStore {
     }
   }
 
+  /** Opens the workspace-global variables in a tab, or shows their tab if it is already open. */
+  async editGlobals(): Promise<void> {
+    if (this.showOpen(GLOBALS_ID)) return;
+    const root = this.root();
+    try {
+      const globals = await this.bridge.send('globals.load');
+      if (this.showOpen(GLOBALS_ID) || this.root() !== root) return;
+      const key = this.workspace.newTabKey();
+      this.drafts.update((drafts) => [
+        ...drafts,
+        {
+          id: GLOBALS_ID,
+          key,
+          name: 'Globals',
+          variables: globals.variables,
+          cookieJar: false,
+          dirty: false,
+          saving: false,
+          revision: 0,
+        },
+      ]);
+      this.workspace.openTab(key);
+    } catch (error) {
+      this.report(error);
+    }
+  }
+
   /** Opens a new, unsaved environment in a tab. */
   create(): void {
     const key = this.workspace.newTabKey();
@@ -173,6 +208,10 @@ export class EnvironmentStore {
     const draft = this.drafts().find((d) => d.key === key);
     if (!draft || draft.saving) return;
     this.patchDraft(key, (d) => ({ ...d, saving: true }));
+    if (isGlobals(draft)) {
+      await this.saveGlobals(draft);
+      return;
+    }
     try {
       const environment = {
         name: draft.name,
@@ -203,6 +242,24 @@ export class EnvironmentStore {
       await this.refresh();
     } catch (error) {
       this.patchDraft(key, (d) => ({ ...d, saving: false }));
+      this.report(error);
+    }
+  }
+
+  private async saveGlobals(draft: EnvironmentDraft): Promise<void> {
+    try {
+      const saved = await this.bridge.send('globals.save', {
+        globals: { variables: draft.variables },
+      });
+      this.patchDraft(draft.key, (d) =>
+        d.revision === draft.revision
+          ? { ...d, variables: saved.variables, saving: false, dirty: false }
+          : { ...d, saving: false },
+      );
+      this.workspace.dismissError();
+      await this.loadVariables(++this.loadCount);
+    } catch (error) {
+      this.patchDraft(draft.key, (d) => ({ ...d, saving: false }));
       this.report(error);
     }
   }
@@ -334,8 +391,24 @@ export class EnvironmentStore {
     root: string,
   ): Promise<void> {
     const available = new Set(environments.map((environment) => environment.id));
+    const globals = this.drafts().find(
+      (draft) => isGlobals(draft) && !draft.dirty && touches(paths, 'dynpost.yaml'),
+    );
+    if (globals) {
+      try {
+        const loaded = await this.bridge.send('globals.load');
+        if (load !== this.loadCount || this.root() !== root) return;
+        this.patchDraft(globals.key, (current) =>
+          current.dirty
+            ? current
+            : { ...current, variables: loaded.variables, revision: current.revision + 1 },
+        );
+      } catch {
+        // Keep the open globals if dynpost.yaml can't currently be read.
+      }
+    }
     const targets = this.drafts().filter(
-      (draft) => draft.id && touches(paths, environmentPath(draft.id)),
+      (draft) => draft.id && !isGlobals(draft) && touches(paths, environmentPath(draft.id)),
     );
     for (const draft of targets) {
       if (load !== this.loadCount || this.root() !== root) return;
@@ -391,6 +464,16 @@ export class EnvironmentStore {
   private async loadVariables(load: number): Promise<void> {
     const id = this.activeId();
     let variables: VariableLookup = new Map();
+    // The workspace globals apply below the environment's variables.
+    const globals = new Map<string, VariableInfo>();
+    try {
+      for (const v of (await this.bridge.send('globals.load')).variables) {
+        if (!v.secret || v.value)
+          globals.set(v.name, { value: v.value, secret: v.secret, global: true });
+      }
+    } catch {
+      // Unreadable globals are reported when sending.
+    }
     if (id) {
       try {
         const environment = await this.bridge.send('environment.load', { id });
@@ -412,6 +495,11 @@ export class EnvironmentStore {
       } catch {
         // An unreadable environment defines nothing; sending explains why.
       }
+    }
+    if (globals.size) {
+      const combined = new Map(globals);
+      for (const [name, info] of variables) combined.set(name, info);
+      variables = combined;
     }
     if (load === this.loadCount) this.variables.set(variables);
   }

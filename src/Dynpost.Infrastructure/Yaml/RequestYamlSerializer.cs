@@ -1,5 +1,6 @@
 using Dynpost.Application.Requests;
 using Dynpost.Domain.Requests;
+using Dynpost.Domain.Runs;
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 
@@ -7,12 +8,13 @@ namespace Dynpost.Infrastructure.Yaml;
 
 /// <summary>
 /// Reads and writes request files. Keys are always written in the same order
-/// (<c>name</c>, <c>method</c>, <c>url</c>, <c>params</c>, <c>headers</c>, <c>auth</c>,
-/// <c>body</c>, <c>capture</c>, <c>description</c>) and empty or default values are omitted. Disabled params and headers are written
+/// (<c>name</c>, <c>method</c>, <c>url</c>, <c>pathParams</c>, <c>params</c>, <c>headers</c>, <c>auth</c>,
+/// <c>body</c>, <c>settings</c>, <c>capture</c>, <c>description</c>) and empty or default values are omitted (path
+/// variables without a value too). Disabled params and headers are written
 /// with a <c>~</c> prefix on their name. A request without <c>auth</c> inherits the auth of its
 /// folders; <c>type: none</c> sends none. Folder defaults (<c>_folder.yaml</c>) use the same
 /// <c>headers</c> and <c>auth</c> keys, in that order, followed by <c>variables</c> (written like
-/// <c>headers</c>).
+/// <c>headers</c>) and <c>settings</c>.
 /// </summary>
 public static class RequestYamlSerializer
 {
@@ -25,6 +27,7 @@ public static class RequestYamlSerializer
             .Scalar("method", request.Method.ToName())
             .Scalar("url", request.Url);
 
+        WriteEntries(writer, "pathParams", request.PathParams.Where(entry => entry.Value.Length > 0).ToList());
         WriteEntries(writer, "params", request.Params);
         WriteEntries(writer, "headers", request.Headers);
         WriteAuth(writer, request.Auth);
@@ -57,6 +60,8 @@ public static class RequestYamlSerializer
             });
         }
 
+        WriteSettings(writer, request.Settings);
+
         if (request.Captures.Count > 0)
         {
             writer.Mapping("capture", map =>
@@ -83,6 +88,7 @@ public static class RequestYamlSerializer
         WriteEntries(writer, "headers", defaults.Headers);
         WriteAuth(writer, defaults.Auth);
         WriteEntries(writer, "variables", defaults.Variables);
+        WriteSettings(writer, defaults.Settings);
         return writer.ToString();
     }
 
@@ -93,7 +99,9 @@ public static class RequestYamlSerializer
     public static FolderDefaults DeserializeFolder(string yaml)
     {
         var root = Load(yaml, allowEmpty: true);
-        return root is null ? FolderDefaults.Empty : new FolderDefaults(ReadEntries(root, "headers"), ReadAuth(root), ReadEntries(root, "variables"));
+        return root is null
+            ? FolderDefaults.Empty
+            : new FolderDefaults(ReadEntries(root, "headers"), ReadAuth(root), ReadEntries(root, "variables")) { Settings = ReadSettings(root) };
     }
 
     /// <summary>
@@ -120,6 +128,8 @@ public static class RequestYamlSerializer
             ReadAuth(root),
             ReadBody(root))
         {
+            PathParams = ReadEntries(root, "pathParams").Select(entry => entry with { Enabled = true }).ToList(),
+            Settings = ReadSettings(root),
             Captures = ReadCaptures(root),
             Description = OptionalString(root, "description") ?? string.Empty,
         };
@@ -215,6 +225,11 @@ public static class RequestYamlSerializer
                     ScalarIfNotEmpty(map, "username", basic.Username);
                     ScalarIfNotEmpty(map, "password", basic.Password);
                     break;
+                case DigestAuth digest:
+                    map.Scalar("type", "digest");
+                    ScalarIfNotEmpty(map, "username", digest.Username);
+                    ScalarIfNotEmpty(map, "password", digest.Password);
+                    break;
                 case BearerAuth bearer:
                     map.Scalar("type", "bearer");
                     ScalarIfNotEmpty(map, "token", bearer.Token);
@@ -249,6 +264,108 @@ public static class RequestYamlSerializer
             }
         });
     }
+
+    /// <summary>
+    /// Writes the settings that are set, in the order <c>timeout</c> (a duration such as <c>30s</c>,
+    /// or <c>0</c> for none), <c>followRedirects</c>, <c>maxRedirects</c>, <c>verifyTls</c>,
+    /// <c>httpVersion</c>; nothing when none is.
+    /// </summary>
+    private static void WriteSettings(YamlWriter writer, RequestSettings settings)
+    {
+        if (settings.IsEmpty)
+        {
+            return;
+        }
+
+        writer.Mapping("settings", map =>
+        {
+            if (settings.Timeout is { } timeout)
+            {
+                if (timeout == TimeSpan.Zero)
+                {
+                    map.Integer("timeout", 0);
+                }
+                else
+                {
+                    map.Scalar("timeout", RunText.FormatDuration(timeout));
+                }
+            }
+
+            if (settings.FollowRedirects is { } follow)
+            {
+                map.Boolean("followRedirects", follow);
+            }
+
+            if (settings.MaxRedirects is { } max)
+            {
+                map.Integer("maxRedirects", max);
+            }
+
+            if (settings.VerifyTls is { } verify)
+            {
+                map.Boolean("verifyTls", verify);
+            }
+
+            if (settings.HttpVersion is { } version)
+            {
+                map.Scalar("httpVersion", RequestSettings.VersionName(version));
+            }
+        });
+    }
+
+    private static RequestSettings ReadSettings(YamlMappingNode root)
+    {
+        var node = Optional(root, "settings");
+        if (node is null || IsNull(node))
+        {
+            return RequestSettings.Inherit;
+        }
+
+        if (node is not YamlMappingNode map)
+        {
+            throw new RequestFormatException("'settings' must be a mapping.");
+        }
+
+        TimeSpan? timeout = null;
+        if (OptionalString(map, "timeout") is { Length: > 0 } timeoutText)
+        {
+            timeout = RunText.TryParseDuration(timeoutText, out var parsed)
+                ? parsed
+                : throw new RequestFormatException($"'settings.timeout' must be a duration such as 30s or 500ms (0 for none), not '{timeoutText}'.");
+        }
+
+        int? maxRedirects = null;
+        if (OptionalString(map, "maxRedirects") is { Length: > 0 } maxText)
+        {
+            maxRedirects = int.TryParse(maxText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var max)
+                ? max
+                : throw new RequestFormatException($"'settings.maxRedirects' must be a whole number, not '{maxText}'.");
+        }
+
+        HttpVersionPreference? version = null;
+        if (OptionalString(map, "httpVersion") is { Length: > 0 } versionText)
+        {
+            version = RequestSettings.TryParseVersion(versionText, out var parsed)
+                ? parsed
+                : throw new RequestFormatException($"'settings.httpVersion' must be 1.1 or 2, not '{versionText}'.");
+        }
+
+        return new RequestSettings(
+            timeout,
+            NullableBoolean(map, "followRedirects"),
+            maxRedirects,
+            NullableBoolean(map, "verifyTls"),
+            version);
+    }
+
+    private static bool? NullableBoolean(YamlMappingNode map, string key) =>
+        OptionalString(map, key)?.ToLowerInvariant() switch
+        {
+            null or "" => null,
+            "true" => true,
+            "false" => false,
+            var other => throw new RequestFormatException($"'settings.{key}' must be true or false, not '{other}'."),
+        };
 
     private static void ScalarIfNotEmpty(YamlWriter writer, string key, string value)
     {
@@ -326,6 +443,7 @@ public static class RequestYamlSerializer
             "none" => RequestAuth.None,
             "basic" => new BasicAuth(Field("username"), Field("password")),
             "bearer" => new BearerAuth(Field("token")),
+            "digest" => new DigestAuth(Field("username"), Field("password")),
             "apikey" => new ApiKeyAuth(Field("key"), Field("value"), Field("in").ToLowerInvariant() switch
             {
                 "" or "header" => ApiKeyLocation.Header,

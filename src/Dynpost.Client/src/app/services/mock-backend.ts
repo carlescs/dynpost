@@ -11,6 +11,9 @@ import {
   CaptureDto,
   CaptureResultDto,
   CapturedValueDto,
+  ClientCertificateDto,
+  EnvironmentVariableDto,
+  GlobalVariablesDto,
   CookieDto,
   DateFormat,
   ERROR_CODES,
@@ -213,6 +216,12 @@ export class MockBackend {
   private readonly bodies = new Map<string, string>();
   /** Cookie jars by environment id. */
   private readonly jars = new Map<string, CookieDto[]>();
+  private readonly certificates = new Map<string, ClientCertificateDto[]>();
+  private globals: EnvironmentVariableDto[] = [];
+  private secretSettings: { storage: 'file' | 'keychain'; useDotEnv: boolean } = {
+    storage: 'file',
+    useDotEnv: false,
+  };
   /** Values requests captured, by environment id and variable name. */
   private readonly captured = new Map<string, Map<string, string>>();
 
@@ -431,6 +440,8 @@ export class MockBackend {
         return ok([
           { id: 'postman', name: 'Postman collection v2.1', extension: '.postman_collection.json' },
           { id: 'insomnia', name: 'Insomnia v4', extension: '.insomnia.json' },
+          { id: 'openapi', name: 'OpenAPI 3.0', extension: '.openapi.json' },
+          { id: 'har', name: 'HAR 1.2', extension: '.har' },
         ]);
       case 'workspace.export': {
         // No save dialog in a browser: pretend the user picked a file next to the workspace.
@@ -509,6 +520,90 @@ export class MockBackend {
         if (!env.cookieJar) this.jars.delete(id);
         this.environments.set(id, env);
         return ok({ id, environment: structuredClone(env) });
+      }
+      case 'request.parseCurl': {
+        // Roughly as the host reads it: the URL, -X, -H and -d (bash quoting only).
+        const command = String(payload?.['command'] ?? '');
+        const words = [...command.matchAll(/'([^']*)'|"([^"]*)"|(\S+)/g)].map(
+          (m) => m[1] ?? m[2] ?? m[3],
+        );
+        if (words[0] !== 'curl')
+          return fail(ERROR_CODES.invalidRequest, 'Paste a command that starts with curl.');
+        let method = '';
+        let url = '';
+        let data = '';
+        const headers: { key: string; value: string; enabled: boolean }[] = [];
+        for (let i = 1; i < words.length; i++) {
+          const word = words[i];
+          if (word === '-X' || word === '--request') method = words[++i].toUpperCase();
+          else if (word === '-H' || word === '--header') {
+            const [key, ...value] = words[++i].split(':');
+            headers.push({ key: key.trim(), value: value.join(':').trim(), enabled: true });
+          } else if (word.startsWith('-d') || word.startsWith('--data')) data = words[++i];
+          else if (!word.startsWith('-')) url = word;
+        }
+        return ok({
+          request: {
+            name: `${method || (data ? 'POST' : 'GET')} ${url.replace(/^\w+:\/\/[^/]*/, '') || '/'}`,
+            method: method || (data ? 'POST' : 'GET'),
+            url,
+            params: [],
+            headers,
+            auth: { type: 'inherit' },
+            body: data ? { type: 'text', content: data } : { type: 'none', content: '' },
+          },
+          warnings: [],
+        });
+      }
+      case 'request.copyAsCurl': {
+        const dto = payload?.['request'] as RequestDto;
+        const quote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`;
+        const parts = [`curl -X ${dto.method} ${quote(dto.url)}`];
+        for (const h of dto.headers.filter((h) => h.enabled && h.key))
+          parts.push(`-H ${quote(`${h.key}: ${h.value}`)}`);
+        if (dto.body.type !== 'none' && dto.body.content)
+          parts.push(`--data-raw ${quote(dto.body.content)}`);
+        return ok(parts.join(' \\\n  '));
+      }
+      case 'secrets.getSettings':
+        return ok({
+          ...this.secretSettings,
+          keychainAvailable: false,
+          keychainName: 'the system keychain',
+        });
+      case 'secrets.setSettings':
+        this.secretSettings = {
+          storage: 'file',
+          useDotEnv: !!payload?.['useDotEnv'],
+        };
+        return ok({
+          ...this.secretSettings,
+          keychainAvailable: false,
+          keychainName: 'the system keychain',
+        });
+      case 'globals.load':
+        return ok({ variables: structuredClone(this.globals) });
+      case 'globals.save': {
+        this.globals = structuredClone(
+          ((payload?.['globals'] as GlobalVariablesDto | undefined)?.variables ?? []).filter(
+            (v) => v.name,
+          ),
+        );
+        return ok({ variables: structuredClone(this.globals) });
+      }
+      case 'certificate.list':
+        return ok(structuredClone(this.certificates.get(payload?.['environment'] as string) ?? []));
+      case 'certificate.save': {
+        const saved = ((payload?.['certificates'] ?? []) as ClientCertificateDto[])
+          .filter((c) => c.certificate)
+          .map((c) => ({
+            host: c.host,
+            certificate: c.certificate,
+            key: c.key || null,
+            hasPassphrase: !!c.passphrase,
+          }));
+        this.certificates.set(payload?.['environment'] as string, saved);
+        return ok(structuredClone(saved));
       }
       case 'cookie.list':
         return ok(structuredClone(this.jars.get(payload?.['environment'] as string) ?? []));
@@ -834,11 +929,36 @@ export class MockBackend {
         v.value.replace(VARIABLE_PATTERN, (match, name: string) => variables.get(name) ?? match),
       );
     }
+    // Built-in variables, roughly as the host generates them (one value per reference and send).
+    const now = new Date();
+    const builtIn: Record<string, () => string> = {
+      $uuid: () => crypto.randomUUID(),
+      $timestamp: () => String(Math.floor(now.getTime() / 1000)),
+      $isoTimestamp: () => now.toISOString(),
+      $randomInt: () => String(Math.floor(Math.random() * 1001)),
+    };
+    const generated = (name: string) => {
+      if (!variables.has(name) && Object.hasOwn(builtIn, name))
+        variables.set(name, builtIn[name]());
+      return variables.get(name);
+    };
     const resolve = (text: string | null | undefined) =>
-      (text ?? '').replace(VARIABLE_PATTERN, (match, name: string) => variables.get(name) ?? match);
+      (text ?? '').replace(VARIABLE_PATTERN, (match, name: string) => generated(name) ?? match);
     dto = {
       ...dto,
-      url: resolve(dto.url),
+      // Path variables, roughly as the host applies them: whole `:name` segments with a value.
+      url: resolve(
+        (dto.pathParams ?? []).reduce(
+          (url, p) =>
+            p.value
+              ? url.replace(
+                  new RegExp(`(?<=/):${p.key}(?=[/;.?#]|$)`, 'g'),
+                  encodeURIComponent(resolve(p.value)),
+                )
+              : url,
+          dto.url,
+        ),
+      ),
       params: dto.params.map((r) => ({ ...r, key: resolve(r.key), value: resolve(r.value) })),
       headers: dto.headers.map((r) => ({ ...r, key: resolve(r.key), value: resolve(r.value) })),
       auth: Object.fromEntries(
@@ -1131,6 +1251,8 @@ export class MockBackend {
     for (const [name, value] of this.captured.get(this.activeEnvironment ?? '') ?? []) {
       raw.set(name, value);
     }
+    // Workspace globals apply below the environment's values.
+    for (const v of this.globals) if (v.value && !raw.has(v.name)) raw.set(v.name, v.value);
     const resolved = new Map<string, string>();
     const resolve = (name: string, seen: Set<string>): string | undefined => {
       if (resolved.has(name)) return resolved.get(name);

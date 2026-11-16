@@ -24,6 +24,66 @@
     />
     Save
   </button>
+  <div class="relative">
+    <button
+      type="button"
+      class="flex items-center gap-2 rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100"
+      title="Copy as a cURL command (paste one into the URL field to import it)"
+      aria-haspopup="menu"
+      [attr.aria-expanded]="curlMenuOpen()"
+      (click)="$event.stopPropagation(); curlMenuOpen.set(!curlMenuOpen())"
+    >
+      <fa-icon [icon]="faTerminal" /> cURL
+    </button>
+    @if (curlMenuOpen()) {
+      <div
+        role="menu"
+        aria-label="Copy as cURL"
+        class="absolute top-full right-0 z-30 mt-1 w-72 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
+        (click)="$event.stopPropagation()"
+      >
+        <button
+          type="button"
+          role="menuitem"
+          class="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
+          title="Variables resolved with the selected environment; secrets and credentials masked"
+          (click)="copyAsCurl('masked')"
+        >
+          Copy as cURL
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="copyAsCurl('secrets')"
+        >
+          Copy as cURL with secrets…
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
+          (click)="copyAsCurl('written')"
+        >
+          Copy as cURL with variables as written
+        </button>
+        <div class="mt-1 border-t border-slate-200 px-3 pt-1.5 pb-1 text-xs text-slate-500">
+          For
+          @for (shell of curlShells; track shell.id) {
+            <label class="ml-2 inline-flex items-center gap-1">
+              <input
+                type="radio"
+                name="curl-shell"
+                [checked]="interchange.curlShell() === shell.id"
+                (change)="interchange.curlShell.set(shell.id)"
+              />
+              {{ shell.label }}
+            </label>
+          }
+        </div>
+      </div>
+    }
+  </div>
 </div>
 
 <!-- Method, URL and send -->
@@ -45,6 +105,7 @@
     <app-variable-input
       class="flex-1"
       ariaLabel="URL"
+      (paste)="pasteUrl($event)"
       [placeholder]="urlPlaceholder"
       [variables]="variables()"
       [value]="doc.url"
@@ -104,6 +165,36 @@
         [rows]="doc.params"
         (rowsChange)="patch({ params: $event })"
       />
+      @if (doc.pathParams.length) {
+        <h3 class="mt-4 mb-1 text-xs font-semibold text-slate-500 uppercase">Path variables</h3>
+        <table class="w-full text-sm" aria-label="Path variables">
+          <tbody>
+            @for (row of doc.pathParams; track row.key; let i = $index) {
+              <tr class="border-b border-slate-100">
+                <td
+                  class="w-1/3 py-1 pr-2 font-mono text-slate-600"
+                  [title]="'Replaces :' + row.key + ' in the URL'"
+                >
+                  :{{ row.key }}
+                </td>
+                <td class="py-1">
+                  <app-variable-input
+                    [ariaLabel]="'Value of :' + row.key"
+                    placeholder="Value (sent percent-encoded)"
+                    [variables]="variables()"
+                    [value]="row.value"
+                    (valueChange)="patchPathParam(i, $event)"
+                  />
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <p class="mt-1 text-xs text-slate-400">
+          Add a <code>:name</code> segment to the URL's path for a path variable; an empty one is
+          sent as written.
+        </p>
+      }
     }
     @case ('headers') {
       <app-key-value-table
@@ -112,6 +203,13 @@
         (rowsChange)="patch({ headers: $event })"
       />
       <app-inherited-headers [headers]="inherited()?.headers ?? []" [own]="doc.headers" />
+    }
+    @case ('settings') {
+      <app-settings-editor
+        [settings]="doc.settings"
+        [inherited]="inherited()?.settings ?? null"
+        (settingsChange)="patch({ settings: $event })"
+      />
     }
     @case ('auth') {
       <app-auth-editor

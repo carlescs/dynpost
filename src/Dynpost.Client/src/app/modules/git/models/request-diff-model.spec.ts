@@ -111,6 +111,7 @@ describe('request diff model', () => {
         headers: 0,
         auth: false,
         body: false,
+        settings: 0,
         capture: 0,
         docs: false,
       });
@@ -135,6 +136,7 @@ describe('request diff model', () => {
         headers: 1,
         auth: true,
         body: true,
+        settings: 0,
         capture: 1,
         docs: true,
       });

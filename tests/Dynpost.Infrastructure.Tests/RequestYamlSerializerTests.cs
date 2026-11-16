@@ -21,6 +21,76 @@ public class RequestYamlSerializerTests
     }
 
     [Fact]
+    public void Settings_AreWrittenAfterTheBodyOnlyWhenSetAndReadBack()
+    {
+        var request = new HttpRequestDefinition("Slow", RequestMethod.Get, "https://api.test/slow")
+        {
+            Settings = new RequestSettings(TimeSpan.FromSeconds(90), false, 5, false, HttpVersionPreference.Http2),
+            Captures = [new CaptureRule("id", "$.id")],
+        };
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Equal(
+            """
+            name: Slow
+            method: GET
+            url: https://api.test/slow
+            settings:
+              timeout: "90s"
+              followRedirects: false
+              maxRedirects: 5
+              verifyTls: false
+              httpVersion: "2"
+            capture:
+              id: $.id
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal(request.Settings, RequestYamlSerializer.Deserialize(yaml, "x").Settings);
+        Assert.Equal(
+            new RequestSettings(Timeout: TimeSpan.Zero),
+            RequestYamlSerializer.Deserialize("url: x\nsettings:\n  timeout: 0\n", "x").Settings);
+        Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.Deserialize("url: x\nsettings:\n  httpVersion: 3\n", "x"));
+    }
+
+    [Fact]
+    public void FolderSettings_AreWrittenLast()
+    {
+        var defaults = new FolderDefaults([new KeyValueEntry("Accept", "*/*")]) { Settings = new RequestSettings(VerifyTls: false) };
+
+        var yaml = RequestYamlSerializer.SerializeFolder(defaults);
+
+        Assert.Equal("headers:\n  Accept: \"*/*\"\nsettings:\n  verifyTls: false\n", yaml);
+        Assert.Equal(defaults.Settings, RequestYamlSerializer.DeserializeFolder(yaml).Settings);
+    }
+
+    [Fact]
+    public void PathParams_AreWrittenAfterTheUrlWithoutEmptyValuesAndReadBack()
+    {
+        var request = new HttpRequestDefinition("Get user", RequestMethod.Get, "{{baseUrl}}/orgs/:org/users/:id", @params: [new KeyValueEntry("page", "1")])
+        {
+            PathParams = [new KeyValueEntry("org", ""), new KeyValueEntry("id", "{{userId}}")],
+        };
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Equal(
+            """
+            name: Get user
+            method: GET
+            url: "{{baseUrl}}/orgs/:org/users/:id"
+            pathParams:
+              id: "{{userId}}"
+            params:
+              page: "1"
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal([new KeyValueEntry("id", "{{userId}}")], RequestYamlSerializer.Deserialize(yaml, "x").PathParams);
+    }
+
+    [Fact]
     public void Serialize_WritesTheDocumentedFormat()
     {
         var request = new HttpRequestDefinition(
@@ -459,5 +529,16 @@ public class RequestYamlSerializerTests
     {
         Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.DeserializeFolder("- a list\n"));
         Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.DeserializeFolder("auth:\n  type: magic\n"));
+    }
+
+    [Fact]
+    public void DigestAuth_RoundTrips()
+    {
+        var request = new HttpRequestDefinition("R", RequestMethod.Get, "https://x", auth: new DigestAuth("ada", "{{password}}"));
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Contains("auth:\n  type: digest\n  username: ada\n  password: \"{{password}}\"\n", yaml);
+        Assert.Equal(request.Auth, RequestYamlSerializer.Deserialize(yaml, "R").Auth);
     }
 }

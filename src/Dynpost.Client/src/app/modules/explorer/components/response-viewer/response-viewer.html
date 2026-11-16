@@ -148,28 +148,66 @@
             The response has no body.
           </p>
         } @else {
-          @if (bodyViews().length > 1) {
-            <div class="flex shrink-0 gap-1 px-4 pt-2 text-xs">
-              @for (option of bodyViews(); track option.id) {
-                <button
-                  type="button"
-                  class="rounded px-2 py-0.5 hover:bg-slate-200"
-                  [class.bg-slate-200]="bodyView() === option.id"
-                  [attr.aria-pressed]="bodyView() === option.id"
-                  (click)="selectedView.set(option.id)"
-                >
-                  {{ option.label }}
-                </button>
+          <div class="flex shrink-0 items-center gap-1 px-4 pt-2 text-xs">
+            @for (option of bodyViews(); track option.id) {
+              <button
+                type="button"
+                class="rounded px-2 py-0.5 hover:bg-slate-200"
+                [class.bg-slate-200]="bodyView() === option.id"
+                [attr.aria-pressed]="bodyView() === option.id"
+                (click)="selectedView.set(option.id)"
+              >
+                {{ option.label }}
+              </button>
+            }
+            @if (canFilter()) {
+              <label
+                class="ml-2 flex min-w-0 flex-1 items-center gap-1 rounded border border-slate-300 px-1.5 focus-within:border-sky-500"
+                [class.border-rose-400]="filtered() && 'error' in filtered()!"
+              >
+                <fa-icon class="text-slate-400" [icon]="faFilter" />
+                <input
+                  class="min-w-0 flex-1 bg-transparent py-0.5 font-mono focus:outline-none"
+                  aria-label="Filter the body with JSONPath"
+                  placeholder="Filter with JSONPath, e.g. $.items[*].id or $..name"
+                  spellcheck="false"
+                  [value]="jsonFilter()"
+                  (input)="jsonFilter.set($any($event.target).value)"
+                  (keydown.escape)="jsonFilter.set('')"
+                />
+              </label>
+              @if (filtered(); as f) {
+                @if ('error' in f) {
+                  <span class="truncate text-rose-700" [title]="f.error">{{ f.error }}</span>
+                } @else {
+                  <span class="shrink-0 text-slate-500"
+                    >{{ f.count }} match{{ f.count === 1 ? '' : 'es' }}</span
+                  >
+                }
               }
-            </div>
-          }
+            } @else {
+              <span class="flex-1"></span>
+            }
+            @if (bodyView() !== 'preview') {
+              <button
+                type="button"
+                class="flex items-center gap-1 rounded px-2 py-0.5 text-slate-600 hover:bg-slate-200"
+                title="Find in the body (Ctrl+F)"
+                (click)="find()"
+              >
+                <fa-icon [icon]="faMagnifyingGlass" /> Find
+              </button>
+            }
+          </div>
           @if (bodyView() === 'preview') {
             <app-response-preview class="mt-1 border-t border-slate-200" [response]="r" />
           } @else {
             <app-code-editor
+              #bodyEditor
               class="mt-1 flex-1 border-t border-slate-200"
               ariaLabel="Response body"
-              [value]="bodyView() === 'pretty' ? (prettyBody() ?? r.body) : r.body"
+              [value]="shownBody() ?? r.body"
+              [jsonPaths]="!filtered()"
               [language]="language()"
               [readOnly]="true"
               [wordWrap]="true"

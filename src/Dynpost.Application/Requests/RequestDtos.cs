@@ -3,7 +3,7 @@ namespace Dynpost.Application.Requests;
 public sealed record KeyValueDto(string Key, string Value, bool Enabled = true);
 
 /// <summary>Auth settings. Only the fields used by <see cref="Type"/> are meaningful.</summary>
-/// <param name="Type"><c>none</c>, <c>basic</c>, <c>bearer</c>, <c>apiKey</c> or <c>oauth2</c>.</param>
+/// <param name="Type"><c>none</c>, <c>basic</c>, <c>digest</c>, <c>bearer</c>, <c>apiKey</c> or <c>oauth2</c>.</param>
 /// <param name="In">For API keys: <c>header</c> or <c>query</c>.</param>
 /// <param name="Grant">For OAuth 2.0: <c>clientCredentials</c> or <c>authorizationCode</c>.</param>
 /// <param name="Credentials">For OAuth 2.0: how the client secret is sent, <c>header</c> or <c>body</c>.</param>
@@ -47,12 +47,27 @@ public sealed record FormFieldDto(
     string? FileName = null,
     bool Encode = false);
 
+/// <summary>How a request is sent; <c>null</c> values are inherited from the folders, or the default.</summary>
+/// <param name="TimeoutMs">The timeout in milliseconds; 0 for none.</param>
+/// <param name="HttpVersion"><c>1.1</c> or <c>2</c>.</param>
+public sealed record RequestSettingsDto(
+    long? TimeoutMs = null,
+    bool? FollowRedirects = null,
+    int? MaxRedirects = null,
+    bool? VerifyTls = null,
+    string? HttpVersion = null);
+
 /// <param name="Variable">The variable the value is stored in.</param>
 /// <param name="Expression">Where the value comes from: a JSONPath (<c>$.token</c>) or <c>header:Name</c>.</param>
 public sealed record CaptureDto(string Variable, string Expression);
 
 /// <param name="Captures">Values to store in variables from a successful response.</param>
 /// <param name="Description">Notes about the request, in Markdown; empty when there are none.</param>
+/// <param name="PathParams">
+/// The values of the URL's <c>:name</c> path variables, one per name in the URL's order (rows for
+/// names the URL no longer has are dropped).
+/// </param>
+/// <param name="Settings">How the request is sent; <c>null</c> sets nothing (all inherited).</param>
 public sealed record RequestDto(
     string Name,
     string Method,
@@ -62,7 +77,9 @@ public sealed record RequestDto(
     AuthDto Auth,
     BodyDto Body,
     string? Description = null,
-    IReadOnlyList<CaptureDto>? Captures = null);
+    IReadOnlyList<CaptureDto>? Captures = null,
+    IReadOnlyList<KeyValueDto>? PathParams = null,
+    RequestSettingsDto? Settings = null);
 
 /// <summary>A request as stored: its (possibly new) path and its content.</summary>
 public sealed record SavedRequestDto(string Path, RequestDto Request);

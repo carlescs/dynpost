@@ -1,6 +1,7 @@
 import {
   Component,
   ElementRef,
+  HostListener,
   computed,
   effect,
   inject,
@@ -10,7 +11,13 @@ import {
   untracked,
 } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
-import { faBan, faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import {
+  faBan,
+  faFloppyDisk,
+  faPaperPlane,
+  faSpinner,
+  faTerminal,
+} from '@fortawesome/free-solid-svg-icons';
 import {
   BODY_LABELS,
   BODY_TYPES,
@@ -31,14 +38,18 @@ import { VariableInput } from '../../../../components/variable-input/variable-in
 import { MarkdownView } from '../../../../components/markdown-view/markdown-view';
 import { AuthEditor } from '../auth-editor/auth-editor';
 import { InheritedHeaders } from '../inherited-headers/inherited-headers';
+import { SettingsEditor, settingsCount } from '../settings-editor/settings-editor';
 import { FolderSettingsStore } from '../../../../services/folder-settings-store';
 import { InheritedSettingsDto } from '../../../../models/messages';
 import { withFolderVariables } from '../../../../models/variables';
 import { FormFieldsEditor } from '../form-fields-editor/form-fields-editor';
 import { fieldsOf, isAbsolutePath } from '../../../../models/form-fields';
 import { Bridge } from '../../../../services/bridge';
+import { InterchangeStore } from '../../../../services/interchange-store';
+import { Dialogs } from '../../../../services/dialogs';
+import { CurlShell } from '../../../../models/messages';
 
-type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
+type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'settings' | 'capture' | 'docs';
 
 @Component({
   selector: 'app-request-editor',
@@ -48,6 +59,7 @@ type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
     ResponseViewer,
     CodeEditor,
     VariableInput,
+    SettingsEditor,
     MarkdownView,
     AuthEditor,
     InheritedHeaders,
@@ -61,6 +73,15 @@ export class RequestEditor {
 
   private readonly store = inject(WorkspaceStore);
   private readonly bridge = inject(Bridge);
+  protected readonly interchange = inject(InterchangeStore);
+  private readonly dialogs = inject(Dialogs);
+  protected readonly curlMenuOpen = signal(false);
+  protected readonly faTerminal = faTerminal;
+  protected readonly curlShells: { id: CurlShell; label: string }[] = [
+    { id: 'posix', label: 'bash / zsh' },
+    { id: 'cmd', label: 'cmd' },
+    { id: 'powershell', label: 'PowerShell' },
+  ];
   protected readonly environments = inject(EnvironmentStore);
   private readonly folders = inject(FolderSettingsStore);
 
@@ -96,6 +117,7 @@ export class RequestEditor {
     { id: 'headers', label: 'Headers' },
     { id: 'auth', label: 'Auth' },
     { id: 'body', label: 'Body' },
+    { id: 'settings', label: 'Settings' },
     { id: 'capture', label: 'Capture' },
     { id: 'docs', label: 'Docs' },
   ];
@@ -161,6 +183,45 @@ export class RequestEditor {
     this.store.update(this.document().id, patch);
   }
 
+  @HostListener('document:click')
+  @HostListener('document:keydown.escape')
+  protected closeCurlMenu(): void {
+    this.curlMenuOpen.set(false);
+  }
+
+  /** A pasted `curl …` command fills in the request instead of becoming its URL. */
+  protected pasteUrl(event: ClipboardEvent): void {
+    const text = event.clipboardData?.getData('text') ?? '';
+    if (!/^\s*curl(\.exe)?\s/i.test(text)) return;
+    event.preventDefault();
+    void this.interchange.importCurl(this.document().id, text);
+  }
+
+  protected async copyAsCurl(mode: 'masked' | 'secrets' | 'written'): Promise<void> {
+    this.curlMenuOpen.set(false);
+    if (
+      mode === 'secrets' &&
+      !(await this.dialogs.confirm(
+        'The command will hold secret values and credentials as they are. Anyone you share it with can use them.',
+        { title: 'Copy with secrets?', confirmLabel: 'Copy' },
+      ))
+    ) {
+      return;
+    }
+    await this.interchange.copyAsCurl(this.document(), {
+      resolve: mode !== 'written',
+      includeSecrets: mode === 'secrets',
+    });
+  }
+
+  protected patchPathParam(index: number, value: string): void {
+    this.patch({
+      pathParams: this.document().pathParams.map((row, i) =>
+        i === index ? { ...row, value } : row,
+      ),
+    });
+  }
+
   protected patchAuth(patch: Partial<RequestAuth>): void {
     this.patch({ auth: { ...this.document().auth, ...patch } });
   }
@@ -209,8 +270,9 @@ export class RequestEditor {
 
   protected count(doc: RequestDocument, tab: RequestTab): number {
     const enabled = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.key).length;
-    if (tab === 'params') return enabled(doc.params);
+    if (tab === 'params') return enabled(doc.params) + doc.pathParams.filter((r) => r.value).length;
     if (tab === 'headers') return enabled(doc.headers);
+    if (tab === 'settings') return settingsCount(doc.settings);
     if (tab === 'capture') return doc.captures.filter((c) => c.variable).length;
     return 0;
   }

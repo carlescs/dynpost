@@ -1,8 +1,8 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
-import { FolderSettingsDto, InheritedSettingsDto } from '../models/messages';
+import { FolderSettingsDto, InheritedSettingsDto, RequestSettingsDto } from '../models/messages';
 import { KeyValue, REQUESTS_FOLDER, RequestAuth } from '../models/workspace';
-import { EMPTY_AUTH, fromAuthDto, toAuthDto } from '../models/request-mapping';
+import { EMPTY_AUTH, compactSettings, fromAuthDto, toAuthDto } from '../models/request-mapping';
 import { WorkspaceStore } from './workspace-store';
 import { CHANGED_ON_DISK, DISCARD, Dialogs, changedOnDisk } from './dialogs';
 import { DiskSnapshots, touches } from '../models/disk-changes';
@@ -22,6 +22,8 @@ export interface FolderDraft {
   auth: RequestAuth;
   /** Variables for the requests below; the selected environment's win over them. */
   variables: KeyValue[];
+  /** How the requests below are sent; unset values are inherited. */
+  settings: RequestSettingsDto;
   dirty: boolean;
   saving: boolean;
   /** Incremented on every edit, so a save can tell whether the draft changed meanwhile. */
@@ -112,7 +114,10 @@ export class FolderSettingsStore {
     }
   }
 
-  update(key: string, patch: Partial<Pick<FolderDraft, 'headers' | 'auth' | 'variables'>>): void {
+  update(
+    key: string,
+    patch: Partial<Pick<FolderDraft, 'headers' | 'auth' | 'variables' | 'settings'>>,
+  ): void {
     this.patchDraft(key, (d) => ({ ...d, ...patch, dirty: true, revision: d.revision + 1 }));
   }
 
@@ -127,6 +132,7 @@ export class FolderSettingsStore {
           headers: draft.headers.map((h) => ({ ...h })),
           auth: toAuthDto(draft.auth),
           variables: draft.variables.map((v) => ({ ...v })),
+          settings: { ...draft.settings },
         },
       });
       this.onDisk.remember(key, fromSettingsDto(saved));
@@ -242,11 +248,12 @@ export class FolderSettingsStore {
 
 function fromSettingsDto(
   dto: FolderSettingsDto,
-): Pick<FolderDraft, 'headers' | 'auth' | 'variables'> {
+): Pick<FolderDraft, 'headers' | 'auth' | 'variables' | 'settings'> {
   return {
     headers: dto.headers.map((h) => ({ ...h })),
     auth: dto.auth ? fromAuthDto(dto.auth) : { ...EMPTY_AUTH },
     variables: (dto.variables ?? []).map((v) => ({ ...v })),
+    settings: compactSettings(dto.settings),
   };
 }
 

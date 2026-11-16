@@ -80,6 +80,7 @@ describe('FolderSettingsStore', () => {
         headers: [],
         auth: { type: 'apiKey', key: 'X-Key', value: 'k', in: 'header' },
         variables: [],
+        settings: {},
       },
     });
     expect(store.draft()!.dirty).toBe(false);
@@ -105,6 +106,7 @@ describe('FolderSettingsStore', () => {
         headers: [],
         auth: { type: 'inherit' },
         variables: [...variables, { key: 'size', value: '20', enabled: false }],
+        settings: {},
       },
     });
     expect(store.draft()!.variables).toHaveLength(2);

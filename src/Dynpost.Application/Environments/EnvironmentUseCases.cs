@@ -1,4 +1,5 @@
 using Dynpost.Application.Captures;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Common;
 using Dynpost.Application.Cookies;
 using Dynpost.Application.OAuth2;
@@ -134,7 +135,8 @@ public sealed class SaveEnvironment(
     ICapturedValueStore captures,
     IOAuth2TokenStore tokens,
     ILocalOnlyFiles localFiles,
-    CurrentWorkspace current)
+    CurrentWorkspace current,
+    IClientCertificateStore? certificates = null)
 {
     public async Task<Result<SavedEnvironmentDto>> ExecuteAsync(string id, EnvironmentDto dto, CancellationToken cancellationToken = default)
     {
@@ -196,6 +198,10 @@ public sealed class SaveEnvironment(
             await CookieJars.MoveAsync(cookieJars, root.Value, id, savedId, cancellationToken);
             await CapturedValues.MoveAsync(captures, root.Value, id, savedId, cancellationToken);
             await OAuth2TokenCache.MoveAsync(tokens, root.Value, id, savedId, cancellationToken);
+            if (certificates is not null)
+            {
+                await ClientCertificates.MoveAsync(certificates, root.Value, id, savedId, cancellationToken);
+            }
         }
 
         if (!environment.Value.CookieJar)
@@ -241,7 +247,8 @@ public sealed class DeleteEnvironment(
     ICapturedValueStore captures,
     IOAuth2TokenStore tokens,
     ILocalOnlyFiles localFiles,
-    CurrentWorkspace current)
+    CurrentWorkspace current,
+    IClientCertificateStore? certificates = null)
 {
     public async Task<Result<Unit>> ExecuteAsync(string id, CancellationToken cancellationToken = default)
     {
@@ -283,6 +290,11 @@ public sealed class DeleteEnvironment(
         await CookieJars.RemoveAsync(cookieJars, root.Value, id, cancellationToken);
         await CapturedValues.RemoveAsync(captures, root.Value, id, cancellationToken);
         await OAuth2TokenCache.RemoveAsync(tokens, root.Value, id, cancellationToken);
+        if (certificates is not null)
+        {
+            await ClientCertificates.RemoveAsync(certificates, root.Value, id, cancellationToken);
+        }
+
         localFiles.Remove(root.Value, LocalOnlyPaths.Environment(id));
         return Unit.Value;
     }

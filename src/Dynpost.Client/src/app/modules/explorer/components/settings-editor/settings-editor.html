@@ -1,0 +1,100 @@
+@let s = settings();
+@let f = fallback();
+<div class="grid max-w-xl grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 py-2 text-sm">
+  <label for="setting-timeout" class="text-slate-600">Timeout (seconds)</label>
+  <div class="flex items-center gap-2">
+    <input
+      id="setting-timeout"
+      type="number"
+      min="0"
+      step="any"
+      class="w-28 rounded border border-slate-300 px-2 py-1 focus:border-sky-500 focus:outline-none"
+      [placeholder]="f.timeoutMs / 1000"
+      [value]="timeoutSeconds()"
+      (change)="setTimeout($any($event.target).value)"
+    />
+    <span class="text-xs text-slate-400">
+      {{ source('timeoutMs') }}: {{ describeTimeout(f.timeoutMs) }} · 0 waits for ever
+    </span>
+  </div>
+
+  <label for="setting-follow" class="text-slate-600">Follow redirects</label>
+  <select
+    id="setting-follow"
+    class="w-56 rounded border border-slate-300 px-2 py-1 focus:border-sky-500 focus:outline-none"
+    [value]="flag(s.followRedirects)"
+    (change)="setFlag('followRedirects', $any($event.target).value)"
+  >
+    <option value="" [selected]="flag(s.followRedirects) === ''">
+      {{ source('followRedirects') }} ({{ f.followRedirects ? 'yes' : 'no' }})
+    </option>
+    <option value="true" [selected]="s.followRedirects === true">Yes</option>
+    <option value="false" [selected]="s.followRedirects === false">No</option>
+  </select>
+
+  <label for="setting-max-redirects" class="text-slate-600">Most redirects</label>
+  <div class="flex items-center gap-2">
+    <input
+      id="setting-max-redirects"
+      type="number"
+      min="0"
+      max="100"
+      step="1"
+      class="w-28 rounded border border-slate-300 px-2 py-1 focus:border-sky-500 focus:outline-none"
+      [placeholder]="f.maxRedirects"
+      [value]="s.maxRedirects ?? ''"
+      (change)="setMaxRedirects($any($event.target).value)"
+    />
+    <span class="text-xs text-slate-400">{{ source('maxRedirects') }}: {{ f.maxRedirects }}</span>
+  </div>
+
+  <label for="setting-verify-tls" class="text-slate-600">Verify TLS certificates</label>
+  <div class="flex items-center gap-2">
+    <select
+      id="setting-verify-tls"
+      class="w-56 rounded border border-slate-300 px-2 py-1 focus:border-sky-500 focus:outline-none"
+      [value]="flag(s.verifyTls)"
+      (change)="setFlag('verifyTls', $any($event.target).value)"
+    >
+      <option value="" [selected]="flag(s.verifyTls) === ''">
+        {{ source('verifyTls') }} ({{ f.verifyTls ? 'yes' : 'no' }})
+      </option>
+      <option value="true" [selected]="s.verifyTls === true">Yes</option>
+      <option value="false" [selected]="s.verifyTls === false">
+        No (accept self-signed and invalid)
+      </option>
+    </select>
+  </div>
+
+  <label for="setting-http-version" class="text-slate-600">HTTP version</label>
+  <select
+    id="setting-http-version"
+    class="w-56 rounded border border-slate-300 px-2 py-1 focus:border-sky-500 focus:outline-none"
+    [value]="s.httpVersion ?? ''"
+    (change)="setHttpVersion($any($event.target).value)"
+  >
+    <option value="" [selected]="!s.httpVersion">
+      {{ source('httpVersion') }} (HTTP/{{ f.httpVersion }})
+    </option>
+    <option value="1.1" [selected]="s.httpVersion === '1.1'">HTTP/1.1</option>
+    <option value="2" [selected]="s.httpVersion === '2'">HTTP/2 (falls back to 1.1)</option>
+  </select>
+</div>
+
+@if ((s.verifyTls ?? f.verifyTls) === false) {
+  <p class="mt-1 max-w-xl text-xs text-amber-700">
+    Certificates are not checked, so anyone between you and the server could read and change the
+    traffic. Use it only for servers you trust, such as local ones with self-signed certificates.
+  </p>
+}
+<p class="mt-3 max-w-xl text-xs text-slate-400">
+  Empty values are inherited from the folders' settings, or take the default.
+  @if (subject() === 'folder') {
+    They apply to every request below this folder that doesn't set them itself.
+  }
+  @if (!isEmpty()) {
+    <button type="button" class="ml-1 text-sky-600 hover:underline" (click)="reset()">
+      Inherit all
+    </button>
+  }
+</p>

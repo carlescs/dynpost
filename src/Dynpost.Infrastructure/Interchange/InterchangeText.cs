@@ -183,12 +183,14 @@ internal static partial class InterchangeText
         request with
         {
             Url = map(request.Url),
+            PathParams = request.PathParams.Select(p => p with { Value = map(p.Value) }).ToList(),
             Params = request.Params.Select(p => p with { Key = map(p.Key), Value = map(p.Value) }).ToList(),
             Headers = request.Headers.Select(h => h with { Key = map(h.Key), Value = map(h.Value) }).ToList(),
             Auth = request.Auth switch
             {
                 BasicAuth basic => new BasicAuth(map(basic.Username), map(basic.Password)),
                 BearerAuth bearer => new BearerAuth(map(bearer.Token)),
+                DigestAuth digest => new DigestAuth(map(digest.Username), map(digest.Password)),
                 ApiKeyAuth apiKey => apiKey with { Key = map(apiKey.Key), Value = map(apiKey.Value) },
                 OAuth2Auth oauth => oauth with
                 {
@@ -257,6 +259,31 @@ internal static partial class InterchangeText
 
         warnings.Add($"'{owner}' redirects to {redirect}, which Dynpost can't receive; it uses a redirect URL on this computer (http://127.0.0.1) instead, which the OAuth 2.0 client may need to allow.");
         return string.Empty;
+    }
+
+    /// <summary>
+    /// A Postman dynamic variable as Dynpost's built-in one (<c>$guid</c> → <c>$uuid</c>); other
+    /// names are kept.
+    /// </summary>
+    public static string FromPostmanDynamic(string name) => name switch
+    {
+        "$guid" or "$randomUUID" => "$uuid",
+        _ => name,
+    };
+
+    /// <summary>
+    /// A Dynpost built-in variable as Postman's (<c>$uuid</c> → <c>$guid</c>); Postman's
+    /// <c>$randomInt</c> takes no range, so the arguments are dropped. Other names are kept.
+    /// </summary>
+    public static string ToPostmanDynamic(string name)
+    {
+        var bare = name.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)[0];
+        return bare switch
+        {
+            "$uuid" => "$guid",
+            "$randomInt" => "$randomInt",
+            _ => name,
+        };
     }
 
     /// <summary>Replaces <c>{{name}}</c> references using <paramref name="rename"/>.</summary>

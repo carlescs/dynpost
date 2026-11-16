@@ -21,7 +21,7 @@ With Dynpost you can:
 - **Load test** — `*.run.yaml` plans that send requests from concurrent
   virtual users, with live statistics and pass/fail thresholds.
 - **Bring your collections** — import from Postman, Insomnia, HAR and
-  OpenAPI/Swagger; export for Postman and Insomnia.
+  OpenAPI/Swagger, and cURL; export for Postman, Insomnia, OpenAPI and HAR.
 - **Work with an AI assistant** — an optional, built-in MCP server lets Claude
   and other AI assistants browse, edit and send your requests (see
   [AI assistants (MCP)](#ai-assistants-mcp)).
@@ -99,11 +99,16 @@ until you allow it in *System Settings* → *Privacy & Security*.
       out of git (see [Local-only files](#local-only-files))
 - [x] Collections as folders, with folder-level headers, auth and variables that apply to
       everything inside (see [Folder settings](#folder-settings))
-- [x] Environments with `{{variable}}` substitution
-- [x] Auth helpers: Basic, Bearer token, API key and OAuth 2.0 (client
-      credentials, and authorization code with PKCE in the system browser)
+- [x] Environments with `{{variable}}` substitution, workspace-global
+      variables (see [Global variables](#global-variables)), and built-in variables
+      such as `{{$uuid}}` and `{{$timestamp}}` (see [Built-in variables](#built-in-variables))
+- [x] Auth helpers: Basic, Digest, Bearer token, API key and OAuth 2.0 (client
+      credentials, and authorization code with PKCE in the system browser), and
+      client certificates (mutual TLS) per environment
 - [x] Local response history per request, compared with the latest response
       in a diff view (kept out of git, see [Response history](#response-history))
+- [x] Watch the workspace folder, so edits made in other programs show up
+      (see [Changes made outside Dynpost](#changes-made-outside-dynpost))
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
       (switch, create, check out, delete), remotes, and clear reporting of
       merge conflicts
@@ -111,8 +116,9 @@ until you allow it in *System Settings* → *Privacy & Security*.
       virtual users, with live statistics, pass/fail thresholds and comparison
       of two runs (see
       [Load runs](#load-runs))
+- [x] Import from cURL, and copy requests as cURL (see [cURL](#curl))
 - [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
-      Postman and Insomnia
+      Postman, Insomnia, OpenAPI 3.0 and HAR
 - [x] A built-in MCP server, off by default, so AI assistants can control the
       app (see [AI assistants (MCP)](#ai-assistants-mcp))
 
@@ -128,7 +134,7 @@ A workspace is a folder, usually a git repository:
 
 ```text
 my-api/
-├── dynpost.yaml            # workspace metadata: the layout version (`layout: 2`)
+├── dynpost.yaml            # workspace metadata: the layout version (`layout: 2`) and global variables
 ├── environments/
 │   ├── dev.yaml
 │   └── prod.yaml
@@ -228,8 +234,8 @@ body:
     }
 ```
 
-Keys are always written in this order — `name`, `method`, `url`, `params`,
-`headers`, `auth`, `body`, `capture`, `description` — and empty sections are
+Keys are always written in this order — `name`, `method`, `url`, `pathParams`,
+`params`, `headers`, `auth`, `body`, `settings`, `capture`, `description` — and empty sections are
 left out. Query parameters
 use the same `name: value` form as headers. A parameter or header that is
 disabled in the editor is kept in the file with a `~` prefix (so names cannot
@@ -241,9 +247,30 @@ params:
   ~debug: "true"     # disabled
 ```
 
+A `:name` segment in the URL's path is a path variable, and `pathParams` holds
+its value in the same `name: value` form:
+
+```yaml
+url: "{{baseUrl}}/orgs/:org/users/:id"
+pathParams:
+  org: acme
+  id: "{{userId}}"
+```
+
+The request editor's **Params** tab lists a row for each path variable of the
+URL (rows come and go as you edit the URL). Values can use `{{variables}}`, and
+are percent-encoded when sent, so `a/b` is sent as `a%2Fb` and can't add path
+segments. A path variable without a value is left out of the file and sent as
+written (`:id`). Only whole segments count — a name starts with a letter or `_`
+and holds letters, digits, `_` and `-`, and may be followed by an extension
+(`/:file.json`) — so ports (`localhost:8080`) and colons inside a segment are
+not path variables. Postman imports and exports keep path variables, and OpenAPI
+imports turn `/pets/{petId}` into `/pets/:petId`, with the parameter's example
+as its value.
+
 A request without `auth` inherits the auth of its folders (see
 [Folder settings](#folder-settings)); `auth: { type: none }` sends no auth even
-when a folder sets one. The other auth types are `basic` (`username`, `password`), `bearer` (`token`),
+when a folder sets one. The other auth types are `basic` (`username`, `password`), `digest` (`username`, `password`), `bearer` (`token`),
 `apiKey` (`key`, `value`, and `in: query` to send it as a query parameter
 instead of a header) and `oauth2` (see [OAuth 2.0](#oauth-20)). Body types are `json`, `text`, `form`, `urlencoded`, `graphql` and `binary`.
 `graphql` bodies store a GraphQL `query` and JSON `variables` separately and are sent as JSON POSTs.
@@ -311,6 +338,28 @@ field, `name=@path;type=…;filename=…` for files) and back. The editor also s
 the `Content-Type` the body is sent with: Dynpost generates
 `multipart/form-data; boundary=…` for `form` bodies and replaces a
 `Content-Type` header you set, which it points out.
+
+`settings` changes how the request is sent; only the values you set are
+written, and the others are inherited from the request's folders (see
+[Folder settings](#folder-settings)) or take the default:
+
+```yaml
+settings:
+  timeout: "5s"          # default 60s; 0 waits for ever (up to 24h)
+  followRedirects: false # default true
+  maxRedirects: 5        # default 20 (at most 100)
+  verifyTls: false       # default true; false accepts self-signed and invalid certificates
+  httpVersion: "2"       # default 1.1; 2 asks for HTTP/2 and falls back to 1.1
+```
+
+They are edited in the request editor's **Settings** tab, which shows the
+inherited value or the default next to each one; an emptied field goes back to
+inheriting. With `httpVersion: "2"`, HTTP/2 is negotiated during the TLS
+handshake, so plain `http://` requests still use HTTP/1.1. Load runs use the
+same settings. Postman imports and exports keep whether redirects are followed
+(and how many) and whether certificates are verified; timeouts and HTTP
+versions are app-wide settings in Postman. A proxy can't be set yet: Dynpost
+uses the operating system's proxy settings.
 
 `capture` stores values from a successful response in variables, so a login
 request can hand its token to the requests after it — declaratively, without
@@ -383,8 +432,8 @@ writes new files and never changes existing ones.
 A collection folder can set headers, auth and variables for every request and
 folder inside it, in an optional `_folder.yaml` (and `requests/_folder.yaml` sets
 them for the whole workspace). It uses the same `headers` and `auth` keys as a
-request file, in that order, followed by `variables`, written like `headers`; a
-folder that sets nothing has no file:
+request file, in that order, followed by `variables`, written like `headers`,
+and `settings`, written like a request's; a folder that sets nothing has no file:
 
 ```yaml
 # requests/users/_folder.yaml
@@ -411,6 +460,8 @@ The more specific level always wins:
   with `auth: { type: none }` stops it there: it and everything below that
   inherits it is sent without auth. When no level sets auth, the request is sent
   without.
+- **Settings** (timeout, redirects, TLS, HTTP version) come one by one from the
+  closest level that sets them: the request's own, else its folder's, and so on.
 - **Variables** add up like headers (names are case-sensitive): a sub-folder's
   variable replaces a parent's of the same name. They are defaults: the selected
   environment's variables (and the values captured for it) win over them, and in
@@ -429,7 +480,7 @@ exported (the export says so), so their requests keep their `{{references}}`.
 Open a folder's settings with **Folder settings** in its menu (the "…" button on
 its row, or a right-click), or **Settings for all requests** in the explorer's
 "More actions" menu (for `requests/` itself). They open in a tab with a
-**Headers**, an **Auth** and a **Variables** tab, which also list what the folder
+**Headers**, an **Auth**, a **Variables** and a **Settings** tab, which also list what the folder
 itself inherits from the folders above. In the request editor, `{{references}}`
 to its folders' variables are highlighted as defined, and their hover says which
 folder sets them. The **Headers** tab lists the
@@ -461,6 +512,33 @@ secret values in Dynpost:
 # .dynpost/secrets.yaml — local only
 dev.yaml:
   apiToken: s3cr3t
+```
+
+**Secrets…** in the settings menu chooses where secret values are kept, for
+every workspace (a per-user setting):
+
+- **In the workspace** (the default), in the git-ignored `.dynpost/secrets.yaml`
+  shown above.
+- **In the system keychain**: Windows Credential Manager, the macOS Keychain, or
+  the Secret Service on Linux (GNOME Keyring, KWallet; it needs libsecret's
+  `secret-tool`). Each value is one item named `Dynpost:<workspace>/<environment
+  file>/<variable>` (service `Dynpost` on macOS and Linux), and
+  `.dynpost/keychain.json` lists their names, never their values. The option is
+  greyed out when no keychain can be used.
+
+After a change, each workspace's secret values move to the new place the first
+time they are read (right away for the open workspace), and are removed from
+the old one.
+
+**Use values from the workspace's `.env` file** (off by default) gives a secret
+that has no value on this computer the value of the `.env` variable with the
+same name, for environments and globals alike. The file uses the usual
+`NAME=value` lines (`export`, `#` comments and single or double quotes work);
+Dynpost only reads it, and you should keep it out of git:
+
+```sh
+# .env — git-ignored
+apiToken=s3cr3t
 ```
 
 `cookieJar: true` makes requests sent with the environment keep cookies between
@@ -501,6 +579,37 @@ name was chosen by hand, and its secret values, cookies, captured values and
 selection follow. Deleting an environment also removes its stored secret values,
 cookies, captured values and OAuth 2.0 tokens.
 
+### Global variables
+
+**Globals**, at the top of the **Environments** view, holds variables for every
+request: they apply with any environment, and when none is selected. They are
+kept in the workspace's `dynpost.yaml`, written like an environment's
+`variables` and `secrets` (Dynpost keeps the file's other keys, such as
+`layout`, as they are), and secret values stay on each computer, in
+`.dynpost/secrets.yaml`:
+
+```yaml
+# dynpost.yaml
+layout: 2
+variables:
+  apiVersion: v2
+  baseUrl: https://{{host}}/{{apiVersion}}
+secrets:
+  - licenseKey
+```
+
+When several places set the same variable, the most specific one wins:
+
+1. a value captured from a response (for the selected environment),
+2. the selected environment's variable,
+3. the closest folder's variable (see [Folder settings](#folder-settings)),
+4. the global variable.
+
+A global's value can use the selected environment's variables (`{{host}}`
+above) and other globals; an environment's can use globals. In load runs, a CSV
+column wins over all of these. The request editor's hover says when a value
+comes from the globals.
+
 **Keep cookies between requests** turns on the environment's cookie jar (off by
 default). Cookies that responses set, including redirects on the way, are then
 kept and sent with later requests using the environment, following the usual
@@ -510,9 +619,56 @@ with the jar's cookies added after it. The editor lists the kept cookies, where
 each can be deleted, or all cleared at once; turning the jar off and saving
 forgets them.
 
+**Client certificates** (mutual TLS): an environment can present a TLS client
+certificate to `https` servers that ask for one. Add one in the environment
+editor with the host it is for (`api.example.com`, `*.example.com` for any
+sub-domain, `host:8443` for one port, or empty for every host), the certificate
+file — PKCS#12 (`.pfx`, `.p12`) or PEM — the PEM private key file when the key
+is in its own file, and the passphrase of the PKCS#12 file or encrypted key.
+Requests (and load runs) sent with the environment use the first certificate
+whose host matches. Paths can be workspace-relative or absolute. Certificates
+are saved with their own **Save certificates** button, apart from the
+environment file, and are kept on this computer only, in
+`.dynpost/certificates.json`; passphrases are never shown again (type a new one
+to replace it). They follow a renamed environment and are deleted with it.
+
+```json
+{
+  "dev.yaml": [
+    { "host": "api.example.com", "certificate": "certs/client.pfx", "passphrase": "s3cr3t" },
+    { "certificate": "/home/ada/certs/client.pem", "key": "/home/ada/certs/client.key" }
+  ]
+}
+```
+
 In the request editor, `{{variable}}` references are highlighted in the URL and
 body: in violet when the selected environment defines them, in red when it
 doesn't. Hover over one to see its value (secret values are not shown).
+
+### Built-in variables
+
+Names starting with `$` are built-in variables, generated when the request is
+sent, without any scripting:
+
+| Variable | Value |
+| --- | --- |
+| `{{$uuid}}` | a random UUID (version 4) |
+| `{{$timestamp}}` | the current time in Unix seconds |
+| `{{$isoTimestamp}}` | the current time in ISO 8601, UTC (`2026-11-15T09:30:00.000Z`) |
+| `{{$randomInt}}` | a random whole number from 0 to 1000 |
+| `{{$randomInt 1 100}}` | a random whole number from 1 to 100 (both included) |
+
+Each reference gets one value per send: a request that uses `{{$uuid}}` in its
+URL and in a header sends the same id in both, and the next send (or the next
+request of a load run) gets a new one. They work wherever variables do,
+including environment and folder variable values (`requestId: "{{$uuid}}"`) and
+load-run body files. The editor highlights them in teal, and their hover says
+what they hold; an unknown `$` name is shown in red and stops the request from
+being sent. A variable an environment defines with the same name wins over the
+built-in one. Postman's `{{$guid}}`, `{{$randomUUID}}`, `{{$timestamp}}`,
+`{{$isoTimestamp}}` and `{{$randomInt}}`, and Insomnia's `{% uuid %}` and
+`{% now 'unix' %}`/`{% now 'iso-8601' %}` tags, become these on import, and
+exports write them back the way each tool names them.
 
 ## Keyboard shortcuts
 
@@ -568,6 +724,39 @@ turn it off to find only the exact text, in the explorer's order. *Match case*
 it. The search reads the files on disk, so it doesn't see unsaved edits, and it
 stops after the first 1000 matching lines (refine the search to see the rest).
 
+## cURL
+
+**Paste a cURL command** into a request's URL field and Dynpost fills in the
+request from it (its name, docs and captures stay), or use **New request from
+cURL…** in the explorer's "More actions" menu to open it as a new request. It
+reads bash/zsh quoting (single and double quotes, `$'…'`, `\` line breaks),
+Windows cmd (`^` line breaks and escapes) and PowerShell (`curl.exe`, backtick
+line breaks), and the options that describe a request: `-X`, `-H`, `-d` /
+`--data` / `--data-raw` / `--data-binary` / `--data-urlencode`, `--json`, `-F` /
+`--form-string`, `-u` (with `--digest` for Digest auth), `-G`, `-I`, `-A`, `-e`,
+`-b`, `-k`, `--max-time`, `--max-redirs` and `--http2`. A JSON `-d` becomes a
+JSON body, `name=value&…` data a `urlencoded` body, `-F` fields a `form` body
+(`@file` parts as file fields), and an `Authorization: Bearer`/`Basic` header the
+matching auth. Options that only change what curl prints (`-s`, `-v`, `-o`, …)
+are ignored; anything else is listed in a note.
+
+The request editor's **cURL** button copies the request as a command, with the
+headers and auth of its folders:
+
+- **Copy as cURL** resolves `{{variables}}` with the selected environment (and
+  the folders' and globals'), with secret values and credentials masked
+  (`••••••`), so it is safe to share.
+- **Copy as cURL with secrets…** writes them as they are, after asking.
+- **Copy as cURL with variables as written** keeps `{{variables}}`, like the
+  request file.
+
+Pick the shell it is quoted for at the bottom of the menu: bash/zsh, cmd
+(`^` line breaks; cmd can't break a quoted value over lines, so line breaks in
+bodies become spaces) or PowerShell (`curl.exe`, backtick line breaks); it is
+PowerShell on Windows and bash/zsh elsewhere until you change it. File bodies
+and parts point at the file's full path, and OAuth 2.0 requests get an
+`<access token>` placeholder.
+
 ## Sending requests
 
 **Send** (or Ctrl+Enter) sends the request as it is in the editor, saved or
@@ -583,7 +772,12 @@ rules such as CORS don't apply. When sending:
 - The headers and auth of the request's folders are applied (see
   [Folder settings](#folder-settings)).
 - Auth adds an `Authorization` header (Basic or Bearer) or the API key header or
-  query parameter; a header you set yourself (or a folder sets) takes precedence. OAuth 2.0 first
+  query parameter. Digest auth sends the request without credentials first and,
+  when the server answers 401 with a `Digest` challenge, sends it again with the
+  answer (MD5 or SHA-256, and their `-sess` variants; `qop=auth` or `auth-int`);
+  the 401 itself isn't shown (Postman and Insomnia imports and exports, and
+  OpenAPI imports, keep Digest auth). A header you set yourself (or a folder
+  sets) takes precedence. OAuth 2.0 first
   gets a token if it needs one (see [OAuth 2.0](#oauth-20)). JSON, text and
   `urlencoded` bodies get a matching `Content-Type` unless you set one;
   multipart `form` bodies always get `multipart/form-data` with the boundary. A
@@ -591,8 +785,10 @@ rules such as CORS don't apply. When sending:
   workspace, is not sent.
 - A `User-Agent: Dynpost` header is added unless you set one. Compressed
   responses (gzip, deflate, Brotli and Zstandard) are decompressed. No cookies are kept between requests unless the
-  environment's cookie jar is on. A request times out after 60 seconds.
-- Up to 20 redirects are followed, never from `https` to `http`. A 303, or a
+  environment's cookie jar is on. A request times out after 60 seconds, unless
+  its settings say otherwise.
+- Up to 20 redirects are followed (the request's settings can change that or
+  turn redirects off), never from `https` to `http`. A 303, or a
   301/302 answering a POST, continues as a GET without a body; 307 and 308 keep
   the method and body. The `Authorization` header is not sent on to the new
   location.
@@ -626,7 +822,16 @@ Request and response bodies are shown in the Monaco
 editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,
 GraphQL and Markdown, chosen from the body type or the response's
 `Content-Type`); JSON request bodies are also validated as you type. JSON
-responses are pretty-printed (switch to **Raw** for the original text). HTML
+responses are pretty-printed (switch to **Raw** for the original text), and
+their objects and arrays can be folded with the arrows in the gutter.
+**Find** (or Ctrl+F in the body) searches the body, with Monaco's options for
+case, whole words and regular expressions. A pretty JSON body can be narrowed
+with a JSONPath in the filter box above it — `$.items[*].id`, `$..name`,
+`$.items[0:5]`, `$.items[?(@.price < 10)].name` (filters compare a child with a
+number, a quoted string, `true`, `false` or `null`, or test that it exists) —
+which shows the value it names, or the list of matches with their count; Esc
+clears it, and **Raw** still shows the whole body. Right-click a key or value
+and pick **Copy JSONPath** to copy its path (`$.items[2].id`). HTML
 responses are previewed rendered in a sandboxed frame that runs no scripts and
 loads nothing from the network
 (switch to **Source** for the markup), PDFs are rendered with pdf.js (fit to width
@@ -958,11 +1163,11 @@ content, in JSON or YAML:
 
 | Format | What is imported |
 | --- | --- |
-| Postman collection v2.0 / v2.1 | Folders, requests, auth (inherited from folders and the collection, OAuth 2.0 included), bodies; collection variables become an environment. Path variables (`/users/:id`) become their value, or `{{id}}` if they have none. |
+| Postman collection v2.0 / v2.1 | Folders, requests, auth (inherited from folders and the collection, OAuth 2.0 included), bodies; collection variables become an environment. Path variables (`/users/:id`) stay path variables, with their values. Dynamic variables such as `{{$guid}}` become Dynpost's built-in ones. |
 | Postman environment | An environment; `secret` variables stay secret (their values go to `.dynpost/secrets.yaml`). |
 | Insomnia export v4 | Folders, requests (with their auth, OAuth 2.0 included) and environments: each sub-environment becomes an environment that includes the base environment's variables. `{{ _.name }}` references become `{{name}}`. |
 | HAR 1.2 (browser dev tools) | One request per entry, in a folder per host, without connection headers such as `Host`. |
-| OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer, API key or OAuth 2.0 auth using secret `{{username}}`/`{{password}}`, `{{token}}`, `{{apiKey}}` or `{{clientId}}`/`{{clientSecret}}` variables, which you fill in (OAuth 2.0 schemes use their client credentials or authorization code flow and the scopes the operation requires; others get a Bearer `{{token}}`). Path parameters without an example become `{{variables}}`. |
+| OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer, API key or OAuth 2.0 auth using secret `{{username}}`/`{{password}}`, `{{token}}`, `{{apiKey}}` or `{{clientId}}`/`{{clientSecret}}` variables, which you fill in (OAuth 2.0 schemes use their client credentials or authorization code flow and the scopes the operation requires; others get a Bearer `{{token}}`). Path parameters that are whole segments become path variables (`/pets/:petId`); others without an example become `{{variables}}`. |
 
 OAuth 2.0 settings whose redirect URL is a web page (such as Postman's own
 callback) get Dynpost's automatic loopback redirect instead, which the OAuth
@@ -981,7 +1186,7 @@ Imported requests are saved as ordinary request files in a new folder named
 after the collection (`Shop`, or `Shop 2` if that name is taken), and
 environments as new environment files; nothing that already exists is changed.
 What Dynpost can't represent is skipped and listed after the import: other auth
-types (digest, OAuth 1, the OAuth 2 implicit and password grants, …), file uploads, scripts, and HTTP methods other than
+types (OAuth 1, Hawk, the OAuth 2 implicit and password grants, …), file uploads, scripts, and HTTP methods other than
 `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` and `OPTIONS`. Repeated query
 parameters or headers keep their first value. GraphQL bodies are kept as a
 separate query and variables object and can be sent and edited without embedding
@@ -996,6 +1201,24 @@ workspace to a file you choose:
   (`dev.postman_environment.json`; a name that is taken gets a number).
 - **Insomnia v4** (`.insomnia.json`), a single file with the requests and the
   environments, using Insomnia's `{{ _.name }}` references.
+- **OpenAPI 3.0** (`.openapi.json`): one operation per request (its name is the
+  summary, its description the description, and `operationId` a slug of the
+  name), tagged with its folders (`users / admin`). `{{baseUrl}}` is the
+  server, taken from the first environment that defines it (other leading
+  `{{variables}}` become server variables, and absolute URLs their own
+  server); `:id` path variables and `{{variables}}` in the path become `{id}`
+  parameters, with the path variable's value as example. Query parameters and
+  headers (except `Accept`, `Content-Type` and `Authorization`) become
+  parameters with their values as examples, JSON bodies examples, form and
+  urlencoded bodies object schemas (file fields as binary), and auth security
+  schemes (Basic, Digest, Bearer, API key, OAuth 2.0); a request without auth
+  has an empty `security`. A second request with the same method and path is
+  skipped, and settings, captures and file bodies are reported.
+- **HAR 1.2** (`.har`): each request as it is sent with the selected
+  environment (and its folders' variables and the globals), with secret values
+  and credentials masked, and the latest response kept in its history (requests
+  without one get an empty response). Requests that can't be resolved, such as
+  ones using undefined variables, are skipped and reported.
 
 Each request is exported with the headers and auth it inherits from its folders
 (see [Folder settings](#folder-settings)); folder variables are not exported. Request descriptions are exported too. Untick **Include environments** to

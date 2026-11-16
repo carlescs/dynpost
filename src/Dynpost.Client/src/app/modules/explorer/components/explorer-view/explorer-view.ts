@@ -24,10 +24,13 @@ import {
   faPlus,
   faShareNodes,
   faSliders,
+  faTerminal,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 import { revealLabel } from '../../../../models/reveal-label';
 import { InterchangeStore } from '../../../../services/interchange-store';
+import { Dialogs } from '../../../../services/dialogs';
+import { CurlImportDialog } from '../curl-import-dialog/curl-import-dialog';
 import { FolderSettingsStore } from '../../../../services/folder-settings-store';
 import { REQUESTS_FOLDER } from '../../../../models/workspace';
 import { WorkspaceStore } from '../../../../services/workspace-store';
@@ -50,9 +53,11 @@ export class ExplorerView {
   protected readonly store = inject(WorkspaceStore);
   protected readonly state = inject(ExplorerState);
   protected readonly interchange = inject(InterchangeStore);
+  private readonly dialogs = inject(Dialogs);
   private readonly folders = inject(FolderSettingsStore);
   protected readonly root = REQUESTS_FOLDER;
   protected readonly faSliders = faSliders;
+  protected readonly faTerminal = faTerminal;
   protected readonly exportOpen = signal(false);
   protected readonly moreOpen = signal(false);
   protected readonly selectedFormat = signal('postman');
@@ -124,6 +129,11 @@ export class ExplorerView {
   protected openFolderSettings(path: string): void {
     this.closeMenu();
     void this.folders.open(path);
+  }
+
+  protected newFromCurl(): void {
+    this.moreOpen.set(false);
+    this.dialogs.open(CurlImportDialog);
   }
 
   protected reveal(): void {

@@ -14,6 +14,13 @@ public interface ICollectionExporter
     /// <summary>The extension of the main file, with its dot, e.g. <c>.postman_collection.json</c>.</summary>
     string Extension { get; }
 
+    /// <summary>
+    /// Whether the format records concrete exchanges (such as HAR), so the export fills in
+    /// <see cref="RequestCollection.Exchanges"/>: each request resolved with the selected
+    /// environment, secrets masked, with its latest response from the history.
+    /// </summary>
+    bool NeedsExchanges => false;
+
     ExportOutput Export(RequestCollection collection);
 }
 

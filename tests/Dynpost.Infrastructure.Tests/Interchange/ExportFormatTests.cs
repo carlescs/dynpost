@@ -199,4 +199,60 @@ public class ExportFormatTests
             AssertSameRequests(expected.Folders[i], actual.Folders[i], normalizeVariables);
         }
     }
+
+    [Fact]
+    public void Exports_WriteBuiltInVariablesTheWayEachToolNamesThem()
+    {
+        var request = new HttpRequestDefinition(
+            "Create",
+            RequestMethod.Post,
+            "https://api.example.com/items",
+            headers: [new KeyValueEntry("X-Id", "{{$uuid}}"), new KeyValueEntry("X-At", "{{ $timestamp }}"), new KeyValueEntry("X-Host", "{{host}}")]);
+        var collection = new RequestCollection(new CollectionFolder("api", [], [request]), []);
+
+        var postman = new PostmanCollectionExporter().Export(collection).Content;
+        Assert.Contains("{{$guid}}", postman);
+        Assert.Contains("{{$timestamp}}", postman);
+
+        var insomnia = new InsomniaExporter().Export(collection).Content;
+        Assert.Contains("{% uuid 'v4' %}", insomnia);
+        Assert.Contains("{% now 'unix' %}", insomnia);
+        Assert.Contains("{{ _.host }}", insomnia);
+    }
+
+    [Fact]
+    public void Postman_WritesPathVariables()
+    {
+        var request = new HttpRequestDefinition("Get user", RequestMethod.Get, "{{baseUrl}}/users/:id")
+        {
+            PathParams = [new KeyValueEntry("id", "42")],
+        };
+        var collection = new RequestCollection(new CollectionFolder("api", [], [request]), []);
+
+        var document = JsonNode.Parse(new PostmanCollectionExporter().Export(collection).Content)!;
+
+        var url = document["item"]![0]!["request"]!["url"]!;
+        Assert.Equal("{{baseUrl}}/users/:id", (string?)url["raw"]);
+        Assert.Equal("id", (string?)url["variable"]![0]!["key"]);
+        Assert.Equal("42", (string?)url["variable"]![0]!["value"]);
+    }
+
+    [Fact]
+    public void Postman_RoundTripsRedirectAndTlsSettings()
+    {
+        var request = new HttpRequestDefinition("Local", RequestMethod.Get, "https://localhost:5001/")
+        {
+            Settings = new RequestSettings(TimeSpan.FromSeconds(5), false, 3, false),
+        };
+        var collection = new RequestCollection(new CollectionFolder("api", [], [request]), []);
+
+        var content = new PostmanCollectionExporter().Export(collection).Content;
+        var behavior = JsonNode.Parse(content)!["item"]![0]!["protocolProfileBehavior"]!;
+        Assert.False((bool?)behavior["followRedirects"]);
+        Assert.Equal(3, (int?)behavior["maxRedirects"]);
+        Assert.False((bool?)behavior["strictSSL"]);
+
+        var imported = new CollectionImporter().Parse(content, "api.json").Value.Collection.Root.Requests[0];
+        Assert.Equal(new RequestSettings(null, false, 3, false), imported.Settings);
+    }
 }

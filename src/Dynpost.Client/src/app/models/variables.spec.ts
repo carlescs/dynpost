@@ -51,7 +51,7 @@ describe('variables', () => {
       const captured = new Map([['jwt', { value: 'x', secret: false, captured: true }]]);
       expect(describeVariable('jwt', captured)).toBe('jwt = x (captured)');
       expect(describeVariable('missing', lookup)).toBe(
-        'missing is not defined in the selected environment',
+        'missing is not defined in the selected environment or the globals',
       );
       const folder = new Map([['page', { value: '2', secret: false, folder: 'requests/users' }]]);
       expect(describeVariable('page', folder)).toBe('page = 2 (set by the folder requests/users)');
@@ -75,6 +75,47 @@ describe('variables', () => {
 
     it('returns the environment itself when no folder variable is added', () => {
       expect(withFolderVariables(lookup, [])).toBe(lookup);
+    });
+  });
+
+  describe('built-in variables', () => {
+    it('splits references with arguments only for built-in variables', () => {
+      expect(splitVariables('{{$randomInt 1 6}}')).toEqual([
+        { text: '{{$randomInt 1 6}}', variable: '$randomInt 1 6' },
+      ]);
+    });
+
+    it('highlights supported built-in variables apart from environment variables', () => {
+      expect(variableClass('$uuid', lookup)).toBe('variable-builtin');
+      expect(variableClass('$randomInt 1 6', null)).toBe('variable-builtin');
+      expect(variableClass('$nope', lookup)).toBe('variable-undefined');
+      expect(variableClass('$randomInt 6 1', lookup)).toBe('variable-undefined');
+    });
+
+    it('describes what a built-in variable holds', () => {
+      expect(describeVariable('$uuid', lookup)).toContain('built-in');
+      expect(describeVariable('$randomInt 1 6', lookup)).toContain('from 1 to 6');
+      expect(describeVariable('$nope', lookup)).toContain('not a built-in variable');
+    });
+  });
+
+  describe('workspace globals', () => {
+    const withGlobals: VariableLookup = new Map([
+      ['host', { value: 'global.test', secret: false, global: true }],
+      ['env', { value: 'dev', secret: false }],
+    ]);
+
+    it('lets folder variables win over globals but not over the environment', () => {
+      const combined = withFolderVariables(withGlobals, [
+        { name: 'host', value: 'folder.test', folder: 'requests' },
+        { name: 'env', value: 'folder', folder: 'requests' },
+      ]);
+      expect(combined.get('host')?.value).toBe('folder.test');
+      expect(combined.get('env')?.value).toBe('dev');
+    });
+
+    it('says a value comes from the globals', () => {
+      expect(describeVariable('host', withGlobals)).toBe('host = global.test (workspace global)');
     });
   });
 });

@@ -30,7 +30,12 @@ public interface IFolderDefaultsStore
 /// Variables for the requests below it; the selected environment's variables win over them.
 /// <c>null</c> (as sent by older callers) is the same as none.
 /// </param>
-public sealed record FolderSettingsDto(IReadOnlyList<KeyValueDto> Headers, AuthDto Auth, IReadOnlyList<KeyValueDto>? Variables = null);
+/// <param name="Settings">How the requests below it are sent; <c>null</c> sets nothing.</param>
+public sealed record FolderSettingsDto(
+    IReadOnlyList<KeyValueDto> Headers,
+    AuthDto Auth,
+    IReadOnlyList<KeyValueDto>? Variables = null,
+    RequestSettingsDto? Settings = null);
 
 /// <summary>A header inherited from a folder.</summary>
 /// <param name="Folder">The folder that sets it.</param>
@@ -45,11 +50,13 @@ public sealed record InheritedVariableDto(string Name, string Value, string Fold
 /// <param name="Auth">The inherited auth; type <c>none</c> when no folder sets one.</param>
 /// <param name="AuthFolder">The folder the auth comes from; <c>null</c> when no folder sets one.</param>
 /// <param name="Variables">The inherited variables (the selected environment's win over them).</param>
+/// <param name="Settings">The inherited request settings; <c>null</c> values are not set by any folder.</param>
 public sealed record InheritedSettingsDto(
     IReadOnlyList<InheritedHeaderDto> Headers,
     AuthDto Auth,
     string? AuthFolder,
-    IReadOnlyList<InheritedVariableDto> Variables);
+    IReadOnlyList<InheritedVariableDto> Variables,
+    RequestSettingsDto? Settings = null);
 
 /// <summary>
 /// Works out what requests inherit from the <c>_folder.yaml</c> files of the folders they are in:
@@ -113,7 +120,7 @@ public sealed class FolderInheritance(IFolderDefaultsStore store)
             return environment;
         }
 
-        var resolved = defaults.ResolveVariables(environment.Values);
+        var resolved = defaults.ResolveVariables(environment.Values, environment.Globals);
         if (resolved.Cycle.Count > 0)
         {
             var folders = string.Join(", ", defaults.FoldersOf(resolved.Cycle).Select(folder => $"'{folder}'"));
@@ -205,7 +212,8 @@ public sealed class GetInheritedSettings(IWorkspaceRepository repository, Folder
             defaults.Headers.Select(header => new InheritedHeaderDto(header.Key, header.Value, header.Folder.Value)).ToList(),
             RequestMapper.ToDto(defaults.EffectiveAuth),
             defaults.AuthFolder?.Value,
-            defaults.Variables.Select(variable => new InheritedVariableDto(variable.Name, variable.Value, variable.Folder.Value)).ToList()));
+            defaults.Variables.Select(variable => new InheritedVariableDto(variable.Name, variable.Value, variable.Folder.Value)).ToList(),
+            RequestMapper.ToDto(defaults.Settings)));
     }
 }
 
@@ -214,13 +222,23 @@ internal static class FolderSettingsMapper
     public static FolderSettingsDto ToDto(FolderDefaults defaults) => new(
         defaults.Headers.Select(header => new KeyValueDto(header.Key, header.Value, header.Enabled)).ToList(),
         RequestMapper.ToDto(defaults.Auth),
-        defaults.Variables.Select(variable => new KeyValueDto(variable.Key, variable.Value, variable.Enabled)).ToList());
+        defaults.Variables.Select(variable => new KeyValueDto(variable.Key, variable.Value, variable.Enabled)).ToList(),
+        RequestMapper.ToDto(defaults.Settings));
 
     public static Result<FolderDefaults> ToDomain(FolderSettingsDto settings)
     {
         var auth = RequestMapper.ToDomain(settings.Auth);
-        return auth.IsSuccess
+        if (!auth.IsSuccess)
+        {
+            return auth.Error!;
+        }
+
+        var requestSettings = RequestMapper.ToDomain(settings.Settings);
+        return requestSettings.IsSuccess
             ? new FolderDefaults(RequestMapper.ToEntries(settings.Headers), auth.Value, RequestMapper.ToEntries(settings.Variables))
-            : auth.Error!;
+            {
+                Settings = requestSettings.Value,
+            }
+            : requestSettings.Error!;
     }
 }

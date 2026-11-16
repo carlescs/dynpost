@@ -6,6 +6,7 @@ import {
   input,
   linkedSignal,
   signal,
+  viewChild,
 } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
@@ -18,6 +19,8 @@ import {
   faPaperPlane,
   faSpinner,
   faTriangleExclamation,
+  faMagnifyingGlass,
+  faFilter,
 } from '@fortawesome/free-solid-svg-icons';
 import { ERROR_CODES, ResponseDto } from '../../../../models/messages';
 import { RequestDocument } from '../../../../models/workspace';
@@ -31,6 +34,7 @@ import { ResponseHistory } from '../response-history/response-history';
 import { looksLikeJson, prettyJson } from '../../models/response-text';
 import { DateFormatStore } from '../../../../services/date-format-store';
 import { copyText } from '../../../../models/clipboard';
+import { filterJson } from '../../../../models/json-path';
 
 type ResponseTab = 'body' | 'headers' | 'cookies' | 'captures' | 'timing' | 'request';
 
@@ -177,10 +181,38 @@ export class ResponseViewer {
     return hops.length > 1 && !hasAuth(hops[hops.length - 1]) && hops.some(hasAuth);
   });
 
+  /** A JSONPath that narrows the pretty JSON body; Raw still shows the whole body. */
+  protected readonly jsonFilter = linkedSignal<string, string>({
+    source: () => this.document().id,
+    computation: () => '',
+  });
+
+  /** Whether the JSONPath filter applies: a JSON body shown pretty. */
+  protected readonly canFilter = computed(
+    () => this.language() === 'json' && this.bodyView() === 'pretty' && this.prettyBody() !== null,
+  );
+
+  /** The filtered body, or why the filter can't be used; `null` without a filter. */
+  protected readonly filtered = computed(() => {
+    const r = this.response();
+    const path = this.jsonFilter().trim();
+    if (!r || !path || !this.canFilter()) return null;
+    return filterJson(r.body, path);
+  });
+
+  private readonly bodyEditor = viewChild<CodeEditor>('bodyEditor');
+
+  /** Opens the find widget of the body (also Ctrl+F in the body). */
+  protected find(): void {
+    this.bodyEditor()?.find();
+  }
+
   /** The text shown in the body view, which is what "Copy" copies. */
   protected readonly shownBody = computed(() => {
     const r = this.response();
     if (!r || r.bodyEncoding !== 'text') return null;
+    const filtered = this.filtered();
+    if (filtered && 'text' in filtered) return filtered.text;
     return this.bodyView() === 'pretty' ? (this.prettyBody() ?? r.body) : r.body;
   });
 
@@ -194,6 +226,8 @@ export class ResponseViewer {
   protected readonly faCircleExclamation = faCircleExclamation;
   protected readonly faClockRotateLeft = faClockRotateLeft;
   protected readonly faTriangleExclamation = faTriangleExclamation;
+  protected readonly faMagnifyingGlass = faMagnifyingGlass;
+  protected readonly faFilter = faFilter;
 
   protected cancel(): void {
     void this.store.cancelSend(this.document().id);

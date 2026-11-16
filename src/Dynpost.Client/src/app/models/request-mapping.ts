@@ -1,10 +1,17 @@
-import { AuthDto, FormFieldDto, RequestDto, WorkspaceNodeDto } from './messages';
+import {
+  AuthDto,
+  FormFieldDto,
+  RequestDto,
+  RequestSettingsDto,
+  WorkspaceNodeDto,
+} from './messages';
 import {
   AUTH_TYPES,
   BODY_TYPES,
   FormField,
   HTTP_METHODS,
   HttpMethod,
+  KeyValue,
   RequestAuth,
   RequestContent,
   WorkspaceNode,
@@ -34,11 +41,48 @@ function toMethod(value: string | null | undefined): HttpMethod {
   return (HTTP_METHODS as readonly string[]).includes(upper) ? (upper as HttpMethod) : 'GET';
 }
 
+/**
+ * A `:name` path variable segment, as the host finds them. Keep in sync with `PathParameters` in
+ * `src/Dynpost.Domain/Requests/PathParameters.cs`.
+ */
+const PATH_VARIABLE = /(?<=\/):([A-Za-z_][A-Za-z0-9_-]*)(?=[/;.]|$)/g;
+
+/** The `:name` path variables of a URL's path, in order, each once. */
+export function pathVariableNames(url: string): string[] {
+  const end = url.search(/[?#]/);
+  const path = end < 0 ? url : url.slice(0, end);
+  return [...new Set([...path.matchAll(PATH_VARIABLE)].map((m) => m[1]))];
+}
+
+/** One row per path variable of `url`, in its order, keeping the values `rows` already have. */
+export function syncPathParams(url: string, rows: readonly KeyValue[]): KeyValue[] {
+  const values = new Map<string, string>();
+  for (const row of rows) if (!values.has(row.key)) values.set(row.key, row.value);
+  return pathVariableNames(url).map((key) => ({
+    key,
+    value: values.get(key) ?? '',
+    enabled: true,
+  }));
+}
+
+/** The settings that are set, without the `null` (inherited) ones. */
+export function compactSettings(
+  settings: RequestSettingsDto | null | undefined,
+): RequestSettingsDto {
+  return Object.fromEntries(
+    Object.entries(settings ?? {}).filter(([, value]) => value !== null && value !== undefined),
+  );
+}
+
 export function fromRequestDto(dto: RequestDto): RequestContent {
   return {
     name: dto.name,
     method: toMethod(dto.method),
     url: dto.url,
+    pathParams: syncPathParams(
+      dto.url,
+      (dto.pathParams ?? []).map((r) => ({ ...r, enabled: true })),
+    ),
     params: dto.params.map((r) => ({ ...r })),
     headers: dto.headers.map((r) => ({ ...r })),
     auth: fromAuthDto(dto.auth),
@@ -48,6 +92,7 @@ export function fromRequestDto(dto: RequestDto): RequestContent {
     bodyFields: dto.body.fields ? dto.body.fields.map(fromFieldDto) : null,
     description: dto.description ?? '',
     captures: (dto.captures ?? []).map((c) => ({ ...c })),
+    settings: compactSettings(dto.settings),
   };
 }
 
@@ -80,12 +125,14 @@ export function toRequestDto(content: RequestContent): RequestDto {
     name: content.name,
     method: content.method,
     url: content.url,
+    pathParams: content.pathParams.map((r) => ({ key: r.key, value: r.value, enabled: true })),
     params: content.params.map((r) => ({ ...r })),
     headers: content.headers.map((r) => ({ ...r })),
     auth: toAuthDto(auth),
     body: toBodyDto(content),
     description: content.description,
     captures: content.captures.map((c) => ({ ...c })),
+    ...(Object.keys(content.settings).length ? { settings: { ...content.settings } } : {}),
   };
 }
 
@@ -132,6 +179,8 @@ export function toAuthDto(auth: RequestAuth): AuthDto {
   switch (auth.type) {
     case 'basic':
       return { type: 'basic', username: auth.username, password: auth.password };
+    case 'digest':
+      return { type: 'digest', username: auth.username, password: auth.password };
     case 'bearer':
       return { type: 'bearer', token: auth.token };
     case 'apiKey':

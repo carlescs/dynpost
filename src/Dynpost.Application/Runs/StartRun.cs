@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Common;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
@@ -112,7 +113,8 @@ public sealed class StartRun(
     RunRegistry registry,
     CurrentWorkspace current,
     TimeProvider time,
-    FolderInheritance inheritance)
+    FolderInheritance inheritance,
+    IClientCertificateStore? certificates = null)
 {
     public async Task<Result<StartedRunDto>> ExecuteAsync(string path, bool confirmLarge, CancellationToken cancellationToken = default)
     {
@@ -496,7 +498,11 @@ public sealed class StartRun(
         var token = run.Cancellation.Token;
         var definition = context.Definitions[path.Value];
         // The folders' variables are defaults: the environment's and the CSV row's win over them.
-        values = context.Inherited[path.Value].ResolveVariables(values).Values;
+        // The workspace globals are less specific than a folder's variables; a CSV value isn't.
+        var overridable = row is null ? variables.Globals : variables.Globals.Where(name => !row.ContainsKey(name)).ToHashSet(StringComparer.Ordinal);
+        values = context.Inherited[path.Value].ResolveVariables(values, overridable).Values;
+        // Built-in variables ({{$uuid}}, …) get fresh values for every request sent.
+        values = DynamicVariables.With(values, time.GetUtcNow(), Random.Shared);
         if (bodyFile is not null)
         {
             definition = definition with { Body = RunBodies.Replace(definition.Body, bodyFile) };
@@ -542,6 +548,18 @@ public sealed class StartRun(
             }
 
             outgoing = RequestPreparation.Prepare(definition, values, accessToken.Value.AccessToken, run.Root).Request!;
+        }
+
+        if (certificates is not null)
+        {
+            var certificate = await ClientCertificates.ForAsync(certificates, run.Root, variables.EnvironmentId, outgoing.Url, token);
+            if (!certificate.IsSuccess)
+            {
+                run.Add(path, Failure(certificate.Error!.Message), 0, 0, environmentPath);
+                return;
+            }
+
+            outgoing = outgoing with { ClientCertificate = certificate.Value };
         }
 
         IReadOnlyCollection<string> sensitiveParams = definition.Auth is ApiKeyAuth { In: ApiKeyLocation.Query } apiKey

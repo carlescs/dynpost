@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Dynpost.Application.Captures;
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Cookies;
 using Dynpost.Application.Environments;
 using Dynpost.Application.Folders;
@@ -10,6 +11,7 @@ using Dynpost.Application.Interchange;
 using Dynpost.Application.OAuth2;
 using Dynpost.Application.Requests;
 using Dynpost.Application.Runs;
+using Dynpost.Application.Secrets;
 using Dynpost.Application.Settings;
 using Dynpost.Application.Sharing;
 using Dynpost.Application.About;
@@ -21,6 +23,7 @@ using Dynpost.Application.Workspaces;
 using Dynpost.Desktop.Bridge;
 using Dynpost.Desktop.Hosting;
 using Dynpost.Desktop.Mcp;
+using Dynpost.Infrastructure.Certificates;
 using Dynpost.Infrastructure.Cookies;
 using Dynpost.Infrastructure.Environments;
 using Dynpost.Infrastructure.Git;
@@ -29,6 +32,7 @@ using Dynpost.Infrastructure.Http;
 using Dynpost.Infrastructure.Interchange;
 using Dynpost.Infrastructure.OAuth2;
 using Dynpost.Infrastructure.Runs;
+using Dynpost.Infrastructure.Secrets;
 using Dynpost.Infrastructure.Settings;
 using Dynpost.Infrastructure.Sharing;
 using Dynpost.Infrastructure.About;
@@ -104,9 +108,17 @@ internal static class Program
             .AddSingleton<FolderInheritance>()
             .AddSingleton<IWorkspaceLayoutStore, FileSystemWorkspaceLayoutStore>()
             .AddSingleton<IEnvironmentStore, FileSystemEnvironmentStore>()
-            .AddSingleton<ISecretStore, YamlSecretStore>()
+            .AddSingleton<YamlSecretStore>()
+            .AddSingleton(_ => SystemKeychain.Create())
+            .AddSingleton<KeychainSecretStore>()
+            .AddSingleton<ISecretStore, SelectedSecretStore>()
+            .AddSingleton<IDotEnvValues, DotEnvValues>()
+            .AddTransient<GetSecretSettings>()
+            .AddTransient<SetSecretSettings>()
+            .AddSingleton<IWorkspaceVariablesStore, YamlWorkspaceVariablesStore>()
             .AddSingleton<IWorkspaceStateStore, YamlWorkspaceStateStore>()
             .AddSingleton<ICookieJarStore, JsonCookieJarStore>()
+            .AddSingleton<IClientCertificateStore, JsonClientCertificateStore>()
             .AddSingleton<ICapturedValueStore, YamlCapturedValueStore>()
             .AddSingleton<IOAuth2TokenStore, JsonOAuth2TokenStore>()
             .AddSingleton<IAuthorizationBrowser, LoopbackAuthorizationBrowser>()
@@ -130,8 +142,11 @@ internal static class Program
             .AddSingleton<RunRegistry>()
             .AddSingleton<IExternalFiles, LocalExternalFiles>()
             .AddSingleton<ICollectionImporter, CollectionImporter>()
+            .AddSingleton<ICurlConverter, CurlConverter>()
             .AddSingleton<ICollectionExporter, PostmanCollectionExporter>()
             .AddSingleton<ICollectionExporter, InsomniaExporter>()
+            .AddSingleton<ICollectionExporter, OpenApiExporter>()
+            .AddSingleton<ICollectionExporter, HarExporter>()
             .AddSingleton<IAppSettingsStore>(new JsonAppSettingsStore(JsonAppSettingsStore.DefaultFilePath, JsonAppSettingsStore.LegacyDefaultFilePath))
             .AddSingleton<IAppUpdater>(new VelopackAppUpdater(ReleasesRepository))
             .AddSingleton<IAppInfo, AssemblyAppInfo>()
@@ -165,6 +180,8 @@ internal static class Program
             .AddTransient<SearchWorkspace>()
             .AddTransient<ShowWorkspaceFolder>()
             .AddTransient<ExportWorkspace>()
+            .AddTransient<ParseCurl>()
+            .AddTransient<CopyAsCurl>()
             .AddTransient<ImportCollection>()
             .AddTransient<LoadRequest>()
             .AddTransient<InspectRequestFiles>()
@@ -179,6 +196,8 @@ internal static class Program
             .AddTransient<SendRequestFile>()
             .AddTransient<CancelRequest>()
             .AddTransient<SaveResponseBody>()
+            .AddTransient<ListClientCertificates>()
+            .AddTransient<SaveClientCertificates>()
             .AddTransient<ListCookies>()
             .AddTransient<DeleteCookie>()
             .AddTransient<ClearCookies>()
@@ -198,6 +217,8 @@ internal static class Program
             .AddTransient<GetInheritedSettings>()
             .AddTransient<ListEnvironments>()
             .AddTransient<LoadEnvironment>()
+            .AddTransient<LoadGlobalVariables>()
+            .AddTransient<SaveGlobalVariables>()
             .AddTransient<CreateEnvironment>()
             .AddTransient<SaveEnvironment>()
             .AddTransient<DeleteEnvironment>()

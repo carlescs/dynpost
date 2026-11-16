@@ -1,4 +1,4 @@
-import { CaptureDto, ResponseDto } from './messages';
+import { CaptureDto, RequestSettingsDto, ResponseDto } from './messages';
 
 /** The workspace folder holding every request and collection folder. */
 export const REQUESTS_FOLDER = 'requests';
@@ -20,7 +20,15 @@ export const BODY_TYPES = [
 ] as const;
 export type BodyType = (typeof BODY_TYPES)[number];
 
-export const AUTH_TYPES = ['inherit', 'none', 'basic', 'bearer', 'apiKey', 'oauth2'] as const;
+export const AUTH_TYPES = [
+  'inherit',
+  'none',
+  'basic',
+  'digest',
+  'bearer',
+  'apiKey',
+  'oauth2',
+] as const;
 export type AuthType = (typeof AUTH_TYPES)[number];
 
 export interface KeyValue {
@@ -80,6 +88,8 @@ export interface RequestContent {
   name: string;
   method: HttpMethod;
   url: string;
+  /** The values of the URL's `:name` path variables, one row per name in the URL's order. */
+  pathParams: KeyValue[];
   params: KeyValue[];
   headers: KeyValue[];
   auth: RequestAuth;
@@ -95,6 +105,8 @@ export interface RequestContent {
   description: string;
   /** Values to capture from a successful response into variables. */
   captures: CaptureDto[];
+  /** How the request is sent (timeout, redirects, TLS, HTTP version); unset values are inherited. */
+  settings: RequestSettingsDto;
 }
 
 /** The outcome of the last send of a request: its response, or why there is none. */
@@ -161,6 +173,7 @@ export const AUTH_LABELS: Record<AuthType, string> = {
   inherit: 'Inherit from folder',
   none: 'No auth',
   basic: 'Basic',
+  digest: 'Digest',
   bearer: 'Bearer token',
   apiKey: 'API key',
   oauth2: 'OAuth 2.0',

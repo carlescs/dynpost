@@ -8,8 +8,10 @@ import { KeyValueTable } from '../../../../components/key-value-table/key-value-
 import { AuthEditor } from '../auth-editor/auth-editor';
 import { InheritedHeaders } from '../inherited-headers/inherited-headers';
 import { InheritedVariables } from '../inherited-variables/inherited-variables';
+import { SettingsEditor, settingsCount } from '../settings-editor/settings-editor';
+import { RequestSettingsDto } from '../../../../models/messages';
 
-type FolderTab = 'headers' | 'auth' | 'variables';
+type FolderTab = 'headers' | 'auth' | 'variables' | 'settings';
 
 /** Nothing inherited: what the top `requests` folder gets. */
 const NOTHING_INHERITED: InheritedSettingsDto = {
@@ -17,6 +19,7 @@ const NOTHING_INHERITED: InheritedSettingsDto = {
   auth: { type: 'none' },
   authFolder: null,
   variables: [],
+  settings: {},
 };
 
 /**
@@ -26,7 +29,14 @@ const NOTHING_INHERITED: InheritedSettingsDto = {
  */
 @Component({
   selector: 'app-folder-editor',
-  imports: [FaIconComponent, KeyValueTable, AuthEditor, InheritedHeaders, InheritedVariables],
+  imports: [
+    FaIconComponent,
+    KeyValueTable,
+    AuthEditor,
+    InheritedHeaders,
+    InheritedVariables,
+    SettingsEditor,
+  ],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './folder-editor.html',
 })
@@ -39,6 +49,7 @@ export class FolderEditor {
     { id: 'headers', label: 'Headers' },
     { id: 'auth', label: 'Auth' },
     { id: 'variables', label: 'Variables' },
+    { id: 'settings', label: 'Settings' },
   ];
   protected readonly faFloppyDisk = faFloppyDisk;
   protected readonly faSpinner = faSpinner;
@@ -75,6 +86,10 @@ export class FolderEditor {
     this.store.update(this.draft().key, { variables });
   }
 
+  protected patchSettings(settings: RequestSettingsDto): void {
+    this.store.update(this.draft().key, { settings });
+  }
+
   protected patchAuth(patch: Partial<RequestAuth>): void {
     this.store.update(this.draft().key, { auth: { ...this.draft().auth, ...patch } });
   }
@@ -84,6 +99,7 @@ export class FolderEditor {
   }
 
   protected count(draft: FolderDraft, tab: FolderTab): number {
+    if (tab === 'settings') return settingsCount(draft.settings);
     const rows = tab === 'headers' ? draft.headers : tab === 'variables' ? draft.variables : [];
     return rows.filter((r) => r.enabled && r.key).length;
   }

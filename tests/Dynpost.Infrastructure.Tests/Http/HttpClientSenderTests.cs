@@ -5,6 +5,7 @@ using System.Text;
 using Dynpost.Application.Common;
 using Dynpost.Application.Http;
 using Dynpost.Domain.Http;
+using Dynpost.Domain.Requests;
 using Dynpost.Infrastructure.Http;
 
 namespace Dynpost.Infrastructure.Tests.Http;
@@ -228,6 +229,115 @@ public sealed class HttpClientSenderTests
         var result = await sender.SendAsync(Request());
 
         Assert.Equal(HttpErrors.TimeoutCode, result.Error?.Code);
+    }
+
+    [Fact]
+    public async Task SendAsync_UsesTheRequestsTimeout()
+    {
+        var handler = new RecordingHandler(async (_, ct) =>
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return new HttpResponseMessage();
+        });
+        using var sender = new HttpClientSender(new HttpClient(handler), timeout: TimeSpan.FromMinutes(5));
+
+        var result = await sender.SendAsync(Request() with { Settings = new RequestSettings(Timeout: TimeSpan.FromMilliseconds(50)) });
+
+        Assert.Equal(HttpErrors.TimeoutCode, result.Error?.Code);
+        Assert.Contains("50 ms", result.Error!.Message);
+    }
+
+    [Fact]
+    public async Task SendAsync_DoesNotFollowRedirectsWhenTurnedOff()
+    {
+        var handler = new SequenceHandler(Redirect(HttpStatusCode.Found, "/next"), Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var response = (await sender.SendAsync(Request() with { Settings = new RequestSettings(FollowRedirects: false) })).Value;
+
+        Assert.Equal(302, response.StatusCode);
+        Assert.Empty(response.Redirects);
+        Assert.Single(handler.Received);
+    }
+
+    [Fact]
+    public async Task SendAsync_FollowsAtMostTheRequestsMaxRedirects()
+    {
+        var handler = new SequenceHandler(Redirect(HttpStatusCode.Found, "/loop"));
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var response = (await sender.SendAsync(Request() with { Settings = new RequestSettings(MaxRedirects: 2) })).Value;
+
+        Assert.Equal(2, response.Redirects.Count);
+        Assert.Equal(3, handler.Received.Count);
+    }
+
+    [Fact]
+    public async Task SendAsync_AsksForHttp2WhenSet()
+    {
+        var handler = new SequenceHandler(Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        await sender.SendAsync(Request() with { Settings = new RequestSettings(HttpVersion: HttpVersionPreference.Http2) });
+
+        Assert.Equal(HttpVersion.Version20, handler.Received[0].Request.Version);
+        Assert.Equal(HttpVersionPolicy.RequestVersionOrLower, handler.Received[0].Request.VersionPolicy);
+    }
+
+    [Fact]
+    public async Task SendAsync_UsesTheInsecureClientWhenTlsIsNotVerified()
+    {
+        var secure = new SequenceHandler(Ok());
+        var insecure = new SequenceHandler(Ok());
+        using var sender = new HttpClientSender(new HttpClient(secure), insecureClient: new HttpClient(insecure));
+
+        await sender.SendAsync(Request() with { Settings = new RequestSettings(VerifyTls: false) });
+
+        Assert.Empty(secure.Received);
+        Assert.Single(insecure.Received);
+    }
+
+    [Fact]
+    public async Task SendAsync_AnswersADigestChallenge()
+    {
+        var handler = new SequenceHandler(
+            _ =>
+            {
+                var challenge = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                challenge.Headers.WwwAuthenticate.ParseAdd("Digest realm=\"api\", qop=\"auth\", nonce=\"abc\", opaque=\"xyz\"");
+                return challenge;
+            },
+            Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var result = await sender.SendAsync(Request() with { Digest = new DigestCredentials("ada", "pw") });
+
+        Assert.Equal(200, result.Value.StatusCode);
+        Assert.Equal(2, handler.Received.Count);
+        Assert.Null(handler.Received[0].Request.Headers.Authorization);
+        var authorization = handler.Received[1].Request.Headers.Authorization!;
+        Assert.Equal("Digest", authorization.Scheme);
+        Assert.Contains("username=\"ada\"", authorization.Parameter);
+        Assert.Contains("opaque=\"xyz\"", authorization.Parameter);
+    }
+
+    [Fact]
+    public async Task SendAsync_ReturnsTheSecond401WhenTheDigestAnswerIsRejected()
+    {
+        static HttpResponseMessage Challenge(HttpRequestMessage _)
+        {
+            var challenge = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            challenge.Headers.WwwAuthenticate.ParseAdd("Digest realm=\"api\", nonce=\"abc\"");
+            return challenge;
+        }
+
+        var handler = new SequenceHandler(Challenge, Challenge, Ok());
+        using var sender = new HttpClientSender(new HttpClient(handler));
+
+        var result = await sender.SendAsync(Request() with { Digest = new DigestCredentials("ada", "wrong") });
+
+        Assert.Equal(401, result.Value.StatusCode);
+        Assert.Equal(2, handler.Received.Count);
     }
 
     [Fact]

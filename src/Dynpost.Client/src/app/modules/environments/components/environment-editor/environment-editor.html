@@ -1,18 +1,25 @@
 @if (draft(); as draft) {
   <div class="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
-    <span class="text-xs font-semibold tracking-wide text-slate-500 uppercase"> Environment </span>
-    <input
-      class="min-w-0 flex-1 rounded px-1 text-lg font-semibold hover:bg-slate-100 focus:bg-white focus:ring-1 focus:ring-sky-500 focus:outline-none"
-      aria-label="Environment name"
-      [value]="draft.name"
-      (input)="store.update(draft.key, { name: $any($event.target).value })"
-    />
-    <span
-      class="truncate text-xs text-slate-400"
-      [title]="draft.id ? 'environments/' + draft.id : ''"
-      >{{ draft.id ? 'environments/' + draft.id : 'New environment — not saved yet' }}</span
-    >
-    @if (draft.id) {
+    @if (globals()) {
+      <span class="min-w-0 flex-1 px-1 text-lg font-semibold">Globals</span>
+      <span class="truncate text-xs text-slate-400" title="dynpost.yaml">dynpost.yaml</span>
+    } @else {
+      <span class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+        Environment
+      </span>
+      <input
+        class="min-w-0 flex-1 rounded px-1 text-lg font-semibold hover:bg-slate-100 focus:bg-white focus:ring-1 focus:ring-sky-500 focus:outline-none"
+        aria-label="Environment name"
+        [value]="draft.name"
+        (input)="store.update(draft.key, { name: $any($event.target).value })"
+      />
+      <span
+        class="truncate text-xs text-slate-400"
+        [title]="draft.id ? 'environments/' + draft.id : ''"
+        >{{ draft.id ? 'environments/' + draft.id : 'New environment — not saved yet' }}</span
+      >
+    }
+    @if (draft.id && !globals()) {
       <button
         type="button"
         [class]="buttonClass"
@@ -40,15 +47,17 @@
       />
       Save
     </button>
-    <button
-      type="button"
-      [class]="buttonClass"
-      title="Delete environment"
-      aria-label="Delete environment"
-      (click)="store.deleteDraft(draft.key)"
-    >
-      <fa-icon [icon]="faTrash" />
-    </button>
+    @if (!globals()) {
+      <button
+        type="button"
+        [class]="buttonClass"
+        title="Delete environment"
+        aria-label="Delete environment"
+        (click)="store.deleteDraft(draft.key)"
+      >
+        <fa-icon [icon]="faTrash" />
+      </button>
+    }
   </div>
 
   <section class="min-h-0 flex-1 overflow-y-auto px-4 py-3">
@@ -131,35 +140,48 @@
       <p class="flex items-start gap-1.5">
         <fa-icon class="mt-0.5" [icon]="faLock" />
         <span>
-          Secret values stay on this computer, in <code>.dynpost/secrets.yaml</code>, and are never
-          committed: the environment file only lists their names. Teammates enter their own values
-          after pulling.
+          Secret values stay on this computer — in <code>.dynpost/secrets.yaml</code>, or in the
+          system keychain if you chose it under Settings › Secrets — and are never committed: the
+          environment file only lists their names. Teammates enter their own values after pulling
+          (or keep them in a <code>.env</code> file, when that is turned on).
         </span>
       </p>
     </div>
 
-    <div class="mt-4 border-t border-slate-200 pt-3">
-      <label class="flex items-center gap-2 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          [checked]="draft.cookieJar"
-          (change)="store.update(draft.key, { cookieJar: $any($event.target).checked })"
-        />
-        Keep cookies between requests (cookie jar)
-      </label>
-      <p class="mt-1 ml-6 text-xs text-slate-500">
-        Cookies that responses set are sent with later requests using this environment, like a
-        browser does. They stay on this computer, in <code>.dynpost/cookies.json</code>. Turning
-        this off and saving forgets them.
+    @if (globals()) {
+      <p class="mt-3 text-xs text-slate-500">
+        Global variables apply to every request, with any environment or none, and are kept in the
+        workspace's <code>dynpost.yaml</code> (secret values stay on this computer, like an
+        environment's). An environment's variable, and a folder's, wins over a global of the same
+        name. Globals can use the selected environment's variables.
       </p>
-      @if (draft.id && draft.cookieJar) {
-        <div class="mt-3 ml-6">
-          <app-cookie-jar [environmentId]="draft.id" />
-        </div>
-      }
-    </div>
+    } @else {
+      <div class="mt-4 border-t border-slate-200 pt-3">
+        <label class="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            [checked]="draft.cookieJar"
+            (change)="store.update(draft.key, { cookieJar: $any($event.target).checked })"
+          />
+          Keep cookies between requests (cookie jar)
+        </label>
+        <p class="mt-1 ml-6 text-xs text-slate-500">
+          Cookies that responses set are sent with later requests using this environment, like a
+          browser does. They stay on this computer, in <code>.dynpost/cookies.json</code>. Turning
+          this off and saving forgets them.
+        </p>
+        @if (draft.id && draft.cookieJar) {
+          <div class="mt-3 ml-6">
+            <app-cookie-jar [environmentId]="draft.id" />
+          </div>
+        }
+      </div>
+    }
 
-    @if (draft.id) {
+    @if (draft.id && !globals()) {
+      <div class="mt-4 border-t border-slate-200 pt-3">
+        <app-client-certificates [environmentId]="draft.id" />
+      </div>
       <div class="mt-4 border-t border-slate-200 pt-3">
         <app-captured-values [environmentId]="draft.id" />
         <p class="mt-1 text-xs text-slate-500">
