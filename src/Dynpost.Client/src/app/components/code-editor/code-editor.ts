@@ -18,6 +18,8 @@ import {
   variableClass,
 } from '../../models/variables';
 import { ThemeStore } from '../../services/theme-store';
+import { jsonPathAt } from '../../models/json-path';
+import { copyText } from '../../models/clipboard';
 import { Monaco, loadMonaco } from './monaco-loader';
 
 /**
@@ -40,6 +42,8 @@ export class CodeEditor {
   readonly highlightVariables = input(false);
   /** The defined variables; references to others are marked. `null` marks none. */
   readonly variables = input<VariableLookup | null>(null);
+  /** Whether a JSON text gets a "Copy JSONPath" action in its context menu. */
+  readonly jsonPaths = input(false);
 
   /** Emits the text as the user edits it. */
   readonly valueChange = output<string>();
@@ -138,9 +142,28 @@ export class CodeEditor {
       if (!this.applyingInput) this.valueChange.emit(model.getValue());
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => this.submit.emit());
+    editor.addAction({
+      id: 'dynpost.copyJsonPath',
+      label: 'Copy JSONPath',
+      contextMenuGroupId: '9_cutcopypaste',
+      precondition: undefined,
+      run: (ed) => {
+        const position = ed.getPosition();
+        const current = ed.getModel();
+        if (!position || !current || !this.jsonPaths() || this.language() !== 'json') return;
+        const path = jsonPathAt(current.getValue(), current.getOffsetAt(position));
+        if (path) void copyText(path);
+      },
+    });
     this.editor = editor;
     this.updateVariableDecorations();
     this.ready.set(true);
+  }
+
+  /** Opens Monaco's find widget (Ctrl+F), once the editor is ready. */
+  find(): void {
+    this.editor?.focus();
+    void this.editor?.getAction('actions.find')?.run();
   }
 
   /** Marks every `{{variable}}` reference (styled by `.variable-highlight` in styles.scss). */

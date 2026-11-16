@@ -132,6 +132,30 @@ describe('ResponseViewer', () => {
     expect(badge.title).toBe('404 Not Found — The server cannot find the requested resource.');
   });
 
+  it('filters a JSON body with JSONPath, leaving Raw whole', () => {
+    const body = JSON.stringify({ items: [{ id: 1 }, { id: 2 }] });
+    const fixture = render(
+      response({ contentType: 'application/json', body, bodyEncoding: 'text', size: body.length }),
+    );
+    const filter = fixture.nativeElement.querySelector(
+      'input[aria-label="Filter the body with JSONPath"]',
+    ) as HTMLInputElement;
+
+    filter.value = '$.items[*].id';
+    filter.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('2 matches');
+    const viewer = fixture.componentInstance as unknown as { shownBody: () => string | null };
+    expect(viewer.shownBody()).toBe(JSON.stringify([1, 2], null, 2));
+
+    click(fixture, 'Raw');
+    expect(viewer.shownBody()).toBe(body);
+    expect(
+      fixture.nativeElement.querySelector('input[aria-label="Filter the body with JSONPath"]'),
+    ).toBeNull();
+  });
+
   it('offers copying only for text bodies', () => {
     const fixture = render(response());
     const labels = [...fixture.nativeElement.querySelectorAll('button')].map((b: HTMLElement) =>
