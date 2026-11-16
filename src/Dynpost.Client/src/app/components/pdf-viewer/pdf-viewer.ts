@@ -46,7 +46,7 @@ interface PageSlot {
 
 /**
  * Renders a PDF with pdf.js: one canvas per page, drawn when it scrolls into view, with a text
- * layer on top so text can be selected and copied. Fits the page width by default. It can be
+ * layer on top so text can be selected and copied. Shows pages at 100% by default. It can be
  * maximized to fill the whole window (Escape restores it).
  */
 @Component({
@@ -67,7 +67,7 @@ export class PdfViewer {
   /** The PDF file's bytes. */
   readonly data = input.required<Uint8Array<ArrayBuffer>>();
 
-  protected readonly zoom = signal<Zoom>('width');
+  protected readonly zoom = signal<Zoom>(1);
   /** Whether the viewer fills the whole window instead of its place in the page. */
   protected readonly maximized = signal(false);
   protected readonly document = signal<PDFDocumentProxy | null>(null);

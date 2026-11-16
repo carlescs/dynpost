@@ -834,8 +834,8 @@ clears it, and **Raw** still shows the whole body. Right-click a key or value
 and pick **Copy JSONPath** to copy its path (`$.items[2].id`). HTML
 responses are previewed rendered in a sandboxed frame that runs no scripts and
 loads nothing from the network
-(switch to **Source** for the markup), PDFs are rendered with pdf.js (fit to width
-or zoomed, with selectable text), images are previewed, and other binary bodies
+(switch to **Source** for the markup), PDFs are rendered with pdf.js (at 100% by default,
+fit to page or width, or zoomed, with selectable text), images are previewed, and other binary bodies
 are not shown (use **Save** to get them). Bodies over 20 MB are cut off. Responses are kept in memory per open
 request only; nothing is written to the workspace. The bodies of the latest
 responses (up to 64 MB in all) are kept by the backend so they can be saved.

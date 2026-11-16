@@ -23,6 +23,15 @@ describe('PdfViewer', () => {
     return fixture;
   }
 
+  it('shows pages at 100% by default', async () => {
+    const fixture = await create();
+    const host = fixture.nativeElement as HTMLElement;
+    const actual = host.querySelector('[aria-label="100% zoom"]') as HTMLButtonElement;
+    const width = host.querySelector('[aria-label="Fit to width"]') as HTMLButtonElement;
+    expect(actual.getAttribute('aria-pressed')).toBe('true');
+    expect(width.getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('maximizes to fill the window and restores with the button or Escape', async () => {
     const fixture = await create();
     const host = fixture.nativeElement as HTMLElement;
