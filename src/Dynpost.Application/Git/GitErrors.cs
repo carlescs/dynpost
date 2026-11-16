@@ -50,6 +50,8 @@ public static class GitErrors
     public const string RemoteBranchUnmappedCode = "git.remote_branch_unmapped";
     public const string CurrentBranchCode = "git.current_branch";
     public const string MergeSameBranchCode = "git.merge_same_branch";
+    public const string CloneDestinationExistsCode = "git.clone_destination_exists";
+    public const string InvalidCloneFolderCode = "git.invalid_clone_folder";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -228,6 +230,12 @@ public static class GitErrors
 
     public static Error FileNotChanged(string path) =>
         new(FileNotChangedCode, $"'{path}' has no changes to show.");
+
+    public static Error CloneDestinationExists(string path) =>
+        new(CloneDestinationExistsCode, $"The folder '{path}' already exists and is not empty. Choose another name or location.");
+
+    public static Error InvalidCloneFolder(string message) =>
+        new(InvalidCloneFolderCode, message);
 
     public static Error InvalidRemote(string message) =>
         new(InvalidRemoteCode, message);

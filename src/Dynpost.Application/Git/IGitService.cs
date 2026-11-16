@@ -21,6 +21,13 @@ public interface IGitService
     Task<Result<Unit>> InitAsync(string workspacePath, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Clones the repository at <paramref name="url"/> into <paramref name="destination"/>, a folder
+    /// that must not exist yet or be empty; its parent folder must exist. Fails with
+    /// <see cref="GitErrors.CloneDestinationExistsCode"/> when the destination is not empty.
+    /// </summary>
+    Task<Result<Unit>> CloneAsync(RemoteUrl url, string destination, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stages and commits changes inside the workspace: the given <paramref name="paths"/>, or every
     /// change when <paramref name="paths"/> is <c>null</c>. Returns the new commit id.
     /// </summary>

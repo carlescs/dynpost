@@ -336,6 +336,54 @@ describe('WorkspaceStore', () => {
     expect(send).toHaveBeenLastCalledWith('workspace.recent');
   });
 
+  it('clones a repository and opens it, closing the open documents', async () => {
+    store.newRequest();
+    store.documents.update((docs) => docs.map((d) => ({ ...d, dirty: false })));
+    respond({
+      'workspace.clone': () => workspace,
+      'workspace.recent': () => [],
+    });
+
+    const result = await store.cloneRepository('https://example.com/api.git', '/home/me', 'api');
+
+    expect(result).toBeNull();
+    expect(send).toHaveBeenCalledWith('workspace.clone', {
+      url: 'https://example.com/api.git',
+      parentFolder: '/home/me',
+      name: 'api',
+    });
+    expect(store.workspace()).toEqual({ name: 'api', root: '/home/me/api' });
+    expect(store.documents()).toEqual([]);
+  });
+
+  it('returns why a clone failed without showing it as the store error', async () => {
+    respond({
+      'workspace.clone': () =>
+        Promise.reject(new BridgeError('git.authentication_failed', 'Denied')),
+      'workspace.recent': () => [],
+    });
+
+    const result = await store.cloneRepository('https://example.com/api.git', '/home/me');
+
+    expect(result).toBe('Denied');
+    expect(send).toHaveBeenCalledWith('workspace.clone', {
+      url: 'https://example.com/api.git',
+      parentFolder: '/home/me',
+      name: null,
+    });
+    expect(store.workspace()).toBeNull();
+    expect(store.error()).toBeNull();
+  });
+
+  it('does not clone when the user keeps their unsaved changes', async () => {
+    store.newRequest();
+    dialogs.confirm.mockResolvedValue(false);
+    respond({});
+
+    expect(await store.cloneRepository('https://example.com/api.git', '/home/me')).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('reports a recent workspace that can no longer be opened', async () => {
     respond({
       'workspace.open': () => Promise.reject(new BridgeError('not_found', 'Gone')),

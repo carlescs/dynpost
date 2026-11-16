@@ -76,6 +76,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 ## Planned features
 
 - [x] Open a folder as a workspace and browse its requests
+- [x] Clone a git repository from its URL and open it as a workspace
 - [x] Create, rename, duplicate and delete (nested) collection folders, and move
       requests and folders between them with drag and drop
 - [x] Duplicate requests, switch between recently used workspaces, and remove
@@ -1267,6 +1268,15 @@ reported so you can resolve them (in Dynpost's editor or your own tools).
 Dynpost runs your installed `git` command-line client, so your git
 configuration, hooks and credential helpers apply as usual. In detail:
 
+- **Clone**: **Clone repository** (the branch button next to the open-folder
+  button in the header, or on the start page, the Explorer and the Source
+  control view when no folder is open) asks for a repository URL
+  (`https://…`, `ssh://…`, `git@host:team/repo.git` or a local path) and the
+  folder to clone into, runs `git clone` into a new subfolder named after the
+  repository (you can rename it; the folder must not exist or be empty) and
+  opens it as the workspace. Private repositories need the same credentials
+  `git clone` would use in a terminal; with no terminal to prompt in, a missing
+  credential is reported instead.
 - **Initialize**: if the workspace folder is not inside a git repository, the
   Source control view offers to create one there (`git init`, using your
   default branch name) and adds `.dynpost/` to the folder's `.gitignore`,

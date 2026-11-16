@@ -298,6 +298,14 @@
     >
       <fa-icon [icon]="faFolderOpen" /> Open folder
     </button>
+    <button
+      type="button"
+      class="flex items-center justify-center gap-2 rounded border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+      [disabled]="store.opening()"
+      (click)="cloneRepository()"
+    >
+      <fa-icon [icon]="faCodeBranch" /> Clone repository
+    </button>
     @if (store.recent().length) {
       <section aria-labelledby="recent-workspaces" class="flex flex-col gap-1 pt-2">
         <h3 id="recent-workspaces" class="text-xs font-semibold tracking-wide uppercase">Recent</h3>

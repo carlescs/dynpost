@@ -1046,6 +1046,16 @@ export interface BridgeMessages {
   'mcp.regenerateToken': { payload: void; result: McpStatusDto };
   'workspace.pick': { payload: void; result: WorkspaceDto | null };
   'workspace.open': { payload: { path: string }; result: WorkspaceDto };
+  /** Shows a folder picker for the folder a repository is cloned into; `null` when cancelled. */
+  'workspace.pickCloneFolder': { payload: void; result: string | null };
+  /**
+   * Clones a git repository into a new folder of `parentFolder` and opens it. `name` is the new
+   * folder's name; omitted, it is the repository's name taken from the URL.
+   */
+  'workspace.clone': {
+    payload: { url: string; parentFolder: string; name?: string | null };
+    result: WorkspaceDto;
+  };
   /** Reopens the workspace from the previous session; `null` when there is none. */
   'workspace.openLast': { payload: void; result: WorkspaceDto | null };
   /**

@@ -38,5 +38,26 @@ public sealed record RemoteUrl
         return url is not null;
     }
 
+    /// <summary>
+    /// The folder name <c>git clone</c> would pick for the repository: the last path segment
+    /// without a trailing <c>.git</c> (<c>https://host/team/api.git</c> and <c>git@host:team/api</c>
+    /// give <c>api</c>), or null when the URL has no usable segment.
+    /// </summary>
+    public string? RepositoryName
+    {
+        get
+        {
+            var path = Value.Replace('\\', '/').TrimEnd('/');
+            if (path.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path[..^".git".Length].TrimEnd('/');
+            }
+
+            var start = path.LastIndexOfAny(['/', ':']) + 1;
+            var name = path[start..];
+            return name is "" or "." or ".." ? null : name;
+        }
+    }
+
     public override string ToString() => Value;
 }

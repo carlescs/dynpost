@@ -142,12 +142,46 @@ export class WorkspaceStore {
     }
   }
 
+  /** Asks the user for the folder to clone a repository into; `null` when cancelled or failed. */
+  async pickCloneFolder(): Promise<string | null> {
+    try {
+      return await this.bridge.send('workspace.pickCloneFolder');
+    } catch (error) {
+      this.report(error);
+      return null;
+    }
+  }
+
+  /**
+   * Clones a git repository into a new folder of `parentFolder` (named `name`, or after the
+   * repository when empty) and opens it, closing the open documents. Resolves to `null` once it is
+   * open, `false` when the user kept their unsaved changes, or the reason the clone failed, so the
+   * clone dialog can show it.
+   */
+  async cloneRepository(
+    url: string,
+    parentFolder: string,
+    name?: string,
+  ): Promise<string | false | null> {
+    const failures: string[] = [];
+    const opened = await this.switchWorkspace(
+      () => this.bridge.send('workspace.clone', { url, parentFolder, name: name || null }),
+      (error) => failures.push(messageOf(error)),
+    );
+    return failures[0] ?? (opened ? null : false);
+  }
+
   /**
    * Replaces the open workspace with the one `open` returns (`null` when the user cancelled),
-   * closing the open documents.
+   * closing the open documents. Resolves to whether the workspace was replaced; a failure goes to
+   * `onError`, which by default shows it as the store's error.
    */
-  private async switchWorkspace(open: () => Promise<WorkspaceDto | null>): Promise<void> {
-    if (!(await this.confirmDiscard('Open another folder?'))) return;
+  private async switchWorkspace(
+    open: () => Promise<WorkspaceDto | null>,
+    onError: (error: unknown) => void = (error) => this.report(error),
+  ): Promise<boolean> {
+    if (!(await this.confirmDiscard('Open another folder?'))) return false;
+    let opened = false;
     this.opening.set(true);
     try {
       const workspace = await open();
@@ -157,13 +191,15 @@ export class WorkspaceStore {
         this.onDisk.clear();
         this.applyWorkspace(workspace);
         this.error.set(null);
+        opened = true;
       }
     } catch (error) {
-      this.report(error);
+      onError(error);
     } finally {
       this.opening.set(false);
     }
     await this.loadRecent();
+    return opened;
   }
 
   /** Re-reads the workspace tree from disk. */
@@ -719,10 +755,12 @@ export class WorkspaceStore {
   }
 
   private report(error: unknown): void {
-    this.error.set(
-      error instanceof BridgeError || error instanceof Error ? error.message : String(error),
-    );
+    this.error.set(messageOf(error));
   }
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof BridgeError || error instanceof Error ? error.message : String(error);
 }
 
 /** Whether `path` is `folder` itself or inside it. */

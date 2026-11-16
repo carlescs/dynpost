@@ -248,6 +248,7 @@ internal static class Program
             .AddTransient<CompareRuns>()
             .AddTransient<GetGitStatus>()
             .AddTransient<InitRepository>()
+            .AddTransient<CloneRepository>()
             .AddTransient<CommitChanges>()
             .AddTransient<DiscardChanges>()
             .AddTransient<PullChanges>()

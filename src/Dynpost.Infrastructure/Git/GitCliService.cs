@@ -73,6 +73,19 @@ public sealed class GitCliService : IGitService
         return parsed with { MergeMessage = mergeMessage.Value };
     }
 
+    public async Task<Result<Unit>> CloneAsync(RemoteUrl url, string destination, CancellationToken cancellationToken = default)
+    {
+        var full = Path.GetFullPath(destination);
+        var parent = Path.GetDirectoryName(full);
+        if (parent is null || !Directory.Exists(parent))
+        {
+            return GitErrors.WorkspaceNotFound(parent ?? full);
+        }
+
+        // "--" keeps the URL and folder from ever being read as options.
+        return Done(await RunCheckedAsync(parent, "clone", ["clone", "--quiet", "--", url.Value, full], cancellationToken));
+    }
+
     public async Task<Result<Unit>> InitAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);

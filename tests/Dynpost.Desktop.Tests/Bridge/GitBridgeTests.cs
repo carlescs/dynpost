@@ -27,6 +27,7 @@ public sealed class GitBridgeTests : IDisposable
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
     private readonly IRequestFileFormat _format = Substitute.For<IRequestFileFormat>();
     private readonly CurrentWorkspace _current = new();
+    private readonly IFileDialogs _dialogs = Substitute.For<IFileDialogs>();
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
 
@@ -56,6 +57,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetGitStatus>()
             .AddTransient<InitRepository>()
+            .AddTransient<CloneRepository>()
             .AddTransient<CommitChanges>()
             .AddTransient<DiscardChanges>()
             .AddTransient<PullChanges>()
@@ -82,7 +84,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<UpdateRemote>()
             .AddTransient<RemoveRemote>()
             .BuildServiceProvider();
-        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
+        _router = BridgeHandlers.Create(_services, _dialogs, Substitute.For<IAppWindow>());
     }
 
     public void Dispose() => _services.Dispose();
@@ -242,6 +244,50 @@ public sealed class GitBridgeTests : IDisposable
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         Assert.Equal("main", response.GetProperty("payload").GetProperty("branch").GetString());
         await _git.Received(1).InitAsync(Folder, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task PickCloneFolder_ReturnsTheChosenFolder()
+    {
+        _dialogs.PickFolderAsync(Arg.Any<string>()).Returns("/work");
+
+        var response = await SendAsync("workspace.pickCloneFolder");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Equal("/work", response.GetProperty("payload").GetString());
+    }
+
+    [Fact]
+    public async Task Clone_ClonesAndOpensTheNewFolder()
+    {
+        var destination = Path.Combine("/work", "renamed");
+        _repository.FolderExists("/work").Returns(true);
+        _repository.FolderExists(destination).Returns(true);
+        _repository.ListAsync(destination, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<WorkspaceEntry>>.Success([]));
+        _git.CloneAsync(default!, default!, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+
+        var response = await SendAsync(
+            "workspace.clone",
+            """{ "url": "https://example.com/team/my-api.git", "parentFolder": "/work", "name": "renamed" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Equal(destination, response.GetProperty("payload").GetProperty("root").GetString());
+        await _git.Received(1).CloneAsync(
+            Arg.Is<RemoteUrl>(u => u.Value == "https://example.com/team/my-api.git"), destination, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Clone_Failure_IsReported()
+    {
+        _repository.FolderExists("/work").Returns(true);
+        _git.CloneAsync(default!, default!, default)
+            .ReturnsForAnyArgs(Result<Unit>.Failure(GitErrors.AuthenticationFailed("denied")));
+
+        var response = await SendAsync("workspace.clone", """{ "url": "https://example.com/my-api.git", "parentFolder": "/work" }""");
+
+        Assert.False(response.GetProperty("ok").GetBoolean());
+        Assert.Equal(GitErrors.AuthenticationFailedCode, ErrorCode(response));
     }
 
     [Fact]

@@ -46,6 +46,10 @@ internal static class BridgeHandlers
             })
             .Register<OpenWorkspacePayload, WorkspaceDto>(BridgeMessageTypes.WorkspaceOpen,
                 (p, ct) => Use<OpenWorkspace>().ExecuteAsync(p.Path, ct))
+            .Register(BridgeMessageTypes.WorkspacePickCloneFolder,
+                async _ => Result<string?>.Success(await dialogs.PickFolderAsync("Choose where to clone the repository")))
+            .Register<CloneWorkspacePayload, WorkspaceDto>(BridgeMessageTypes.WorkspaceClone,
+                (p, ct) => Use<CloneRepository>().ExecuteAsync(new CloneRepositoryRequest(p.Url, p.ParentFolder, p.Name), ct))
             .Register(BridgeMessageTypes.WorkspaceOpenLast,
                 ct => Use<OpenLastWorkspace>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.WorkspaceRecent,

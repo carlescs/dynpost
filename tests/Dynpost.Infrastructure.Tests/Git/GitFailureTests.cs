@@ -18,6 +18,7 @@ public class GitFailureTests
     [InlineData("fatal: refusing to merge unrelated histories", GitErrors.UnrelatedHistoriesCode)]
     [InlineData("fatal: detected dubious ownership in repository at '/w'\nTo add an exception for this directory, call:\n\n\tgit config --global --add safe.directory /w", GitErrors.UnsafeRepositoryCode)]
     [InlineData("fatal: Unable to create '/w/.git/index.lock': File exists.\n\nAnother git process seems to be running", GitErrors.RepositoryLockedCode)]
+    [InlineData("fatal: destination path '/w/api' already exists and is not an empty directory.", GitErrors.CloneDestinationExistsCode)]
     [InlineData("error: something else entirely", GitErrors.CommandFailedCode)]
     public void Classify_RecognizesCommonFailures(string details, string code)
     {
