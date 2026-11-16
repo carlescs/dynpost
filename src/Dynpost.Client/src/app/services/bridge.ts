@@ -22,6 +22,7 @@ export class BridgeError extends Error implements BridgeErrorShape {
   constructor(
     readonly code: string,
     message: string,
+    readonly target: string | null = null,
   ) {
     super(message);
     this.name = 'BridgeError';
@@ -116,7 +117,11 @@ export class Bridge {
 
   private unwrap(response: BridgeResponseEnvelope): unknown {
     if (response.ok) return response.payload;
-    throw new BridgeError(response.error.code, response.error.message);
+    throw new BridgeError(
+      response.error.code,
+      response.error.message,
+      response.error.target ?? null,
+    );
   }
 
   private static findHost(): PhotinoExternal | null {

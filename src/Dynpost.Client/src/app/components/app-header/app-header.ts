@@ -5,6 +5,7 @@ import {
   faCircleArrowUp,
   faCircleInfo,
   faClockRotateLeft,
+  faCodeBranch,
   faKey,
   faGear,
   faKeyboard,
@@ -17,6 +18,7 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { AboutDialog } from '../about-dialog/about-dialog';
+import { openCloneDialog } from '../clone-dialog/open-clone-dialog';
 import { HistorySettingsDialog } from '../history-settings-dialog/history-settings-dialog';
 import { SecretSettingsDialog } from '../secret-settings-dialog/secret-settings-dialog';
 import { McpSettingsDialog } from '../mcp-settings-dialog/mcp-settings-dialog';
@@ -76,6 +78,7 @@ export class AppHeader {
   protected readonly faMagnifyingGlass = faMagnifyingGlass;
   protected readonly quickOpenKeys = formatCombo({ key: 'p', mod: true });
   protected readonly faFolderOpen = faFolderOpen;
+  protected readonly faCodeBranch = faCodeBranch;
   protected readonly faXmark = faXmark;
   protected readonly faRobot = faRobot;
 
@@ -109,6 +112,11 @@ export class AppHeader {
     const target = event.target as Node;
     if (!this.host.nativeElement.contains(target)) this.menuOpen.set(false);
     if (!this.recentMenu().nativeElement.contains(target)) this.recentOpen.set(false);
+  }
+
+  protected cloneRepository(): void {
+    this.recentOpen.set(false);
+    void openCloneDialog(this.dialogs);
   }
 
   protected showHistorySettings(): void {

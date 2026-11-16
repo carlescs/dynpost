@@ -71,6 +71,23 @@ public class RemoteTests
         Assert.False(string.IsNullOrEmpty(error));
     }
 
+    [Theory]
+    [InlineData("https://github.com/team/my-api.git", "my-api")]
+    [InlineData("https://github.com/team/my-api/", "my-api")]
+    [InlineData("git@github.com:team/my-api.git", "my-api")]
+    [InlineData("git@github.com:my-api", "my-api")]
+    [InlineData("ssh://git@host:2222/team/my-api.git/", "my-api")]
+    [InlineData(@"C:\repos\my-api", "my-api")]
+    [InlineData("../repos/my-api.git", "my-api")]
+    [InlineData("https://github.com/", "github.com")]
+    [InlineData("https://", null)]
+    [InlineData("..", null)]
+    public void RemoteUrl_RepositoryName_IsTheFolderGitWouldClone(string text, string? name)
+    {
+        Assert.True(RemoteUrl.TryCreate(text, out var url, out var error), error);
+        Assert.Equal(name, url.RepositoryName);
+    }
+
     [Fact]
     public void LooksBinary_DetectsNulCharacters()
     {

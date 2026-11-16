@@ -76,6 +76,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 ## Planned features
 
 - [x] Open a folder as a workspace and browse its requests
+- [x] Clone a git repository from its URL and open it as a workspace
 - [x] Create, rename, duplicate and delete (nested) collection folders, and move
       requests and folders between them with drag and drop
 - [x] Duplicate requests, switch between recently used workspaces, and remove
@@ -1267,6 +1268,30 @@ reported so you can resolve them (in Dynpost's editor or your own tools).
 Dynpost runs your installed `git` command-line client, so your git
 configuration, hooks and credential helpers apply as usual. In detail:
 
+- **Clone**: **Clone repository** (the branch button next to the open-folder
+  button in the header, or on the start page, the Explorer and the Source
+  control view when no folder is open) asks for a repository URL
+  (`https://…`, `ssh://…`, `git@host:team/repo.git` or a local path) and the
+  folder to clone into, runs `git clone` into a new subfolder named after the
+  repository (you can rename it; the folder must not exist or be empty) and
+  opens it as the workspace. Private repositories sign in as described under
+  **Signing in** below.
+- **Signing in**: clone, pull, push and fetch first use your git setup as is
+  (a credential manager such as Git Credential Manager, a saved login, or your
+  SSH keys). When git can't sign in to an HTTP(S) remote by itself, Dynpost
+  asks for a user name and a password or personal access token (GitHub,
+  GitLab, Bitbucket and Azure DevOps need a token) and tries again, asking
+  again if they are refused. The credentials go to git for that command and
+  that host only, through environment variables read by a one-off credential
+  helper: never on the command line, in the remote's URL or in any file
+  Dynpost writes. Once they work, Dynpost hands them to your own credential
+  helpers (`git credential approve`), so the login is saved where git saves it
+  for a terminal (Windows Credential Manager, the macOS Keychain, libsecret,
+  `~/.git-credentials` with the `store` helper...) and later commands, in
+  Dynpost or a terminal, sign in by themselves. Without a credential helper
+  configured, nothing is saved and you are asked again next time. SSH remotes
+  are left to your SSH setup: load passphrase-protected keys into `ssh-agent`
+  and connect once from a terminal so the host is trusted.
 - **Initialize**: if the workspace folder is not inside a git repository, the
   Source control view offers to create one there (`git init`, using your
   default branch name) and adds `.dynpost/` to the folder's `.gitignore`,

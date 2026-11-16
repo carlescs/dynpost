@@ -18,6 +18,7 @@ import {
   faFileExport,
   faFileImport,
   faFolderOpen,
+  faCodeBranch,
   faFolderPlus,
   faLaptop,
   faPen,
@@ -30,6 +31,7 @@ import {
 import { revealLabel } from '../../../../models/reveal-label';
 import { InterchangeStore } from '../../../../services/interchange-store';
 import { Dialogs } from '../../../../services/dialogs';
+import { openCloneDialog } from '../../../../components/clone-dialog/open-clone-dialog';
 import { CurlImportDialog } from '../curl-import-dialog/curl-import-dialog';
 import { FolderSettingsStore } from '../../../../services/folder-settings-store';
 import { REQUESTS_FOLDER } from '../../../../models/workspace';
@@ -70,6 +72,7 @@ export class ExplorerView {
   protected readonly faFileExport = faFileExport;
   protected readonly faFileImport = faFileImport;
   protected readonly faFolderOpen = faFolderOpen;
+  protected readonly faCodeBranch = faCodeBranch;
   protected readonly faFolderPlus = faFolderPlus;
   protected readonly faTrash = faTrash;
   protected readonly faArrowsRotate = faArrowsRotate;
@@ -129,6 +132,10 @@ export class ExplorerView {
   protected openFolderSettings(path: string): void {
     this.closeMenu();
     void this.folders.open(path);
+  }
+
+  protected cloneRepository(): void {
+    void openCloneDialog(this.dialogs);
   }
 
   protected newFromCurl(): void {

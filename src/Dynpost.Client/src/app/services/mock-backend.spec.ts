@@ -179,6 +179,23 @@ describe('MockBackend search', () => {
     return result.payload as never;
   }
 
+  it('opens the sample workspace for a clone and rejects a blank URL', async () => {
+    const backend = new MockBackend();
+    const cloned = await backend.handle({
+      id: '1',
+      type: 'workspace.clone',
+      payload: { url: 'https://example.com/api.git', parentFolder: '/preview' },
+    });
+    const blank = await backend.handle({
+      id: '2',
+      type: 'workspace.clone',
+      payload: { url: ' ', parentFolder: '/preview' },
+    });
+
+    expect(cloned.ok).toBe(true);
+    expect(blank.ok).toBe(false);
+  });
+
   it('finds requests by name, method or URL words with typos for quick open', async () => {
     const items: QuickOpenItemDto[] = await call('workspace.quickOpen', { query: 'post /usars' });
 

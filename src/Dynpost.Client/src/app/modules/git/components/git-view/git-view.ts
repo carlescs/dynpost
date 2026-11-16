@@ -31,6 +31,7 @@ import { GitHistoryList } from '../git-history-list/git-history-list';
 import { GitRemotes } from '../git-remotes/git-remotes';
 import { GitBranches } from '../git-branches/git-branches';
 import { Dialogs } from '../../../../services/dialogs';
+import { openCloneDialog } from '../../../../components/clone-dialog/open-clone-dialog';
 
 @Component({
   selector: 'app-git-view',
@@ -248,6 +249,10 @@ export class GitView {
 
   protected describe(change: GitChange): string {
     return change.originalPath ? `${change.originalPath} → ${change.path}` : change.path;
+  }
+
+  protected cloneRepository(): void {
+    void openCloneDialog(this.dialogs);
   }
 }
 

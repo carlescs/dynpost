@@ -445,6 +445,15 @@ export class MockBackend {
     }
     // The browser preview's tab is the browser's to close.
     if (request.type === 'app.quit') return ok(null);
+    // The browser preview has no file system: any folder will do, and a clone opens the sample.
+    if (request.type === 'workspace.pickCloneFolder') return ok('/preview');
+    if (request.type === 'workspace.clone') {
+      if (!String(payload?.['url'] ?? '').trim()) {
+        return fail(ERROR_CODES.invalidRequest, "Enter the remote's URL.");
+      }
+      this.open = true;
+      return ok(this.workspace());
+    }
     if (request.type === 'workspace.pick' || request.type === 'workspace.open') {
       this.open = true;
       return ok(this.workspace());

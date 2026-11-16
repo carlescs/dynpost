@@ -17,6 +17,7 @@ import { EnvironmentStore } from './environment-store';
 import { RunStore, isRunPlanDirty } from './run-store';
 import { WorkspaceStore } from './workspace-store';
 import { Dialogs } from './dialogs';
+import { GitSignInPrompt } from './git-sign-in-prompt';
 
 export type GitOperation =
   | 'refresh'
@@ -49,6 +50,7 @@ export class GitStore {
   private readonly workspace = inject(WorkspaceStore);
   private readonly environments = inject(EnvironmentStore);
   private readonly runs = inject(RunStore);
+  private readonly signIn = inject(GitSignInPrompt);
 
   /** Whether git is reachable: the browser dev server has no git backend. */
   readonly available = this.bridge.isDesktop;
@@ -228,7 +230,7 @@ export class GitStore {
   async fetch(): Promise<void> {
     await this.run(
       'fetch',
-      () => this.bridge.send('git.fetch'),
+      () => this.signIn.run((signIn) => this.bridge.send('git.fetch', { signIn })),
       (status) => {
         this.status.set(status);
         this.notice.set({
@@ -348,7 +350,7 @@ export class GitStore {
   async pull(): Promise<void> {
     await this.run(
       'pull',
-      () => this.bridge.send('git.pull'),
+      () => this.signIn.run((signIn) => this.bridge.send('git.pull', { signIn })),
       (r) => {
         this.status.set(r.status);
         this.notice.set(PULL_NOTICES[r.outcome]);
@@ -365,7 +367,7 @@ export class GitStore {
   async push(): Promise<void> {
     const ok = await this.run(
       'push',
-      () => this.bridge.send('git.push'),
+      () => this.signIn.run((signIn) => this.bridge.send('git.push', { signIn })),
       (status) => {
         this.status.set(status);
         // Pushing a new branch creates its remote-tracking branch.
@@ -379,7 +381,7 @@ export class GitStore {
       const root = this.root();
       this.busy.set('fetch');
       try {
-        const status = await this.bridge.send('git.fetch');
+        const status = await this.bridge.send('git.fetch', {});
         if (this.root() === root) {
           this.status.set(status);
           this.reloadBranchesIfShown();

@@ -25,7 +25,7 @@ public class FetchChangesTests
         var result = await _useCase.ExecuteAsync();
 
         Assert.Equal(GitErrors.NoRemoteCode, result.Error?.Code);
-        _ = _git.DidNotReceiveWithAnyArgs().FetchAsync(default!, default);
+        _ = _git.DidNotReceiveWithAnyArgs().FetchAsync(default!, default, default);
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public class FetchChangesTests
         var after = Status() with { Behind = 2 };
         _git.ListRemotesAsync(WorkspacePath, Arg.Any<CancellationToken>())
             .Returns(Ok<IReadOnlyList<GitRemote>>([new GitRemote("origin", "u", "u")]));
-        _git.FetchAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(Unit.Value));
+        _git.FetchAsync(WorkspacePath, Arg.Any<GitCredentials?>(), Arg.Any<CancellationToken>()).Returns(Ok(Unit.Value));
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>()).Returns(Ok(after));
 
         var result = await _useCase.ExecuteAsync();
@@ -48,7 +48,7 @@ public class FetchChangesTests
     {
         _git.ListRemotesAsync(WorkspacePath, Arg.Any<CancellationToken>())
             .Returns(Ok<IReadOnlyList<GitRemote>>([new GitRemote("origin", "u", "u")]));
-        _git.FetchAsync(WorkspacePath, Arg.Any<CancellationToken>())
+        _git.FetchAsync(WorkspacePath, Arg.Any<GitCredentials?>(), Arg.Any<CancellationToken>())
             .Returns(Result<Unit>.Failure(GitErrors.AuthenticationFailed("denied")));
 
         var result = await _useCase.ExecuteAsync();

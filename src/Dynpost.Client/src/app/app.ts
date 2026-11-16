@@ -3,6 +3,7 @@ import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faCircleCheck,
   faCircleExclamation,
+  faCodeBranch,
   faFolderOpen,
   faPaperPlane,
   faPlus,
@@ -30,6 +31,8 @@ import { UpdateStore } from './services/update-store';
 import { InterchangeStore } from './services/interchange-store';
 import { Shortcuts } from './services/shortcuts';
 import { WorkspaceStore } from './services/workspace-store';
+import { Dialogs } from './services/dialogs';
+import { openCloneDialog } from './components/clone-dialog/open-clone-dialog';
 import { WorkspaceSync } from './services/workspace-sync';
 
 @Component({
@@ -67,6 +70,7 @@ export class App implements OnInit {
   protected readonly interchange = inject(InterchangeStore);
   private readonly updates = inject(UpdateStore);
   private readonly theme = inject(ThemeStore);
+  private readonly dialogs = inject(Dialogs);
   private readonly dateFormat = inject(DateFormatStore);
   private readonly shortcuts = inject(Shortcuts);
   /** Shows what AI assistants change through the MCP server. */
@@ -74,6 +78,7 @@ export class App implements OnInit {
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faPlus = faPlus;
   protected readonly faFolderOpen = faFolderOpen;
+  protected readonly faCodeBranch = faCodeBranch;
   protected readonly faXmark = faXmark;
   protected readonly faCircleExclamation = faCircleExclamation;
   protected readonly faCircleCheck = faCircleCheck;
@@ -87,5 +92,9 @@ export class App implements OnInit {
 
   protected onKeydown(event: KeyboardEvent): void {
     this.shortcuts.handle(event);
+  }
+
+  protected cloneRepository(): void {
+    void openCloneDialog(this.dialogs);
   }
 }

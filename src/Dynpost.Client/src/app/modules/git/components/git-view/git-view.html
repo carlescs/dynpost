@@ -32,7 +32,7 @@
   <p class="px-3 text-sm text-slate-500">Source control is available in the Dynpost desktop app.</p>
 } @else if (!workspace.workspace()) {
   <div class="space-y-2 px-3 text-sm text-slate-500">
-    <p>Open a workspace folder to see its changes and sync it with git.</p>
+    <p>Open a workspace folder to see its changes and sync it with git, or clone a repository.</p>
     <button
       type="button"
       class="flex w-full items-center justify-center gap-2 rounded bg-sky-600 px-3 py-1 text-sm text-white enabled:hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -40,6 +40,14 @@
       (click)="workspace.openFolder()"
     >
       <fa-icon [icon]="faFolderOpen" /> Open folder
+    </button>
+    <button
+      type="button"
+      class="flex w-full items-center justify-center gap-2 rounded border border-slate-300 px-3 py-1 text-sm text-slate-700 enabled:hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+      [disabled]="workspace.opening()"
+      (click)="cloneRepository()"
+    >
+      <fa-icon [icon]="faCodeBranch" /> Clone repository
     </button>
   </div>
 } @else if (git.notARepository()) {

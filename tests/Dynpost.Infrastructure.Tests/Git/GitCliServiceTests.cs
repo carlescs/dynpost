@@ -46,6 +46,55 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Clone_CopiesTheRepositoryIntoANewFolder()
+    {
+        var source = _temp.Combine("source");
+        Write(source, "requests/health.yaml", "name: Health\n");
+        TestGit.Run(_temp.Path, "init", "--quiet", source);
+        TestGit.Configure(source);
+        TestGit.CommitAll(source, "first");
+        var destination = _temp.Combine("clones", "api");
+        Directory.CreateDirectory(_temp.Combine("clones"));
+
+        var result = await _git.CloneAsync(Url(source), destination);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal("name: Health\n", File.ReadAllText(Path.Combine(destination, "requests", "health.yaml")));
+        Assert.Equal(TestGit.Head(source), TestGit.Head(destination));
+    }
+
+    [Fact]
+    public async Task Clone_IntoAFolderThatIsNotEmpty_IsReported()
+    {
+        var source = _temp.Combine("source");
+        TestGit.Run(_temp.Path, "init", "--quiet", source);
+        var destination = _temp.Combine("taken");
+        Write(destination, "notes.txt", "mine");
+
+        var result = await _git.CloneAsync(Url(source), destination);
+
+        Assert.Equal(GitErrors.CloneDestinationExistsCode, result.Error?.Code);
+        Assert.Equal("mine", File.ReadAllText(Path.Combine(destination, "notes.txt")));
+    }
+
+    [Fact]
+    public async Task Clone_FromAMissingRepository_IsReported()
+    {
+        var result = await _git.CloneAsync(Url(_temp.Combine("missing")), _temp.Combine("api"));
+
+        Assert.True(result.IsFailure);
+        Assert.False(Directory.Exists(_temp.Combine("api")));
+    }
+
+    [Fact]
+    public async Task Clone_IntoAMissingParentFolder_IsReported()
+    {
+        var result = await _git.CloneAsync(Url("https://example.invalid/a.git"), _temp.Combine("missing", "api"));
+
+        Assert.Equal(GitErrors.WorkspaceNotFoundCode, result.Error?.Code);
+    }
+
+    [Fact]
     public async Task Init_AppendsToAnExistingGitIgnore()
     {
         var workspace = _temp.Combine("new");

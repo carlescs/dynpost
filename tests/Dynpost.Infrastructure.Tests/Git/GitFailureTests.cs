@@ -18,10 +18,24 @@ public class GitFailureTests
     [InlineData("fatal: refusing to merge unrelated histories", GitErrors.UnrelatedHistoriesCode)]
     [InlineData("fatal: detected dubious ownership in repository at '/w'\nTo add an exception for this directory, call:\n\n\tgit config --global --add safe.directory /w", GitErrors.UnsafeRepositoryCode)]
     [InlineData("fatal: Unable to create '/w/.git/index.lock': File exists.\n\nAnother git process seems to be running", GitErrors.RepositoryLockedCode)]
+    [InlineData("fatal: destination path '/w/api' already exists and is not an empty directory.", GitErrors.CloneDestinationExistsCode)]
     [InlineData("error: something else entirely", GitErrors.CommandFailedCode)]
     public void Classify_RecognizesCommonFailures(string details, string code)
     {
         Assert.Equal(code, GitFailure.Classify("pull", details).Code);
+    }
+
+    [Theory]
+    [InlineData("fatal: could not read Username for 'https://github.com': terminal prompts disabled", "https://github.com")]
+    [InlineData("remote: Invalid username or password.\nfatal: Authentication failed for 'https://me@git.example.com:8443/team/x.git/'", "https://me@git.example.com:8443")]
+    [InlineData("fatal: unable to access 'http://git.local/x.git/': The requested URL returned error: 403", "http://git.local")]
+    [InlineData("git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.", null)]
+    public void AuthenticationFailed_NamesTheHttpUrlToSignInTo(string details, string? url)
+    {
+        var error = GitFailure.Classify("pull", details);
+
+        Assert.Equal(GitErrors.AuthenticationFailedCode, error.Code);
+        Assert.Equal(url, error.Target);
     }
 
     [Fact]

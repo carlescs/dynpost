@@ -14,7 +14,11 @@ public static class ErrorCodes
     public const string UpdateFailed = "update_failed";
 }
 
-public sealed record Error(string Code, string Message);
+/// <param name="Target">
+/// What the error is about, when the UI can act on it: for <c>git.authentication_failed</c>, the
+/// HTTP(S) URL git couldn't sign in to, so the user can be asked for credentials.
+/// </param>
+public sealed record Error(string Code, string Message, string? Target = null);
 
 /// <summary>The outcome of an operation that can fail in an expected way.</summary>
 public readonly record struct Result<T>

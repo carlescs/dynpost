@@ -1,3 +1,4 @@
+import { of } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { Mock } from 'vitest';
 import { RequestDto, WorkspaceDto } from '../models/messages';
@@ -334,6 +335,83 @@ describe('WorkspaceStore', () => {
     expect(store.workspace()).toEqual({ name: 'other', root: '/home/me/other' });
     expect(store.documents()).toHaveLength(0);
     expect(send).toHaveBeenLastCalledWith('workspace.recent');
+  });
+
+  it('clones a repository and opens it, closing the open documents', async () => {
+    store.newRequest();
+    store.documents.update((docs) => docs.map((d) => ({ ...d, dirty: false })));
+    respond({
+      'workspace.clone': () => workspace,
+      'workspace.recent': () => [],
+    });
+
+    const result = await store.cloneRepository('https://example.com/api.git', '/home/me', 'api');
+
+    expect(result).toBeNull();
+    expect(send).toHaveBeenCalledWith('workspace.clone', {
+      url: 'https://example.com/api.git',
+      parentFolder: '/home/me',
+      name: 'api',
+      signIn: null,
+    });
+    expect(store.workspace()).toEqual({ name: 'api', root: '/home/me/api' });
+    expect(store.documents()).toEqual([]);
+  });
+
+  it('returns why a clone failed without showing it as the store error', async () => {
+    respond({
+      'workspace.clone': () =>
+        Promise.reject(new BridgeError('git.authentication_failed', 'Denied')),
+      'workspace.recent': () => [],
+    });
+
+    const result = await store.cloneRepository('https://example.com/api.git', '/home/me');
+
+    expect(result).toBe('Denied');
+    expect(send).toHaveBeenCalledWith('workspace.clone', {
+      url: 'https://example.com/api.git',
+      parentFolder: '/home/me',
+      name: null,
+      signIn: null,
+    });
+    expect(store.workspace()).toBeNull();
+    expect(store.error()).toBeNull();
+  });
+
+  it('asks for credentials when git cannot sign in, and clones with them', async () => {
+    const signIn = { url: 'https://github.com', username: 'me', password: 'token' };
+    (dialogs as unknown as { open: Mock }).open = vi.fn(() => ({ closed: of(signIn) }));
+    let tries = 0;
+    respond({
+      'workspace.clone': (payload) => {
+        tries++;
+        if (!payload.signIn) {
+          throw new BridgeError('git.authentication_failed', 'Denied', 'https://github.com');
+        }
+        return workspace;
+      },
+      'workspace.recent': () => [],
+    });
+
+    const result = await store.cloneRepository('https://github.com/team/api.git', '/home/me');
+
+    expect(result).toBeNull();
+    expect(tries).toBe(2);
+    expect(send).toHaveBeenCalledWith('workspace.clone', {
+      url: 'https://github.com/team/api.git',
+      parentFolder: '/home/me',
+      name: null,
+      signIn,
+    });
+  });
+
+  it('does not clone when the user keeps their unsaved changes', async () => {
+    store.newRequest();
+    dialogs.confirm.mockResolvedValue(false);
+    respond({});
+
+    expect(await store.cloneRepository('https://example.com/api.git', '/home/me')).toBe(false);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('reports a recent workspace that can no longer be opened', async () => {

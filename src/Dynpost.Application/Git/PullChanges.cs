@@ -15,12 +15,19 @@ public sealed record PullChangesResult(PullOutcome Outcome, GitStatus Status);
 /// </summary>
 public sealed class PullChanges(IGitService git, CurrentWorkspace workspace)
 {
-    public async Task<Result<PullChangesResult>> ExecuteAsync(CancellationToken cancellationToken = default)
+    /// <param name="signIn">Credentials the user entered after a first try couldn't sign in to the remote.</param>
+    public async Task<Result<PullChangesResult>> ExecuteAsync(GitSignIn? signIn = null, CancellationToken cancellationToken = default)
     {
         var root = workspace.RequireRoot();
         if (root.IsFailure)
         {
             return root.Error!;
+        }
+
+        var credentials = GitSignIn.Check(signIn);
+        if (credentials.IsFailure)
+        {
+            return credentials.Error!;
         }
 
         var workspacePath = root.Value;
@@ -51,7 +58,7 @@ public sealed class PullChanges(IGitService git, CurrentWorkspace workspace)
         var linking = !status.HasUpstream;
         if (linking)
         {
-            var tracked = await git.TrackRemoteBranchAsync(workspacePath, branch, cancellationToken);
+            var tracked = await git.TrackRemoteBranchAsync(workspacePath, branch, credentials.Value, cancellationToken);
             if (tracked.IsFailure)
             {
                 return tracked.Error!;
@@ -63,7 +70,7 @@ public sealed class PullChanges(IGitService git, CurrentWorkspace workspace)
             }
         }
 
-        var pull = await git.PullAsync(workspacePath, allowUnrelatedHistories: linking, cancellationToken);
+        var pull = await git.PullAsync(workspacePath, allowUnrelatedHistories: linking, credentials.Value, cancellationToken);
         if (pull.IsFailure)
         {
             return pull.Error!;

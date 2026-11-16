@@ -1046,6 +1046,16 @@ export interface BridgeMessages {
   'mcp.regenerateToken': { payload: void; result: McpStatusDto };
   'workspace.pick': { payload: void; result: WorkspaceDto | null };
   'workspace.open': { payload: { path: string }; result: WorkspaceDto };
+  /** Shows a folder picker for the folder a repository is cloned into; `null` when cancelled. */
+  'workspace.pickCloneFolder': { payload: void; result: string | null };
+  /**
+   * Clones a git repository into a new folder of `parentFolder` and opens it. `name` is the new
+   * folder's name; omitted, it is the repository's name taken from the URL.
+   */
+  'workspace.clone': {
+    payload: { url: string; parentFolder: string; name?: string | null; signIn?: GitSignIn | null };
+    result: WorkspaceDto;
+  };
   /** Reopens the workspace from the previous session; `null` when there is none. */
   'workspace.openLast': { payload: void; result: WorkspaceDto | null };
   /**
@@ -1243,11 +1253,11 @@ export interface BridgeMessages {
   /** Discards the uncommitted changes of `paths`: edits are reverted and new files deleted. */
   'git.discard': { payload: { paths: string[] }; result: GitStatus };
   /** Pulls the current branch with a merge (never a rebase). */
-  'git.pull': { payload: void; result: { outcome: PullOutcome; status: GitStatus } };
+  'git.pull': { payload: GitRemoteCommand; result: { outcome: PullOutcome; status: GitStatus } };
   /** Pushes the current branch, or publishes it when it has no upstream. Never forces. */
-  'git.push': { payload: void; result: GitStatus };
+  'git.push': { payload: GitRemoteCommand; result: GitStatus };
   /** Downloads the remotes' latest commits without changing files, so `behind` is current. */
-  'git.fetch': { payload: void; result: GitStatus };
+  'git.fetch': { payload: GitRemoteCommand; result: GitStatus };
   /** The commit identity git uses in the workspace. */
   'git.identity': { payload: void; result: GitIdentity };
   /** Sets the commit identity, for all of the user's repositories (`global`) or only this one. */
@@ -1323,6 +1333,26 @@ export interface BridgeRequestEnvelope {
 export interface BridgeErrorShape {
   code: string;
   message: string;
+  /**
+   * What the error is about, when the UI can act on it: for `git.authentication_failed`, the
+   * HTTP(S) URL git couldn't sign in to (`https://host`, maybe with `user@`).
+   */
+  target?: string | null;
+}
+
+/**
+ * Credentials the user entered after git couldn't sign in to `url` (the error's `target`). Git
+ * gets them for that host only, and the user's credential helpers save them once they work.
+ */
+export interface GitSignIn {
+  url: string;
+  username: string;
+  password: string;
+}
+
+/** The payload of the git commands that contact a remote: credentials when retrying a sign-in. */
+export interface GitRemoteCommand {
+  signIn?: GitSignIn | null;
 }
 
 export type BridgeResponseEnvelope =

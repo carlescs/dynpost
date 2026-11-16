@@ -27,6 +27,7 @@ public sealed class GitBridgeTests : IDisposable
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
     private readonly IRequestFileFormat _format = Substitute.For<IRequestFileFormat>();
     private readonly CurrentWorkspace _current = new();
+    private readonly IFileDialogs _dialogs = Substitute.For<IFileDialogs>();
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
 
@@ -56,6 +57,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<OpenLastWorkspace>()
             .AddTransient<GetGitStatus>()
             .AddTransient<InitRepository>()
+            .AddTransient<CloneRepository>()
             .AddTransient<CommitChanges>()
             .AddTransient<DiscardChanges>()
             .AddTransient<PullChanges>()
@@ -82,7 +84,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<UpdateRemote>()
             .AddTransient<RemoveRemote>()
             .BuildServiceProvider();
-        _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
+        _router = BridgeHandlers.Create(_services, _dialogs, Substitute.For<IAppWindow>());
     }
 
     public void Dispose() => _services.Dispose();
@@ -162,7 +164,7 @@ public sealed class GitBridgeTests : IDisposable
         _current.Open(Folder);
         _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
             .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 0, 0, false, [])));
-        _git.PullAsync(Folder, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Result<PullOutcome>.Success(PullOutcome.UpToDate));
+        _git.PullAsync(Folder, Arg.Any<bool>(), Arg.Any<GitCredentials?>(), Arg.Any<CancellationToken>()).Returns(Result<PullOutcome>.Success(PullOutcome.UpToDate));
 
         var response = await SendAsync("git.pull");
 
@@ -188,7 +190,7 @@ public sealed class GitBridgeTests : IDisposable
         _current.Open(Folder);
         _git.ListRemotesAsync(Folder, Arg.Any<CancellationToken>())
             .Returns(Result<IReadOnlyList<GitRemote>>.Success([new GitRemote("origin", "u", "u")]));
-        _git.FetchAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<Unit>.Success(Unit.Value));
+        _git.FetchAsync(Folder, Arg.Any<GitCredentials?>(), Arg.Any<CancellationToken>()).Returns(Result<Unit>.Success(Unit.Value));
         _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
             .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 0, 3, false, [])));
 
@@ -221,7 +223,7 @@ public sealed class GitBridgeTests : IDisposable
         _current.Open(Folder);
         _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
             .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 1, 0, false, [])));
-        _git.PushAsync(default!, default, default)
+        _git.PushAsync(default!, default, default, default)
             .ReturnsForAnyArgs(Result<Unit>.Failure(GitErrors.PushRejected("! refs/heads/main [rejected]")));
 
         var response = await SendAsync("git.push");
@@ -242,6 +244,81 @@ public sealed class GitBridgeTests : IDisposable
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         Assert.Equal("main", response.GetProperty("payload").GetProperty("branch").GetString());
         await _git.Received(1).InitAsync(Folder, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GitPull_SignsInWithTheCredentialsGiven()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 0, 1, false, [])));
+        _git.PullAsync(default!, default, default, default).ReturnsForAnyArgs(Result<PullOutcome>.Success(PullOutcome.Updated));
+
+        var response = await SendAsync(
+            "git.pull", """{ "signIn": { "url": "https://github.com", "username": "me", "password": "token" } }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        await _git.Received(1).PullAsync(
+            Folder, false, Arg.Is<GitCredentials?>(c => c != null && c.Password == "token"), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GitPush_SignInFailure_NamesTheUrlToSignInTo()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 1, 0, false, [])));
+        _git.PushAsync(default!, default, default, default)
+            .ReturnsForAnyArgs(Result<Unit>.Failure(GitErrors.AuthenticationFailed("denied", "https://github.com")));
+
+        var response = await SendAsync("git.push", "{}");
+
+        Assert.Equal(GitErrors.AuthenticationFailedCode, ErrorCode(response));
+        Assert.Equal("https://github.com", response.GetProperty("error").GetProperty("target").GetString());
+    }
+
+    [Fact]
+    public async Task PickCloneFolder_ReturnsTheChosenFolder()
+    {
+        _dialogs.PickFolderAsync(Arg.Any<string>()).Returns("/work");
+
+        var response = await SendAsync("workspace.pickCloneFolder");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Equal("/work", response.GetProperty("payload").GetString());
+    }
+
+    [Fact]
+    public async Task Clone_ClonesAndOpensTheNewFolder()
+    {
+        var destination = Path.Combine("/work", "renamed");
+        _repository.FolderExists("/work").Returns(true);
+        _repository.FolderExists(destination).Returns(true);
+        _repository.ListAsync(destination, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<WorkspaceEntry>>.Success([]));
+        _git.CloneAsync(default!, default!, default, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+
+        var response = await SendAsync(
+            "workspace.clone",
+            """{ "url": "https://example.com/team/my-api.git", "parentFolder": "/work", "name": "renamed" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Equal(destination, response.GetProperty("payload").GetProperty("root").GetString());
+        await _git.Received(1).CloneAsync(
+            Arg.Is<RemoteUrl>(u => u.Value == "https://example.com/team/my-api.git"), destination, Arg.Any<GitCredentials?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Clone_Failure_IsReported()
+    {
+        _repository.FolderExists("/work").Returns(true);
+        _git.CloneAsync(default!, default!, default, default)
+            .ReturnsForAnyArgs(Result<Unit>.Failure(GitErrors.AuthenticationFailed("denied")));
+
+        var response = await SendAsync("workspace.clone", """{ "url": "https://example.com/my-api.git", "parentFolder": "/work" }""");
+
+        Assert.False(response.GetProperty("ok").GetBoolean());
+        Assert.Equal(GitErrors.AuthenticationFailedCode, ErrorCode(response));
     }
 
     [Fact]

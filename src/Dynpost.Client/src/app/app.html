@@ -92,15 +92,25 @@
               <fa-icon [icon]="faPlus" /> New request
             </button>
           } @else {
-            <p>Open a folder to work with the requests it contains.</p>
-            <button
-              type="button"
-              class="flex items-center gap-2 rounded bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700 disabled:opacity-50"
-              [disabled]="store.opening()"
-              (click)="store.openFolder()"
-            >
-              <fa-icon [icon]="faFolderOpen" /> Open folder
-            </button>
+            <p>Open a folder to work with the requests it contains, or clone a git repository.</p>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="flex items-center gap-2 rounded bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700 disabled:opacity-50"
+                [disabled]="store.opening()"
+                (click)="store.openFolder()"
+              >
+                <fa-icon [icon]="faFolderOpen" /> Open folder
+              </button>
+              <button
+                type="button"
+                class="flex items-center gap-2 rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-100 disabled:opacity-50"
+                [disabled]="store.opening()"
+                (click)="cloneRepository()"
+              >
+                <fa-icon [icon]="faCodeBranch" /> Clone repository
+              </button>
+            </div>
           }
           @if (!store.isDesktop) {
             <p class="text-xs text-slate-400">

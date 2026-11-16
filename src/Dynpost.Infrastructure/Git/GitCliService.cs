@@ -73,6 +73,35 @@ public sealed class GitCliService : IGitService
         return parsed with { MergeMessage = mergeMessage.Value };
     }
 
+    public async Task<Result<Unit>> CloneAsync(
+        RemoteUrl url,
+        string destination,
+        GitCredentials? credentials = null,
+        CancellationToken cancellationToken = default)
+    {
+        var full = Path.GetFullPath(destination);
+        var parent = Path.GetDirectoryName(full);
+        if (parent is null || !Directory.Exists(parent))
+        {
+            return GitErrors.WorkspaceNotFound(parent ?? full);
+        }
+
+        // "--" keeps the URL and folder from ever being read as options.
+        var clone = await RunCheckedAsync(
+            parent,
+            "clone",
+            GitCredentialOverride.Arguments(["clone", "--quiet", "--", url.Value, full], credentials),
+            cancellationToken,
+            GitCredentialOverride.Environment(credentials));
+        if (clone.IsFailure)
+        {
+            return clone.Error!;
+        }
+
+        await ApproveAsync(full, credentials, cancellationToken);
+        return Unit.Value;
+    }
+
     public async Task<Result<Unit>> InitAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
@@ -1385,6 +1414,7 @@ public sealed class GitCliService : IGitService
     public async Task<Result<PullOutcome>> PullAsync(
         string workspacePath,
         bool allowUnrelatedHistories = false,
+        GitCredentials? credentials = null,
         CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
@@ -1407,7 +1437,11 @@ public sealed class GitCliService : IGitService
             arguments.Add("--allow-unrelated-histories");
         }
 
-        var pull = await RunAsync(workspacePath, arguments, cancellationToken);
+        var pull = await RunAsync(
+            workspacePath,
+            GitCredentialOverride.Arguments(arguments, credentials),
+            cancellationToken,
+            GitCredentialOverride.Environment(credentials));
         if (pull.IsFailure)
         {
             return pull.Error!;
@@ -1426,6 +1460,7 @@ public sealed class GitCliService : IGitService
 
             if (conflicts.Value.Succeeded && conflicts.Value.StandardOutput.Length > 0)
             {
+                await ApproveAsync(workspacePath, credentials, cancellationToken);
                 return PullOutcome.Conflicted;
             }
 
@@ -1438,12 +1473,14 @@ public sealed class GitCliService : IGitService
             return headAfter.Error!;
         }
 
+        await ApproveAsync(workspacePath, credentials, cancellationToken);
         return headAfter.Value == headBefore.Value ? PullOutcome.UpToDate : PullOutcome.Updated;
     }
 
     public async Task<Result<Unit>> PushAsync(
         string workspacePath,
         bool setUpstream,
+        GitCredentials? credentials = null,
         CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
@@ -1477,7 +1514,11 @@ public sealed class GitCliService : IGitService
             }
         }
 
-        var push = await RunAsync(workspacePath, arguments, cancellationToken);
+        var push = await RunAsync(
+            workspacePath,
+            GitCredentialOverride.Arguments(arguments, credentials),
+            cancellationToken,
+            GitCredentialOverride.Environment(credentials));
         if (push.IsFailure)
         {
             return push.Error!;
@@ -1498,6 +1539,7 @@ public sealed class GitCliService : IGitService
             return GitFailure.Classify("push", Details(push.Value));
         }
 
+        await ApproveAsync(workspacePath, credentials, cancellationToken);
         return Unit.Value;
     }
 
@@ -1572,7 +1614,10 @@ public sealed class GitCliService : IGitService
         return Result<string?>.Success(value);
     }
 
-    public async Task<Result<Unit>> FetchAsync(string workspacePath, CancellationToken cancellationToken = default)
+    public async Task<Result<Unit>> FetchAsync(
+        string workspacePath,
+        GitCredentials? credentials = null,
+        CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
         if (prefix.IsFailure)
@@ -1581,12 +1626,25 @@ public sealed class GitCliService : IGitService
         }
 
         // --prune drops remote-tracking branches deleted on the remote, so a deleted upstream shows up.
-        return Done(await RunCheckedAsync(workspacePath, "fetch", ["fetch", "--all", "--prune", "--quiet"], cancellationToken));
+        var fetch = await RunCheckedAsync(
+            workspacePath,
+            "fetch",
+            GitCredentialOverride.Arguments(["fetch", "--all", "--prune", "--quiet"], credentials),
+            cancellationToken,
+            GitCredentialOverride.Environment(credentials));
+        if (fetch.IsFailure)
+        {
+            return fetch.Error!;
+        }
+
+        await ApproveAsync(workspacePath, credentials, cancellationToken);
+        return Unit.Value;
     }
 
     public async Task<Result<bool>> TrackRemoteBranchAsync(
         string workspacePath,
         string branch,
+        GitCredentials? credentials = null,
         CancellationToken cancellationToken = default)
     {
         var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
@@ -1601,11 +1659,18 @@ public sealed class GitCliService : IGitService
             return remote.Error!;
         }
 
-        var fetch = await RunCheckedAsync(workspacePath, "fetch", ["fetch", "--quiet", "--prune", "--", remote.Value], cancellationToken);
+        var fetch = await RunCheckedAsync(
+            workspacePath,
+            "fetch",
+            GitCredentialOverride.Arguments(["fetch", "--quiet", "--prune", "--", remote.Value], credentials),
+            cancellationToken,
+            GitCredentialOverride.Environment(credentials));
         if (fetch.IsFailure)
         {
             return fetch.Error!;
         }
+
+        await ApproveAsync(workspacePath, credentials, cancellationToken);
 
         var exists = await RunAsync(
             workspacePath,
@@ -1778,6 +1843,32 @@ public sealed class GitCliService : IGitService
             0 => GitErrors.NoRemote(),
             _ => GitErrors.AmbiguousRemote(),
         };
+    }
+
+    /// <summary>
+    /// Best effort: offers credentials that just worked to the user's credential helpers
+    /// (<c>git credential approve</c>), so later commands, in Dynpost or a terminal, sign in by
+    /// themselves. Without a helper that saves logins, git keeps nothing.
+    /// </summary>
+    private async Task ApproveAsync(string workingDirectory, GitCredentials? credentials, CancellationToken cancellationToken)
+    {
+        if (credentials is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _runner.RunAsync(
+                workingDirectory,
+                ["credential", "approve"],
+                cancellationToken,
+                input: GitCredentialOverride.ApproveInput(credentials));
+        }
+        catch (GitNotFoundException)
+        {
+            // The command that just ran found git; nothing to save otherwise.
+        }
     }
 
     private async Task<Result<GitCommandResult>> RunCheckedAsync(

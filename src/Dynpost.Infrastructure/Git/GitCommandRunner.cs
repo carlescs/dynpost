@@ -25,7 +25,8 @@ internal sealed class GitCommandRunner(string executable)
         string workingDirectory,
         IEnumerable<string> arguments,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        string? input = null)
     {
         var startInfo = new ProcessStartInfo(executable)
         {
@@ -37,6 +38,7 @@ internal sealed class GitCommandRunner(string executable)
             RedirectStandardError = true,
             StandardOutputEncoding = Utf8,
             StandardErrorEncoding = Utf8,
+            StandardInputEncoding = Utf8,
         };
 
         foreach (var argument in arguments)
@@ -68,6 +70,11 @@ internal sealed class GitCommandRunner(string executable)
         catch (Win32Exception ex)
         {
             throw new GitNotFoundException(executable, ex);
+        }
+
+        if (input is not null)
+        {
+            await process.StandardInput.WriteAsync(input.AsMemory(), cancellationToken);
         }
 
         process.StandardInput.Close();

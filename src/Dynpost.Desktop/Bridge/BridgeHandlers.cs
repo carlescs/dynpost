@@ -46,6 +46,10 @@ internal static class BridgeHandlers
             })
             .Register<OpenWorkspacePayload, WorkspaceDto>(BridgeMessageTypes.WorkspaceOpen,
                 (p, ct) => Use<OpenWorkspace>().ExecuteAsync(p.Path, ct))
+            .Register(BridgeMessageTypes.WorkspacePickCloneFolder,
+                async _ => Result<string?>.Success(await dialogs.PickFolderAsync("Choose where to clone the repository")))
+            .Register<CloneWorkspacePayload, WorkspaceDto>(BridgeMessageTypes.WorkspaceClone,
+                (p, ct) => Use<CloneRepository>().ExecuteAsync(new CloneRepositoryRequest(p.Url, p.ParentFolder, p.Name, p.SignIn), ct))
             .Register(BridgeMessageTypes.WorkspaceOpenLast,
                 ct => Use<OpenLastWorkspace>().ExecuteAsync(ct))
             .Register(BridgeMessageTypes.WorkspaceRecent,
@@ -261,12 +265,12 @@ internal static class BridgeHandlers
                 async ct => (await Use<InitRepository>().ExecuteAsync(ct)).Map(GitStatusDto.From))
             .Register<GitCommitPayload, GitCommitDto>(BridgeMessageTypes.GitCommit,
                 async (p, ct) => (await Use<CommitChanges>().ExecuteAsync(new CommitChangesRequest(p.Message, p.Paths), ct)).Map(GitCommitDto.From))
-            .Register(BridgeMessageTypes.GitPull,
-                async ct => (await Use<PullChanges>().ExecuteAsync(ct)).Map(GitPullDto.From))
-            .Register(BridgeMessageTypes.GitPush,
-                async ct => (await Use<PushChanges>().ExecuteAsync(ct)).Map(GitStatusDto.From))
-            .Register(BridgeMessageTypes.GitFetch,
-                async ct => (await Use<FetchChanges>().ExecuteAsync(ct)).Map(GitStatusDto.From))
+            .RegisterOptional<GitRemoteCommandPayload, GitPullDto>(BridgeMessageTypes.GitPull,
+                async (p, ct) => (await Use<PullChanges>().ExecuteAsync(p?.SignIn, ct)).Map(GitPullDto.From))
+            .RegisterOptional<GitRemoteCommandPayload, GitStatusDto>(BridgeMessageTypes.GitPush,
+                async (p, ct) => (await Use<PushChanges>().ExecuteAsync(p?.SignIn, ct)).Map(GitStatusDto.From))
+            .RegisterOptional<GitRemoteCommandPayload, GitStatusDto>(BridgeMessageTypes.GitFetch,
+                async (p, ct) => (await Use<FetchChanges>().ExecuteAsync(p?.SignIn, ct)).Map(GitStatusDto.From))
             .Register(BridgeMessageTypes.GitIdentity,
                 async ct => (await Use<GetGitIdentity>().ExecuteAsync(ct)).Map(GitIdentityDto.From))
             .Register<GitSetIdentityPayload, GitIdentityDto>(BridgeMessageTypes.GitSetIdentity,

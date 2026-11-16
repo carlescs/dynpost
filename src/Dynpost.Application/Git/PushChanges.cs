@@ -10,12 +10,19 @@ namespace Dynpost.Application.Git;
 /// </summary>
 public sealed class PushChanges(IGitService git, CurrentWorkspace workspace)
 {
-    public async Task<Result<GitStatus>> ExecuteAsync(CancellationToken cancellationToken = default)
+    /// <param name="signIn">Credentials the user entered after a first try couldn't sign in to the remote.</param>
+    public async Task<Result<GitStatus>> ExecuteAsync(GitSignIn? signIn = null, CancellationToken cancellationToken = default)
     {
         var root = workspace.RequireRoot();
         if (root.IsFailure)
         {
             return root.Error!;
+        }
+
+        var credentials = GitSignIn.Check(signIn);
+        if (credentials.IsFailure)
+        {
+            return credentials.Error!;
         }
 
         var workspacePath = root.Value;
@@ -41,7 +48,7 @@ public sealed class PushChanges(IGitService git, CurrentWorkspace workspace)
             return GitErrors.NoCommits();
         }
 
-        var push = await git.PushAsync(workspacePath, setUpstream: !status.HasUpstream, cancellationToken);
+        var push = await git.PushAsync(workspacePath, setUpstream: !status.HasUpstream, credentials.Value, cancellationToken);
         if (push.IsFailure)
         {
             return push.Error!;
