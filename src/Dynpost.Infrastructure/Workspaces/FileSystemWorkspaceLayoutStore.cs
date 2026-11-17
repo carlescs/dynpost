@@ -103,6 +103,70 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
         }
     }
 
+    public Result<IReadOnlyList<MiscasedAreaFolder>> FindMiscasedAreaFolders(string root)
+    {
+        try
+        {
+            var names = new DirectoryInfo(root).EnumerateDirectories().Select(d => d.Name).ToList();
+            var found = new List<MiscasedAreaFolder>();
+            foreach (var area in (string[])[WorkspaceLayout.RequestsFolder, WorkspaceLayout.PlansFolder])
+            {
+                if (names.Contains(area, StringComparer.Ordinal))
+                {
+                    continue;
+                }
+
+                var matches = names.Where(n => string.Equals(n, area, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matches.Count == 1)
+                {
+                    found.Add(new MiscasedAreaFolder(matches[0], area));
+                }
+            }
+
+            return found;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not look through the workspace folder: {ex.Message}");
+        }
+    }
+
+    public Result<Unit> RenameRootFolder(string root, string from, string to)
+    {
+        var source = Path.Combine(root, from);
+        var target = Path.Combine(root, to);
+        // Through a temporary name: a rename that only changes case is the same path on a
+        // case-insensitive file system.
+        var temporary = Path.Combine(root, $"{from}.{Guid.NewGuid():N}");
+        try
+        {
+            Directory.Move(source, temporary);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new Error(ErrorCodes.Io, $"Could not rename '{from}' to '{to}': {ex.Message}");
+        }
+
+        try
+        {
+            Directory.Move(temporary, target);
+            return Unit.Value;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            try
+            {
+                Directory.Move(temporary, source);
+            }
+            catch (Exception restore) when (restore is IOException or UnauthorizedAccessException)
+            {
+                // Left under the temporary name; the error below says what failed.
+            }
+
+            return new Error(ErrorCodes.Io, $"Could not rename '{from}' to '{to}': {ex.Message}");
+        }
+    }
+
     public async Task<Result<LegacyLayoutScan>> ScanLegacyAsync(string root, CancellationToken cancellationToken = default)
     {
         var requests = new List<WorkspacePath>();

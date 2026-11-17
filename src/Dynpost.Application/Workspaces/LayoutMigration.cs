@@ -1,4 +1,5 @@
 using Dynpost.Application.Common;
+using Dynpost.Application.Git;
 using Dynpost.Application.History;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Sharing;
@@ -28,6 +29,14 @@ public sealed record LegacyLayoutScan(
     public bool HasFilesToMove => Requests.Count > 0 || RunPlans.Count > 0;
 }
 
+/// <summary>
+/// A root folder spelled like an area folder (<c>requests</c> or <c>plans</c>) in another case,
+/// such as <c>Requests</c>, while no folder is spelled exactly like the area.
+/// </summary>
+/// <param name="Name">The folder's name on disk.</param>
+/// <param name="Area">The area's name, all lower case.</param>
+public sealed record MiscasedAreaFolder(string Name, string Area);
+
 /// <summary>Reads and records which layout a workspace folder uses, and finds files left in an older layout.</summary>
 public interface IWorkspaceLayoutStore
 {
@@ -43,6 +52,16 @@ public interface IWorkspaceLayoutStore
     /// <c>.gitignore</c> entry at the new folder. Each is left alone when its new name is taken.
     /// </summary>
     Task<Result<Unit>> RenameLegacyFilesAsync(string root, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The root folders spelled like <c>requests</c> or <c>plans</c> in another case, such as
+    /// <c>Requests</c>. A folder is left out when one spelled exactly like the area also exists
+    /// (only possible on a case-sensitive file system).
+    /// </summary>
+    Result<IReadOnlyList<MiscasedAreaFolder>> FindMiscasedAreaFolders(string root);
+
+    /// <summary>Renames a root folder, also when the new name only differs in case.</summary>
+    Result<Unit> RenameRootFolder(string root, string from, string to);
 
     /// <summary>Finds the files and folders of the old layout (requests and run plans anywhere in the workspace).</summary>
     Task<Result<LegacyLayoutScan>> ScanLegacyAsync(string root, CancellationToken cancellationToken = default);
@@ -69,6 +88,7 @@ public sealed record LayoutMigrationDto(int Requests, int Plans, IReadOnlyList<s
 /// </summary>
 public sealed class MigrateWorkspaceLayout(
     IWorkspaceLayoutStore layout,
+    IGitService git,
     IWorkspaceRepository repository,
     IRunPlanStore plans,
     IRunPlanFormat planFormat,
@@ -87,6 +107,7 @@ public sealed class MigrateWorkspaceLayout(
         // Best effort, like the layout record: a workspace whose files keep the former name still
         // opens, it just starts without its local state.
         await layout.RenameLegacyFilesAsync(root, cancellationToken);
+        await LowerCaseAreaFoldersAsync(root, cancellationToken);
 
         var version = await layout.ReadVersionAsync(root, cancellationToken);
         if (version.IsSuccess && version.Value >= WorkspaceLayout.CurrentLayoutVersion)
@@ -108,6 +129,26 @@ public sealed class MigrateWorkspaceLayout(
         }
 
         return await MigrateAsync(root, scan.Value, cancellationToken);
+    }
+
+    /// <summary>
+    /// Renames a <c>Requests</c> or <c>Plans</c> folder (any spelling other than the area's) to
+    /// its lower-case name, so the workspace looks the same on every file system: on Windows and
+    /// macOS the app finds such a folder by the lower-case name, but on Linux it doesn't. A folder
+    /// git tracks is renamed with git, which then shows the rename as a change to commit.
+    /// Best effort, like the renames of the former name: on failure the folder keeps its name.
+    /// </summary>
+    private async Task LowerCaseAreaFoldersAsync(string root, CancellationToken cancellationToken)
+    {
+        var found = layout.FindMiscasedAreaFolders(root);
+        foreach (var folder in found.IsSuccess ? found.Value ?? [] : [])
+        {
+            var moved = await git.MoveTrackedFolderAsync(root, folder.Name, folder.Area, cancellationToken);
+            if (!moved.IsSuccess || !moved.Value)
+            {
+                layout.RenameRootFolder(root, folder.Name, folder.Area);
+            }
+        }
     }
 
     private async Task<LayoutMigrationDto> MigrateAsync(string root, LegacyLayoutScan scan, CancellationToken cancellationToken)

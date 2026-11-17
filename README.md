@@ -199,6 +199,15 @@ workspace it reorganizes it, and says what it did:
   commit. Teammates on an older version of Dynpost should update before they
   pull that commit.
 
+### Folder names in lower case
+
+`requests/` and `plans/` are always spelled in lower case, so a workspace works
+the same on Linux, where file names are case-sensitive, as on Windows and macOS.
+Opening a workspace whose folder is spelled otherwise, such as `Requests/`,
+renames it to `requests/`, unless a `requests/` folder also exists. When git
+tracks the folder, Dynpost renames it with `git mv`, so the rename shows up in
+**Source control**, ready to commit, even on file systems that ignore case.
+
 ### Moving from Missive
 
 Dynpost was called Missive before. Opening a workspace made under that name

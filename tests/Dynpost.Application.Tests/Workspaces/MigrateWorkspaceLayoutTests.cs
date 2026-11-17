@@ -1,4 +1,5 @@
 using Dynpost.Application.Common;
+using Dynpost.Application.Git;
 using Dynpost.Application.History;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Sharing;
@@ -19,6 +20,7 @@ public class MigrateWorkspaceLayoutTests
     private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
     private readonly IRunStore _runs = Substitute.For<IRunStore>();
     private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
+    private readonly IGitService _git = Substitute.For<IGitService>();
 
     public MigrateWorkspaceLayoutTests()
     {
@@ -30,7 +32,7 @@ public class MigrateWorkspaceLayoutTests
         _plans.List(Root).Returns(Result<IReadOnlyList<WorkspacePath>>.Success([]));
     }
 
-    private MigrateWorkspaceLayout UseCase() => new(_layout, _repository, _plans, _format, _history, _runs, _localFiles);
+    private MigrateWorkspaceLayout UseCase() => new(_layout, _git, _repository, _plans, _format, _history, _runs, _localFiles);
 
     private static WorkspacePath P(string path) => WorkspacePath.Parse(path);
 
@@ -61,6 +63,40 @@ public class MigrateWorkspaceLayoutTests
             _layout.RenameLegacyFilesAsync(Root, Arg.Any<CancellationToken>());
             _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>());
         });
+    }
+
+    [Fact]
+    public async Task LowerCasesAreaFolders_WithGitWhenItTracksThem()
+    {
+        _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<int>.Success(2));
+        _layout.FindMiscasedAreaFolders(Root).Returns(Result<IReadOnlyList<MiscasedAreaFolder>>.Success(
+            [new MiscasedAreaFolder("Requests", "requests"), new MiscasedAreaFolder("PLANS", "plans")]));
+        _git.MoveTrackedFolderAsync(Root, "Requests", "requests", Arg.Any<CancellationToken>()).Returns(true);
+        _git.MoveTrackedFolderAsync(Root, "PLANS", "plans", Arg.Any<CancellationToken>()).Returns(false);
+
+        await UseCase().ExecuteAsync(Root);
+
+        _layout.DidNotReceive().RenameRootFolder(Root, "Requests", Arg.Any<string>());
+        _layout.Received(1).RenameRootFolder(Root, "PLANS", "plans");
+        Received.InOrder(() =>
+        {
+            _layout.FindMiscasedAreaFolders(Root);
+            _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>());
+        });
+    }
+
+    [Fact]
+    public async Task LowerCasesAreaFolders_OnTheirOwnWhenGitFails()
+    {
+        _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<int>.Success(2));
+        _layout.FindMiscasedAreaFolders(Root).Returns(Result<IReadOnlyList<MiscasedAreaFolder>>.Success(
+            [new MiscasedAreaFolder("Requests", "requests")]));
+        _git.MoveTrackedFolderAsync(Root, "Requests", "requests", Arg.Any<CancellationToken>())
+            .Returns(new Error("git.failed", "git is not installed"));
+
+        await UseCase().ExecuteAsync(Root);
+
+        _layout.Received(1).RenameRootFolder(Root, "Requests", "requests");
     }
 
     [Fact]
