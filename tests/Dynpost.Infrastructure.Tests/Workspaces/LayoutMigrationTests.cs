@@ -4,7 +4,9 @@ using Dynpost.Application.Requests;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Workspaces;
 using Dynpost.Domain.Workspaces;
+using Dynpost.Infrastructure.Git;
 using Dynpost.Infrastructure.History;
+using Dynpost.Infrastructure.Tests.Git;
 using Dynpost.Infrastructure.Runs;
 using Dynpost.Infrastructure.Sharing;
 using Dynpost.Infrastructure.Workspaces;
@@ -14,7 +16,10 @@ namespace Dynpost.Infrastructure.Tests.Workspaces;
 /// <summary>Moves real workspaces in the old layout to the current one, with the real file stores.</summary>
 public sealed class LayoutMigrationTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("dynpost-layout-").FullName;
+    // Some tests make the workspace a git repository, whose read-only object files TempDirectory
+    // can delete on Windows.
+    private readonly TempDirectory _temp = new();
+    private readonly string _root;
     private readonly FileSystemWorkspaceLayoutStore _layout = new();
     private readonly FileSystemWorkspaceRepository _repository = new();
     private readonly FileSystemRunPlanStore _plans = new();
@@ -22,10 +27,12 @@ public sealed class LayoutMigrationTests : IDisposable
     private readonly JsonRunStore _runs = new();
     private readonly GitIgnoreLocalOnlyFiles _localFiles = new();
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public LayoutMigrationTests() => _root = _temp.Path;
+
+    public void Dispose() => _temp.Dispose();
 
     private MigrateWorkspaceLayout Migration() =>
-        new(_layout, _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
+        new(_layout, new LowerCaseSystemFolders(_layout, new GitCliService()), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
 
     private static WorkspacePath P(string path) => WorkspacePath.Parse(path);
 
@@ -254,13 +261,17 @@ public sealed class LayoutMigrationTests : IDisposable
                 && Directory.EnumerateDirectories(parent).Any(d =>
                     string.Equals(Path.GetFileName(d), Path.GetFileName(path), StringComparison.OrdinalIgnoreCase)));
 
-        return new(new FileSystemWorkspaceLayoutStore(Exists), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
+        var layout = new FileSystemWorkspaceLayoutStore(Exists);
+        return new(layout, new LowerCaseSystemFolders(layout, new GitCliService()), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
     }
 
+    /// <summary>The names of the folders at the workspace root, as spelled on disk.</summary>
+    private IReadOnlyList<string> RootFolders() =>
+        new DirectoryInfo(_root).EnumerateDirectories().Select(d => d.Name).Order(StringComparer.Ordinal).ToList();
+
     [Fact]
-    public async Task KeepsAreaFoldersSpelledInAnotherCase_OnCaseInsensitiveFileSystems()
+    public async Task LowerCasesSystemFoldersSpelledInAnotherCase()
     {
-        // "Requests" is the requests folder on Windows and macOS: its files are already in place.
         Write("Requests/users/get-user.yaml", "name: Get user\nmethod: GET\nurl: /users/1\n");
         Write("Requests/users/_folder.yaml", "headers:\n  Accept: application/json\n");
         Write("Requests/empty/.gitkeep", "");
@@ -272,12 +283,49 @@ public sealed class LayoutMigrationTests : IDisposable
         Assert.NotNull(result);
         Assert.Equal(1, result.Requests);
         Assert.Equal(0, result.Plans);
-        Assert.True(Exists("Requests/users/get-user.yaml"));
-        Assert.True(Exists("Requests/users/_folder.yaml"));
-        Assert.True(Exists("Requests/empty/.gitkeep"));
-        Assert.True(Exists("Plans/smoke.run.yaml"));
+        Assert.Equal(["plans", "requests"], RootFolders());
+        Assert.True(Exists("requests/users/get-user.yaml"));
+        Assert.True(Exists("requests/users/_folder.yaml"));
+        Assert.True(Exists("requests/empty/.gitkeep"));
+        Assert.True(Exists("requests/health.yaml"));
+        Assert.True(Exists("plans/smoke.run.yaml"));
         Assert.False(Exists("requests/Requests"));
         Assert.False(Exists("plans/Plans"));
+    }
+
+    [Fact]
+    public async Task LowerCasesSystemFolders_InWorkspacesAlreadyInTheCurrentLayout()
+    {
+        Write("dynpost.yaml", "layout: 2\n");
+        Write("REQUESTS/health.yaml", "name: Health\nmethod: GET\nurl: /health\n");
+        Write("Environments/dev.yaml", "name: Dev\n");
+        Write(".Dynpost/secrets.yaml", "token: secret\n");
+
+        Assert.Null(await Migration().ExecuteAsync(_root));
+
+        Assert.Equal([".dynpost", "environments", "requests"], RootFolders());
+        Assert.True(Exists("requests/health.yaml"));
+        Assert.True(Exists("environments/dev.yaml"));
+        Assert.True(Exists(".dynpost/secrets.yaml"));
+    }
+
+    [Fact]
+    public async Task LowerCasesSystemFoldersWithGit_WhenTheyAreTracked()
+    {
+        Write("dynpost.yaml", "layout: 2\n");
+        Write("Requests/health.yaml", "name: Health\nmethod: GET\nurl: /health\n");
+        TestGit.Run(_root, "init", "--quiet");
+        TestGit.Configure(_root);
+        TestGit.CommitAll(_root, "first");
+        Write("Requests/draft.yaml", "name: Draft\nmethod: GET\nurl: /draft\n");
+
+        await Migration().ExecuteAsync(_root);
+
+        Assert.Equal(["requests"], RootFolders().Where(n => n != ".git"));
+        Assert.True(Exists("requests/draft.yaml"));
+        Assert.Equal(
+            "R  Requests/health.yaml -> requests/health.yaml\n?? requests/draft.yaml\n",
+            TestGit.Run(_root, "status", "--short", "--untracked-files=all"));
     }
 
     [Fact]

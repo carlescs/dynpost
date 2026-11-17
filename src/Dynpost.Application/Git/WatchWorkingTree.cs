@@ -8,9 +8,14 @@ namespace Dynpost.Application.Git;
 /// editor, git in a terminal), so it stays current without the user reloading it: the git status
 /// may have changed, and so may the request, environment, run plan and folder settings files the
 /// UI shows. Follows the workspace the app has open and watches it through
-/// <see cref="IWorkingTreeWatcher"/>. Registered as a singleton.
+/// <see cref="IWorkingTreeWatcher"/>. A change that brings in a system folder spelled in another
+/// case (such as a pull adding <c>Requests/</c>) has it renamed by <see cref="LowerCaseSystemFolders"/>;
+/// the rename is then reported like any other change. Registered as a singleton.
 /// </summary>
-public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWatcher watcher) : IDisposable
+public sealed class WatchWorkingTree(
+    CurrentWorkspace workspace,
+    IWorkingTreeWatcher watcher,
+    LowerCaseSystemFolders lowerCase) : IDisposable
 {
     private readonly Lock _gate = new();
     private Action? _gitChanged;
@@ -55,7 +60,7 @@ public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWat
             || path is WorkspaceLayout.WorkspaceFile or ".gitignore";
     }
 
-    private void Report(WorkingTreeChange change)
+    private void Report(string root, WorkingTreeChange change)
     {
         Action? gitChanged;
         Action<IReadOnlyList<string>?>? filesChanged;
@@ -68,6 +73,11 @@ public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWat
 
             gitChanged = _gitChanged;
             filesChanged = _filesChanged;
+        }
+
+        if (LowerCaseSystemFolders.MayBeNeeded(change.Files))
+        {
+            _ = LowerCaseAsync(root);
         }
 
         gitChanged?.Invoke();
@@ -84,6 +94,18 @@ public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWat
         }
     }
 
+    /// <summary>Best effort: a folder that can't be renamed now is tried again on the next change.</summary>
+    private async Task LowerCaseAsync(string root)
+    {
+        try
+        {
+            await lowerCase.ExecuteAsync(root);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+        }
+    }
+
     private void Follow(string root)
     {
         lock (_gate)
@@ -97,7 +119,7 @@ public sealed class WatchWorkingTree(CurrentWorkspace workspace, IWorkingTreeWat
             _watch = null;
             try
             {
-                _watch = watcher.Watch(root, Report);
+                _watch = watcher.Watch(root, change => Report(root, change));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or PlatformNotSupportedException)
             {

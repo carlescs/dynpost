@@ -126,6 +126,7 @@ internal static class Program
             .AddSingleton(TimeProvider.System)
             .AddSingleton<IGitService, GitCliService>()
             .AddSingleton<IWorkingTreeWatcher, FileSystemWorkingTreeWatcher>()
+            .AddSingleton<LowerCaseSystemFolders>()
             .AddSingleton<WatchWorkingTree>()
             .AddSingleton<ILocalOnlyFiles, GitIgnoreLocalOnlyFiles>()
             .AddSingleton<IRequestFileFormat, YamlRequestFileFormat>()

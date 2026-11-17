@@ -266,6 +266,10 @@ Desktop → Application
   `missive.yaml` and `.missive/` (and their `.gitignore` line) through
   `IWorkspaceLayoutStore.RenameLegacyFilesAsync`, and `JsonAppSettingsStore` reads the old
   `Missive` settings file until the new one exists. The GitHub repository was renamed to `carlescs/dynpost` (GitHub redirects the old URLs).
+- The root folders the app reads by name (`WorkspaceLayout.SystemFolders`: `requests/`, `plans/`,
+  `environments/`, `.dynpost/`) are always lower case: `Application/Workspaces/LowerCaseSystemFolders.cs`
+  renames other spellings (with `git mv` when tracked) on open and when `WatchWorkingTree` sees one.
+  Always build their paths from the `WorkspaceLayout` constants, never from a name read from disk.
 - YAML, 2-space indent, LF line endings, trailing newline.
 - Stable, documented key order; omit empty or default-valued fields.
 - File names are slugs of the request name (`create-user.yaml`); renaming a

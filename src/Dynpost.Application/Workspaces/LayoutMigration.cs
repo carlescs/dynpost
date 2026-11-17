@@ -28,6 +28,14 @@ public sealed record LegacyLayoutScan(
     public bool HasFilesToMove => Requests.Count > 0 || RunPlans.Count > 0;
 }
 
+/// <summary>
+/// A root folder spelled like one of <see cref="WorkspaceLayout.SystemFolders"/> in another case,
+/// such as <c>Requests</c>, while no folder is spelled exactly like it.
+/// </summary>
+/// <param name="Name">The folder's name on disk.</param>
+/// <param name="Expected">The name Dynpost reads it by, all lower case.</param>
+public sealed record MiscasedSystemFolder(string Name, string Expected);
+
 /// <summary>Reads and records which layout a workspace folder uses, and finds files left in an older layout.</summary>
 public interface IWorkspaceLayoutStore
 {
@@ -44,6 +52,16 @@ public interface IWorkspaceLayoutStore
     /// </summary>
     Task<Result<Unit>> RenameLegacyFilesAsync(string root, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The root folders spelled like one of <see cref="WorkspaceLayout.SystemFolders"/> in another
+    /// case, such as <c>Requests</c> or <c>.Dynpost</c>. A folder is left out when one spelled
+    /// exactly right also exists (only possible on a case-sensitive file system).
+    /// </summary>
+    Result<IReadOnlyList<MiscasedSystemFolder>> FindMiscasedSystemFolders(string root);
+
+    /// <summary>Renames a root folder, also when the new name only differs in case.</summary>
+    Result<Unit> RenameRootFolder(string root, string from, string to);
+
     /// <summary>Finds the files and folders of the old layout (requests and run plans anywhere in the workspace).</summary>
     Task<Result<LegacyLayoutScan>> ScanLegacyAsync(string root, CancellationToken cancellationToken = default);
 }
@@ -56,7 +74,8 @@ public interface IWorkspaceLayoutStore
 public sealed record LayoutMigrationDto(int Requests, int Plans, IReadOnlyList<string> LeftInPlace, string? Error = null);
 
 /// <summary>
-/// Renames the files a workspace has under the app's former name, then moves it from the first layout — requests, collection folders and run plans all over
+/// Renames the files a workspace has under the app's former name and spells its system folders in
+/// lower case (see <see cref="LowerCaseSystemFolders"/>), then moves it from the first layout — requests, collection folders and run plans all over
 /// the workspace root — to the current one, where requests and their folders live in
 /// <c>requests/</c> and run plans in <c>plans/</c>, keeping their relative paths
 /// (<c>users/get-user.yaml</c> → <c>requests/users/get-user.yaml</c>, <c>smoke.run.yaml</c> →
@@ -69,6 +88,7 @@ public sealed record LayoutMigrationDto(int Requests, int Plans, IReadOnlyList<s
 /// </summary>
 public sealed class MigrateWorkspaceLayout(
     IWorkspaceLayoutStore layout,
+    LowerCaseSystemFolders lowerCase,
     IWorkspaceRepository repository,
     IRunPlanStore plans,
     IRunPlanFormat planFormat,
@@ -87,6 +107,7 @@ public sealed class MigrateWorkspaceLayout(
         // Best effort, like the layout record: a workspace whose files keep the former name still
         // opens, it just starts without its local state.
         await layout.RenameLegacyFilesAsync(root, cancellationToken);
+        await lowerCase.ExecuteAsync(root, cancellationToken);
 
         var version = await layout.ReadVersionAsync(root, cancellationToken);
         if (version.IsSuccess && version.Value >= WorkspaceLayout.CurrentLayoutVersion)

@@ -1581,6 +1581,57 @@ public sealed class GitCliService : IGitService
             cancellationToken));
     }
 
+    public async Task<Result<bool>> MoveTrackedFolderAsync(
+        string workspacePath,
+        string from,
+        string to,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsSafeRelativePath(from) || IsLocalFolder(from) || !IsSafeRelativePath(to) || IsLocalFolder(to))
+        {
+            return new Error(ErrorCodes.InvalidPath, $"'{from}' is not a workspace folder.");
+        }
+
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!.Code == GitErrors.NotARepositoryCode ? false : prefix.Error!;
+        }
+
+        var tracked = await RunCheckedAsync(
+            workspacePath,
+            "ls-files",
+            ["ls-files", "-z", "--", ":(literal)" + from],
+            cancellationToken);
+        if (tracked.IsFailure)
+        {
+            return tracked.Error!;
+        }
+
+        if (tracked.Value.StandardOutput.Length == 0)
+        {
+            return false;
+        }
+
+        // Through a temporary name: a rename that only changes case is the same path on a
+        // case-insensitive file system, which git mv refuses or mishandles there.
+        var temporary = $"{from}.{Guid.NewGuid():N}";
+        var first = await RunCheckedAsync(workspacePath, "mv", ["mv", "--", from, temporary], cancellationToken);
+        if (first.IsFailure)
+        {
+            return first.Error!;
+        }
+
+        var second = await RunCheckedAsync(workspacePath, "mv", ["mv", "--", temporary, to], cancellationToken);
+        if (second.IsFailure)
+        {
+            await RunAsync(workspacePath, ["mv", "--", temporary, from], cancellationToken);
+            return second.Error!;
+        }
+
+        return true;
+    }
+
     public async Task<Result<Unit>> RestoreTrackingAsync(string workspacePath, string path, CancellationToken cancellationToken = default)
     {
         if (!IsSafeRelativePath(path) || IsLocalFolder(path))

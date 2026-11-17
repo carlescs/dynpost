@@ -46,6 +46,43 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task MoveTrackedFolder_RenamesItWithGit_EvenWhenOnlyTheCaseChanges()
+    {
+        var workspace = _temp.Combine("api");
+        Write(workspace, "Requests/health.yaml", "name: Health\n");
+        TestGit.Run(_temp.Path, "init", "--quiet", workspace);
+        TestGit.Configure(workspace);
+        TestGit.CommitAll(workspace, "first");
+        Write(workspace, "Requests/draft.yaml", "name: Draft\n");
+
+        var result = await _git.MoveTrackedFolderAsync(workspace, "Requests", "requests");
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.True(result.Value);
+        Assert.Equal(["requests"], new DirectoryInfo(workspace).EnumerateDirectories().Select(d => d.Name).Where(n => n != ".git"));
+        Assert.Equal("name: Draft\n", File.ReadAllText(Path.Combine(workspace, "requests", "draft.yaml")));
+        Assert.Equal("requests/health.yaml\n", TestGit.Run(workspace, "ls-files"));
+    }
+
+    [Fact]
+    public async Task MoveTrackedFolder_LeavesFoldersGitDoesNotTrack()
+    {
+        var outside = _temp.Combine("outside");
+        Write(outside, "Requests/health.yaml", "name: Health\n");
+        var repository = _temp.Combine("repository");
+        Write(repository, "Requests/health.yaml", "name: Health\n");
+        TestGit.Run(_temp.Path, "init", "--quiet", repository);
+
+        var notARepository = await _git.MoveTrackedFolderAsync(outside, "Requests", "requests");
+        var untracked = await _git.MoveTrackedFolderAsync(repository, "Requests", "requests");
+
+        Assert.False(notARepository.Value);
+        Assert.False(untracked.Value);
+        Assert.True(File.Exists(Path.Combine(outside, "Requests", "health.yaml")));
+        Assert.True(File.Exists(Path.Combine(repository, "Requests", "health.yaml")));
+    }
+
+    [Fact]
     public async Task Clone_CopiesTheRepositoryIntoANewFolder()
     {
         var source = _temp.Combine("source");

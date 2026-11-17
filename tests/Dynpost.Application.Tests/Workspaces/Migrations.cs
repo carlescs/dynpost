@@ -1,4 +1,5 @@
 using Dynpost.Application.Common;
+using Dynpost.Application.Git;
 using Dynpost.Application.History;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Sharing;
@@ -17,6 +18,7 @@ internal static class Migrations
         layout.ReadVersionAsync(default!, default).ReturnsForAnyArgs(Result<int>.Success(WorkspaceLayout.CurrentLayoutVersion));
         return new MigrateWorkspaceLayout(
             layout,
+            new LowerCaseSystemFolders(layout, Substitute.For<IGitService>()),
             Substitute.For<IWorkspaceRepository>(),
             Substitute.For<IRunPlanStore>(),
             Substitute.For<IRunPlanFormat>(),

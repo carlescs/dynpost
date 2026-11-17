@@ -1,4 +1,5 @@
 using Dynpost.Application.Common;
+using Dynpost.Application.Git;
 using Dynpost.Application.History;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Sharing;
@@ -19,6 +20,7 @@ public class MigrateWorkspaceLayoutTests
     private readonly IHistoryStore _history = Substitute.For<IHistoryStore>();
     private readonly IRunStore _runs = Substitute.For<IRunStore>();
     private readonly ILocalOnlyFiles _localFiles = Substitute.For<ILocalOnlyFiles>();
+    private readonly IGitService _git = Substitute.For<IGitService>();
 
     public MigrateWorkspaceLayoutTests()
     {
@@ -30,7 +32,7 @@ public class MigrateWorkspaceLayoutTests
         _plans.List(Root).Returns(Result<IReadOnlyList<WorkspacePath>>.Success([]));
     }
 
-    private MigrateWorkspaceLayout UseCase() => new(_layout, _repository, _plans, _format, _history, _runs, _localFiles);
+    private MigrateWorkspaceLayout UseCase() => new(_layout, new LowerCaseSystemFolders(_layout, _git), _repository, _plans, _format, _history, _runs, _localFiles);
 
     private static WorkspacePath P(string path) => WorkspacePath.Parse(path);
 
@@ -59,6 +61,20 @@ public class MigrateWorkspaceLayoutTests
         Received.InOrder(() =>
         {
             _layout.RenameLegacyFilesAsync(Root, Arg.Any<CancellationToken>());
+            _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>());
+        });
+    }
+
+    [Fact]
+    public async Task LowerCasesSystemFoldersBeforeReadingTheLayout()
+    {
+        _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<int>.Success(2));
+
+        await UseCase().ExecuteAsync(Root);
+
+        Received.InOrder(() =>
+        {
+            _layout.FindMiscasedSystemFolders(Root);
             _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>());
         });
     }

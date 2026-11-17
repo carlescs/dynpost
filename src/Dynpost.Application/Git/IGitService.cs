@@ -60,6 +60,15 @@ public interface IGitService
     Task<Result<Unit>> RestoreTrackingAsync(string workspacePath, string path, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Renames a folder of the workspace with <c>git mv</c> when git tracks files in it, so the
+    /// repository records the new name even on a case-insensitive file system, where a rename
+    /// that only changes case is otherwise invisible to git. Files git doesn't track move with
+    /// the folder. Returns <c>false</c>, moving nothing, when the workspace isn't in a repository
+    /// or git tracks nothing in the folder.
+    /// </summary>
+    Task<Result<bool>> MoveTrackedFolderAsync(string workspacePath, string from, string to, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Throws away the given uncommitted changes: modified and deleted files go back to their last
     /// committed content, new files (staged or untracked) are deleted, and a rename is undone.
     /// </summary>

@@ -30,6 +30,13 @@ public static class WorkspaceLayout
     /// <summary>The folder holding every run plan and the folders organizing them: <c>plans/</c>.</summary>
     public static WorkspacePath PlansRoot { get; } = WorkspacePath.Root.Combine(PlansFolder);
 
+    /// <summary>
+    /// The root folders Dynpost reads by name: <c>requests/</c>, <c>plans/</c>,
+    /// <c>environments/</c> and <c>.dynpost/</c>. They are always spelled in lower case, so a
+    /// workspace works the same on case-sensitive file systems (Linux) as on Windows and macOS.
+    /// </summary>
+    public static IReadOnlyList<string> SystemFolders { get; } = [RequestsFolder, PlansFolder, EnvironmentsFolder, LocalFolder];
+
     /// <summary>The current layout of a workspace, recorded as <c>layout</c> in <see cref="WorkspaceFile"/>.</summary>
     public const int CurrentLayoutVersion = 2;
 
