@@ -17,6 +17,19 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
 {
     private const string LayoutKey = "layout";
 
+    private readonly Func<string, bool> _directoryExists;
+
+    public FileSystemWorkspaceLayoutStore()
+        : this(Directory.Exists)
+    {
+    }
+
+    /// <param name="directoryExists">
+    /// Whether a folder exists, which on a case-insensitive file system ignores the case of its
+    /// name; tests replace it to stand in for one.
+    /// </param>
+    internal FileSystemWorkspaceLayoutStore(Func<string, bool> directoryExists) => _directoryExists = directoryExists;
+
     /// <summary>The top-level keys of a request file; a YAML file with only these keys is a request.</summary>
     private static readonly HashSet<string> RequestKeys = new(StringComparer.Ordinal)
     {
@@ -97,7 +110,7 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
         var empty = new List<WorkspacePath>();
         try
         {
-            await ScanAsync(WorkspacePath.Root);
+            await ScanAsync(WorkspacePath.Root, root);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -106,12 +119,15 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
 
         return new LegacyLayoutScan(requests, plans, empty);
 
-        // Returns whether the folder holds any file other than OS clutter, at any depth.
-        async Task<bool> ScanAsync(WorkspacePath folder)
+        // Returns whether the folder holds any file other than OS clutter, at any depth. The folder
+        // is read at its path on disk; the workspace path names it as the app does, which differs
+        // for an area folder spelled in another case (see AreaFolderName).
+        async Task<bool> ScanAsync(WorkspacePath folder, string fullPath)
         {
             var holdsFiles = false;
-            var directory = new DirectoryInfo(FullPath(root, folder));
-            foreach (var info in directory.EnumerateFileSystemInfos().OrderBy(i => i.Name, StringComparer.Ordinal))
+            var directory = new DirectoryInfo(fullPath);
+            var infos = directory.EnumerateFileSystemInfos().OrderBy(i => i.Name, StringComparer.Ordinal).ToList();
+            foreach (var info in infos)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!WorkspacePath.TryParse(info.Name, out var parsed) || parsed.Value != info.Name)
@@ -126,7 +142,9 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
                     continue;
                 }
 
-                var path = folder.Combine(info.Name);
+                var path = folder.IsRoot && info is DirectoryInfo && AreaFolderName(root, info.Name, infos, _directoryExists) is { } area
+                    ? WorkspacePath.Root.Combine(area)
+                    : folder.Combine(info.Name);
                 if (info is DirectoryInfo)
                 {
                     if (info.Name.StartsWith('.')
@@ -136,7 +154,7 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
                         continue;
                     }
 
-                    var childHoldsFiles = await ScanAsync(path);
+                    var childHoldsFiles = await ScanAsync(path, info.FullName);
                     holdsFiles |= childHoldsFiles;
                     if (!childHoldsFiles && !IsInArea(path))
                     {
@@ -167,7 +185,7 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
                 }
                 else if (WorkspaceLayout.IsRequestFile(folder, info.Name)
                     && !WorkspaceLayout.IsRequestPath(path)
-                    && await LooksLikeRequestAsync(FullPath(root, path), cancellationToken))
+                    && await LooksLikeRequestAsync(info.FullName, cancellationToken))
                 {
                     requests.Add(path);
                 }
@@ -175,6 +193,38 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
 
             return holdsFiles;
         }
+    }
+
+    /// <summary>
+    /// The area folder (<c>requests</c> or <c>plans</c>) a root folder named <paramref name="name"/>
+    /// is, or <c>null</c>. On a case-insensitive file system (Windows, macOS) a folder spelled
+    /// differently, such as <c>Requests</c>, is that area: the app opens it by the area's name, so
+    /// its files are already in place and must not be moved into a nested <c>requests/Requests</c>.
+    /// </summary>
+    private static string? AreaFolderName(
+        string root,
+        string name,
+        IReadOnlyList<FileSystemInfo> siblings,
+        Func<string, bool> directoryExists)
+    {
+        foreach (var area in (string[])[WorkspaceLayout.RequestsFolder, WorkspaceLayout.PlansFolder])
+        {
+            if (string.Equals(name, area, StringComparison.Ordinal))
+            {
+                return area;
+            }
+
+            // The folder is the area only when the area's own name resolves to it: there is no
+            // folder spelled exactly like the area, yet one by that name exists.
+            if (string.Equals(name, area, StringComparison.OrdinalIgnoreCase)
+                && !siblings.Any(s => string.Equals(s.Name, area, StringComparison.Ordinal))
+                && directoryExists(Path.Combine(root, area)))
+            {
+                return area;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsInArea(WorkspacePath path) =>

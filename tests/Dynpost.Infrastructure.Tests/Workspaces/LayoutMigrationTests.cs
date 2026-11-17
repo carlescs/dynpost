@@ -241,6 +241,58 @@ public sealed class LayoutMigrationTests : IDisposable
         Assert.False(Exists("plans"));
     }
 
+    /// <summary>
+    /// A migration whose layout store sees the workspace as a case-insensitive file system would
+    /// (Windows, macOS): any spelling of a folder's name finds it.
+    /// </summary>
+    private MigrateWorkspaceLayout CaseInsensitiveMigration()
+    {
+        bool Exists(string path) =>
+            Directory.Exists(path)
+            || (Path.GetDirectoryName(path) is { } parent
+                && Directory.Exists(parent)
+                && Directory.EnumerateDirectories(parent).Any(d =>
+                    string.Equals(Path.GetFileName(d), Path.GetFileName(path), StringComparison.OrdinalIgnoreCase)));
+
+        return new(new FileSystemWorkspaceLayoutStore(Exists), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
+    }
+
+    [Fact]
+    public async Task KeepsAreaFoldersSpelledInAnotherCase_OnCaseInsensitiveFileSystems()
+    {
+        // "Requests" is the requests folder on Windows and macOS: its files are already in place.
+        Write("Requests/users/get-user.yaml", "name: Get user\nmethod: GET\nurl: /users/1\n");
+        Write("Requests/users/_folder.yaml", "headers:\n  Accept: application/json\n");
+        Write("Requests/empty/.gitkeep", "");
+        Write("Plans/smoke.run.yaml", "name: Smoke\n");
+        Write("health.yaml", "name: Health\nmethod: GET\nurl: /health\n");
+
+        var result = await CaseInsensitiveMigration().ExecuteAsync(_root);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.Requests);
+        Assert.Equal(0, result.Plans);
+        Assert.True(Exists("Requests/users/get-user.yaml"));
+        Assert.True(Exists("Requests/users/_folder.yaml"));
+        Assert.True(Exists("Requests/empty/.gitkeep"));
+        Assert.True(Exists("Plans/smoke.run.yaml"));
+        Assert.False(Exists("requests/Requests"));
+        Assert.False(Exists("plans/Plans"));
+    }
+
+    [Fact]
+    public async Task MovesAFolderSpelledLikeAnAreaInAnotherCase_WhenTheAreaIsAnotherFolder()
+    {
+        // On a case-sensitive file system "Requests" is not "requests", which the app opens.
+        Write("requests/a.yaml", "name: A\nmethod: GET\nurl: /a\n");
+        Write("Requests/b.yaml", "name: B\nmethod: GET\nurl: /b\n");
+
+        await CaseInsensitiveMigration().ExecuteAsync(_root);
+
+        Assert.True(Exists("requests/a.yaml"));
+        Assert.True(Exists("requests/Requests/b.yaml"));
+    }
+
     [Fact]
     public async Task LayoutStore_FindsOnlyDynpostFilesOutsideTheirFolders()
     {
