@@ -30,12 +30,12 @@ public sealed record LegacyLayoutScan(
 }
 
 /// <summary>
-/// A root folder spelled like an area folder (<c>requests</c> or <c>plans</c>) in another case,
-/// such as <c>Requests</c>, while no folder is spelled exactly like the area.
+/// A root folder spelled like one of <see cref="WorkspaceLayout.SystemFolders"/> in another case,
+/// such as <c>Requests</c>, while no folder is spelled exactly like it.
 /// </summary>
 /// <param name="Name">The folder's name on disk.</param>
-/// <param name="Area">The area's name, all lower case.</param>
-public sealed record MiscasedAreaFolder(string Name, string Area);
+/// <param name="Expected">The name Dynpost reads it by, all lower case.</param>
+public sealed record MiscasedSystemFolder(string Name, string Expected);
 
 /// <summary>Reads and records which layout a workspace folder uses, and finds files left in an older layout.</summary>
 public interface IWorkspaceLayoutStore
@@ -54,11 +54,11 @@ public interface IWorkspaceLayoutStore
     Task<Result<Unit>> RenameLegacyFilesAsync(string root, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The root folders spelled like <c>requests</c> or <c>plans</c> in another case, such as
-    /// <c>Requests</c>. A folder is left out when one spelled exactly like the area also exists
-    /// (only possible on a case-sensitive file system).
+    /// The root folders spelled like one of <see cref="WorkspaceLayout.SystemFolders"/> in another
+    /// case, such as <c>Requests</c> or <c>.Dynpost</c>. A folder is left out when one spelled
+    /// exactly right also exists (only possible on a case-sensitive file system).
     /// </summary>
-    Result<IReadOnlyList<MiscasedAreaFolder>> FindMiscasedAreaFolders(string root);
+    Result<IReadOnlyList<MiscasedSystemFolder>> FindMiscasedSystemFolders(string root);
 
     /// <summary>Renames a root folder, also when the new name only differs in case.</summary>
     Result<Unit> RenameRootFolder(string root, string from, string to);
@@ -107,7 +107,7 @@ public sealed class MigrateWorkspaceLayout(
         // Best effort, like the layout record: a workspace whose files keep the former name still
         // opens, it just starts without its local state.
         await layout.RenameLegacyFilesAsync(root, cancellationToken);
-        await LowerCaseAreaFoldersAsync(root, cancellationToken);
+        await LowerCaseSystemFoldersAsync(root, cancellationToken);
 
         var version = await layout.ReadVersionAsync(root, cancellationToken);
         if (version.IsSuccess && version.Value >= WorkspaceLayout.CurrentLayoutVersion)
@@ -132,21 +132,24 @@ public sealed class MigrateWorkspaceLayout(
     }
 
     /// <summary>
-    /// Renames a <c>Requests</c> or <c>Plans</c> folder (any spelling other than the area's) to
-    /// its lower-case name, so the workspace looks the same on every file system: on Windows and
-    /// macOS the app finds such a folder by the lower-case name, but on Linux it doesn't. A folder
-    /// git tracks is renamed with git, which then shows the rename as a change to commit.
+    /// Renames the folders Dynpost reads by name (<see cref="WorkspaceLayout.SystemFolders"/>) when
+    /// they are spelled in another case, such as <c>Requests</c> or <c>.Dynpost</c>, so the
+    /// workspace looks the same on every file system: on Windows and macOS the app finds such a
+    /// folder by its lower-case name, but on Linux it doesn't. A folder git tracks is renamed with
+    /// git, which then shows the rename as a change to commit; <c>.dynpost/</c> is never tracked.
     /// Best effort, like the renames of the former name: on failure the folder keeps its name.
     /// </summary>
-    private async Task LowerCaseAreaFoldersAsync(string root, CancellationToken cancellationToken)
+    private async Task LowerCaseSystemFoldersAsync(string root, CancellationToken cancellationToken)
     {
-        var found = layout.FindMiscasedAreaFolders(root);
+        var found = layout.FindMiscasedSystemFolders(root);
         foreach (var folder in found.IsSuccess ? found.Value ?? [] : [])
         {
-            var moved = await git.MoveTrackedFolderAsync(root, folder.Name, folder.Area, cancellationToken);
+            var moved = folder.Expected == WorkspaceLayout.LocalFolder
+                ? false
+                : await git.MoveTrackedFolderAsync(root, folder.Name, folder.Expected, cancellationToken);
             if (!moved.IsSuccess || !moved.Value)
             {
-                layout.RenameRootFolder(root, folder.Name, folder.Area);
+                layout.RenameRootFolder(root, folder.Name, folder.Expected);
             }
         }
     }

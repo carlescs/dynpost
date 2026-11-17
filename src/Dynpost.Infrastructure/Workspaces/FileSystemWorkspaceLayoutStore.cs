@@ -103,23 +103,23 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
         }
     }
 
-    public Result<IReadOnlyList<MiscasedAreaFolder>> FindMiscasedAreaFolders(string root)
+    public Result<IReadOnlyList<MiscasedSystemFolder>> FindMiscasedSystemFolders(string root)
     {
         try
         {
             var names = new DirectoryInfo(root).EnumerateDirectories().Select(d => d.Name).ToList();
-            var found = new List<MiscasedAreaFolder>();
-            foreach (var area in (string[])[WorkspaceLayout.RequestsFolder, WorkspaceLayout.PlansFolder])
+            var found = new List<MiscasedSystemFolder>();
+            foreach (var expected in WorkspaceLayout.SystemFolders)
             {
-                if (names.Contains(area, StringComparer.Ordinal))
+                if (names.Contains(expected, StringComparer.Ordinal))
                 {
                     continue;
                 }
 
-                var matches = names.Where(n => string.Equals(n, area, StringComparison.OrdinalIgnoreCase)).ToList();
+                var matches = names.Where(n => string.Equals(n, expected, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (matches.Count == 1)
                 {
-                    found.Add(new MiscasedAreaFolder(matches[0], area));
+                    found.Add(new MiscasedSystemFolder(matches[0], expected));
                 }
             }
 

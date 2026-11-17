@@ -201,12 +201,13 @@ workspace it reorganizes it, and says what it did:
 
 ### Folder names in lower case
 
-`requests/` and `plans/` are always spelled in lower case, so a workspace works
-the same on Linux, where file names are case-sensitive, as on Windows and macOS.
-Opening a workspace whose folder is spelled otherwise, such as `Requests/`,
-renames it to `requests/`, unless a `requests/` folder also exists. When git
-tracks the folder, Dynpost renames it with `git mv`, so the rename shows up in
-**Source control**, ready to commit, even on file systems that ignore case.
+The folders Dynpost reads by name, `requests/`, `plans/`, `environments/` and
+`.dynpost/`, are always spelled in lower case, so a workspace works the same on
+Linux, where file names are case-sensitive, as on Windows and macOS. Opening a
+workspace whose folder is spelled otherwise, such as `Requests/`, renames it to
+`requests/`, unless a `requests/` folder also exists. When git tracks the folder,
+Dynpost renames it with `git mv`, so the rename shows up in **Source control**,
+ready to commit, even on file systems that ignore case.
 
 ### Moving from Missive
 

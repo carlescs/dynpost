@@ -264,7 +264,7 @@ public sealed class LayoutMigrationTests : IDisposable
         new DirectoryInfo(_root).EnumerateDirectories().Select(d => d.Name).Order(StringComparer.Ordinal).ToList();
 
     [Fact]
-    public async Task LowerCasesAreaFoldersSpelledInAnotherCase()
+    public async Task LowerCasesSystemFoldersSpelledInAnotherCase()
     {
         Write("Requests/users/get-user.yaml", "name: Get user\nmethod: GET\nurl: /users/1\n");
         Write("Requests/users/_folder.yaml", "headers:\n  Accept: application/json\n");
@@ -288,19 +288,23 @@ public sealed class LayoutMigrationTests : IDisposable
     }
 
     [Fact]
-    public async Task LowerCasesAreaFolders_InWorkspacesAlreadyInTheCurrentLayout()
+    public async Task LowerCasesSystemFolders_InWorkspacesAlreadyInTheCurrentLayout()
     {
         Write("dynpost.yaml", "layout: 2\n");
         Write("REQUESTS/health.yaml", "name: Health\nmethod: GET\nurl: /health\n");
+        Write("Environments/dev.yaml", "name: Dev\n");
+        Write(".Dynpost/secrets.yaml", "token: secret\n");
 
         Assert.Null(await Migration().ExecuteAsync(_root));
 
-        Assert.Equal(["requests"], RootFolders());
+        Assert.Equal([".dynpost", "environments", "requests"], RootFolders());
         Assert.True(Exists("requests/health.yaml"));
+        Assert.True(Exists("environments/dev.yaml"));
+        Assert.True(Exists(".dynpost/secrets.yaml"));
     }
 
     [Fact]
-    public async Task LowerCasesAreaFoldersWithGit_WhenTheyAreTracked()
+    public async Task LowerCasesSystemFoldersWithGit_WhenTheyAreTracked()
     {
         Write("dynpost.yaml", "layout: 2\n");
         Write("Requests/health.yaml", "name: Health\nmethod: GET\nurl: /health\n");
