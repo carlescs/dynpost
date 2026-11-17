@@ -582,6 +582,14 @@ name was chosen by hand, and its secret values, cookies, captured values and
 selection follow. Deleting an environment also removes its stored secret values,
 cookies, captured values and OAuth 2.0 tokens.
 
+To start a new environment from an existing one (say, `Staging` from `Production`),
+use its **Clone** button, in the **Environments** view or its editor. The copy,
+`Staging copy` in `staging-copy.yaml`, opens in a tab with the same variables,
+color and cookie-jar switch, and gets the original's secret values and client
+certificates on this computer; a copy of a local-only environment is local-only
+too. Cookies, captured values and OAuth 2.0 tokens are not copied, and unsaved
+changes in the original's tab are left out.
+
 To tell environments apart at a glance, give each one a **Color** in its editor
 (say, red for production). The selected environment's color runs along the bottom
 of the header and outlines the picker there, and each environment shows it next

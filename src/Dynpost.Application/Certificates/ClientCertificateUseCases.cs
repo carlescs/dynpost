@@ -103,6 +103,18 @@ public static class ClientCertificates
         }
     }
 
+    /// <summary>Sets up the certificates of the environment <paramref name="from"/> for <paramref name="to"/> too.</summary>
+    public static async Task CopyAsync(IClientCertificateStore store, string root, string from, string to, CancellationToken cancellationToken)
+    {
+        var stored = await store.LoadAsync(root, cancellationToken);
+        if (stored.IsSuccess && stored.Value.TryGetValue(from, out var certificates))
+        {
+            var updated = stored.Value.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+            updated[to] = certificates;
+            await store.SaveAsync(root, updated, cancellationToken);
+        }
+    }
+
     public static async Task RemoveAsync(IClientCertificateStore store, string root, string id, CancellationToken cancellationToken)
     {
         var stored = await store.LoadAsync(root, cancellationToken);

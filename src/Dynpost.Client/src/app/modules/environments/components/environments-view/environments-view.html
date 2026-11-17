@@ -111,6 +111,16 @@
         />
         <button
           type="button"
+          class="hidden size-5 shrink-0 items-center justify-center rounded text-slate-400 group-focus-within:flex group-hover:flex enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          [title]="env.error ?? 'Clone ' + env.name"
+          [attr.aria-label]="'Clone ' + env.name"
+          [disabled]="!!env.error"
+          (click)="store.clone(env.id)"
+        >
+          <fa-icon [icon]="faClone" />
+        </button>
+        <button
+          type="button"
           class="flex size-5 shrink-0 items-center justify-center rounded enabled:hover:bg-slate-300 enabled:hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           [class.text-sky-600]="store.draft()?.id === env.id"
           [class.text-slate-400]="store.draft()?.id !== env.id"

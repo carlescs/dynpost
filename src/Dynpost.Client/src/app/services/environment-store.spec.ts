@@ -33,6 +33,8 @@ describe('EnvironmentStore', () => {
           return onDisk;
         case 'environment.save':
           return { id: payload.id, environment: payload.environment };
+        case 'environment.clone':
+          return { id: 'dev-copy.yaml', environment: { ...dev, name: 'Dev copy' } };
         default:
           return null;
       }
@@ -116,5 +118,16 @@ describe('EnvironmentStore', () => {
     await store.refresh(['environments/dev.yaml']);
 
     expect(draft()).toMatchObject({ name: 'Theirs', dirty: false });
+  });
+
+  it('clones an environment and opens the copy in a tab', async () => {
+    onDisk = { ...dev, name: 'Dev copy' };
+
+    await store.clone('dev.yaml');
+
+    expect(send).toHaveBeenCalledWith('environment.clone', { id: 'dev.yaml' });
+    expect(send).toHaveBeenCalledWith('environment.load', { id: 'dev-copy.yaml' });
+    expect(store.drafts().map((d) => d.id)).toEqual(['dev.yaml', 'dev-copy.yaml']);
+    expect(store.draft()).toMatchObject({ id: 'dev-copy.yaml', name: 'Dev copy', dirty: false });
   });
 });

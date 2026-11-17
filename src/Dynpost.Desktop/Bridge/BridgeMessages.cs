@@ -242,6 +242,12 @@ internal static class BridgeMessageTypes
     /// <summary>Saves an existing environment. Payload: <see cref="SaveEnvironmentPayload"/>. Result: saved environment.</summary>
     public const string EnvironmentSave = "environment.save";
 
+    /// <summary>
+    /// Copies an environment as "… copy", with its secret values and client certificates.
+    /// Payload: <see cref="EnvironmentIdPayload"/>. Result: the saved copy.
+    /// </summary>
+    public const string EnvironmentClone = "environment.clone";
+
     /// <summary>Deletes an environment. Payload: <see cref="EnvironmentIdPayload"/>. Result: none.</summary>
     public const string EnvironmentDelete = "environment.delete";
 

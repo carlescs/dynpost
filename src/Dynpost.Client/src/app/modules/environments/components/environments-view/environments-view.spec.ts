@@ -33,6 +33,7 @@ describe('EnvironmentsView', () => {
       draft: signal(null),
       select: vi.fn(),
       edit: vi.fn(),
+      clone: vi.fn(),
       create: vi.fn(),
       refresh: vi.fn(),
     };
@@ -50,6 +51,14 @@ describe('EnvironmentsView', () => {
     button(fixture, 'Edit Dev').click();
     expect(store.edit).toHaveBeenCalledWith('dev.yaml');
     expect(store.select).not.toHaveBeenCalled();
+  });
+
+  it('clones an environment from its clone button, without selecting it', () => {
+    const fixture = render();
+    button(fixture, 'Clone Dev').click();
+    expect(store.clone).toHaveBeenCalledWith('dev.yaml');
+    expect(store.select).not.toHaveBeenCalled();
+    expect(button(fixture, 'Clone Broken').disabled).toBe(true);
   });
 
   it('shows each environment’s color next to its name', () => {

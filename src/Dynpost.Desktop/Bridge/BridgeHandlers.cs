@@ -255,6 +255,8 @@ internal static class BridgeHandlers
                 (p, ct) => Use<CreateEnvironment>().ExecuteAsync(p.Environment, ct))
             .Register<SaveEnvironmentPayload, SavedEnvironmentDto>(BridgeMessageTypes.EnvironmentSave,
                 (p, ct) => Use<SaveEnvironment>().ExecuteAsync(p.Id, p.Environment, ct))
+            .Register<EnvironmentIdPayload, SavedEnvironmentDto>(BridgeMessageTypes.EnvironmentClone,
+                (p, ct) => Use<CloneEnvironment>().ExecuteAsync(p.Id, ct))
             .Register<EnvironmentIdPayload, Unit?>(BridgeMessageTypes.EnvironmentDelete,
                 async (p, ct) => NoValue(await Use<DeleteEnvironment>().ExecuteAsync(p.Id, ct)))
             .Register<SelectEnvironmentPayload, Unit?>(BridgeMessageTypes.EnvironmentSelect,

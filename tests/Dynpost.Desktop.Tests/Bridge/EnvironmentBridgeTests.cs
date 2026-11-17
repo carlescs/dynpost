@@ -59,6 +59,7 @@ public sealed class EnvironmentBridgeTests : IDisposable
             .AddTransient<ListEnvironments>()
             .AddTransient<LoadEnvironment>()
             .AddTransient<SelectEnvironment>()
+            .AddTransient<CloneEnvironment>()
             .BuildServiceProvider();
         _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>(), Substitute.For<IAppWindow>());
     }
@@ -120,6 +121,26 @@ public sealed class EnvironmentBridgeTests : IDisposable
         await _state.Received(1).SaveAsync(Root, WorkspaceState.Default, Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task Clone_ReturnsTheSavedCopy()
+    {
+        _store.Exists(Root, "dev.yaml").Returns(true);
+        _store.ReadAsync(Root, "dev.yaml", Arg.Any<CancellationToken>()).Returns(
+            new EnvironmentDefinition("Development", [new EnvironmentVariable("token", "", Secret: true)]));
+        _store.WriteAsync(Root, Arg.Any<string>(), Arg.Any<EnvironmentDefinition>(), Arg.Any<CancellationToken>())
+            .Returns(Result<bool>.Success(true));
+        _secrets.SaveAsync(Root, Arg.Any<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>(), Arg.Any<CancellationToken>())
+            .Returns(Unit.Value);
+
+        var response = await SendAsync("environment.clone", """{ "id": "dev.yaml" }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var payload = response.GetProperty("payload");
+        Assert.Equal("development-copy.yaml", payload.GetProperty("id").GetString());
+        Assert.Equal("Development copy", payload.GetProperty("environment").GetProperty("name").GetString());
+        Assert.Equal("abc", payload.GetProperty("environment").GetProperty("variables")[0].GetProperty("value").GetString());
+    }
+
     private async Task<JsonElement> SendAsync(string type, string payload)
     {
         var json = await _router.HandleAsync($$"""{ "id": "1", "type": "{{type}}", "payload": {{payload}} }""");
@@ -131,6 +152,7 @@ public sealed class EnvironmentBridgeTests : IDisposable
     {
         var files = Substitute.For<ILocalOnlyFiles>();
         files.List(Arg.Any<string>()).Returns(new HashSet<WorkspacePath>());
+        files.Copy(Arg.Any<string>(), Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
         return files;
     }
 }

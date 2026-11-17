@@ -269,3 +269,33 @@ describe('MockBackend run.compare', () => {
     expect(comparison.requests).toHaveLength(2);
   });
 });
+
+describe('MockBackend environment.clone', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('copies an environment as "… copy" under a free file name', async () => {
+    const backend = new MockBackend();
+    const call = async (type: string, payload?: unknown) => {
+      const reply = backend.handle({ id: '1', type, payload } as never);
+      await vi.advanceTimersByTimeAsync(1000);
+      return reply;
+    };
+    await call('workspace.open', { path: '/preview' });
+    const created = await call('environment.create', {
+      environment: { name: 'Stage', variables: [{ name: 'host', value: 'stage' }] },
+    });
+    const id = created.ok ? (created.payload as { id: string }).id : '';
+
+    const first = await call('environment.clone', { id });
+    const second = await call('environment.clone', { id });
+    const missing = await call('environment.clone', { id: 'nope.yaml' });
+
+    expect(first).toMatchObject({
+      ok: true,
+      payload: { id: 'stage-copy.yaml', environment: { name: 'Stage copy' } },
+    });
+    expect(second).toMatchObject({ ok: true, payload: { id: 'stage-copy-2.yaml' } });
+    expect(missing).toMatchObject({ ok: false, error: { code: 'not_found' } });
+  });
+});

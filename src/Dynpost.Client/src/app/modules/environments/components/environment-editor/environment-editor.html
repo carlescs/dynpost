@@ -47,6 +47,21 @@
       />
       Save
     </button>
+    @if (draft.id && !globals()) {
+      <button
+        type="button"
+        [class]="buttonClass"
+        [title]="
+          draft.dirty
+            ? 'Clone the saved environment (unsaved changes are not copied)'
+            : 'Clone environment, with its secret values and client certificates'
+        "
+        aria-label="Clone environment"
+        (click)="store.clone(draft.id)"
+      >
+        <fa-icon [icon]="faClone" />
+      </button>
+    }
     @if (!globals()) {
       <button
         type="button"
