@@ -286,11 +286,22 @@ public sealed class LayoutMigrationTests : IDisposable
         // On a case-sensitive file system "Requests" is not "requests", which the app opens.
         Write("requests/a.yaml", "name: A\nmethod: GET\nurl: /a\n");
         Write("Requests/b.yaml", "name: B\nmethod: GET\nurl: /b\n");
+        // On a case-insensitive one (macOS, Windows) both names are the same folder.
+        var caseSensitive = !Exists("requests/b.yaml");
 
         await CaseInsensitiveMigration().ExecuteAsync(_root);
 
         Assert.True(Exists("requests/a.yaml"));
-        Assert.True(Exists("requests/Requests/b.yaml"));
+        if (caseSensitive)
+        {
+            Assert.True(Exists("requests/Requests/b.yaml"));
+        }
+        else
+        {
+            // Nothing to move: both requests are already in the requests folder.
+            Assert.True(Exists("requests/b.yaml"));
+            Assert.False(Directory.Exists(Path.Combine(_root, "requests", "Requests")));
+        }
     }
 
     [Fact]
