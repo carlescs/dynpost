@@ -32,7 +32,7 @@ public class MigrateWorkspaceLayoutTests
         _plans.List(Root).Returns(Result<IReadOnlyList<WorkspacePath>>.Success([]));
     }
 
-    private MigrateWorkspaceLayout UseCase() => new(_layout, _git, _repository, _plans, _format, _history, _runs, _localFiles);
+    private MigrateWorkspaceLayout UseCase() => new(_layout, new LowerCaseSystemFolders(_layout, _git), _repository, _plans, _format, _history, _runs, _localFiles);
 
     private static WorkspacePath P(string path) => WorkspacePath.Parse(path);
 
@@ -66,50 +66,17 @@ public class MigrateWorkspaceLayoutTests
     }
 
     [Fact]
-    public async Task LowerCasesSystemFolders_WithGitWhenItTracksThem()
+    public async Task LowerCasesSystemFoldersBeforeReadingTheLayout()
     {
         _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<int>.Success(2));
-        _layout.FindMiscasedSystemFolders(Root).Returns(Result<IReadOnlyList<MiscasedSystemFolder>>.Success(
-            [new MiscasedSystemFolder("Requests", "requests"), new MiscasedSystemFolder("PLANS", "plans")]));
-        _git.MoveTrackedFolderAsync(Root, "Requests", "requests", Arg.Any<CancellationToken>()).Returns(true);
-        _git.MoveTrackedFolderAsync(Root, "PLANS", "plans", Arg.Any<CancellationToken>()).Returns(false);
 
         await UseCase().ExecuteAsync(Root);
 
-        _layout.DidNotReceive().RenameRootFolder(Root, "Requests", Arg.Any<string>());
-        _layout.Received(1).RenameRootFolder(Root, "PLANS", "plans");
         Received.InOrder(() =>
         {
             _layout.FindMiscasedSystemFolders(Root);
             _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>());
         });
-    }
-
-    [Fact]
-    public async Task LowerCasesSystemFolders_OnTheirOwnWhenGitFails()
-    {
-        _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<int>.Success(2));
-        _layout.FindMiscasedSystemFolders(Root).Returns(Result<IReadOnlyList<MiscasedSystemFolder>>.Success(
-            [new MiscasedSystemFolder("Requests", "requests")]));
-        _git.MoveTrackedFolderAsync(Root, "Requests", "requests", Arg.Any<CancellationToken>())
-            .Returns(new Error("git.failed", "git is not installed"));
-
-        await UseCase().ExecuteAsync(Root);
-
-        _layout.Received(1).RenameRootFolder(Root, "Requests", "requests");
-    }
-
-    [Fact]
-    public async Task LowerCasesTheLocalFolder_WithoutGit()
-    {
-        _layout.ReadVersionAsync(Root, Arg.Any<CancellationToken>()).Returns(Result<int>.Success(2));
-        _layout.FindMiscasedSystemFolders(Root).Returns(Result<IReadOnlyList<MiscasedSystemFolder>>.Success(
-            [new MiscasedSystemFolder(".Dynpost", ".dynpost")]));
-
-        await UseCase().ExecuteAsync(Root);
-
-        await _git.DidNotReceiveWithAnyArgs().MoveTrackedFolderAsync(default!, default!, default!, default);
-        _layout.Received(1).RenameRootFolder(Root, ".Dynpost", ".dynpost");
     }
 
     [Fact]

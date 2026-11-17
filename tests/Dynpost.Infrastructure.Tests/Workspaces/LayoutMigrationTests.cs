@@ -27,7 +27,7 @@ public sealed class LayoutMigrationTests : IDisposable
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private MigrateWorkspaceLayout Migration() =>
-        new(_layout, new GitCliService(), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
+        new(_layout, new LowerCaseSystemFolders(_layout, new GitCliService()), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
 
     private static WorkspacePath P(string path) => WorkspacePath.Parse(path);
 
@@ -256,7 +256,8 @@ public sealed class LayoutMigrationTests : IDisposable
                 && Directory.EnumerateDirectories(parent).Any(d =>
                     string.Equals(Path.GetFileName(d), Path.GetFileName(path), StringComparison.OrdinalIgnoreCase)));
 
-        return new(new FileSystemWorkspaceLayoutStore(Exists), new GitCliService(), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
+        var layout = new FileSystemWorkspaceLayoutStore(Exists);
+        return new(layout, new LowerCaseSystemFolders(layout, new GitCliService()), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
     }
 
     /// <summary>The names of the folders at the workspace root, as spelled on disk.</summary>

@@ -1,3 +1,4 @@
+using Dynpost.Application.Common;
 using Dynpost.Application.Git;
 using Dynpost.Application.Workspaces;
 using NSubstitute;
@@ -8,11 +9,16 @@ public class WatchWorkingTreeTests
 {
     private readonly IWorkingTreeWatcher _watcher = Substitute.For<IWorkingTreeWatcher>();
     private readonly CurrentWorkspace _workspace = new();
+    private readonly IWorkspaceLayoutStore _layout = Substitute.For<IWorkspaceLayoutStore>();
+    private readonly IGitService _git = Substitute.For<IGitService>();
+    private readonly LowerCaseSystemFolders _lowerCase;
+
+    public WatchWorkingTreeTests() => _lowerCase = new LowerCaseSystemFolders(_layout, _git);
 
     [Fact]
     public void WithoutAWorkspace_WatchesNothingUntilOneIsOpened()
     {
-        using var watch = new WatchWorkingTree(_workspace, _watcher);
+        using var watch = new WatchWorkingTree(_workspace, _watcher, _lowerCase);
         watch.Start(() => { }, _ => { });
 
         _watcher.DidNotReceiveWithAnyArgs().Watch(default!, default!);
@@ -31,6 +37,24 @@ public class WatchWorkingTreeTests
 
         Assert.Equal(1, git.Count);
         Assert.Equal([["requests/health.yaml"]], files);
+    }
+
+    [Fact]
+    public void ChangesInASystemFolderSpelledInAnotherCase_LowerCaseIt()
+    {
+        _layout.FindMiscasedSystemFolders("/work/api").Returns(Result<IReadOnlyList<MiscasedSystemFolder>>.Success(
+            [new MiscasedSystemFolder("Requests", "requests")]));
+        _git.MoveTrackedFolderAsync("/work/api", "Requests", "requests", Arg.Any<CancellationToken>()).Returns(true);
+        var report = Watching("/work/api", out _, out _);
+
+        report(new WorkingTreeChange(["requests/health.yaml", "README.md"]));
+        _layout.DidNotReceiveWithAnyArgs().FindMiscasedSystemFolders(default!);
+
+        report(new WorkingTreeChange(["Requests/health.yaml"]));
+        _git.Received(1).MoveTrackedFolderAsync("/work/api", "Requests", "requests", Arg.Any<CancellationToken>());
+
+        report(new WorkingTreeChange(null));
+        _layout.Received(2).FindMiscasedSystemFolders("/work/api");
     }
 
     [Fact]
@@ -86,7 +110,7 @@ public class WatchWorkingTreeTests
         var second = Substitute.For<IDisposable>();
         _watcher.Watch("/work/api", Arg.Any<Action<WorkingTreeChange>>()).Returns(first);
         _watcher.Watch("/work/web", Arg.Any<Action<WorkingTreeChange>>()).Returns(second);
-        using var watch = new WatchWorkingTree(_workspace, _watcher);
+        using var watch = new WatchWorkingTree(_workspace, _watcher, _lowerCase);
         watch.Start(() => { }, _ => { });
 
         _workspace.Open("/work/api");
@@ -101,7 +125,7 @@ public class WatchWorkingTreeTests
     {
         var handle = Substitute.For<IDisposable>();
         _watcher.Watch("/work/api", Arg.Any<Action<WorkingTreeChange>>()).Returns(handle);
-        var watch = new WatchWorkingTree(_workspace, _watcher);
+        var watch = new WatchWorkingTree(_workspace, _watcher, _lowerCase);
         watch.Start(() => { }, _ => { });
         _workspace.Open("/work/api");
 
@@ -116,7 +140,7 @@ public class WatchWorkingTreeTests
     public void AFolderThatCannotBeWatched_IsNotAnError()
     {
         _watcher.Watch("/work/api", Arg.Any<Action<WorkingTreeChange>>()).Returns(_ => throw new IOException("Too many watches."));
-        using var watch = new WatchWorkingTree(_workspace, _watcher);
+        using var watch = new WatchWorkingTree(_workspace, _watcher, _lowerCase);
         watch.Start(() => { }, _ => { });
 
         _workspace.Open("/work/api");
@@ -132,7 +156,7 @@ public class WatchWorkingTreeTests
         _watcher.Watch(root, Arg.Do<Action<WorkingTreeChange>>(a => reported = a)).Returns(Substitute.For<IDisposable>());
         var gitChanges = new List<int>();
         var fileChanges = new List<IReadOnlyList<string>?>();
-        var watch = new WatchWorkingTree(_workspace, _watcher);
+        var watch = new WatchWorkingTree(_workspace, _watcher, _lowerCase);
         watch.Start(() => gitChanges.Add(gitChanges.Count), paths => fileChanges.Add(paths));
         git = gitChanges;
         files = fileChanges;

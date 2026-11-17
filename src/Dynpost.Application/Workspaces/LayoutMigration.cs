@@ -1,5 +1,4 @@
 using Dynpost.Application.Common;
-using Dynpost.Application.Git;
 using Dynpost.Application.History;
 using Dynpost.Application.Runs;
 using Dynpost.Application.Sharing;
@@ -75,7 +74,8 @@ public interface IWorkspaceLayoutStore
 public sealed record LayoutMigrationDto(int Requests, int Plans, IReadOnlyList<string> LeftInPlace, string? Error = null);
 
 /// <summary>
-/// Renames the files a workspace has under the app's former name, then moves it from the first layout — requests, collection folders and run plans all over
+/// Renames the files a workspace has under the app's former name and spells its system folders in
+/// lower case (see <see cref="LowerCaseSystemFolders"/>), then moves it from the first layout — requests, collection folders and run plans all over
 /// the workspace root — to the current one, where requests and their folders live in
 /// <c>requests/</c> and run plans in <c>plans/</c>, keeping their relative paths
 /// (<c>users/get-user.yaml</c> → <c>requests/users/get-user.yaml</c>, <c>smoke.run.yaml</c> →
@@ -88,7 +88,7 @@ public sealed record LayoutMigrationDto(int Requests, int Plans, IReadOnlyList<s
 /// </summary>
 public sealed class MigrateWorkspaceLayout(
     IWorkspaceLayoutStore layout,
-    IGitService git,
+    LowerCaseSystemFolders lowerCase,
     IWorkspaceRepository repository,
     IRunPlanStore plans,
     IRunPlanFormat planFormat,
@@ -107,7 +107,7 @@ public sealed class MigrateWorkspaceLayout(
         // Best effort, like the layout record: a workspace whose files keep the former name still
         // opens, it just starts without its local state.
         await layout.RenameLegacyFilesAsync(root, cancellationToken);
-        await LowerCaseSystemFoldersAsync(root, cancellationToken);
+        await lowerCase.ExecuteAsync(root, cancellationToken);
 
         var version = await layout.ReadVersionAsync(root, cancellationToken);
         if (version.IsSuccess && version.Value >= WorkspaceLayout.CurrentLayoutVersion)
@@ -129,29 +129,6 @@ public sealed class MigrateWorkspaceLayout(
         }
 
         return await MigrateAsync(root, scan.Value, cancellationToken);
-    }
-
-    /// <summary>
-    /// Renames the folders Dynpost reads by name (<see cref="WorkspaceLayout.SystemFolders"/>) when
-    /// they are spelled in another case, such as <c>Requests</c> or <c>.Dynpost</c>, so the
-    /// workspace looks the same on every file system: on Windows and macOS the app finds such a
-    /// folder by its lower-case name, but on Linux it doesn't. A folder git tracks is renamed with
-    /// git, which then shows the rename as a change to commit; <c>.dynpost/</c> is never tracked.
-    /// Best effort, like the renames of the former name: on failure the folder keeps its name.
-    /// </summary>
-    private async Task LowerCaseSystemFoldersAsync(string root, CancellationToken cancellationToken)
-    {
-        var found = layout.FindMiscasedSystemFolders(root);
-        foreach (var folder in found.IsSuccess ? found.Value ?? [] : [])
-        {
-            var moved = folder.Expected == WorkspaceLayout.LocalFolder
-                ? false
-                : await git.MoveTrackedFolderAsync(root, folder.Name, folder.Expected, cancellationToken);
-            if (!moved.IsSuccess || !moved.Value)
-            {
-                layout.RenameRootFolder(root, folder.Name, folder.Expected);
-            }
-        }
     }
 
     private async Task<LayoutMigrationDto> MigrateAsync(string root, LegacyLayoutScan scan, CancellationToken cancellationToken)

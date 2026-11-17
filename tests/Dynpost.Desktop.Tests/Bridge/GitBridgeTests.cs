@@ -55,6 +55,7 @@ public sealed class GitBridgeTests : IDisposable
             .AddSingleton(Substitute.For<IRunPlanFormat>())
             .AddSingleton(Substitute.For<IHistoryStore>())
             .AddSingleton(Substitute.For<IRunStore>())
+            .AddSingleton<LowerCaseSystemFolders>()
             .AddTransient<MigrateWorkspaceLayout>()
             .AddTransient<OpenWorkspace>()
             .AddTransient<OpenLastWorkspace>()

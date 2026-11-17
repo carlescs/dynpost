@@ -18,7 +18,7 @@ internal static class Migrations
         layout.ReadVersionAsync(default!, default).ReturnsForAnyArgs(Result<int>.Success(WorkspaceLayout.CurrentLayoutVersion));
         return new MigrateWorkspaceLayout(
             layout,
-            Substitute.For<IGitService>(),
+            new LowerCaseSystemFolders(layout, Substitute.For<IGitService>()),
             Substitute.For<IWorkspaceRepository>(),
             Substitute.For<IRunPlanStore>(),
             Substitute.For<IRunPlanFormat>(),
