@@ -16,7 +16,10 @@ namespace Dynpost.Infrastructure.Tests.Workspaces;
 /// <summary>Moves real workspaces in the old layout to the current one, with the real file stores.</summary>
 public sealed class LayoutMigrationTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("dynpost-layout-").FullName;
+    // Some tests make the workspace a git repository, whose read-only object files TempDirectory
+    // can delete on Windows.
+    private readonly TempDirectory _temp = new();
+    private readonly string _root;
     private readonly FileSystemWorkspaceLayoutStore _layout = new();
     private readonly FileSystemWorkspaceRepository _repository = new();
     private readonly FileSystemRunPlanStore _plans = new();
@@ -24,7 +27,9 @@ public sealed class LayoutMigrationTests : IDisposable
     private readonly JsonRunStore _runs = new();
     private readonly GitIgnoreLocalOnlyFiles _localFiles = new();
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public LayoutMigrationTests() => _root = _temp.Path;
+
+    public void Dispose() => _temp.Dispose();
 
     private MigrateWorkspaceLayout Migration() =>
         new(_layout, new LowerCaseSystemFolders(_layout, new GitCliService()), _repository, _plans, new YamlRunPlanFormat(), _history, _runs, _localFiles);
