@@ -48,9 +48,12 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
         {
             var fullPath = FullPath(root, WorkspaceFile);
             var text = (await ReadIfExistsAsync(fullPath, cancellationToken)) ?? string.Empty;
+            // Match the file's line endings (git checks files out with CRLF on Windows), so the
+            // change is one line.
+            var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
             var updated = LayoutLine().IsMatch(text)
                 ? LayoutLine().Replace(text, line, 1)
-                : text + (text.Length == 0 || text.EndsWith('\n') ? string.Empty : "\n") + line + "\n";
+                : text + (text.Length == 0 || text.EndsWith('\n') ? string.Empty : newline) + line + newline;
             await WriteIfChangedAsync(fullPath, updated, cancellationToken);
             return Unit.Value;
         }
@@ -205,6 +208,11 @@ public sealed partial class FileSystemWorkspaceLayoutStore : IWorkspaceLayoutSto
         }
     }
 
-    [GeneratedRegex(@"^layout:[ \t]*(?<version>\d+)[ \t]*$", RegexOptions.Multiline)]
+    /// <summary>
+    /// The <c>layout</c> line. A multiline <c>$</c> only matches before <c>\n</c>, so a CRLF line
+    /// end (as git checks files out on Windows with <c>core.autocrlf</c>) is allowed for and left
+    /// out of the match, which keeps it when the line is replaced.
+    /// </summary>
+    [GeneratedRegex(@"^layout:[ \t]*(?<version>\d+)[ \t]*(?=\r?$)", RegexOptions.Multiline)]
     private static partial Regex LayoutLine();
 }
