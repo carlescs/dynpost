@@ -199,6 +199,49 @@ public sealed class LayoutMigrationTests : IDisposable
     }
 
     [Fact]
+    public async Task LayoutStore_ReadsAndUpdatesTheVersion_WithCrlfLineEndings()
+    {
+        // Git on Windows (core.autocrlf) checks dynpost.yaml out with CRLF line endings.
+        Write("dynpost.yaml", "name: api\r\nlayout: 1 \r\nother: x\r\n");
+        Assert.Equal(1, (await _layout.ReadVersionAsync(_root)).Value);
+
+        await _layout.WriteVersionAsync(_root, 2);
+
+        Assert.Equal("name: api\r\nlayout: 2\r\nother: x\r\n", Read("dynpost.yaml"));
+        Assert.Equal(2, (await _layout.ReadVersionAsync(_root)).Value);
+    }
+
+    [Fact]
+    public async Task LayoutStore_AddsTheVersionWithTheFileLineEndings()
+    {
+        Write("dynpost.yaml", "name: api\r\n");
+
+        await _layout.WriteVersionAsync(_root, 2);
+
+        Assert.Equal("name: api\r\nlayout: 2\r\n", Read("dynpost.yaml"));
+    }
+
+    [Fact]
+    public async Task LeavesAWorkspaceCheckedOutWithCrlfLineEndingsAsItIs()
+    {
+        // A clone on Windows of a workspace in the current layout: request-like YAML files the
+        // user keeps outside requests/ must not be moved, nor dynpost.yaml rewritten.
+        Write("dynpost.yaml", "layout: 2\r\n");
+        Write("requests/users/get-user.yaml", "name: Get user\r\nmethod: GET\r\nurl: /users/1\r\n");
+        Write("samples/health.yaml", "name: Health\r\nmethod: GET\r\nurl: /health\r\n");
+        Write("perf/smoke.run.yaml", "name: Smoke\r\n");
+
+        var result = await Migration().ExecuteAsync(_root);
+
+        Assert.Null(result);
+        Assert.Equal("layout: 2\r\n", Read("dynpost.yaml"));
+        Assert.True(Exists("samples/health.yaml"));
+        Assert.True(Exists("perf/smoke.run.yaml"));
+        Assert.False(Exists("requests/samples"));
+        Assert.False(Exists("plans"));
+    }
+
+    [Fact]
     public async Task LayoutStore_FindsOnlyDynpostFilesOutsideTheirFolders()
     {
         Write("health.yaml", "name: Health\nmethod: GET\nurl: /health\n");
