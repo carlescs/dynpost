@@ -300,6 +300,106 @@ public sealed class DeleteEnvironment(
     }
 }
 
+/// <summary>
+/// Copies an environment as <c>… copy</c> into a new file named after it (<c>staging-copy.yaml</c>,
+/// or <c>staging-copy-2.yaml</c> if that is taken). The copy gets the original's secret values
+/// and client certificates from this computer, and is local-only when the original is; cookies,
+/// captured values and OAuth 2.0 tokens are not copied. The original is left untouched.
+/// </summary>
+public sealed class CloneEnvironment(
+    IEnvironmentStore store,
+    ISecretStore secrets,
+    ILocalOnlyFiles localFiles,
+    CurrentWorkspace current,
+    IClientCertificateStore? certificates = null)
+{
+    public const string CopySuffix = " copy";
+
+    /// <summary>One clone at a time, so two copies never pick, and overwrite, the same file name.</summary>
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
+    public async Task<Result<SavedEnvironmentDto>> ExecuteAsync(string id, CancellationToken cancellationToken = default)
+    {
+        await Gate.WaitAsync(cancellationToken);
+        try
+        {
+            return await CloneAsync(id, cancellationToken);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private async Task<Result<SavedEnvironmentDto>> CloneAsync(string id, CancellationToken cancellationToken)
+    {
+        var root = current.RequireRoot();
+        if (!root.IsSuccess)
+        {
+            return root.Error!;
+        }
+
+        if (!EnvironmentMapper.IsValidId(id))
+        {
+            return EnvironmentMapper.InvalidId(id);
+        }
+
+        if (!store.Exists(root.Value, id))
+        {
+            return EnvironmentMapper.NotFound(id);
+        }
+
+        var original = await store.ReadAsync(root.Value, id, cancellationToken);
+        if (!original.IsSuccess)
+        {
+            return original.Error!;
+        }
+
+        // Check the secrets can be stored before creating the file.
+        var stored = await secrets.LoadAsync(root.Value, cancellationToken);
+        if (!stored.IsSuccess)
+        {
+            return stored.Error!;
+        }
+
+        var dto = EnvironmentMapper.ToDto(original.Value, stored.Value.GetValueOrDefault(id));
+        var copy = EnvironmentMapper.ToDomain(dto with { Name = dto.Name + CopySuffix });
+        if (!copy.IsSuccess)
+        {
+            return copy.Error!;
+        }
+
+        var target = EnvironmentFiles.FreeId(store, root.Value, copy.Value.Name, current: null);
+        if (target is null)
+        {
+            return new Error(ErrorCodes.Io, $"Could not find a free file name for '{copy.Value.Name}'.");
+        }
+
+        var written = await store.WriteAsync(root.Value, target, copy.Value, cancellationToken);
+        if (!written.IsSuccess)
+        {
+            return written.Error!;
+        }
+
+        // The copy of a local-only environment is local-only too.
+        var followed = localFiles.Copy(root.Value, LocalOnlyPaths.Environment(id), LocalOnlyPaths.Environment(target));
+        if (!followed.IsSuccess)
+        {
+            return followed.Error!;
+        }
+
+        if (certificates is not null)
+        {
+            await ClientCertificates.CopyAsync(certificates, root.Value, id, target, cancellationToken);
+        }
+
+        var saved = await EnvironmentFiles.SaveSecretsAsync(secrets, root.Value, stored.Value, target, null, copy.Value, cancellationToken);
+        return saved.IsSuccess
+            ? new SavedEnvironmentDto(target, EnvironmentMapper.ToDto(copy.Value, EnvironmentMapper.SecretValues(copy.Value)))
+            : saved.Error!;
+    }
+}
+
 /// <summary>Selects the environment whose variables are used when sending requests, or none.</summary>
 public sealed class SelectEnvironment(IEnvironmentStore store, IWorkspaceStateStore state, CurrentWorkspace current)
 {

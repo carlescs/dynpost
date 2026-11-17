@@ -223,6 +223,7 @@ internal static class Program
             .AddTransient<SaveGlobalVariables>()
             .AddTransient<CreateEnvironment>()
             .AddTransient<SaveEnvironment>()
+            .AddTransient<CloneEnvironment>()
             .AddTransient<DeleteEnvironment>()
             .AddTransient<SelectEnvironment>()
             .AddTransient<ListRunPlans>()

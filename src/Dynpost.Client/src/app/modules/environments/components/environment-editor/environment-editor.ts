@@ -9,6 +9,7 @@ import {
   faLock,
   faSpinner,
   faTrash,
+  faClone,
 } from '@fortawesome/free-solid-svg-icons';
 import { EnvironmentVariableDto } from '../../../../models/messages';
 import {
@@ -64,6 +65,7 @@ export class EnvironmentEditor {
   protected readonly faLock = faLock;
   protected readonly faSpinner = faSpinner;
   protected readonly faTrash = faTrash;
+  protected readonly faClone = faClone;
 
   protected patch(index: number, patch: Partial<EnvironmentVariableDto>): void {
     const draft = this.draft();

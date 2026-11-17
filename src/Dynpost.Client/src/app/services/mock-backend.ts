@@ -690,6 +690,15 @@ export class MockBackend {
         return ok(null);
       case 'oauth2.signIn.cancel':
         return ok(false);
+      case 'environment.clone': {
+        const original = this.environments.get(payload?.['id'] as string);
+        if (!original) return fail(ERROR_CODES.notFound, 'Environment not found.');
+        const copy = { ...structuredClone(original), name: `${original.name} copy` };
+        let id = `${slug(copy.name)}.yaml`;
+        for (let n = 2; this.environments.has(id); n++) id = `${slug(copy.name)}-${n}.yaml`;
+        this.environments.set(id, copy);
+        return ok({ id, environment: structuredClone(copy) });
+      }
       case 'environment.delete': {
         const id = payload?.['id'] as string;
         this.environments.delete(id);

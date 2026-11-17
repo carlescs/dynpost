@@ -271,6 +271,21 @@ export class EnvironmentStore {
     }
   }
 
+  /**
+   * Copies an environment, as saved on disk, into a new "… copy" environment with the same secret
+   * values and client certificates, and opens the copy in a tab.
+   */
+  async clone(id: string): Promise<void> {
+    try {
+      const saved = await this.bridge.send('environment.clone', { id });
+      this.workspace.dismissError();
+      await this.refresh();
+      await this.edit(saved.id);
+    } catch (error) {
+      this.report(error);
+    }
+  }
+
   /** Deletes a draft's environment, after asking the user, and closes its tab. */
   async deleteDraft(key: string): Promise<void> {
     const draft = this.drafts().find((d) => d.key === key);

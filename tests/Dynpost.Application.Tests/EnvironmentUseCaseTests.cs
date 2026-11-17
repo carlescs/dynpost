@@ -1,3 +1,4 @@
+using Dynpost.Application.Certificates;
 using Dynpost.Application.Common;
 using Dynpost.Application.Sharing;
 using Dynpost.Application.Cookies;
@@ -474,5 +475,92 @@ public class EnvironmentUseCaseTests
         await new DeleteEnvironment(_store, _secrets, _state, _cookies, _captures, _tokens, _localFiles, _current).ExecuteAsync("dev.yaml");
 
         _localFiles.Received(1).Remove(Root, WorkspacePath.Parse("environments/dev.yaml"));
+    }
+
+    private CloneEnvironment Clone(IClientCertificateStore? certificates = null)
+    {
+        _localFiles.Copy(Root, Arg.Any<WorkspacePath>(), Arg.Any<WorkspacePath>()).Returns(Unit.Value);
+        return new CloneEnvironment(_store, _secrets, _localFiles, _current, certificates);
+    }
+
+    [Fact]
+    public async Task Clone_WritesACopyWithTheOriginalsSecretValues()
+    {
+        Existing("staging.yaml", new EnvironmentDefinition("Staging",
+            [new EnvironmentVariable("baseUrl", "https://staging"), new EnvironmentVariable("token", "", true)])
+        {
+            CookieJar = true,
+            Color = "orange",
+        });
+        _store.Exists(Root, "staging-copy.yaml").Returns(true);
+        StoredSecrets(new() { ["staging.yaml"] = new Dictionary<string, string> { ["token"] = "s3cret" } });
+
+        var result = await Clone().ExecuteAsync("staging.yaml");
+
+        Assert.Equal("staging-copy-2.yaml", result.Value.Id);
+        Assert.Equal("Staging copy", result.Value.Environment.Name);
+        Assert.True(result.Value.Environment.CookieJar);
+        Assert.Equal("orange", result.Value.Environment.Color);
+        Assert.Equal("s3cret", result.Value.Environment.Variables.Single(v => v.Name == "token").Value);
+        await _store.Received(1).WriteAsync(
+            Root,
+            "staging-copy-2.yaml",
+            Arg.Is<EnvironmentDefinition>(e => e.Name == "Staging copy" && e.Variables.Count == 2),
+            Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().WriteAsync(Root, "staging.yaml", Arg.Any<EnvironmentDefinition>(), Arg.Any<CancellationToken>());
+        await _secrets.Received(1).SaveAsync(
+            Root,
+            Arg.Is<Secrets>(s => s.Count == 2 && s["staging.yaml"]["token"] == "s3cret" && s["staging-copy-2.yaml"]["token"] == "s3cret"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Clone_KeepsTheCopyOfALocalOnlyEnvironmentLocal()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev"));
+
+        await Clone().ExecuteAsync("dev.yaml");
+
+        _localFiles.Received(1).Copy(Root, WorkspacePath.Parse("environments/dev.yaml"), WorkspacePath.Parse("environments/dev-copy.yaml"));
+    }
+
+    [Fact]
+    public async Task Clone_CopiesClientCertificatesButNotCookiesOrCapturedValues()
+    {
+        Existing("dev.yaml", new EnvironmentDefinition("Dev"));
+        var certificates = Substitute.For<IClientCertificateStore>();
+        IReadOnlyList<ClientCertificateSetting> devCertificates = [new("api.example.com", "certs/dev.p12", Passphrase: "pw")];
+        certificates.LoadAsync(Root, Arg.Any<CancellationToken>()).Returns(
+            Result<IReadOnlyDictionary<string, IReadOnlyList<ClientCertificateSetting>>>.Success(
+                new Dictionary<string, IReadOnlyList<ClientCertificateSetting>> { ["dev.yaml"] = devCertificates }));
+        certificates.SaveAsync(Root, Arg.Any<IReadOnlyDictionary<string, IReadOnlyList<ClientCertificateSetting>>>(), Arg.Any<CancellationToken>())
+            .Returns(Unit.Value);
+
+        await Clone(certificates).ExecuteAsync("dev.yaml");
+
+        await certificates.Received(1).SaveAsync(
+            Root,
+            Arg.Is<IReadOnlyDictionary<string, IReadOnlyList<ClientCertificateSetting>>>(c =>
+                c.Count == 2 && c["dev.yaml"] == devCertificates && c["dev-copy.yaml"] == devCertificates),
+            Arg.Any<CancellationToken>());
+        await _cookies.DidNotReceiveWithAnyArgs().SaveAsync(default!, default!, default);
+        await _captures.DidNotReceiveWithAnyArgs().SaveAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task Clone_MissingFile_IsNotFound()
+    {
+        var result = await Clone().ExecuteAsync("dev.yaml");
+
+        Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
+        await _store.DidNotReceiveWithAnyArgs().WriteAsync(default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task Clone_RejectsInvalidIds()
+    {
+        var result = await Clone().ExecuteAsync("../dev.yaml");
+
+        Assert.Equal(ErrorCodes.InvalidPath, result.Error?.Code);
     }
 }

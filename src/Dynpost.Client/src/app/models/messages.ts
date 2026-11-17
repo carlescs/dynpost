@@ -1279,6 +1279,11 @@ export interface BridgeMessages {
     payload: { id: string; environment: EnvironmentDto };
     result: SavedEnvironmentDto;
   };
+  /**
+   * Copies an environment as "… copy" into a new file, with its secret values and client
+   * certificates; a copy of a local-only environment is local-only too.
+   */
+  'environment.clone': { payload: { id: string }; result: SavedEnvironmentDto };
   /** Deletes an environment file and its stored secrets. */
   'environment.delete': { payload: { id: string }; result: null };
   /** Selects the environment requests are sent with; `null` selects none. */
