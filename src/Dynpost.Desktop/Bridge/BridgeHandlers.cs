@@ -113,6 +113,8 @@ internal static class BridgeHandlers
                 (p, _) => Task.FromResult(Result<IReadOnlyList<RequestFileInfoDto>>.Success(Use<InspectRequestFiles>().Execute(p.Paths ?? []))))
             .Register<CreateRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestCreate,
                 (p, ct) => Use<CreateRequest>().ExecuteAsync(p.Folder, p.Request, ct))
+            .Register<ViewRequestFilePayload, string>(BridgeMessageTypes.RequestViewFile,
+                (p, ct) => Use<ViewRequestFile>().ExecuteAsync(p.Request, p.Path, ct))
             .Register<SaveRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestSave,
                 (p, ct) => Use<SaveRequest>().ExecuteAsync(p.Path, p.Request, ct))
             .Register<DuplicateRequestPayload, SavedRequestDto>(BridgeMessageTypes.RequestDuplicate,

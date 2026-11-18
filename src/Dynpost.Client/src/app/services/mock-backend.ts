@@ -728,6 +728,11 @@ export class MockBackend {
       case 'environment.select':
         this.activeEnvironment = (payload?.['id'] as string | null) ?? null;
         return ok(null);
+      case 'request.viewFile': {
+        const path = payload?.['path'] as string | null | undefined;
+        const dto = path ? this.files.get(path) : (payload?.['request'] as RequestDto);
+        return dto ? ok(this.yaml(dto)) : fail(ERROR_CODES.notFound, 'File not found.');
+      }
       case 'request.load': {
         const file = this.files.get(payload?.['path'] as string);
         return file ? ok(structuredClone(file)) : fail(ERROR_CODES.notFound, 'File not found.');
@@ -1420,6 +1425,27 @@ export class MockBackend {
     return [...this.folders, ...this.files.keys(), ...this.runPlans.keys()].some(
       (p) => p.toLowerCase() === lower,
     );
+  }
+
+  /** A rough YAML rendering of a request, standing in for the host's request file format. */
+  private yaml(dto: RequestDto): string {
+    const quote = (text: string) => (/^[\w./:{}$-]*$/.test(text) ? text : JSON.stringify(text));
+    const lines = [`name: ${quote(dto.name)}`, `method: ${dto.method}`, `url: ${quote(dto.url)}`];
+    for (const [key, rows] of [
+      ['params', dto.params],
+      ['headers', dto.headers],
+    ] as const) {
+      const filled = rows.filter((r) => r.key);
+      if (filled.length) lines.push(`${key}:`);
+      for (const r of filled) lines.push(`  ${quote(r.key)}: ${quote(r.value)}`);
+    }
+    if (dto.auth.type !== 'inherit') lines.push('auth:', `  type: ${dto.auth.type}`);
+    if (dto.body.type !== 'none') {
+      lines.push('body:', `  type: ${dto.body.type}`);
+      if (dto.body.content)
+        lines.push('  content: |', ...dto.body.content.split('\n').map((l) => `    ${l}`));
+    }
+    return lines.join('\n') + '\n';
   }
 
   private clean(dto: RequestDto): RequestDto {

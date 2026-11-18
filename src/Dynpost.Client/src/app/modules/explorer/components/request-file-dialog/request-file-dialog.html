@@ -1,0 +1,55 @@
+<div
+  class="adaptive relative flex w-[48rem] max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-slate-300 bg-white p-5 text-sm text-slate-800 shadow-xl"
+>
+  <button
+    type="button"
+    class="absolute top-2 right-2 flex size-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+    title="Close"
+    aria-label="Close"
+    (click)="ref.close()"
+  >
+    <fa-icon [icon]="faXmark" />
+  </button>
+  <h2 id="request-file-dialog-title" class="mb-1 truncate pr-6 text-base font-semibold">
+    {{ data.name || 'Untitled' }} — YAML
+  </h2>
+  <p class="mb-3 truncate text-xs text-slate-500" [title]="data.location">
+    @if (data.path) {
+      {{ data.location }}
+    } @else {
+      As it will be saved in {{ data.location }} (unsaved changes)
+    }
+  </p>
+  <div class="h-[60vh] min-h-48 overflow-hidden rounded border border-slate-300">
+    @if (error(); as message) {
+      <p class="p-3 text-red-600" role="alert">{{ message }}</p>
+    } @else if (text(); as yaml) {
+      <app-code-editor
+        class="h-full"
+        language="yaml"
+        ariaLabel="Request YAML"
+        [value]="yaml"
+        [readOnly]="true"
+      />
+    } @else {
+      <p class="p-3 text-slate-400">Loading…</p>
+    }
+  </div>
+  <div class="mt-3 flex justify-end gap-2">
+    <button
+      type="button"
+      class="flex items-center gap-2 rounded border border-slate-300 px-3 py-1 hover:bg-slate-100 disabled:opacity-50"
+      [disabled]="text() === null"
+      (click)="copy()"
+    >
+      <fa-icon [icon]="copied() ? faCheck : faCopy" /> {{ copied() ? 'Copied' : 'Copy' }}
+    </button>
+    <button
+      type="button"
+      class="rounded bg-sky-600 px-3 py-1 text-white hover:bg-sky-700"
+      (click)="ref.close()"
+    >
+      Close
+    </button>
+  </div>
+</div>

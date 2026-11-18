@@ -13,6 +13,7 @@ import {
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faBan,
+  faFileCode,
   faFloppyDisk,
   faPaperPlane,
   faSpinner,
@@ -28,6 +29,7 @@ import {
   RequestAuth,
   RequestContent,
   RequestDocument,
+  REQUESTS_FOLDER,
 } from '../../../../models/workspace';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
@@ -48,6 +50,8 @@ import { Bridge } from '../../../../services/bridge';
 import { InterchangeStore } from '../../../../services/interchange-store';
 import { Dialogs } from '../../../../services/dialogs';
 import { CurlShell } from '../../../../models/messages';
+import { toRequestDto } from '../../../../models/request-mapping';
+import { RequestFileData, RequestFileDialog } from '../request-file-dialog/request-file-dialog';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'settings' | 'capture' | 'docs';
 
@@ -77,6 +81,7 @@ export class RequestEditor {
   private readonly dialogs = inject(Dialogs);
   protected readonly curlMenuOpen = signal(false);
   protected readonly faTerminal = faTerminal;
+  protected readonly faFileCode = faFileCode;
   protected readonly curlShells: { id: CurlShell; label: string }[] = [
     { id: 'posix', label: 'bash / zsh' },
     { id: 'cmd', label: 'cmd' },
@@ -211,6 +216,23 @@ export class RequestEditor {
     await this.interchange.copyAsCurl(this.document(), {
       resolve: mode !== 'written',
       includeSecrets: mode === 'secrets',
+    });
+  }
+
+  /**
+   * Shows the request's YAML: the file on disk when it is saved and unchanged, otherwise what
+   * saving it would write.
+   */
+  protected viewYaml(): void {
+    const doc = this.document();
+    this.dialogs.open<void, RequestFileData>(RequestFileDialog, {
+      data: {
+        name: doc.name,
+        request: toRequestDto(doc),
+        path: doc.path && !doc.dirty ? doc.path : null,
+        location: doc.path ?? `a new file in ${doc.folder || REQUESTS_FOLDER}`,
+      },
+      ariaLabelledBy: 'request-file-dialog-title',
     });
   }
 

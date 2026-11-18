@@ -1155,6 +1155,11 @@ export interface BridgeMessages {
    */
   'workspace.import': { payload: { folder: string }; result: ImportResultDto | null };
   'request.load': { payload: { path: string }; result: RequestDto };
+  /**
+   * The YAML of a request's file: as on disk when `path` is given, else as saving `request` would
+   * write it.
+   */
+  'request.viewFile': { payload: { request: RequestDto; path?: string | null }; result: string };
   /** Shows the native file picker for a request body; `null` when cancelled. */
   'request.pickFile': { payload: void; result: PickedFileDto | null };
   /** Reads a `curl …` command into a request (not saved), with what it couldn't represent. */

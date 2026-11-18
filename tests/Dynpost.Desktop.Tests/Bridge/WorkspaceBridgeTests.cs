@@ -25,6 +25,7 @@ public sealed class WorkspaceBridgeTests : IDisposable
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
     private readonly IFileManager _fileManager = Substitute.For<IFileManager>();
     private readonly IFolderDefaultsStore _folders = Substitute.For<IFolderDefaultsStore>();
+    private readonly IRequestFileFormat _format = Substitute.For<IRequestFileFormat>();
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
 
@@ -36,6 +37,8 @@ public sealed class WorkspaceBridgeTests : IDisposable
             .AddSingleton(_settings)
             .AddSingleton(_fileManager)
             .AddSingleton(_folders)
+            .AddSingleton(_format)
+            .AddTransient<ViewRequestFile>()
             .AddSingleton<FolderInheritance>()
             .AddTransient<LoadFolderSettings>()
             .AddTransient<SaveFolderSettings>()
@@ -70,6 +73,20 @@ public sealed class WorkspaceBridgeTests : IDisposable
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         Assert.Equal("requests/get-user-copy.yaml", response.GetProperty("payload").GetProperty("path").GetString());
         Assert.Equal("Get user copy", response.GetProperty("payload").GetProperty("request").GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task ViewRequestFile_ReturnsTheYamlOfTheEditedRequest()
+    {
+        _format.Format(Arg.Is<HttpRequestDefinition>(r => r.Name == "Get user")).Returns("name: Get user\n");
+
+        var response = await SendAsync("request.viewFile", """
+            { "request": { "name": "Get user", "method": "GET", "url": "/users/1", "params": [], "headers": [],
+              "auth": { "type": "none" }, "body": { "type": "none", "content": "" } } }
+            """);
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        Assert.Equal("name: Get user\n", response.GetProperty("payload").GetString());
     }
 
     [Fact]
