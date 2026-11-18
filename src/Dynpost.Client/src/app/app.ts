@@ -23,6 +23,8 @@ import { DiffView } from './modules/git/components/diff-view/diff-view';
 import { GitHistoryStore } from './services/git-history-store';
 import { GitStore } from './services/git-store';
 import { ActivityBar } from './components/activity-bar/activity-bar';
+import { WindowEdges } from './components/window-edges/window-edges';
+import { WindowFrame } from './services/window-frame';
 import { AppHeader } from './components/app-header/app-header';
 import { Sidebar } from './components/sidebar/sidebar';
 import { ThemeStore } from './services/theme-store';
@@ -49,6 +51,7 @@ import { WorkspaceSync } from './services/workspace-sync';
     RunEditor,
     FolderEditor,
     FaIconComponent,
+    WindowEdges,
   ],
   selector: 'app-root',
   host: {
@@ -70,6 +73,7 @@ export class App implements OnInit {
   protected readonly interchange = inject(InterchangeStore);
   private readonly updates = inject(UpdateStore);
   private readonly theme = inject(ThemeStore);
+  private readonly frame = inject(WindowFrame);
   private readonly dialogs = inject(Dialogs);
   private readonly dateFormat = inject(DateFormatStore);
   private readonly shortcuts = inject(Shortcuts);
@@ -85,6 +89,7 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     void this.theme.load();
+    void this.frame.load();
     void this.dateFormat.load();
     void this.store.restore();
     void this.updates.check();

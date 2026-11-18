@@ -43,6 +43,10 @@ internal sealed class HostEvents
     public Task OpenRequestedAsync(WorkspaceItemDto item) =>
         SendAsync(BridgeEventTypes.ItemOpen, item);
 
+    /// <summary>The window was maximized or restored, so the UI's title bar buttons change.</summary>
+    public Task WindowStateChangedAsync(WindowStateDto state) =>
+        SendAsync(BridgeEventTypes.WindowStateChanged, state);
+
     private async Task SendAsync(string type, object payload)
     {
         if (Volatile.Read(ref _send) is not { } send)

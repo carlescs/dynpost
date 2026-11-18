@@ -220,6 +220,7 @@ export class MockBackend {
   private open = false;
   private theme: Theme = 'light';
   private activityOrder: string[] = [];
+  private nativeTitleBar = false;
   /** The MCP server's settings; it never runs in the browser preview. */
   private mcp = { enabled: false, port: 47823, token: null as string | null };
   private historySettings: HistorySettingsDto = {
@@ -370,6 +371,7 @@ export class MockBackend {
       theme: this.theme,
       history: { ...this.historySettings },
       activityOrder: [...this.activityOrder],
+      nativeTitleBar: this.nativeTitleBar,
     });
     if (request.type === 'settings.get') return ok(settings());
     if (request.type === 'settings.setTheme') {
@@ -445,6 +447,22 @@ export class MockBackend {
     }
     // The browser preview's tab is the browser's to close.
     if (request.type === 'app.quit') return ok(null);
+    // The browser preview is the browser's window: it has no title bar of its own to draw.
+    if (request.type === 'window.get') {
+      return ok({ frame: 'native', platform: 'web', maximized: false });
+    }
+    if (
+      request.type === 'window.minimize' ||
+      request.type === 'window.toggleMaximize' ||
+      request.type === 'window.startDrag' ||
+      request.type === 'window.startResize'
+    ) {
+      return ok(null);
+    }
+    if (request.type === 'settings.setTitleBar') {
+      this.nativeTitleBar = payload?.['native'] === true;
+      return ok(settings());
+    }
     // The browser preview has no file system: any folder will do, and a clone opens the sample.
     if (request.type === 'workspace.pickCloneFolder') return ok('/preview');
     if (request.type === 'workspace.clone') {

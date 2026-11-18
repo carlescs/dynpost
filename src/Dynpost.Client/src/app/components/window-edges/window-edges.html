@@ -1,0 +1,8 @@
+@for (edge of frame.resizeEdges(); track edge) {
+  <div
+    class="fixed z-[1000]"
+    [class]="handles[edge]"
+    [attr.data-edge]="edge"
+    (mousedown)="frame.resizeMouseDown($event, edge)"
+  ></div>
+}

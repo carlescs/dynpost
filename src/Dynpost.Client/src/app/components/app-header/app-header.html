@@ -110,6 +110,7 @@
       <div
         id="recent-panel"
         role="menu"
+        data-no-drag
         aria-label="Recent workspaces"
         class="adaptive absolute top-full right-0 z-50 mt-1 w-72 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
       >
@@ -155,6 +156,7 @@
     @if (menuOpen()) {
       <div
         id="settings-panel"
+        data-no-drag
         class="adaptive absolute top-full right-0 z-50 mt-1 w-56 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
       >
         <button
@@ -177,6 +179,37 @@
             ></span>
           </span>
         </button>
+        @if (frame.configurable()) {
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+            role="switch"
+            title="Use the operating system's title bar instead of Dynpost's header"
+            [attr.aria-checked]="frame.nativeTitleBar()"
+            [attr.aria-describedby]="frame.restartNeeded() ? 'title-bar-restart' : null"
+            (click)="frame.setNativeTitleBar(!frame.nativeTitleBar())"
+          >
+            <fa-icon class="w-4 text-slate-500" [icon]="faWindowMaximize" />
+            <span class="flex flex-1 flex-col">
+              <span>System title bar</span>
+              @if (frame.restartNeeded()) {
+                <span id="title-bar-restart" class="text-xs text-slate-500"
+                  >Applies when Dynpost restarts</span
+                >
+              }
+            </span>
+            <span
+              class="relative h-4 w-7 shrink-0 rounded-full transition-colors"
+              [class]="frame.nativeTitleBar() ? 'bg-sky-600' : 'bg-slate-300'"
+              aria-hidden="true"
+            >
+              <span
+                class="absolute top-0.5 left-0.5 size-3 rounded-full bg-[#fff] shadow transition-transform"
+                [class.translate-x-3]="frame.nativeTitleBar()"
+              ></span>
+            </span>
+          </button>
+        }
         <button
           type="button"
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
@@ -222,3 +255,37 @@
     }
   </div>
 </div>
+@if (frame.showButtons()) {
+  <div class="ml-1 flex h-full items-stretch" role="group" aria-label="Window">
+    <button
+      type="button"
+      class="flex w-11 items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white"
+      title="Minimize"
+      aria-label="Minimize"
+      (click)="frame.minimize()"
+    >
+      <fa-icon class="text-xs" [icon]="faWindowMinimize" />
+    </button>
+    <button
+      type="button"
+      class="flex w-11 items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white"
+      [title]="frame.state().maximized ? 'Restore' : 'Maximize'"
+      [attr.aria-label]="frame.state().maximized ? 'Restore' : 'Maximize'"
+      (click)="frame.toggleMaximize()"
+    >
+      <fa-icon
+        class="text-xs"
+        [icon]="frame.state().maximized ? faWindowRestore : faWindowMaximize"
+      />
+    </button>
+    <button
+      type="button"
+      class="flex w-11 items-center justify-center text-slate-300 hover:bg-red-600 hover:text-white"
+      title="Close"
+      aria-label="Close"
+      (click)="shortcuts.run('quit')"
+    >
+      <fa-icon [icon]="faXmark" />
+    </button>
+  </div>
+}

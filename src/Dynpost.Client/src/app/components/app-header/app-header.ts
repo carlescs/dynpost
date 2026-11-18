@@ -15,6 +15,9 @@ import {
   faMagnifyingGlass,
   faPaperPlane,
   faRobot,
+  faWindowMaximize,
+  faWindowMinimize,
+  faWindowRestore,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { AboutDialog } from '../about-dialog/about-dialog';
@@ -30,9 +33,13 @@ import { Shortcuts } from '../../services/shortcuts';
 import { formatCombo } from '../../models/shortcuts';
 import { ThemeStore } from '../../services/theme-store';
 import { UpdateStore } from '../../services/update-store';
+import { WindowFrame } from '../../services/window-frame';
 import { WorkspaceStore } from '../../services/workspace-store';
 
-/** Main application header: app name, open workspace and global options. */
+/**
+ * Main application header: app name, open workspace and global options. Unless the user chose
+ * the system's title bar, it is also the window's title bar (see `WindowFrame`).
+ */
 @Component({
   selector: 'app-header',
   imports: [FaIconComponent],
@@ -40,6 +47,9 @@ import { WorkspaceStore } from '../../services/workspace-store';
     class:
       'always-dark relative flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
     role: 'banner',
+    '[class.pl-20]': 'frame.trafficLights()',
+    '[class.pr-0]': 'frame.showButtons()',
+    '(mousedown)': 'frame.titleBarMouseDown($event)',
     '(document:click)': 'onDocumentClick($event)',
     '(document:keydown.escape)': 'onEscape()',
   },
@@ -50,6 +60,7 @@ export class AppHeader {
   protected readonly environments = inject(EnvironmentStore);
   protected readonly updates = inject(UpdateStore);
   protected readonly theme = inject(ThemeStore);
+  protected readonly frame = inject(WindowFrame);
   private readonly dialogs = inject(Dialogs);
   protected readonly shortcuts = inject(Shortcuts);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -81,6 +92,9 @@ export class AppHeader {
   protected readonly faCodeBranch = faCodeBranch;
   protected readonly faXmark = faXmark;
   protected readonly faRobot = faRobot;
+  protected readonly faWindowMinimize = faWindowMinimize;
+  protected readonly faWindowMaximize = faWindowMaximize;
+  protected readonly faWindowRestore = faWindowRestore;
 
   constructor() {
     // Removing the last other recent workspace (or a reload finding none) leaves nothing to

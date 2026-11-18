@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { Bridge } from '../../services/bridge';
 import { EnvironmentStore } from '../../services/environment-store';
+import { Shortcuts } from '../../services/shortcuts';
+import { WindowFrame } from '../../services/window-frame';
 import { WorkspaceStore } from '../../services/workspace-store';
 import { AppHeader } from './app-header';
 
@@ -132,5 +134,41 @@ describe('AppHeader', () => {
     expect(root.querySelector('#recent-panel')).toBeNull();
     expect(root.querySelector('button[aria-controls="recent-panel"]')).toBeNull();
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Open workspace folder');
+  });
+
+  it('draws window buttons when it is the title bar, and closes through quit', () => {
+    const { fixture } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.querySelector('[aria-label="Window"]')).toBeNull();
+    const frame = TestBed.inject(WindowFrame);
+    const run = vi.spyOn(TestBed.inject(Shortcuts), 'run').mockResolvedValue();
+    const minimize = vi.spyOn(frame, 'minimize').mockReturnValue();
+
+    frame.state.set({ frame: 'custom', platform: 'windows', maximized: true });
+    fixture.detectChanges();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Minimize"]')!.click();
+    expect(minimize).toHaveBeenCalled();
+    expect(root.querySelector('[aria-label="Restore"]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click();
+    expect(run).toHaveBeenCalledWith('quit');
+  });
+
+  it('offers the system title bar in the settings menu of the desktop app', () => {
+    const { fixture } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    const frame = TestBed.inject(WindowFrame);
+    const setNative = vi.spyOn(frame, 'setNativeTitleBar').mockResolvedValue();
+    frame.state.set({ frame: 'custom', platform: 'linux', maximized: false });
+    root.querySelector<HTMLButtonElement>('[aria-label="Settings"]')!.click();
+    fixture.detectChanges();
+
+    const toggle = [...root.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find((b) =>
+      b.textContent?.includes('System title bar'),
+    )!;
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    toggle.click();
+
+    expect(setNative).toHaveBeenCalledWith(true);
   });
 });

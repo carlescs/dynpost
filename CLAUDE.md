@@ -143,6 +143,15 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   with the FuzzySearch.Net library by `Infrastructure/Search/FuzzySearchNetMatcher.cs`; don't hand-roll
   a matcher. The plain line search and how a matching line is shown are in `Domain/Search/TextSearch.cs`. The client's `components/quick-open` dialog is lazy-loaded by
   `Shortcuts`, and matches are highlighted with `components/highlighted-text`.
+- Window: unless the per-user `AppSettings.NativeTitleBar` is set (settings menu, applied at the
+  next start), the client's header is the window's title bar. `Desktop/Window/AppWindow.cs` (the
+  bridge's `IAppWindow`, `window.*` messages, `window.stateChanged` event) uses one `WindowChrome`
+  per platform, all native interop: `Win32Chrome` removes the caption with `WM_NCCALCSIZE` (side
+  and bottom borders stay native) and starts moves/resizes with `WM_NCLBUTTONDOWN`; `GtkChrome`
+  makes the window undecorated and uses GTK's move/resize drags; `CocoaChrome` keeps the traffic
+  lights with a transparent, full-size-content title bar and `performWindowDragWithEvent:`. The
+  client's `services/window-frame.ts` starts drags from the header and `components/window-edges`
+  draws the resize handles the platform lacks.
 - Dates: the client never formats dates with the webview's locale or Angular's
   `DatePipe`; it uses `DateFormatStore` (`services/date-format-store.ts`), which formats
   with the operating system's regional patterns read by the host

@@ -496,6 +496,24 @@ internal static class BridgeMessageTypes
     /// <summary>Closes the app window, which ends the app. Payload: none. Result: none.</summary>
     public const string AppQuit = "app.quit";
 
+    /// <summary>The window's title bar (the app's or the system's), platform and state. Payload: none. Result: <see cref="WindowStateDto"/>.</summary>
+    public const string WindowGet = "window.get";
+
+    /// <summary>Minimizes the window. Payload: none. Result: none.</summary>
+    public const string WindowMinimize = "window.minimize";
+
+    /// <summary>Maximizes or restores the window (zooms it on macOS). Payload: none. Result: none.</summary>
+    public const string WindowToggleMaximize = "window.toggleMaximize";
+
+    /// <summary>Moves the window with the mouse pressed on the app's title bar. Payload: none. Result: none.</summary>
+    public const string WindowStartDrag = "window.startDrag";
+
+    /// <summary>Resizes the window with the mouse pressed on one of its edges. Payload: <see cref="WindowResizePayload"/>. Result: none.</summary>
+    public const string WindowStartResize = "window.startResize";
+
+    /// <summary>Uses the system's title bar or the app's own from the next start. Payload: <see cref="SetTitleBarPayload"/>. Result: settings.</summary>
+    public const string SettingsSetTitleBar = "settings.setTitleBar";
+
     /// <summary>Reads the user settings. Payload: none. Result: settings.</summary>
     public const string SettingsGet = "settings.get";
 
@@ -554,6 +572,9 @@ internal static class BridgeEventTypes
     /// what it shows of them. Payload: <see cref="FilesChangedEvent"/>.
     /// </summary>
     public const string FilesChanged = "workspace.filesChanged";
+
+    /// <summary>The window was maximized or restored. Payload: <see cref="WindowStateDto"/>.</summary>
+    public const string WindowStateChanged = "window.stateChanged";
 }
 
 /// <summary>A message from the host the UI didn't ask for; unlike a <see cref="BridgeResponse"/> it has no id.</summary>
@@ -611,6 +632,11 @@ internal sealed record SearchWorkspacePayload(string Query, bool MatchCase = fal
 
 internal sealed record SetThemePayload(string Theme);
 internal sealed record SetActivityOrderPayload(IReadOnlyList<string>? Order);
+
+internal sealed record SetTitleBarPayload(bool Native);
+
+/// <param name="Edge">The edge or corner: <c>top</c>, <c>bottom</c>, <c>left</c>, <c>right</c>, <c>topLeft</c>, <c>topRight</c>, <c>bottomLeft</c> or <c>bottomRight</c>.</param>
+internal sealed record WindowResizePayload(string Edge);
 
 /// <param name="Port">The port to listen on; <c>null</c> keeps the current one.</param>
 internal sealed record SetMcpPayload(bool Enabled, int? Port = null);
