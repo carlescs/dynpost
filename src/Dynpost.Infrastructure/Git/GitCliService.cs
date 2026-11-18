@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Dynpost.Application.Common;
 using Dynpost.Application.Git;
 using Dynpost.Domain.Git;
@@ -1490,8 +1491,8 @@ public sealed class GitCliService : IGitService
         }
 
         // Local-only files that stopped being tracked are staged deletions of ignored files that
-        // are still on disk. git add refuses to name them, and commit --only would track them
-        // again, so they are committed through their staged deletion instead.
+        // are still on disk. git add refuses to name them, so only their staged deletion is
+        // committed (see CommitStagedAsync).
         var untracked = await GetUntrackedLocalFilesAsync(workspacePath, cancellationToken);
         if (untracked.IsFailure)
         {
@@ -1526,27 +1527,26 @@ public sealed class GitCliService : IGitService
             }
         }
 
-        if (removals.Count > 0 && !merging.Value)
+        if (merging.Value)
         {
-            var committed = await CommitWithRemovalsAsync(
-                workspacePath, message, hasFiles ? addPathspecs : [], removals, cancellationToken);
-            if (committed.IsFailure)
+            // A merge commit must include the whole index (where removals are already staged).
+            var commit = await RunCheckedAsync(workspacePath, "commit", ["commit", "--message", message.Value], cancellationToken);
+            if (commit.IsFailure)
             {
-                return committed.Error!;
+                return commit.Error!;
             }
         }
         else
         {
-            // A merge commit must include the whole index (where removals are already staged);
-            // otherwise commit only the selected paths, leaving anything else the user staged untouched.
-            List<string> commitArguments = merging.Value
-                ? ["commit", "--message", message.Value]
-                : ["commit", "--message", message.Value, "--only", "--", .. pathspecs];
-
-            var commit = await RunCheckedAsync(workspacePath, "commit", commitArguments, cancellationToken);
-            if (commit.IsFailure)
+            // Only the selected paths, leaving anything else the user staged untouched. The
+            // removals are named too: their deletion is already staged.
+            List<string> selected = paths is null
+                ? pathspecs
+                : [.. paths.Select(p => ":(literal)" + p), ExcludeLocalFolder];
+            var committed = await CommitStagedAsync(workspacePath, message, selected, cancellationToken);
+            if (committed.IsFailure)
             {
-                return commit.Error!;
+                return committed.Error!;
             }
         }
 
@@ -1690,6 +1690,23 @@ public sealed class GitCliService : IGitService
             return onDisk;
         }
 
+        // The old name of a rename that only changes case finds the new file on a case-insensitive
+        // file system; it is a rename, not a file that stopped being tracked.
+        var indexed = await RunCheckedAsync(workspacePath, "ls-files", ["ls-files", "-z", "--", "."], cancellationToken);
+        if (indexed.IsFailure)
+        {
+            return indexed.Error!;
+        }
+
+        var tracked = indexed.Value.StandardOutput
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        onDisk.RemoveAll(tracked.Contains);
+        if (onDisk.Count == 0)
+        {
+            return onDisk;
+        }
+
         // One check per path: they are few, and the exit code needs no parsing of quoted names.
         var ignored = new List<string>();
         foreach (var path in onDisk)
@@ -1717,45 +1734,85 @@ public sealed class GitCliService : IGitService
     }
 
     /// <summary>
-    /// Commits the selected changes plus the staged removal of <paramref name="removals"/>, and
-    /// nothing else the user staged, like <c>commit --only</c> does: through a temporary index
-    /// that starts from HEAD.
+    /// Commits what the index holds for <paramref name="pathspecs"/>, and nothing else the user
+    /// staged, like <c>commit --only</c> does: through a temporary index that starts from HEAD and
+    /// takes those paths' entries from the real index. Unlike <c>commit --only</c>, which reads the
+    /// paths from the working tree again, this keeps what git staged that the working tree can't
+    /// show: a rename that only changes case on a case-insensitive file system (where the old
+    /// name still finds the file, so it would be kept and the commit would be empty), and the
+    /// removal of a local-only file that is still on disk (which would be tracked again).
     /// </summary>
-    private async Task<Result<Unit>> CommitWithRemovalsAsync(
+    private async Task<Result<Unit>> CommitStagedAsync(
         string workspacePath,
         CommitMessage message,
-        IReadOnlyList<string> addPathspecs,
-        IReadOnlyList<string> removals,
+        IReadOnlyList<string> pathspecs,
         CancellationToken cancellationToken)
     {
+        var head = await GetHeadAsync(workspacePath, cancellationToken);
+        if (head.IsFailure)
+        {
+            return head.Error!;
+        }
+
+        // update-index --index-info lines, with paths relative to the repository root.
+        string entries;
+        if (head.Value.Length == 0)
+        {
+            // No commit yet: every staged entry is new. ls-files --stage prints a format
+            // --index-info reads as it is.
+            var staged = await RunCheckedAsync(
+                workspacePath,
+                "ls-files",
+                ["ls-files", "--stage", "--full-name", "-z", "--", .. pathspecs],
+                cancellationToken);
+            if (staged.IsFailure)
+            {
+                return staged.Error!;
+            }
+
+            entries = staged.Value.StandardOutput;
+        }
+        else
+        {
+            var diff = await RunCheckedAsync(
+                workspacePath,
+                "diff-index",
+                ["diff-index", "--cached", "--no-renames", "-z", "HEAD", "--", .. pathspecs],
+                cancellationToken);
+            if (diff.IsFailure)
+            {
+                return diff.Error!;
+            }
+
+            entries = StagedEntries(diff.Value.StandardOutput);
+        }
+
         var indexFile = Path.Combine(Path.GetTempPath(), $"dynpost-index-{Guid.NewGuid():N}");
         var environment = new Dictionary<string, string> { ["GIT_INDEX_FILE"] = indexFile };
         try
         {
-            var read = await RunCheckedAsync(workspacePath, "read-tree", ["read-tree", "HEAD"], cancellationToken, environment);
-            if (read.IsFailure)
+            if (head.Value.Length > 0)
             {
-                return read.Error!;
-            }
-
-            if (addPathspecs.Count > 0)
-            {
-                var add = await RunCheckedAsync(workspacePath, "add", ["add", "--all", "--", .. addPathspecs], cancellationToken, environment);
-                if (add.IsFailure)
+                var read = await RunCheckedAsync(workspacePath, "read-tree", ["read-tree", "HEAD"], cancellationToken, environment);
+                if (read.IsFailure)
                 {
-                    return add.Error!;
+                    return read.Error!;
                 }
             }
 
-            var remove = await RunCheckedAsync(
-                workspacePath,
-                "rm",
-                ["rm", "--cached", "--force", "--quiet", "--ignore-unmatch", "--", .. removals.Select(p => ":(literal)" + p)],
-                cancellationToken,
-                environment);
-            if (remove.IsFailure)
+            if (entries.Length > 0)
             {
-                return remove.Error!;
+                var update = await RunCheckedAsync(
+                    workspacePath,
+                    "update-index",
+                    ["update-index", "-z", "--index-info"],
+                    cancellationToken,
+                    environment,
+                    entries);
+                if (update.IsFailure)
+                {
+                    return update.Error!;
+                }
             }
 
             return Done(await RunCheckedAsync(workspacePath, "commit", ["commit", "--message", message.Value], cancellationToken, environment));
@@ -1772,6 +1829,29 @@ public sealed class GitCliService : IGitService
                 // A leftover temporary file is harmless.
             }
         }
+    }
+
+    /// <summary>
+    /// Turns <c>git diff-index --cached -z</c> output (<c>:oldmode newmode oldsha newsha status</c>,
+    /// then the path) into <c>update-index -z --index-info</c> lines giving each path its staged
+    /// entry; a deleted path has mode 0, which removes it. Unmerged paths are left as in HEAD.
+    /// </summary>
+    internal static string StagedEntries(string diffIndexOutput)
+    {
+        var records = diffIndexOutput.Split('\0');
+        var entries = new StringBuilder();
+        for (var i = 0; i + 1 < records.Length; i += 2)
+        {
+            var fields = records[i].TrimStart(':').Split(' ');
+            if (fields.Length < 5 || fields[4].StartsWith('U'))
+            {
+                continue;
+            }
+
+            entries.Append(fields[1]).Append(' ').Append(fields[3]).Append('\t').Append(records[i + 1]).Append('\0');
+        }
+
+        return entries.ToString();
     }
 
     public async Task<Result<Unit>> DiscardChangesAsync(
@@ -2310,9 +2390,10 @@ public sealed class GitCliService : IGitService
         string command,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        string? input = null)
     {
-        var result = await RunAsync(workspacePath, arguments, cancellationToken, environment);
+        var result = await RunAsync(workspacePath, arguments, cancellationToken, environment, input);
         if (result.IsSuccess && !result.Value.Succeeded)
         {
             return GitFailure.Classify(command, Details(result.Value));
@@ -2330,13 +2411,14 @@ public sealed class GitCliService : IGitService
         string workspacePath,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        string? input = null)
     {
         try
         {
             for (var attempt = 0; ; attempt++)
             {
-                var result = await _runner.RunAsync(workspacePath, arguments, cancellationToken, environment);
+                var result = await _runner.RunAsync(workspacePath, arguments, cancellationToken, environment, input);
                 if (result.Succeeded || attempt >= LockRetryDelays.Length || !GitFailure.IsLocked(result.StandardError))
                 {
                     return result;
