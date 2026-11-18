@@ -13,7 +13,10 @@
 @for (node of nodes(); track node.path) {
   <li
     role="treeitem"
+    class="select-none"
+    [class.opacity-50]="state.isDragging(node)"
     [attr.aria-expanded]="node.kind === 'folder' ? state.isExpanded(node) : null"
+    [attr.aria-selected]="state.isSelected(node)"
     cdkDrag
     [cdkDragData]="node"
     [cdkDragDisabled]="state.editing() !== null"
@@ -48,13 +51,17 @@
             />
           </div>
         } @else {
-          <div class="group flex items-center" [class.hover:bg-slate-200]="!state.dragged()">
+          <div
+            class="group flex items-center"
+            [class.hover:bg-slate-200]="!state.dragged()"
+            [class.bg-sky-200]="state.isSelected(node)"
+          >
             <button
               type="button"
               class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 pr-2 text-left"
               [style.padding-left.px]="indent()"
               [title]="node.path"
-              (click)="state.toggle(node)"
+              (click)="onFolderClick(node, $event)"
               (keydown)="onFolderKeydown($event, node)"
             >
               <fa-icon class="w-3 text-[10px] text-slate-400" [icon]="chevron(node)" />
@@ -128,6 +135,7 @@
         class="group flex items-center gap-1 pr-2"
         [class.hover:bg-slate-200]="!state.dragged()"
         [class.bg-sky-100]="state.store.draft()?.path === node.path"
+        [class.bg-sky-200]="state.isSelected(node)"
         (contextmenu)="state.openMenu(node, $event)"
       >
         <button
@@ -135,7 +143,7 @@
           class="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left"
           [style.padding-left.px]="indent()"
           [title]="node.plan?.error ?? node.path"
-          (click)="state.store.open(node.path)"
+          (click)="onPlanClick(node, $event)"
           (keydown)="onPlanKeydown($event, node)"
         >
           <span class="w-3 shrink-0"></span>

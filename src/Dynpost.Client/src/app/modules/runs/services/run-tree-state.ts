@@ -14,6 +14,7 @@ export class RunTreeState extends TreeState<RunTreeNode> {
   readonly root = PLANS_FOLDER;
 
   readonly tree = computed(() => buildRunTree(this.store.folders(), this.store.plans(), this.root));
+  readonly items = this.tree;
 
   /** The folder whose context menu is open, with the pointer position. */
   readonly menu = signal<{ node: RunTreeNode; x: number; y: number } | null>(null);

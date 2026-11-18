@@ -1,11 +1,12 @@
-import { Component, Injectable } from '@angular/core';
+import { Component, Injectable, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { TreeState } from '../../services/tree-state';
+import { TreeItem, TreeState } from '../../services/tree-state';
 import { RootDropZone } from './root-drop-zone';
 
 @Injectable()
 class TestTreeState extends TreeState {
   readonly root = '';
+  readonly items = signal<TreeItem[]>([]);
   protected createFolder = vi.fn();
   protected renameFolder = vi.fn();
   protected move = vi.fn();

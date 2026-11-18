@@ -5,7 +5,8 @@ import { TreeState, folderName } from '../../services/tree-state';
 
 /**
  * The chip that follows the pointer while an entry of a folder tree is dragged: the entry (projected
- * content) and, under it, where dropping it now would move it — or why it would not move.
+ * content), how many other selected entries come along, and, under it, where dropping them now would
+ * move them — or why they would not move.
  */
 @Component({
   selector: 'app-drag-chip',
@@ -21,14 +22,20 @@ export class DragChip {
   protected readonly faArrowRight = faArrowRight;
   protected readonly faBan = faBan;
 
+  /** How many entries are dragged with this one (the rest of the selection). */
+  protected readonly others = computed(() => Math.max(0, this.state.draggedNodes().length - 1));
+
   /** Whether dropping now moves the entry. */
   protected readonly moves = computed(() => this.state.dropHint()?.kind === 'move');
 
   protected readonly hint = computed(() => {
     const hint = this.state.dropHint();
     if (!hint) return '';
-    if (hint.kind === 'move')
-      return hint.folder !== this.state.root ? folderName(hint.folder) : this.rootLabel();
+    if (hint.kind === 'move') {
+      const folder = hint.folder !== this.state.root ? folderName(hint.folder) : this.rootLabel();
+      const total = this.state.draggedNodes().length;
+      return hint.count < total ? `${folder} (${hint.count} of ${total})` : folder;
+    }
     switch (hint.reason) {
       case 'same':
         return 'Already here';
