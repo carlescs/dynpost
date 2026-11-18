@@ -334,6 +334,52 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Commit_OfRenamesThatOnlyChangeCase_CommitsThem()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "Requests/health.yaml", "name: Health\n");
+        Write(repository, "Requests/users.yaml", "name: Users\n");
+        TestGit.CommitAll(repository, "first");
+        TestGit.Run(repository, "mv", "Requests", "renaming");
+        TestGit.Run(repository, "mv", "renaming", "requests");
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
+        {
+            // A case-sensitive file system: the old name finds the files, as on Windows and macOS.
+            TestGit.Run(repository, "config", "core.ignorecase", "true");
+            Directory.CreateSymbolicLink(Path.Combine(repository, "Requests"), "requests");
+            File.AppendAllText(Path.Combine(repository, ".git", "info", "exclude"), "/Requests\n");
+        }
+
+        var result = await _git.CommitAsync(repository, Message("Rename"), paths: null);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal("requests/health.yaml\nrequests/users.yaml\n", CommittedFiles(repository));
+        Assert.Empty((await _git.GetStatusAsync(repository)).Value.Changes);
+    }
+
+    [Fact]
+    public async Task Commit_WithPaths_LeavesOtherStagedChangesStaged()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        Write(repository, "b.yaml", "name: B\n");
+        Write(repository, "c.yaml", "name: C\n");
+        TestGit.CommitAll(repository, "first");
+        Write(repository, "a.yaml", "name: A2\n");
+        Write(repository, "b.yaml", "name: B2\n");
+        TestGit.Run(repository, "add", "b.yaml");
+        File.Delete(Path.Combine(repository, "c.yaml"));
+
+        var result = await _git.CommitAsync(repository, Message("Edit A, remove C"), ["a.yaml", "c.yaml"]);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal("a.yaml\nc.yaml\n", CommittedFiles(repository));
+        Assert.Equal("name: A2\n", TestGit.Run(repository, "show", "HEAD:a.yaml"));
+        Assert.Equal("name: B\n", TestGit.Run(repository, "show", "HEAD:b.yaml"));
+        Assert.Equal("M  b.yaml\n", TestGit.Run(repository, "status", "--porcelain"));
+    }
+
+    [Fact]
     public async Task Push_WithSetUpstream_PublishesTheBranch()
     {
         var remote = InitBareRemote();

@@ -330,8 +330,9 @@ Desktop → Application
 - Local-only requests, environments and run plans (`Application/Sharing`) are
   anchored lines in the workspace `.gitignore`
   (`Infrastructure/Sharing/GitIgnoreLocalOnlyFiles.cs`); making one local-only
-  also untracks it (`git rm --cached`), and `CommitAsync` commits such staged
-  removals through a temporary index because `commit --only` would re-add them.
+  also untracks it (`git rm --cached`). `CommitAsync` commits the staged entries of the
+  selected paths through a temporary index, never `commit --only`: that re-reads them from disk,
+  re-adding such removals and dropping case-only renames on case-insensitive file systems.
   Use cases that rename, move, copy or delete files keep those lines in step.
 - Never force-push, rewrite history, or auto-resolve conflicts. Report
   conflicts and errors to the user clearly.
