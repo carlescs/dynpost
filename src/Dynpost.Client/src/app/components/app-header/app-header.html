@@ -7,22 +7,27 @@
     data-environment-stripe
   ></span>
 }
-<fa-icon class="text-sky-400" [icon]="faPaperPlane" />
-<span class="text-sm font-semibold tracking-wide text-white">Dynpost</span>
+<fa-icon class="shrink-0 text-sky-400" [icon]="faPaperPlane" />
+<span class="shrink-0 text-sm font-semibold tracking-wide whitespace-nowrap text-white"
+  >Dynpost</span
+>
 @if (store.workspace(); as workspace) {
-  <span class="text-sm text-slate-400" aria-hidden="true">—</span>
-  <span class="truncate text-sm text-slate-400" [title]="workspace.root">{{ workspace.name }}</span>
+  <span class="shrink-0 text-sm text-slate-400" aria-hidden="true">—</span>
+  <span class="min-w-0 truncate text-sm text-slate-400" [title]="workspace.root">{{
+    workspace.name
+  }}</span>
 }
-<div class="ml-auto flex items-center gap-1">
+<div class="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap">
   @if (updates.readyVersion(); as version) {
     <button
       type="button"
       class="flex items-center gap-2 rounded bg-emerald-600 px-2 py-1 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
       [title]="'Dynpost ' + version + ' is ready. Restart to install it.'"
+      aria-label="Restart to update"
       [disabled]="updates.restarting()"
       (click)="updates.restart()"
     >
-      <fa-icon [icon]="faCircleArrowUp" /> Restart to update
+      <fa-icon [icon]="faCircleArrowUp" /><span class="hidden lg:inline">Restart to update</span>
     </button>
   }
   @if (store.workspace()) {
@@ -35,8 +40,8 @@
       (click)="shortcuts.run('quickOpen')"
     >
       <fa-icon [icon]="faMagnifyingGlass" />
-      <span class="hidden md:inline">Open request…</span>
-      <kbd class="hidden font-sans text-xs text-slate-500 md:inline">{{ quickOpenKeys }}</kbd>
+      <span class="hidden xl:inline">Open request…</span>
+      <kbd class="hidden font-sans text-xs text-slate-500 xl:inline">{{ quickOpenKeys }}</kbd>
     </button>
     <label
       class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300"
@@ -46,7 +51,7 @@
       <span class="sr-only">Environment</span>
       <select
         [class]="activeColor()?.border ?? 'border-slate-600'"
-        class="max-w-48 rounded border bg-slate-800 px-1.5 py-0.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+        class="max-w-32 rounded border lg:max-w-48 bg-slate-800 px-1.5 py-0.5 text-sm text-white focus:border-sky-500 focus:outline-none"
         aria-label="Environment"
         [value]="environments.activeId() ?? ''"
         (change)="environments.select($any($event.target).value || null)"
@@ -102,7 +107,8 @@
           [disabled]="store.opening()"
           (click)="toggleRecent()"
         >
-          Recent workspaces <fa-icon class="text-xs text-slate-400" [icon]="faChevronDown" />
+          <span class="hidden lg:inline">Recent workspaces</span>
+          <fa-icon class="text-xs text-slate-400" [icon]="faChevronDown" />
         </button>
       }
     </div>
