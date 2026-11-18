@@ -18,6 +18,7 @@
               <input
                 type="checkbox"
                 [checked]="row.enabled"
+                [title]="row.enabled ? 'Sent: uncheck to skip it' : 'Not sent: check to send it'"
                 [attr.aria-label]="'Enable ' + row.key"
                 (change)="patch(i, { enabled: $any($event.target).checked })"
               />

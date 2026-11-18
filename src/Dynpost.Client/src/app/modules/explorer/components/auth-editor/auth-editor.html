@@ -102,7 +102,12 @@
         [value]="a.value"
         (input)="patch({ value: $any($event.target).value })"
       />
-      <label for="auth-in">Add to</label>
+      <label for="auth-in" class="flex items-center gap-1">
+        Add to
+        <app-info-tip
+          text="Header sends the key as a request header named by Key; Query parameters adds Key=Value to the URL."
+        />
+      </label>
       <select
         id="auth-in"
         class="justify-self-start rounded border border-slate-300 px-2 py-1"

@@ -395,7 +395,12 @@
 
       <div class="grid grid-cols-2 gap-x-2 gap-y-3">
         <div [class]="label + ' col-span-2'">
-          <label for="plan-threads">Virtual users (threads)</label>
+          <label for="plan-threads" class="flex items-center gap-1">
+            Virtual users (threads)
+            <app-info-tip
+              text="How many users send requests at the same time. Each one runs its own iterations and has at most one request in flight. Runs over 200 users ask for confirmation."
+            />
+          </label>
           <div class="flex items-center gap-3">
             <input
               id="plan-threads"
@@ -419,7 +424,11 @@
         </div>
 
         <div [class]="label">
-          Stop after
+          <span class="flex items-center gap-1"
+            >Stop after
+            <app-info-tip
+              text="Iterations: each user goes through the requests a set number of times. Duration: users keep going until the time is up."
+          /></span>
           <div class="flex rounded border border-slate-300 bg-slate-100 p-0.5" role="group">
             @for (
               option of [
@@ -446,7 +455,11 @@
         </div>
         @if (loadMode(form) === 'duration') {
           <label [class]="label">
-            Duration (e.g. 2m)
+            <span class="flex items-center gap-1"
+              >Duration (e.g. 2m)
+              <app-info-tip
+                text="How long users keep sending, counted from the start of the run, ramp-up included. Use ms, s, m or h."
+            /></span>
             <input
               [class]="field"
               [value]="form.duration"
@@ -455,7 +468,11 @@
           </label>
         } @else {
           <label [class]="label">
-            Iterations per user
+            <span class="flex items-center gap-1"
+              >Iterations per user
+              <app-info-tip
+                text="How many times each user goes through the requests. With a random or round-robin order, an iteration is one request."
+            /></span>
             <input
               type="number"
               min="1"
@@ -466,7 +483,11 @@
           </label>
         }
         <label [class]="label">
-          Ramp-up (e.g. 10s)
+          <span class="flex items-center gap-1"
+            >Ramp-up (e.g. 10s)
+            <app-info-tip
+              text="Time over which the users are started one after another, so the load grows gradually. Empty starts them all at once."
+          /></span>
           <input
             [class]="field"
             placeholder="All at once"
@@ -475,7 +496,11 @@
           />
         </label>
         <label [class]="label">
-          Max requests/s
+          <span class="flex items-center gap-1"
+            >Max requests/s
+            <app-info-tip
+              text="Caps the requests sent per second by all users together. Empty sends as fast as the server answers."
+          /></span>
           <input
             type="number"
             min="0"
@@ -486,7 +511,11 @@
           />
         </label>
         <label [class]="label">
-          Think time (e.g. 100ms)
+          <span class="flex items-center gap-1"
+            >Think time (e.g. 100ms)
+            <app-info-tip
+              text="Pause each user takes between two requests, like a person reading a page."
+          /></span>
           <input
             [class]="field"
             placeholder="None"
@@ -495,7 +524,11 @@
           />
         </label>
         <label [class]="label">
-          Think time up to (optional)
+          <span class="flex items-center gap-1"
+            >Think time up to (optional)
+            <app-info-tip
+              text="Pause a random time between the think time and this one. Empty always pauses exactly the think time."
+          /></span>
           <input
             [class]="field"
             placeholder="Same"
@@ -515,7 +548,11 @@
       </div>
       <div class="grid grid-cols-2 gap-2">
         <label [class]="label + ' col-span-2'">
-          CSV file
+          <span class="flex items-center gap-1"
+            >CSV file
+            <app-info-tip
+              text="Workspace-relative path of a comma-separated file with a header line. A row is picked once per iteration and its columns override the environment's variables."
+          /></span>
           <input
             [class]="field"
             placeholder="users.csv"
@@ -525,7 +562,11 @@
         </label>
         @if (form.dataFile) {
           <label [class]="label">
-            Row selection
+            <span class="flex items-center gap-1"
+              >Row selection
+              <app-info-tip
+                text="Sequential hands out the rows in order from one cursor shared by every user, Random picks one each time, and Per thread deals them out in turns so each user gets its own."
+            /></span>
             <select
               [class]="field"
               [value]="form.dataMode"
@@ -537,7 +578,11 @@
             </select>
           </label>
           <label [class]="label">
-            When rows run out
+            <span class="flex items-center gap-1"
+              >When rows run out
+              <app-info-tip
+                text="With Sequential or Per thread: Recycle starts again from the first row, Stop ends that user."
+            /></span>
             <select
               [class]="field"
               [value]="form.dataOnEof"
@@ -579,7 +624,11 @@
           </div>
           <div class="grid grid-cols-2 gap-2">
             <label [class]="label">
-              Folder
+              <span class="flex items-center gap-1"
+                >Folder
+                <app-info-tip
+                  text="Workspace-relative folder whose files replace the request's body, one file per send. They are read when the run starts (at most 10 MB each)."
+              /></span>
               <input
                 [class]="field"
                 placeholder="bodies/create-user"
@@ -588,7 +637,11 @@
               />
             </label>
             <label [class]="label">
-              File names (e.g. *.json)
+              <span class="flex items-center gap-1"
+                >File names (e.g. *.json)
+                <app-info-tip
+                  text="Only files whose names match are sent; * and ? are wildcards. Hidden files are always skipped."
+              /></span>
               <input
                 [class]="field"
                 placeholder="All files"
@@ -597,7 +650,11 @@
               />
             </label>
             <label [class]="label">
-              File selection
+              <span class="flex items-center gap-1"
+                >File selection
+                <app-info-tip
+                  text="Sequential hands out the files in order from one cursor shared by every user, Random picks one each time, and Per thread deals them out in turns so each user gets its own."
+              /></span>
               <select
                 [class]="field"
                 [value]="body.mode"
@@ -609,7 +666,11 @@
               </select>
             </label>
             <label [class]="label">
-              When files run out
+              <span class="flex items-center gap-1"
+                >When files run out
+                <app-info-tip
+                  text="With Sequential or Per thread: Recycle starts again from the first file, Stop ends that user."
+              /></span>
               <select
                 [class]="field"
                 [value]="body.onEof"
@@ -685,7 +746,11 @@
           </div>
           <div class="grid grid-cols-2 gap-2">
             <label [class]="label">
-              Status (e.g. 200-299, 201, 2xx)
+              <span class="flex items-center gap-1"
+                >Status (e.g. 200-299, 201, 2xx)
+                <app-info-tip
+                  text="Statuses that count as a success. Without one, a status of 400 or higher counts as an error."
+              /></span>
               <input
                 [class]="field"
                 [value]="assertion.status"
@@ -693,7 +758,10 @@
               />
             </label>
             <label [class]="label">
-              Max time (e.g. 800ms)
+              <span class="flex items-center gap-1"
+                >Max time (e.g. 800ms)
+                <app-info-tip text="A response that takes longer than this counts as failed."
+              /></span>
               <input
                 [class]="field"
                 [value]="assertion.maxTime"

@@ -1,7 +1,12 @@
 @let s = settings();
 @let f = fallback();
 <div class="grid max-w-xl grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 py-2 text-sm">
-  <label for="setting-timeout" class="text-slate-600">Timeout (seconds)</label>
+  <label for="setting-timeout" class="flex items-center gap-1 text-slate-600">
+    Timeout (seconds)
+    <app-info-tip
+      text="How long to wait for the whole response before giving up. 0 waits for ever."
+    />
+  </label>
   <div class="flex items-center gap-2">
     <input
       id="setting-timeout"
@@ -18,7 +23,12 @@
     </span>
   </div>
 
-  <label for="setting-follow" class="text-slate-600">Follow redirects</label>
+  <label for="setting-follow" class="flex items-center gap-1 text-slate-600">
+    Follow redirects
+    <app-info-tip
+      text="Whether a 3xx response with a Location header is followed automatically. Every hop is listed in the response's Timing tab."
+    />
+  </label>
   <select
     id="setting-follow"
     class="w-56 rounded border border-slate-300 px-2 py-1 focus:border-sky-500 focus:outline-none"
@@ -32,7 +42,12 @@
     <option value="false" [selected]="s.followRedirects === false">No</option>
   </select>
 
-  <label for="setting-max-redirects" class="text-slate-600">Most redirects</label>
+  <label for="setting-max-redirects" class="flex items-center gap-1 text-slate-600">
+    Most redirects
+    <app-info-tip
+      text="How many redirects in a row are followed before the request fails, to stop redirect loops."
+    />
+  </label>
   <div class="flex items-center gap-2">
     <input
       id="setting-max-redirects"
@@ -48,7 +63,12 @@
     <span class="text-xs text-slate-400">{{ source('maxRedirects') }}: {{ f.maxRedirects }}</span>
   </div>
 
-  <label for="setting-verify-tls" class="text-slate-600">Verify TLS certificates</label>
+  <label for="setting-verify-tls" class="flex items-center gap-1 text-slate-600">
+    Verify TLS certificates
+    <app-info-tip
+      text="Whether the server's HTTPS certificate must be valid and trusted. Turn it off only for servers you trust, such as local ones with self-signed certificates."
+    />
+  </label>
   <div class="flex items-center gap-2">
     <select
       id="setting-verify-tls"
@@ -66,7 +86,12 @@
     </select>
   </div>
 
-  <label for="setting-http-version" class="text-slate-600">HTTP version</label>
+  <label for="setting-http-version" class="flex items-center gap-1 text-slate-600">
+    HTTP version
+    <app-info-tip
+      text="The protocol version asked for. HTTP/2 needs HTTPS on most servers and falls back to HTTP/1.1 when the server doesn't offer it."
+    />
+  </label>
   <select
     id="setting-http-version"
     class="w-56 rounded border border-slate-300 px-2 py-1 focus:border-sky-500 focus:outline-none"

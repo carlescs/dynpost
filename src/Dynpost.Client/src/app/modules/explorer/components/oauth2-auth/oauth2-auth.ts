@@ -16,6 +16,7 @@ import { OAUTH2_GRANT_LABELS, OAUTH2_GRANTS, RequestAuth } from '../../../../mod
 import { Bridge, BridgeError } from '../../../../services/bridge';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { DateFormatStore } from '../../../../services/date-format-store';
+import { InfoTip } from '../../../../components/info-tip/info-tip';
 
 /**
  * The OAuth 2.0 settings of a request and its cached token: **Get new token** obtains one (the
@@ -24,7 +25,7 @@ import { DateFormatStore } from '../../../../services/date-format-store';
  */
 @Component({
   selector: 'app-oauth2-auth',
-  imports: [FaIconComponent],
+  imports: [FaIconComponent, InfoTip],
   templateUrl: './oauth2-auth.html',
 })
 export class OAuth2Auth {
