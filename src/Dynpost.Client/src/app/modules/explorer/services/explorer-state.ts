@@ -22,6 +22,7 @@ export interface ExplorerMenu {
 export class ExplorerState extends TreeState<WorkspaceNode> {
   readonly store = inject(WorkspaceStore);
   readonly root = REQUESTS_FOLDER;
+  readonly items = this.store.tree;
 
   /**
    * The explorer entry whose menu is open and where: at the pointer for a right-click, or under

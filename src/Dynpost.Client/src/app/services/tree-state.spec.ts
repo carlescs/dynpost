@@ -1,10 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HOVER_EXPAND_DELAY_MS, TreeItem, TreeState, canMove, folderName } from './tree-state';
 
 @Injectable()
 class TestTreeState extends TreeState {
   readonly root = '';
+  readonly items = signal<TreeItem[]>([]);
   readonly moved = vi.fn().mockResolvedValue(true);
   protected createFolder = vi.fn().mockResolvedValue(true);
   protected renameFolder = vi.fn().mockResolvedValue(true);
@@ -51,7 +52,7 @@ describe('TreeState', () => {
     pointAt('users');
     expect(state.dropHint()).toEqual({ kind: 'none', reason: 'same' });
     pointAt('orders');
-    expect(state.dropHint()).toEqual({ kind: 'move', folder: 'orders' });
+    expect(state.dropHint()).toEqual({ kind: 'move', folder: 'orders', count: 1 });
     expect(state.dropTarget()).toBe('orders');
   });
 
@@ -106,6 +107,123 @@ describe('TreeState', () => {
     await state.endDrag();
     vi.advanceTimersByTime(HOVER_EXPAND_DELAY_MS);
     expect(state.isExpanded({ path: 'orders', kind: 'folder' })).toBe(false);
+  });
+});
+
+describe('TreeState selection', () => {
+  let state: TestTreeState;
+  let under: HTMLElement | null;
+  const lists: Record<string, HTMLElement> = {};
+
+  const users: TreeItem = {
+    path: 'users',
+    kind: 'folder',
+    children: [
+      { path: 'users/admin', kind: 'folder', children: [] },
+      { path: 'users/get-user.yaml', kind: 'request' },
+    ],
+  };
+  const orders: TreeItem = { path: 'orders', kind: 'folder', children: [] };
+  const top: TreeItem = { path: 'top.yaml', kind: 'request' };
+  const getUser = users.children![1];
+  const paths = () => [...state.selected()].sort();
+
+  function pointAt(path: string | null): void {
+    under = path === null ? null : lists[path];
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 1, clientY: 1 }));
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [TestTreeState] });
+    state = TestBed.inject(TestTreeState);
+    state.items.set([users, orders, top]);
+    for (const path of ['', 'users', 'users/admin', 'orders']) {
+      lists[path] = document.createElement('div');
+      state.registerDropList(lists[path], () => path);
+    }
+    under = null;
+    document.elementFromPoint = () => under;
+  });
+
+  it('selects one entry on a plain click and opens it', () => {
+    expect(state.select(top)).toBe(true);
+    expect(paths()).toEqual(['top.yaml']);
+    expect(state.isSelected(top)).toBe(false);
+  });
+
+  it('adds and removes entries with Ctrl or Cmd', () => {
+    state.select(top);
+    expect(state.select(getUser, { ctrlKey: true })).toBe(false);
+    expect(paths()).toEqual(['top.yaml', 'users/get-user.yaml']);
+    expect(state.isSelected(top)).toBe(true);
+    state.select(top, { metaKey: true });
+    expect(paths()).toEqual(['users/get-user.yaml']);
+  });
+
+  it('selects the visible range from the last clicked entry with Shift', () => {
+    state.select(users.children![0]);
+    expect(state.select(top, { shiftKey: true })).toBe(false);
+    expect(paths()).toEqual(['orders', 'top.yaml', 'users/admin', 'users/get-user.yaml']);
+
+    state.toggle(users);
+    state.select(users);
+    state.select(top, { shiftKey: true });
+    expect(paths()).toEqual(['orders', 'top.yaml', 'users']);
+  });
+
+  it('drags the whole selection, leaving out what a selected folder carries', () => {
+    state.select(users);
+    state.select(getUser, { ctrlKey: true });
+    state.select(top, { ctrlKey: true });
+    state.startDrag(top);
+    expect(state.draggedNodes().map((n) => n.path)).toEqual(['users', 'top.yaml']);
+    expect(state.isDragging(users)).toBe(true);
+    expect(state.isDragging(getUser)).toBe(false);
+  });
+
+  it('drags only the entry when it is not selected', () => {
+    state.select(top);
+    state.select(orders, { ctrlKey: true });
+    state.startDrag(getUser);
+    expect(state.draggedNodes()).toEqual([getUser]);
+  });
+
+  it('moves every dragged entry that is not already there', async () => {
+    state.select(getUser);
+    state.select(top, { ctrlKey: true });
+    state.startDrag(getUser);
+
+    pointAt('users');
+    expect(state.dropHint()).toEqual({ kind: 'move', folder: 'users', count: 1 });
+    pointAt('orders');
+    expect(state.dropHint()).toEqual({ kind: 'move', folder: 'orders', count: 2 });
+    await state.endDrag();
+
+    expect(state.moved).toHaveBeenCalledTimes(2);
+    expect(state.moved).toHaveBeenCalledWith(getUser, 'orders');
+    expect(state.moved).toHaveBeenCalledWith(top, 'orders');
+    expect(state.selected().size).toBe(0);
+  });
+
+  it('refuses dropping a selection into one of its folders', () => {
+    state.select(users);
+    state.select(top, { ctrlKey: true });
+    state.startDrag(top);
+    pointAt('users/admin');
+    expect(state.dropHint()).toEqual({ kind: 'none', reason: 'inside' });
+    expect(state.canEnter(top, 'users/admin', lists['users/admin'])).toBe(false);
+    pointAt('');
+    expect(state.dropHint()).toEqual({ kind: 'none', reason: 'same' });
+    pointAt('orders');
+    expect(state.dropHint()).toEqual({ kind: 'move', folder: 'orders', count: 2 });
+  });
+
+  it('clears the selection', () => {
+    state.select(top);
+    state.select(orders, { ctrlKey: true });
+    state.clearSelection();
+    expect(state.selected().size).toBe(0);
+    expect(state.isSelected(orders)).toBe(false);
   });
 });
 

@@ -1,19 +1,29 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, Signal, computed, signal } from '@angular/core';
 
 /** An entry of a folder tree: a folder, or a file of some kind. */
 export interface TreeItem {
   /** Workspace-relative path; folders are the drop targets, as is the tree's `root` folder. */
   path: string;
   kind: string;
+  /** Only for folders: what is inside. */
+  children?: TreeItem[];
 }
 
 /**
- * What dropping the dragged node now would do: move it into `folder`, or nothing — because the
- * pointer is not over the tree (`outside`), the node is already there (`same`), or the folder is
- * the node itself or inside it (`inside`).
+ * What dropping the dragged nodes now would do: move `count` of them into `folder`, or nothing —
+ * because the pointer is not over the tree (`outside`), they are all already there (`same`), or
+ * the folder is one of them or inside one (`inside`).
  */
 export type DropHint =
-  { kind: 'move'; folder: string } | { kind: 'none'; reason: 'outside' | 'same' | 'inside' };
+  | { kind: 'move'; folder: string; count: number }
+  | { kind: 'none'; reason: 'outside' | 'same' | 'inside' };
+
+/** The modifier keys of a click that change how it selects. */
+export interface SelectModifiers {
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+}
 
 /** How long the pointer has to rest on a collapsed folder during a drag for it to open. */
 export const HOVER_EXPAND_DELAY_MS = 700;
@@ -26,6 +36,10 @@ export type Editing = { kind: 'create'; parent: string } | { kind: 'rename'; pat
  * expanded folders, inline name editing and drag and drop. Each tree provides its own subclass,
  * which says how to create, rename and move entries, and also provides it as `TreeState` so the
  * shared `FolderDrop` directive finds it.
+ *
+ * Entries can be selected several at a time — Ctrl (Cmd on macOS) + click adds or removes one,
+ * Shift + click selects the range from the last clicked entry — and dragging a selected entry moves
+ * the whole selection.
  *
  * Drop targets are folders (and the tree's top level, its `root` folder). Folders nest, so their drop lists nest too;
  * the CDK picks the first connected list containing the pointer, which for nested lists may be
@@ -40,6 +54,8 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
 
   /** The workspace folder the tree shows the contents of (such as `requests`): its top level. */
   abstract readonly root: string;
+  /** The entries of the tree's top level, each folder with its `children`. */
+  abstract readonly items: Signal<T[]>;
 
   /** Creates a folder; resolves to whether it worked. */
   protected abstract createFolder(parent: string, name: string): Promise<boolean>;
@@ -48,29 +64,54 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
   /** Moves an entry into `folder`; resolves to whether it worked. */
   protected abstract move(node: T, folder: string): Promise<boolean>;
 
-  /** The node being dragged, or `null`. */
+  /**
+   * Paths of the selected entries. A plain click selects the entry clicked, so a drag that starts
+   * from it moves only it.
+   */
+  readonly selected = signal<ReadonlySet<string>>(new Set());
+  /**
+   * Whether the selection was made with Ctrl or Shift, so the rows show it; a plain click's
+   * selection isn't shown (the open entry is highlighted instead).
+   */
+  readonly multiSelecting = signal(false);
+  /** The entry a Shift + click selects the range from: the last one clicked. */
+  private anchor: string | null = null;
+
+  /** The node the drag started on, or `null`. */
   readonly dragged = signal<T | null>(null);
+  /**
+   * The nodes being dragged: the selection when the drag started on a selected entry, else that
+   * entry alone. Entries inside a selected folder are left out, as they move with it.
+   */
+  readonly draggedNodes = computed<T[]>(() => {
+    const node = this.dragged();
+    if (!node) return [];
+    const selected = this.selected();
+    if (!selected.has(node.path)) return [node];
+    const nodes = flatten(this.items()).filter((item) => selected.has(item.path));
+    const folders = nodes.filter((item) => item.kind === 'folder').map((item) => item.path);
+    const outermost = nodes.filter((item) => !folders.some((f) => isWithin(item.path, f)));
+    return outermost.some((item) => item.path === node.path) ? outermost : [node];
+  });
   /** The folder path (`root` for the top level) whose drop list is under the pointer, or `null`. */
   readonly hovered = signal<string | null>(null);
-  /** The folder the dragged node would move into if dropped now, or `null` for no move. */
-  readonly dropTarget = computed(() => {
-    const node = this.dragged();
-    const target = this.hovered();
-    return node && target !== null && canMove(node, target) ? target : null;
-  });
   /** What dropping now would do, for the drag preview; `null` when nothing is being dragged. */
   readonly dropHint = computed<DropHint | null>(() => {
-    const node = this.dragged();
-    if (!node) return null;
+    const nodes = this.draggedNodes();
+    if (!nodes.length) return null;
     const target = this.hovered();
     if (target === null) return { kind: 'none', reason: 'outside' };
-    if (canMove(node, target)) return { kind: 'move', folder: target };
-    return { kind: 'none', reason: target === parentPath(node.path) ? 'same' : 'inside' };
+    return dropHintFor(nodes, target);
   });
-  /** Whether the dragged node can move to the top level (it is not already there). */
+  /** The folder the dragged nodes would move into if dropped now, or `null` for no move. */
+  readonly dropTarget = computed(() => {
+    const hint = this.dropHint();
+    return hint?.kind === 'move' ? hint.folder : null;
+  });
+  /** Whether some dragged node can move to the top level (it is not already there). */
   readonly canDropAtRoot = computed(() => {
-    const node = this.dragged();
-    return node !== null && canMove(node, this.root);
+    const nodes = this.draggedNodes();
+    return nodes.length > 0 && dropHintFor(nodes, this.root).kind === 'move';
   });
 
   /** Drop list elements of the tree, with a getter for the folder each one stands for. */
@@ -105,6 +146,58 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
       next.delete(path);
       return next;
     });
+  }
+
+  /** Whether `node`'s row shows it as selected. */
+  isSelected(node: TreeItem): boolean {
+    return this.multiSelecting() && this.selected().has(node.path);
+  }
+
+  /** Whether `node` is one of the entries being dragged, so its row can be dimmed. */
+  isDragging(node: TreeItem): boolean {
+    return this.draggedNodes().some((item) => item.path === node.path);
+  }
+
+  /**
+   * Selects an entry for a click: on its own for a plain click, adding or removing it with Ctrl
+   * (Cmd), or the visible range from the last clicked entry with Shift. Returns whether it was a
+   * plain click, which also opens the entry.
+   */
+  select(node: TreeItem, modifiers: SelectModifiers = {}): boolean {
+    if (modifiers.shiftKey) {
+      const visible = this.visible();
+      const from = visible.findIndex((item) => item.path === this.anchor);
+      const to = visible.findIndex((item) => item.path === node.path);
+      if (from >= 0 && to >= 0) {
+        const range = visible.slice(Math.min(from, to), Math.max(from, to) + 1);
+        const paths = range.map((item) => item.path);
+        const add = modifiers.ctrlKey || modifiers.metaKey;
+        this.selected.update((set) => new Set([...(add ? set : []), ...paths]));
+        this.multiSelecting.set(true);
+        return false;
+      }
+    }
+    if (modifiers.ctrlKey || modifiers.metaKey) {
+      this.selected.update((set) => {
+        const next = new Set(set);
+        if (next.has(node.path)) next.delete(node.path);
+        else next.add(node.path);
+        return next;
+      });
+      this.anchor = node.path;
+      this.multiSelecting.set(true);
+      return false;
+    }
+    this.selected.set(new Set([node.path]));
+    this.anchor = node.path;
+    this.multiSelecting.set(false);
+    return true;
+  }
+
+  clearSelection(): void {
+    this.selected.set(new Set());
+    this.anchor = null;
+    this.multiSelecting.set(false);
   }
 
   isCreatingIn(parent: string): boolean {
@@ -146,10 +239,12 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
     this.dropLists.delete(element);
   }
 
-  /** Whether the drop list `element` (standing for `folder`) may receive the dragged node now. */
+  /** Whether the drop list `element` (standing for `folder`) may receive the dragged nodes now. */
   canEnter(node: T, folder: string, element: Element): boolean {
+    const nodes = this.dragged() ? this.draggedNodes() : [node];
     return (
-      canMove(node, folder) && this.innermostListAt(this.pointer.x, this.pointer.y) === element
+      dropHintFor(nodes, folder).kind === 'move' &&
+      this.innermostListAt(this.pointer.x, this.pointer.y) === element
     );
   }
 
@@ -160,16 +255,25 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
     window.addEventListener('pointermove', this.trackPointer, { capture: true });
   }
 
-  /** Ends a drag; moves the node into the folder under the pointer, if that is a valid move. */
+  /**
+   * Ends a drag; moves the dragged nodes into the folder under the pointer, if that is a valid
+   * move. Nodes already in that folder stay; the others move one at a time, and a move that fails
+   * (the store reports why) doesn't stop the rest.
+   */
   async endDrag(): Promise<void> {
     window.removeEventListener('pointermove', this.trackPointer, { capture: true });
     this.scheduleExpand(null);
-    const node = this.dragged();
     const target = this.dropTarget();
+    const nodes = target === null ? [] : this.draggedNodes().filter((n) => canMove(n, target));
     this.dragged.set(null);
     this.hovered.set(null);
-    if (!node || target === null) return;
-    if (await this.move(node, target)) this.expand(target);
+    if (target === null || !nodes.length) return;
+    let moved = false;
+    for (const node of nodes) moved = (await this.move(node, target)) || moved;
+    if (!moved) return;
+    this.expand(target);
+    // The moved entries have new paths; a selection of the old ones would be stale.
+    if (nodes.length > 1) this.clearSelection();
   }
 
   /**
@@ -181,12 +285,26 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
     clearTimeout(this.expandTimer);
     this.expandTimer = undefined;
     this.expandCandidate = folder;
-    const node = this.dragged();
-    if (!folder || !node || !this.collapsed().has(folder) || !canMove(node, folder)) return;
+    const nodes = this.draggedNodes();
+    if (!folder || !nodes.length || !this.collapsed().has(folder)) return;
+    if (dropHintFor(nodes, folder).kind !== 'move') return;
     this.expandTimer = setTimeout(() => {
       this.expandTimer = undefined;
       if (this.dragged() && this.hovered() === folder) this.expand(folder);
     }, HOVER_EXPAND_DELAY_MS);
+  }
+
+  /** The entries shown now, in tree order: those inside collapsed folders are left out. */
+  private visible(): TreeItem[] {
+    const result: TreeItem[] = [];
+    const walk = (nodes: TreeItem[]) => {
+      for (const node of nodes) {
+        result.push(node);
+        if (node.kind === 'folder' && this.isExpanded(node)) walk(node.children ?? []);
+      }
+    };
+    walk(this.items());
+    return result;
   }
 
   private folderAt(x: number, y: number): string | null {
@@ -223,6 +341,29 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
 export function canMove(node: TreeItem, folder: string): boolean {
   if (folder === parentPath(node.path)) return false;
   return node.kind !== 'folder' || !(folder === node.path || folder.startsWith(`${node.path}/`));
+}
+
+/**
+ * What dropping `nodes` on `folder` would do: nothing when the folder is one of them or inside
+ * one, or when all of them are already there; otherwise move those that aren't.
+ */
+export function dropHintFor(nodes: TreeItem[], folder: string): DropHint {
+  const inside = nodes.some(
+    (node) => node.kind === 'folder' && (folder === node.path || isWithin(folder, node.path)),
+  );
+  if (inside) return { kind: 'none', reason: 'inside' };
+  const count = nodes.filter((node) => canMove(node, folder)).length;
+  return count ? { kind: 'move', folder, count } : { kind: 'none', reason: 'same' };
+}
+
+/** Every entry of a tree, folders before their contents. */
+function flatten<T extends TreeItem>(nodes: T[]): T[] {
+  return nodes.flatMap((node) => [node, ...flatten((node.children ?? []) as T[])]);
+}
+
+/** Whether `path` is inside the folder `folder`. */
+function isWithin(path: string, folder: string): boolean {
+  return path.startsWith(`${folder}/`);
 }
 
 /** The display name of a folder: its last path segment. */

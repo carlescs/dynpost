@@ -419,7 +419,9 @@ bottom of the explorer, or its empty space) to move it there. While dragging, th
 destination folder is outlined and marked "Move here", the dragged chip says where
 the entry would go (or why it can't), and a collapsed folder opens when you hold
 the entry over it for a moment; moved files keep their names, and nothing is moved if the destination already
-has an entry with that name. Open requests follow renamed and moved folders. Folder
+has an entry with that name. To move several entries at once, select them with Ctrl+click
+(Cmd+click on macOS) or Shift+click (a range) and drag any of them: the chip counts the others, and
+Escape clears the selection. Open requests follow renamed and moved folders. Folder
 names are kept as typed, but must work on Windows, macOS and Linux (no
 `/ \ < > : " | ? *`, no leading dot or trailing dot, no reserved names such as
 `CON`). Deleting a folder
@@ -1020,7 +1022,8 @@ requests in `requests/`. The **Load runs** view shows them as a tree. Its header
 folder at the top; hover a folder to make a plan or a sub-folder in it, rename it (F2) or delete
 it (Delete), and right-click it to duplicate it as "… copy". Drag a plan or a folder onto
 another folder, or onto the drop zone at the bottom (or empty space) for the top level, to move
-it; the drag shows the destination as in the explorer. A plan keeps its earlier
+it; as in the explorer, Ctrl+click and Shift+click select several to drag together, and the drag
+shows the destination. A plan keeps its earlier
 runs when it or its folder is renamed or moved; deleting a folder deletes its plans and their
 runs, after asking. A folder with a running plan can't be renamed, moved or deleted.
 

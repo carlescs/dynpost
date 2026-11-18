@@ -75,19 +75,33 @@ export class RunTreeLevel {
     return this.state.dropTarget() === node.path;
   }
 
+  /** A plain click opens or closes the folder; Ctrl and Shift only change the selection. */
+  protected onFolderClick(node: RunTreeNode, event: MouseEvent): void {
+    if (this.state.select(node, event)) this.state.toggle(node);
+  }
+
+  /** A plain click opens the entry; Ctrl and Shift only change the selection. */
+  protected onPlanClick(node: RunTreeNode, event: MouseEvent): void {
+    if (this.state.select(node, event)) void this.state.store.open(node.path);
+  }
+
   protected dragStarted(node: RunTreeNode, event: CdkDragStart<RunTreeNode>): void {
     this.state.startDrag(node, event.event);
   }
 
   protected onPlanKeydown(event: KeyboardEvent, node: RunTreeNode): void {
-    if (event.key === 'Delete') {
+    if (event.key === 'Escape') {
+      this.state.clearSelection();
+    } else if (event.key === 'Delete') {
       event.preventDefault();
       void this.state.store.delete(node.path);
     }
   }
 
   protected onFolderKeydown(event: KeyboardEvent, node: RunTreeNode): void {
-    if (event.key === 'F2') {
+    if (event.key === 'Escape') {
+      this.state.clearSelection();
+    } else if (event.key === 'F2') {
       event.preventDefault();
       this.state.startRename(node);
     } else if (event.key === 'Delete') {
