@@ -346,6 +346,8 @@ internal static class BridgeHandlers
                 (p, ct) => Use<SetHistorySettings>().ExecuteAsync(p, ct))
             .Register<SetActivityOrderPayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetActivityOrder,
                 (p, ct) => Use<SetActivityOrder>().ExecuteAsync(p.Order, ct))
+            .Register<SetTitleBarPayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetTitleBar,
+                (p, ct) => Use<SetTitleBar>().ExecuteAsync(p.Native, ct))
             .Register(BridgeMessageTypes.McpStatus,
                 ct => Use<GetMcpStatus>().ExecuteAsync(ct))
             .Register<SetMcpPayload, McpStatusDto>(BridgeMessageTypes.McpSet,
@@ -367,7 +369,20 @@ internal static class BridgeHandlers
                 {
                     window.Close();
                     return Task.FromResult(Result<Unit?>.Success(null));
-                });
+                })
+            .Register(BridgeMessageTypes.WindowGet,
+                _ => Task.FromResult(Result<WindowStateDto>.Success(window.GetState())))
+            .Register(BridgeMessageTypes.WindowMinimize,
+                _ => Task.FromResult(Done(window.Minimize)))
+            .Register(BridgeMessageTypes.WindowToggleMaximize,
+                _ => Task.FromResult(Done(window.ToggleMaximize)))
+            .Register(BridgeMessageTypes.WindowStartDrag,
+                _ => Task.FromResult(Done(window.StartDrag)))
+            .Register<WindowResizePayload, Unit?>(BridgeMessageTypes.WindowStartResize,
+                (p, _) => Task.FromResult(
+                    ParseEdge(p.Edge) is { } edge
+                        ? Done(() => window.StartResize(edge))
+                        : Result<Unit?>.Failure(new Error(ErrorCodes.InvalidRequest, $"Unknown window edge '{p.Edge}'."))));
     }
 
     /// <summary>The files the import dialog offers: Postman, Insomnia and HAR files are JSON; OpenAPI can be YAML; JMeter plans are XML.</summary>
@@ -397,6 +412,26 @@ internal static class BridgeHandlers
         };
 
     /// <summary>Results without a value are sent as a <c>null</c> payload.</summary>
+    private static Result<Unit?> Done(Action action)
+    {
+        action();
+        return Result<Unit?>.Success(null);
+    }
+
+    /// <summary>The edge the UI names (<c>topLeft</c>, ...), or <see langword="null"/> for anything else.</summary>
+    private static WindowEdge? ParseEdge(string? edge)
+    {
+        foreach (var value in Enum.GetValues<WindowEdge>())
+        {
+            if (string.Equals(value.ToString(), edge, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
     private static Result<Unit?> NoValue(Result<Unit> result) =>
         result.IsSuccess ? Result<Unit?>.Success(null) : Result<Unit?>.Failure(result.Error!);
 }

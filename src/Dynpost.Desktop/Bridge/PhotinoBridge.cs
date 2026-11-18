@@ -4,7 +4,7 @@ using Photino.NET;
 namespace Dynpost.Desktop.Bridge;
 
 /// <summary>Connects a <see cref="BridgeRouter"/> to a Photino window's message channel.</summary>
-internal sealed class PhotinoBridge(PhotinoWindow window) : IFileDialogs, IAppWindow
+internal sealed class PhotinoBridge(PhotinoWindow window) : IFileDialogs
 {
     public void Attach(BridgeRouter router, HostEvents events)
     {
@@ -29,9 +29,6 @@ internal sealed class PhotinoBridge(PhotinoWindow window) : IFileDialogs, IAppWi
             });
         });
     }
-
-    // Messages are handled off the UI thread (see Attach); the window must be closed on it.
-    public void Close() => window.Invoke(window.Close);
 
     public async Task<string?> PickFolderAsync(string title)
     {

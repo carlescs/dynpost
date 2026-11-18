@@ -23,6 +23,7 @@ using Dynpost.Application.Workspaces;
 using Dynpost.Desktop.Bridge;
 using Dynpost.Desktop.Hosting;
 using Dynpost.Desktop.Mcp;
+using Dynpost.Desktop.Window;
 using Dynpost.Infrastructure.Certificates;
 using Dynpost.Infrastructure.Cookies;
 using Dynpost.Infrastructure.Environments;
@@ -85,9 +86,15 @@ internal static class Program
             window.SetIconFile(iconPath);
         }
 
+        // The app's header is the title bar unless the user chose the system's (read once: the
+        // frame can't change while the window is open).
+        var settings = services.GetRequiredService<GetAppSettings>().ExecuteAsync().GetAwaiter().GetResult();
+        var appWindow = AppWindow.Create(window, settings.Value?.NativeTitleBar ?? false);
+
         var bridge = new PhotinoBridge(window);
         var events = services.GetRequiredService<HostEvents>();
-        bridge.Attach(BridgeHandlers.Create(services, bridge, bridge), events);
+        bridge.Attach(BridgeHandlers.Create(services, bridge, appWindow), events);
+        appWindow.OnStateChanged(state => _ = events.WindowStateChangedAsync(state));
         // Keep the source control view and the open files current as files and git state change,
         // whoever changes them.
         services.GetRequiredService<WatchWorkingTree>().Start(
@@ -167,6 +174,7 @@ internal static class Program
             .AddTransient<SetTheme>()
             .AddTransient<SetHistorySettings>()
             .AddTransient<SetActivityOrder>()
+            .AddTransient<SetTitleBar>()
             .AddTransient<ListResponseHistory>()
             .AddTransient<GetResponseHistoryEntry>()
             .AddTransient<DeleteResponseHistory>()

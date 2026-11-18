@@ -18,6 +18,10 @@ namespace Dynpost.Application.Settings;
 /// </param>
 /// <param name="Mcp">The MCP server AI assistants connect to; <c>null</c> is <see cref="McpSettings.Default"/> (off).</param>
 /// <param name="Secrets">Where secret values are kept; <c>null</c> is <see cref="SecretSettings.Default"/>.</param>
+/// <param name="NativeTitleBar">
+/// Whether the window keeps the operating system's title bar instead of the app's own; <c>null</c>
+/// is <c>false</c>. Read when the window opens, so a change applies the next time the app starts.
+/// </param>
 public sealed record AppSettings(
     string? LastWorkspacePath = null,
     string? Theme = null,
@@ -25,7 +29,8 @@ public sealed record AppSettings(
     HistorySettings? History = null,
     IReadOnlyList<string>? ActivityOrder = null,
     McpSettings? Mcp = null,
-    SecretSettings? Secrets = null)
+    SecretSettings? Secrets = null,
+    bool? NativeTitleBar = null)
 {
     public static AppSettings Default { get; } = new();
 }

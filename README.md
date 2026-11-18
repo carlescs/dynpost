@@ -735,6 +735,20 @@ order is remembered in your user settings, and the small reset icon at the
 bottom of the activity bar puts the views back in their default order. Ctrl+1 … Ctrl+4 keep opening the
 same views whatever their order.
 
+## Window
+
+The header is the window's title bar: drag it to move the window (snapping and
+the system's move gestures still apply) and double-click it to maximize or
+restore the window. On Windows and Linux it ends with **Minimize**,
+**Maximize**/**Restore** and **Close** buttons (**Close** asks first, like
+Ctrl+Q, when tabs have unsaved changes or load runs are running), and the window
+is resized from its edges as usual. On macOS the window keeps its traffic-light
+buttons, shown in the header's top-left corner.
+
+To use the operating system's title bar instead, turn on **System title bar**
+in the settings menu; the change applies the next time Dynpost starts. It is
+kept in your user settings.
+
 ## Finding requests
 
 **Quick open** (Ctrl+P, or *Open request…* in the header) finds a request as you

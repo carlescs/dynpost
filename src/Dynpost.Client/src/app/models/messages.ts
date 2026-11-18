@@ -781,6 +781,21 @@ export interface AppSettingsDto {
   history: HistorySettingsDto;
   /** The order of the activity bar's views (their ids); empty for the default order. */
   activityOrder: string[];
+  /** Whether the window keeps the operating system's title bar (from the next start). */
+  nativeTitleBar: boolean;
+}
+
+/** The edge or corner of the window a resize starts from. */
+export type WindowEdge =
+  'top' | 'bottom' | 'left' | 'right' | 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
+
+/** The window's title bar and state. */
+export interface WindowStateDto {
+  /** `custom` when the app's header is the title bar, `native` for the system's. */
+  frame: 'native' | 'custom';
+  /** The platform the app runs on; `web` in the browser preview. */
+  platform: 'windows' | 'linux' | 'macos' | 'web';
+  maximized: boolean;
 }
 
 /** The MCP server AI assistants connect to, as set up and as running. */
@@ -1395,6 +1410,18 @@ export interface BridgeMessages {
   'update.restart': { payload: void; result: null };
   /** Closes the app window, which ends the app; the response may not arrive before it closes. */
   'app.quit': { payload: void; result: null };
+  /** The window's title bar (the app's or the system's), platform and state. */
+  'window.get': { payload: void; result: WindowStateDto };
+  /** Minimizes the window. */
+  'window.minimize': { payload: void; result: null };
+  /** Maximizes or restores the window (zooms it on macOS). */
+  'window.toggleMaximize': { payload: void; result: null };
+  /** Moves the window with the mouse pressed on the app's title bar, until it is released. */
+  'window.startDrag': { payload: void; result: null };
+  /** Resizes the window with the mouse pressed on one of its edges, until it is released. */
+  'window.startResize': { payload: { edge: WindowEdge }; result: null };
+  /** Uses the system's title bar (or the app's own) from the next start. */
+  'settings.setTitleBar': { payload: { native: boolean }; result: AppSettingsDto };
 }
 
 export type BridgeMessageType = keyof BridgeMessages;
@@ -1462,6 +1489,8 @@ export interface BridgeEvents {
    * the files and folders at `paths` (workspace paths), or any of them when `paths` is `null`.
    */
   'workspace.filesChanged': { paths: string[] | null };
+  /** The window was maximized or restored. */
+  'window.stateChanged': WindowStateDto;
 }
 
 export type BridgeEventType = keyof BridgeEvents;
