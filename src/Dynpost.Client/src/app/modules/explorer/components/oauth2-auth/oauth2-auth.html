@@ -1,6 +1,11 @@
 @let a = auth();
 <div class="mt-3 grid max-w-2xl grid-cols-[auto_1fr] items-center gap-2 text-sm">
-  <label for="oauth2-grant">Grant</label>
+  <label for="oauth2-grant" class="flex items-center gap-1">
+    Grant
+    <app-info-tip
+      text="How the token is obtained. Client credentials: the app signs in as itself with its id and secret. Authorization code: you sign in in your browser and Dynpost receives the code."
+    />
+  </label>
   <select
     id="oauth2-grant"
     class="justify-self-start rounded border border-slate-300 px-2 py-1"
@@ -48,7 +53,12 @@
     [value]="a.clientSecret"
     (input)="patch({ clientSecret: $any($event.target).value })"
   />
-  <label for="oauth2-scope">Scope</label>
+  <label for="oauth2-scope" class="flex items-center gap-1">
+    Scope
+    <app-info-tip
+      text="Space-separated permissions asked for in the token. Leave empty for the server's default."
+    />
+  </label>
   <input
     id="oauth2-scope"
     [class]="fieldClass"
@@ -57,7 +67,12 @@
     [value]="a.scope"
     (input)="patch({ scope: $any($event.target).value })"
   />
-  <label for="oauth2-audience">Audience</label>
+  <label for="oauth2-audience" class="flex items-center gap-1">
+    Audience
+    <app-info-tip
+      text="The API the token is meant for. Some providers (such as Auth0) need it; most ignore it."
+    />
+  </label>
   <input
     id="oauth2-audience"
     [class]="fieldClass"
@@ -77,7 +92,12 @@
       (input)="patch({ redirectUri: $any($event.target).value })"
     />
   }
-  <label for="oauth2-credentials">Send credentials</label>
+  <label for="oauth2-credentials" class="flex items-center gap-1">
+    Send credentials
+    <app-info-tip
+      text="How the client id and secret are sent to the token URL: as a Basic Authorization header (most servers), or as client_id and client_secret fields in the request body."
+    />
+  </label>
   <select
     id="oauth2-credentials"
     class="justify-self-start rounded border border-slate-300 px-2 py-1"

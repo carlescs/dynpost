@@ -119,7 +119,14 @@
         <tr class="text-left text-xs text-slate-500">
           <th class="w-1/3 px-2 py-1 font-medium">Variable</th>
           <th class="px-2 py-1 font-medium">Value</th>
-          <th class="w-20 px-2 py-1 text-center font-medium">Secret</th>
+          <th class="w-20 px-2 py-1 text-center font-medium">
+            <span class="inline-flex items-center gap-1">
+              Secret
+              <app-info-tip
+                text="A secret's value stays on this computer and is never written to the environment file, so it isn't committed. The file keeps only the variable's name."
+              />
+            </span>
+          </th>
           <th class="w-8"></th>
         </tr>
       </thead>

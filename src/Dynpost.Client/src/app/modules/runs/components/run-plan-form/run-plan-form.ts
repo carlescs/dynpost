@@ -46,6 +46,7 @@ import { METHOD_COLORS, WorkspaceNode } from '../../../../models/workspace';
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { parseDuration } from '../../models/run-format';
+import { InfoTip } from '../../../../components/info-tip/info-tip';
 import { LoadProfile } from '../load-profile/load-profile';
 
 type LoadMode = 'iterations' | 'duration';
@@ -120,7 +121,7 @@ const SLIDER_MAX = 200;
 /** Edits a run plan with form fields; every change is written back into the plan's YAML text. */
 @Component({
   selector: 'app-run-plan-form',
-  imports: [CdkDrag, CdkDragHandle, CdkDropList, FaIconComponent, LoadProfile],
+  imports: [CdkDrag, CdkDragHandle, CdkDropList, FaIconComponent, InfoTip, LoadProfile],
   host: { class: 'block' },
   templateUrl: './run-plan-form.html',
 })

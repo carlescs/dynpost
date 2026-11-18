@@ -21,13 +21,14 @@ import { CookieJar } from '../cookie-jar/cookie-jar';
 import { ENVIRONMENT_COLORS, ENVIRONMENT_COLOR_NAMES } from '../../../../models/environment-colors';
 import { ClientCertificates } from '../client-certificates/client-certificates';
 import { CapturedValues } from '../captured-values/captured-values';
+import { InfoTip } from '../../../../components/info-tip/info-tip';
 
 const BLANK: EnvironmentVariableDto = { name: '', value: '', secret: false };
 
 /** Edits an environment open in a tab: its name, variables and cookie jar, and shows its captured values. */
 @Component({
   selector: 'app-environment-editor',
-  imports: [FaIconComponent, CookieJar, CapturedValues, ClientCertificates],
+  imports: [FaIconComponent, CookieJar, CapturedValues, ClientCertificates, InfoTip],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './environment-editor.html',
 })

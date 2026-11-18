@@ -1,5 +1,6 @@
 import { Component, computed, input, output } from '@angular/core';
 import { RequestSettingsDto } from '../../../../models/messages';
+import { InfoTip } from '../../../../components/info-tip/info-tip';
 
 /** The defaults the host applies when neither the request nor a folder sets a value. */
 export const DEFAULT_SETTINGS: Required<{
@@ -30,6 +31,7 @@ export function describeTimeout(ms: number): string {
  */
 @Component({
   selector: 'app-settings-editor',
+  imports: [InfoTip],
   templateUrl: './settings-editor.html',
 })
 export class SettingsEditor {

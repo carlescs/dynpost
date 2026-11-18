@@ -5,6 +5,7 @@ import { InheritedSettingsDto } from '../../../../models/messages';
 import { AUTH_LABELS, AUTH_TYPES, AuthType, RequestAuth } from '../../../../models/workspace';
 import { FolderSettingsStore } from '../../../../services/folder-settings-store';
 import { OAuth2Auth } from '../oauth2-auth/oauth2-auth';
+import { InfoTip } from '../../../../components/info-tip/info-tip';
 
 /**
  * The auth settings of a request or a folder: the type and its fields. `inherit` uses the auth of
@@ -12,7 +13,7 @@ import { OAuth2Auth } from '../oauth2-auth/oauth2-auth';
  */
 @Component({
   selector: 'app-auth-editor',
-  imports: [FaIconComponent, OAuth2Auth],
+  imports: [FaIconComponent, InfoTip, OAuth2Auth],
   templateUrl: './auth-editor.html',
 })
 export class AuthEditor {

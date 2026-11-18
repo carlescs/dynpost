@@ -52,7 +52,8 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   to emit the same (SCSS, no inline template or styles, plus a `.spec.ts`):
   - `components/<name>/<name>.ts` — the shell (header, activity bar, sidebar,
     document tabs) and UI shared by several modules (code and diff editors, PDF
-    viewer, key/value table, variable input, folder drop target and name input of the folder trees).
+    viewer, key/value table, variable input, `info-tip` (an info icon whose tooltip explains a
+    setting), folder drop target and name input of the folder trees).
   - `services/` — root-provided stores and the `Bridge` (with its `MockBackend`).
   - `models/` — bridge message types (`messages.ts`), the client model
     (`workspace.ts`), DTO mapping and other pure helpers.

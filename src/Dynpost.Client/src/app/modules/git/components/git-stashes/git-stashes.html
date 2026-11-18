@@ -3,6 +3,7 @@
     type="button"
     class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase hover:text-slate-800"
     [attr.aria-expanded]="expanded()"
+    title="Stashes put uncommitted changes aside so the working tree is clean, to bring them back later"
     (click)="toggle()"
   >
     <fa-icon class="w-3" [icon]="expanded() ? faChevronDown : faChevronRight" />

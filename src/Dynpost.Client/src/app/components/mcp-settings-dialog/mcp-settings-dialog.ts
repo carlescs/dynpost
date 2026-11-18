@@ -6,6 +6,7 @@ import { copyText } from '../../models/clipboard';
 import { McpStatusDto } from '../../models/messages';
 import { Bridge, BridgeError } from '../../services/bridge';
 import { Dialogs } from '../../services/dialogs';
+import { InfoTip } from '../info-tip/info-tip';
 
 /** The ports the host accepts for the MCP server. */
 export const MIN_MCP_PORT = 1024;
@@ -18,7 +19,7 @@ export const MAX_MCP_PORT = 65535;
  */
 @Component({
   selector: 'app-mcp-settings-dialog',
-  imports: [FaIconComponent],
+  imports: [FaIconComponent, InfoTip],
   templateUrl: './mcp-settings-dialog.html',
 })
 export class McpSettingsDialog implements OnInit {
