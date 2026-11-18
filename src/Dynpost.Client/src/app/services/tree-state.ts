@@ -18,6 +18,9 @@ export type DropHint =
   | { kind: 'move'; folder: string; count: number }
   | { kind: 'none'; reason: 'outside' | 'same' | 'inside' };
 
+/** The background of a selected row: the open entry's tint, with an accent bar on the left. */
+const SELECTED_ROW = 'bg-sky-100 shadow-[inset_2px_0_0_var(--color-sky-600)]';
+
 /** The modifier keys of a click that change how it selects. */
 export interface SelectModifiers {
   ctrlKey?: boolean;
@@ -151,6 +154,22 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
   /** Whether `node`'s row shows it as selected. */
   isSelected(node: TreeItem): boolean {
     return this.multiSelecting() && this.selected().has(node.path);
+  }
+
+  /**
+   * The background classes of `node`'s row. A row has one highlight at a time: while entries are
+   * selected with Ctrl or Shift only those are, with an accent bar along their left edge, and the
+   * open entry's highlight (`active`) steps aside so the two can't be confused; otherwise the open
+   * entry, or the entry whose menu is open. Plain rows darken on hover, except during a drag.
+   */
+  rowClasses(node: TreeItem, active: boolean, menuOpen = false): string {
+    if (this.multiSelecting()) {
+      if (this.selected().has(node.path)) return SELECTED_ROW;
+    } else if (active) {
+      return 'bg-sky-100';
+    }
+    if (menuOpen) return 'bg-slate-200';
+    return this.dragged() ? '' : 'hover:bg-slate-200';
   }
 
   /** Whether `node` is one of the entries being dragged, so its row can be dimmed. */

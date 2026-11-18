@@ -218,6 +218,22 @@ describe('TreeState selection', () => {
     expect(state.dropHint()).toEqual({ kind: 'move', folder: 'orders', count: 2 });
   });
 
+  it('gives each row one highlight at a time', () => {
+    expect(state.rowClasses(top, true)).toBe('bg-sky-100');
+    expect(state.rowClasses(top, false, true)).toBe('bg-slate-200');
+    expect(state.rowClasses(top, false)).toBe('hover:bg-slate-200');
+
+    state.select(top);
+    state.select(orders, { ctrlKey: true });
+    // The open entry's highlight steps aside while several entries are selected.
+    expect(state.rowClasses(getUser, true)).toBe('hover:bg-slate-200');
+    expect(state.rowClasses(top, false)).toContain('bg-sky-100');
+    expect(state.rowClasses(top, false)).toContain('inset');
+
+    state.startDrag(getUser);
+    expect(state.rowClasses(getUser, false)).toBe('');
+  });
+
   it('clears the selection', () => {
     state.select(top);
     state.select(orders, { ctrlKey: true });
