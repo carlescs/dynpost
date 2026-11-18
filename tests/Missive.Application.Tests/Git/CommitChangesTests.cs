@@ -58,6 +58,21 @@ public class CommitChangesTests
     }
 
     [Fact]
+    public async Task MergeThatLeavesNoChanges_IsCommittedToCompleteIt()
+    {
+        _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())
+            .Returns(Ok(Status(merging: true)), Ok(Clean()));
+        _git.CommitAsync(WorkspacePath, Arg.Any<CommitMessage>(), null, Arg.Any<CancellationToken>())
+            .Returns(Ok("abc1234"));
+
+        var result = await _useCase.ExecuteAsync(new CommitChangesRequest("Merge origin/main"));
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal("abc1234", result.Value.CommitId);
+        _ = _git.Received(1).CommitAsync(WorkspacePath, Arg.Any<CommitMessage>(), null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Conflicts_BlockTheCommit()
     {
         _git.GetStatusAsync(WorkspacePath, Arg.Any<CancellationToken>())

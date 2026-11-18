@@ -439,7 +439,8 @@ export class GitView {
     () =>
       this.git.busy() === null &&
       this.message().trim().length > 0 &&
-      this.git.changeCount() > 0 &&
+      // A merge needs a commit to complete even when it leaves no file changed.
+      (this.git.changeCount() > 0 || this.git.status()?.merging === true) &&
       this.git.conflicts().length === 0,
   );
 

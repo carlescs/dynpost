@@ -12,7 +12,17 @@ public sealed class GitCliService : IGitService
     /// <summary>Keeps the workspace's local-only folder out of status and commits, even if it is not git-ignored.</summary>
     private const string ExcludeLocalFolder = ":(exclude).missive";
 
+    /// <summary>
+    /// How long a pull or push may run. It leaves time to sign in through a credential helper's
+    /// window, and stops a command waiting on a prompt nobody can see.
+    /// </summary>
+    public static readonly TimeSpan DefaultRemoteTimeout = TimeSpan.FromMinutes(3);
+
+    /// <summary>SSH that fails instead of asking for a passphrase or to trust an unknown host.</summary>
+    internal const string NonInteractiveSshCommand = "ssh -o BatchMode=yes";
+
     private readonly GitCommandRunner _runner;
+    private readonly TimeSpan _remoteTimeout;
 
     public GitCliService()
         : this("git")
@@ -21,8 +31,16 @@ public sealed class GitCliService : IGitService
 
     /// <param name="gitExecutable">The git executable to run: a name on the PATH or a full path.</param>
     public GitCliService(string gitExecutable)
+        : this(gitExecutable, DefaultRemoteTimeout)
+    {
+    }
+
+    /// <param name="gitExecutable">The git executable to run: a name on the PATH or a full path.</param>
+    /// <param name="remoteTimeout">How long a pull or push may run before it is stopped.</param>
+    public GitCliService(string gitExecutable, TimeSpan remoteTimeout)
     {
         _runner = new GitCommandRunner(gitExecutable);
+        _remoteTimeout = remoteTimeout;
     }
 
     public async Task<Result<GitStatus>> GetStatusAsync(string workspacePath, CancellationToken cancellationToken = default)
@@ -736,7 +754,7 @@ public sealed class GitCliService : IGitService
         }
 
         // Always merge: rebasing would rewrite the user's local commits.
-        var pull = await RunAsync(workspacePath, ["pull", "--no-rebase", "--no-edit"], cancellationToken);
+        var pull = await RunRemoteCommandAsync(workspacePath, "pull", ["pull", "--no-rebase", "--no-edit"], cancellationToken);
         if (pull.IsFailure)
         {
             return pull.Error!;
@@ -793,7 +811,7 @@ public sealed class GitCliService : IGitService
             arguments.AddRange(["--set-upstream", remote.Value, "HEAD"]);
         }
 
-        var push = await RunAsync(workspacePath, arguments, cancellationToken);
+        var push = await RunRemoteCommandAsync(workspacePath, "push", arguments, cancellationToken);
         if (push.IsFailure)
         {
             return push.Error!;
@@ -910,14 +928,66 @@ public sealed class GitCliService : IGitService
         return result;
     }
 
-    private async Task<Result<GitCommandResult>> RunAsync(
+    /// <summary>
+    /// Runs a command that talks to a remote. There is no terminal to answer prompts, so SSH is
+    /// made non-interactive and the command is stopped after <see cref="_remoteTimeout"/>.
+    /// </summary>
+    private async Task<Result<GitCommandResult>> RunRemoteCommandAsync(
         string workspacePath,
+        string command,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
+        var configured = await RunAsync(workspacePath, ["config", "--get", "core.sshCommand"], cancellationToken);
+        if (configured.IsFailure)
+        {
+            return configured.Error!;
+        }
+
+        var environment = NonInteractiveSshEnvironment(
+            Environment.GetEnvironmentVariable,
+            sshCommandConfigured: configured.Value.Succeeded);
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_remoteTimeout);
         try
         {
-            return await _runner.RunAsync(workspacePath, arguments, cancellationToken);
+            return await RunAsync(workspacePath, arguments, timeout.Token, environment);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return GitErrors.TimedOut(command, _remoteTimeout);
+        }
+    }
+
+    /// <summary>
+    /// The variables that make SSH fail instead of waiting on a prompt nobody can answer, unless the
+    /// user chose how git runs SSH (<c>GIT_SSH_COMMAND</c>, <c>core.sshCommand</c>, <c>GIT_SSH</c>)
+    /// or set up a graphical passphrase prompt (<c>SSH_ASKPASS</c>).
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string>? NonInteractiveSshEnvironment(
+        Func<string, string?> variable,
+        bool sshCommandConfigured)
+    {
+        bool IsSet(string name) => !string.IsNullOrEmpty(variable(name));
+
+        if (sshCommandConfigured || IsSet("GIT_SSH_COMMAND") || IsSet("GIT_SSH") || IsSet("SSH_ASKPASS"))
+        {
+            return null;
+        }
+
+        return new Dictionary<string, string> { ["GIT_SSH_COMMAND"] = NonInteractiveSshCommand };
+    }
+
+    private async Task<Result<GitCommandResult>> RunAsync(
+        string workspacePath,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environment = null)
+    {
+        try
+        {
+            return await _runner.RunAsync(workspacePath, arguments, cancellationToken, environment);
         }
         catch (GitNotFoundException)
         {

@@ -78,7 +78,9 @@ public sealed class CommitChanges(IGitService git, CurrentWorkspace workspace)
 
         if (requested is null || requested.Count == 0)
         {
-            if (!status.HasChanges)
+            // A merge is concluded by a commit even when its result leaves no file changed (every
+            // conflict resolved to the current branch's side, or changes only outside the workspace).
+            if (!status.HasChanges && !status.IsMerging)
             {
                 error = GitErrors.NothingToCommit();
             }

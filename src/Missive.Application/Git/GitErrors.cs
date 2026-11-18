@@ -20,6 +20,7 @@ public static class GitErrors
     public const string NoRemoteCode = "git.no_remote";
     public const string PushRejectedCode = "git.push_rejected";
     public const string CommandFailedCode = "git.command_failed";
+    public const string TimedOutCode = "git.timed_out";
     public const string NothingToDiscardCode = "git.nothing_to_discard";
     public const string DiscardDuringMergeCode = "git.discard_during_merge";
     public const string NotMergingCode = "git.not_merging";
@@ -109,6 +110,12 @@ public static class GitErrors
 
     public static Error RemoteNotFound(string name) =>
         new(RemoteNotFoundCode, $"There is no remote named '{name}'.");
+
+    public static Error TimedOut(string command, TimeSpan timeout) =>
+        new(
+            TimedOutCode,
+            $"git {command} did not finish within {timeout.TotalMinutes:0.#} minute(s) and was stopped. "
+                + "If the remote uses SSH, make sure your key is loaded in an SSH agent and the host is in known_hosts.");
 
     public static Error CommandFailed(string command, string details) =>
         new(CommandFailedCode, WithDetails($"git {command} failed.", details));

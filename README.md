@@ -310,6 +310,13 @@ configuration, hooks and credential helpers apply as usual. In detail:
   yet is published to `origin` (or the only remote) and tracks it from then on.
   If the remote has commits you don't have, the push is rejected and you are
   asked to pull first.
+- Pull and push can't answer prompts, so a pull or push that hasn't finished
+  after 3 minutes is stopped and reported. Over SSH, Missive runs `ssh` in batch
+  mode, so a passphrase-protected key without an SSH agent or an unknown host key
+  fails with SSH's own error instead of waiting. It leaves SSH alone when you
+  have chosen how git runs it (`core.sshCommand`, `GIT_SSH_COMMAND`, `GIT_SSH`)
+  or set `SSH_ASKPASS`. Credential helpers such as Git Credential Manager still
+  open their sign-in windows.
 - **History**: the **History** tab lists the commits on the current branch that
   changed files in the workspace, newest first, 50 at a time (**Load more** for
   older ones). Choosing a commit opens it for review: its message, author and
@@ -337,7 +344,8 @@ choose:
   combine both sides. Missive refuses while the file still has
   `<<<<<<<` / `=======` / `>>>>>>>` conflict markers.
 
-Once every file is resolved, **Commit all** completes the merge; the commit
+Once every file is resolved, **Commit all** completes the merge (even when
+keeping your versions left no file changed); the commit
 message is pre-filled with git's merge message. **Abort merge** abandons the
 merge instead (`git merge --abort`) and puts your branch back as it was before
 the pull, after asking you to confirm.

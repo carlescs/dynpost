@@ -328,6 +328,76 @@ public sealed class GitCliServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task KeepingOurSideEverywhere_LeavesNoChanges_YetCommittingCompletesTheMerge()
+    {
+        var (alice, bob) = InitTwoClones();
+        Write(alice, "a.yaml", "name: From Alice\n");
+        TestGit.CommitAll(alice, "Alice");
+        TestGit.Run(alice, "push", "--quiet");
+        Write(bob, "a.yaml", "name: From Bob\n");
+        TestGit.CommitAll(bob, "Bob");
+        Assert.Equal(PullOutcome.Conflicted, (await _git.PullAsync(bob)).Value);
+
+        var ours = await _git.ResolveConflictAsync(bob, "a.yaml", ConflictResolution.Ours);
+
+        Assert.True(ours.IsSuccess, ours.Error?.Message);
+        var status = (await _git.GetStatusAsync(bob)).Value;
+        Assert.True(status.IsMerging);
+        Assert.Empty(status.Changes);
+
+        var commit = await _git.CommitAsync(bob, Message(status.MergeMessage!), paths: null);
+
+        Assert.True(commit.IsSuccess, commit.Error?.Message);
+        Assert.False((await _git.GetStatusAsync(bob)).Value.IsMerging);
+        Assert.Equal("name: From Bob\n", File.ReadAllText(Path.Combine(bob, "a.yaml")));
+    }
+
+    [Fact]
+    public async Task Pull_ThatHangs_IsStoppedAfterTheTimeout()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+        // An SSH remote whose "ssh" never answers, like one waiting on a prompt nobody can see.
+        TestGit.Run(repository, "config", "core.sshCommand", "sleep 60; :");
+        TestGit.Run(repository, "remote", "add", "origin", "ssh://git@example.invalid/repo.git");
+        TestGit.Run(repository, "config", "branch.main.remote", "origin");
+        TestGit.Run(repository, "config", "branch.main.merge", "refs/heads/main");
+        var git = new GitCliService("git", TimeSpan.FromSeconds(2));
+
+        var started = DateTime.UtcNow;
+        var pull = await git.PullAsync(repository);
+
+        Assert.Equal(GitErrors.TimedOutCode, pull.Error?.Code);
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(30));
+    }
+
+    [Theory]
+    [InlineData(false, null, true)]
+    [InlineData(true, null, false)]
+    [InlineData(false, "GIT_SSH_COMMAND", false)]
+    [InlineData(false, "GIT_SSH", false)]
+    [InlineData(false, "SSH_ASKPASS", false)]
+    public void NonInteractiveSsh_IsOnlyUsedWhenTheUserHasNotChosenHowToRunSsh(
+        bool sshCommandConfigured,
+        string? setVariable,
+        bool expected)
+    {
+        var environment = GitCliService.NonInteractiveSshEnvironment(
+            name => name == setVariable ? "custom" : null,
+            sshCommandConfigured);
+
+        if (expected)
+        {
+            Assert.Equal(GitCliService.NonInteractiveSshCommand, environment?["GIT_SSH_COMMAND"]);
+        }
+        else
+        {
+            Assert.Null(environment);
+        }
+    }
+
+    [Fact]
     public async Task ResolvingEveryFile_ThenCommitting_CompletesTheMerge()
     {
         var bob = await ConflictedMergeAsync();
