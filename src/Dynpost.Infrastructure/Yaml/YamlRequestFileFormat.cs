@@ -19,4 +19,6 @@ public sealed class YamlRequestFileFormat : IRequestFileFormat
             return new Error(ErrorCodes.InvalidFile, $"'{path}' is not a valid request file. {ex.Message}");
         }
     }
+
+    public string Format(HttpRequestDefinition request) => RequestYamlSerializer.Serialize(request);
 }

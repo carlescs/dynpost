@@ -88,6 +88,12 @@ internal static class BridgeMessageTypes
     /// <summary>Writes the request in the editor as a cURL command. Payload: <see cref="CopyAsCurlPayload"/>. Result: the command.</summary>
     public const string RequestCopyAsCurl = "request.copyAsCurl";
 
+    /// <summary>
+    /// Shows the YAML of a request's file: as on disk when a path is given, else as saving the
+    /// request in the editor would write it. Payload: <see cref="ViewRequestFilePayload"/>. Result: the text.
+    /// </summary>
+    public const string RequestViewFile = "request.viewFile";
+
     /// <summary>Shows a native file picker for a request body. Payload: none. Result: file path or null if cancelled.</summary>
     public const string RequestPickFile = "request.pickFile";
 
@@ -649,6 +655,8 @@ internal sealed record ExportWorkspacePayload(string Format, bool IncludeEnviron
 internal sealed record ImportCollectionPayload(string Folder = WorkspaceLayout.RequestsFolder);
 
 internal sealed record LoadRequestPayload(string Path);
+
+internal sealed record ViewRequestFilePayload(RequestDto Request, string? Path = null);
 internal sealed record PickRequestFilesPayload(bool Multiple = false);
 
 internal sealed record InspectRequestFilesPayload(IReadOnlyList<string> Paths);

@@ -195,6 +195,7 @@ internal static class Program
             .AddTransient<CopyAsCurl>()
             .AddTransient<ImportCollection>()
             .AddTransient<LoadRequest>()
+            .AddTransient<ViewRequestFile>()
             .AddTransient<InspectRequestFiles>()
             .AddTransient<CreateRequest>()
             .AddTransient<SaveRequest>()

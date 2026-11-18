@@ -24,6 +24,14 @@
     />
     Save
   </button>
+  <button
+    type="button"
+    class="flex items-center gap-2 rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100"
+    title="View the request's YAML file"
+    (click)="viewYaml()"
+  >
+    <fa-icon [icon]="faFileCode" /> YAML
+  </button>
   <div class="relative">
     <button
       type="button"

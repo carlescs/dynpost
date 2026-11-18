@@ -159,6 +159,10 @@ always relative to the workspace folder (`requests/users/get-user.yaml`), so a
 run plan refers to a request as `requests/users/get-user.yaml` and a body file as
 `uploads/report.pdf`. Dynpost leaves every other file and folder alone.
 
+The request editor's **YAML** button shows the request's file, read-only, with a
+**Copy** button: the file as it is on disk, or — while the request has unsaved
+changes or was never saved — the YAML that saving it would write.
+
 ### Changes made outside Dynpost
 
 Dynpost watches the workspace folder, so edits made elsewhere — in another

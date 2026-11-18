@@ -26,4 +26,17 @@ public class YamlRequestFileFormatTests
         Assert.Equal(ErrorCodes.InvalidFile, result.Error?.Code);
         Assert.Contains("broken.yaml", result.Error!.Message);
     }
+
+    [Fact]
+    public void Format_WritesWhatParseReads()
+    {
+        var path = WorkspacePath.Parse("requests/get-user.yaml");
+        var parsed = _format.Parse("name: Get user\nmethod: GET\nurl: https://example.com/users/1\n", path).Value;
+
+        var text = _format.Format(parsed);
+
+        Assert.Contains("url: https://example.com/users/1", text);
+        Assert.EndsWith("\n", text);
+        Assert.Equal(parsed.Url, _format.Parse(text, path).Value.Url);
+    }
 }

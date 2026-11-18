@@ -55,6 +55,44 @@ public class RequestUseCaseTests
     }
 
     [Fact]
+    public async Task ViewRequestFile_WithAPath_ReturnsTheFileAsOnDisk()
+    {
+        var path = WorkspacePath.Parse("requests/users/get-user.yaml");
+        _repository.FileExists(Root, path).Returns(true);
+        _repository.ReadTextAsync(Root, path, Arg.Any<CancellationToken>()).Returns("name: Get user\n");
+        var format = Substitute.For<IRequestFileFormat>();
+
+        var result = await new ViewRequestFile(_repository, format, _current)
+            .ExecuteAsync(RequestDtoFactory.Create(), "requests/users/get-user.yaml");
+
+        Assert.Equal("name: Get user\n", result.Value);
+        format.DidNotReceiveWithAnyArgs().Format(default!);
+    }
+
+    [Fact]
+    public async Task ViewRequestFile_WithoutAPath_FormatsTheEditedRequest()
+    {
+        var format = Substitute.For<IRequestFileFormat>();
+        format.Format(Arg.Any<HttpRequestDefinition>()).Returns("formatted");
+
+        var result = await new ViewRequestFile(_repository, format, _current)
+            .ExecuteAsync(RequestDtoFactory.Create(name: " "), null);
+
+        Assert.Equal("formatted", result.Value);
+        format.Received(1).Format(Arg.Is<HttpRequestDefinition>(r => r.Name == "Untitled" && r.Method == RequestMethod.Post));
+        await _repository.DidNotReceiveWithAnyArgs().ReadTextAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task ViewRequestFile_MissingFile_IsNotFound()
+    {
+        var result = await new ViewRequestFile(_repository, Substitute.For<IRequestFileFormat>(), _current)
+            .ExecuteAsync(RequestDtoFactory.Create(), "requests/gone.yaml");
+
+        Assert.Equal(ErrorCodes.NotFound, result.Error?.Code);
+    }
+
+    [Fact]
     public async Task CreateRequest_WritesASlugNamedFileInTheFolder()
     {
         var result = await new CreateRequest(_repository, _current).ExecuteAsync("requests/users", RequestDtoFactory.Create());
