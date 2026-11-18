@@ -148,6 +148,11 @@ export class AppHeader {
     this.dialogs.open(McpSettingsDialog, { ariaLabelledBy: 'mcp-settings-title' });
   }
 
+  protected restartToUpdate(): void {
+    this.menuOpen.set(false);
+    void this.updates.restart();
+  }
+
   protected showAbout(): void {
     this.menuOpen.set(false);
     this.dialogs.open(AboutDialog, { ariaLabelledBy: 'about-title' });

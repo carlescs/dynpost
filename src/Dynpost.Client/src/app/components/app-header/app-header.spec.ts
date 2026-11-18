@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Bridge } from '../../services/bridge';
 import { EnvironmentStore } from '../../services/environment-store';
 import { Shortcuts } from '../../services/shortcuts';
+import { UpdateStore } from '../../services/update-store';
 import { WindowFrame } from '../../services/window-frame';
 import { WorkspaceStore } from '../../services/workspace-store';
 import { AppHeader } from './app-header';
@@ -170,5 +171,32 @@ describe('AppHeader', () => {
     toggle.click();
 
     expect(setNative).toHaveBeenCalledWith(true);
+  });
+
+  it('offers a ready update in the settings menu and marks the settings button', () => {
+    const { fixture } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    const updates = TestBed.inject(UpdateStore);
+    const restart = vi.spyOn(updates, 'restart').mockResolvedValue();
+    const settings = root.querySelector<HTMLButtonElement>('[aria-label="Settings"]')!;
+    expect(root.querySelector('[data-update-badge]')).toBeNull();
+    expect(root.querySelector('[aria-label="Restart to update"]')).toBeNull();
+
+    updates.readyVersion.set('1.2.3');
+    fixture.detectChanges();
+
+    expect(settings.querySelector('[data-update-badge]')).not.toBeNull();
+    expect(settings.getAttribute('aria-describedby')).toBe('update-badge');
+    settings.click();
+    fixture.detectChanges();
+    const entry = [...root.querySelectorAll<HTMLButtonElement>('#settings-panel button')].find(
+      (b) => b.textContent?.includes('Restart to update'),
+    )!;
+    expect(entry.textContent).toContain('Dynpost 1.2.3 is ready');
+    entry.click();
+    fixture.detectChanges();
+
+    expect(restart).toHaveBeenCalled();
+    expect(root.querySelector('#settings-panel')).toBeNull();
   });
 });

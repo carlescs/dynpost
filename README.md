@@ -45,9 +45,9 @@ Download the file for your system from the
 | Linux (x64) | `Dynpost.AppImage` | Make it executable (`chmod +x Dynpost.AppImage`) and run it; keep it wherever you like. |
 
 Dynpost checks for a new version at startup and downloads it in the background;
-when one is ready, a **Restart to update** button appears in the header. Nothing
-is installed until you click it. Builds run from source don't update
-themselves.
+when one is ready, a badge appears on the settings button and the settings menu
+offers **Restart to update**. Nothing is installed until you click it. Builds run
+from source don't update themselves.
 
 Dates and times (response history, cookies, commits, branches, load runs) are
 shown in your operating system's regional format, including formats you
