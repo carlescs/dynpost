@@ -56,9 +56,7 @@
         } @else {
           <div
             class="group flex items-center"
-            [class.hover:bg-slate-200]="!state.dragged()"
-            [class.bg-slate-200]="state.isMenuOpen(node)"
-            [class.bg-sky-200]="state.isSelected(node)"
+            [class]="state.rowClasses(node, false, state.isMenuOpen(node))"
           >
             <button
               type="button"
@@ -135,9 +133,7 @@
       <button
         type="button"
         class="flex w-full min-w-0 items-center gap-1.5 py-0.5 pr-2 text-left"
-        [class.hover:bg-slate-200]="!state.dragged()"
-        [class.bg-sky-100]="node.path === state.store.activeId()"
-        [class.bg-sky-200]="state.isSelected(node)"
+        [class]="state.rowClasses(node, node.path === state.store.activeId())"
         [style.padding-left.px]="indent()"
         [title]="node.error ?? node.path"
         (click)="onRequestClick(node, $event)"
