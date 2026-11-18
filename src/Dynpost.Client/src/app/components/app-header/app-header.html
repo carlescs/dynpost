@@ -18,18 +18,6 @@
   }}</span>
 }
 <div class="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap">
-  @if (updates.readyVersion(); as version) {
-    <button
-      type="button"
-      class="flex items-center gap-2 rounded bg-emerald-600 px-2 py-1 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
-      [title]="'Dynpost ' + version + ' is ready. Restart to install it.'"
-      aria-label="Restart to update"
-      [disabled]="updates.restarting()"
-      (click)="updates.restart()"
-    >
-      <fa-icon [icon]="faCircleArrowUp" /><span class="hidden lg:inline">Restart to update</span>
-    </button>
-  }
   @if (store.workspace()) {
     <button
       type="button"
@@ -150,14 +138,27 @@
   <div class="relative">
     <button
       type="button"
-      class="flex size-7 items-center justify-center rounded text-slate-300 hover:bg-slate-700 hover:text-white"
-      title="Settings"
+      class="relative flex size-7 items-center justify-center rounded text-slate-300 hover:bg-slate-700 hover:text-white"
+      [title]="
+        updates.readyVersion()
+          ? 'Settings — Dynpost ' + updates.readyVersion() + ' is ready to install'
+          : 'Settings'
+      "
       aria-label="Settings"
+      [attr.aria-describedby]="updates.readyVersion() ? 'update-badge' : null"
       aria-controls="settings-panel"
       [attr.aria-expanded]="menuOpen()"
       (click)="menuOpen.set(!menuOpen())"
     >
       <fa-icon [icon]="faGear" />
+      @if (updates.readyVersion()) {
+        <span
+          id="update-badge"
+          class="absolute top-0.5 right-0.5 size-2 rounded-full bg-emerald-500 ring-2 ring-slate-900"
+          data-update-badge
+          ><span class="sr-only">Update ready</span></span
+        >
+      }
     </button>
     @if (menuOpen()) {
       <div
@@ -165,6 +166,22 @@
         data-no-drag
         class="adaptive absolute top-full right-0 z-50 mt-1 w-56 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
       >
+        @if (updates.readyVersion(); as version) {
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+            [title]="'Dynpost ' + version + ' is ready. Restart to install it.'"
+            [disabled]="updates.restarting()"
+            (click)="restartToUpdate()"
+          >
+            <fa-icon class="w-4 text-emerald-600" [icon]="faCircleArrowUp" />
+            <span class="flex flex-1 flex-col">
+              <span>Restart to update</span>
+              <span class="text-xs text-slate-500">Dynpost {{ version }} is ready</span>
+            </span>
+          </button>
+          <div class="my-1 border-t border-slate-200" role="separator"></div>
+        }
         <button
           type="button"
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
