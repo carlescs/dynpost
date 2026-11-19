@@ -181,6 +181,34 @@
             </span>
           </button>
           <div class="my-1 border-t border-slate-200" role="separator"></div>
+        } @else if (updates.canCheck) {
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-50"
+            title="Look for a newer version of Dynpost now"
+            [disabled]="updates.checking() || updates.supported() === false"
+            [attr.aria-describedby]="updateNote() ? 'update-check-note' : null"
+            (click)="updates.checkNow()"
+          >
+            <fa-icon
+              class="w-4 text-slate-500"
+              [icon]="faRotate"
+              [animation]="updates.checking() ? 'spin' : undefined"
+            />
+            <span class="flex flex-1 flex-col">
+              <span>{{ updates.checking() ? 'Checking for updates…' : 'Check for updates' }}</span>
+              @if (updateNote(); as note) {
+                <span
+                  id="update-check-note"
+                  class="text-xs"
+                  [class]="note.ok ? 'text-slate-500' : 'text-rose-700'"
+                  data-update-check-note
+                  >{{ note.message }}</span
+                >
+              }
+            </span>
+          </button>
+          <div class="my-1 border-t border-slate-200" role="separator"></div>
         }
         <button
           type="button"
