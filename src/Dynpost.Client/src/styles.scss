@@ -120,3 +120,72 @@
     background: var(--scrollbar-thumb-hover);
   }
 }
+
+// Monaco's right-click menu (code-editor.ts and code-diff-editor.ts, which render it outside a
+// shadow root), styled like the app's own menus: rounded slate border, white panel, slate-100
+// hover. Monaco colors the menu through these variables (inline styles on the menu, its scroll
+// wrapper and its items), so they are set on the context view that holds them all. The rules are
+// prefixed to beat Monaco's theme rules and the menu stylesheet it injects after this one.
+.monaco-component .context-view {
+  --vscode-menu-foreground: var(--color-slate-800);
+  --vscode-menu-background: var(--color-white);
+  --vscode-menu-border: var(--color-slate-300);
+  // The hovered or focused item.
+  --vscode-list-hoverForeground: var(--color-slate-800);
+  --vscode-list-hoverBackground: var(--color-slate-100);
+  --vscode-menu-selectionBorder: transparent;
+  --vscode-menu-separatorBackground: var(--color-slate-200);
+  --vscode-disabledForeground: var(--color-slate-400);
+  --vscode-cornerRadius-large: var(--radius-sm);
+  --vscode-shadow-lg: var(--shadow-lg);
+  --vscode-widget-shadow: transparent; // Monaco adds a glow in this color to the shadow.
+
+  .monaco-menu {
+    min-width: 14rem;
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+  }
+
+  .monaco-menu .monaco-action-bar.vertical {
+    padding: 0.25rem 0;
+
+    .action-menu-item {
+      height: 2rem;
+      margin: 0;
+      border-radius: 0;
+    }
+
+    .action-label:not(.separator),
+    .keybinding {
+      padding: 0 0.75rem;
+      font-size: inherit;
+    }
+
+    .keybinding {
+      color: var(--color-slate-500);
+      font-size: var(--text-xs);
+      opacity: 1;
+    }
+
+    .action-label.separator {
+      margin: 0.25rem 0 !important; // Monaco's own margin is !important too.
+      border-bottom-color: var(--vscode-menu-separatorBackground);
+    }
+
+    // The keyboard-focus ring, in the app's focus color.
+    .action-menu-item:focus-visible {
+      outline: 2px solid var(--color-sky-500) !important;
+      outline-offset: -2px !important;
+    }
+  }
+}
+
+// `bg-white` panels are slate-900 in dark mode (tailwind.css); --color-white itself isn't re-mapped.
+// slate-100 becomes slate-900 too, so the hover takes the next step up to stay visible.
+.dark .monaco-component .context-view {
+  --vscode-menu-background: var(--raw-slate-900);
+  --vscode-list-hoverBackground: var(--raw-slate-800);
+}

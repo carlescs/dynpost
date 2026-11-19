@@ -117,6 +117,8 @@ export class CodeDiffEditor {
       scrollBeyondLastLine: false,
       renderLineHighlight: 'none',
       fixedOverflowWidgets: true,
+      // Render the right-click menu in the page, not a shadow root, so styles.scss can style it.
+      useShadowDOM: false,
       theme: this.themes.monacoTheme(),
     });
     diffEditor.setModel({ original, modified });

@@ -154,6 +154,8 @@ export class CodeEditor {
       renderLineHighlight: this.readOnly() ? 'none' : 'line',
       tabSize: 2,
       fixedOverflowWidgets: true,
+      // Render the right-click menu in the page, not a shadow root, so styles.scss can style it.
+      useShadowDOM: false,
       theme: this.themes.monacoTheme(),
     });
     this.variableDecorations = editor.createDecorationsCollection();
