@@ -20,6 +20,7 @@ import {
 import { ThemeStore } from '../../services/theme-store';
 import { jsonPathAt } from '../../models/json-path';
 import { copyText } from '../../models/clipboard';
+import { canPrettyPrint, prettyPrint } from '../../models/pretty-print';
 import { Monaco, loadMonaco } from './monaco-loader';
 
 /**
@@ -49,6 +50,8 @@ export class CodeEditor {
   readonly valueChange = output<string>();
   /** Emits on Ctrl+Enter (Cmd+Enter on macOS), which Monaco would otherwise consume. */
   readonly submit = output<void>();
+  /** Emits why the text couldn't be prettified (Shift+Alt+F or the context menu). */
+  readonly prettifyFailed = output<string>();
 
   protected readonly ready = signal(false);
   private readonly container = viewChild.required<ElementRef<HTMLElement>>('container');
@@ -57,6 +60,8 @@ export class CodeEditor {
   /** Set while the text is replaced from the input, so the change isn't echoed back. */
   private applyingInput = false;
   private variableDecorations: editor.IEditorDecorationsCollection | null = null;
+  /** Whether "Prettify" is offered: an editable JSON or XML text. */
+  private canPrettifyKey: { set(value: boolean): void } | null = null;
   private destroyed = false;
   private readonly themes = inject(ThemeStore);
 
@@ -97,6 +102,10 @@ export class CodeEditor {
       this.highlightVariables();
       this.variables();
       this.updateVariableDecorations();
+    });
+
+    effect(() => {
+      this.canPrettifyKey?.set(!this.readOnly() && canPrettyPrint(this.language()));
     });
 
     effect(() => {
@@ -155,6 +164,22 @@ export class CodeEditor {
         if (path) void copyText(path);
       },
     });
+    this.canPrettifyKey = editor.createContextKey(
+      'dynpost.canPrettify',
+      !this.readOnly() && canPrettyPrint(this.language()),
+    );
+    editor.addAction({
+      id: 'dynpost.prettify',
+      label: 'Prettify',
+      contextMenuGroupId: '1_modification',
+      precondition: 'dynpost.canPrettify',
+      // Replaces Monaco's own Format Document, which doesn't know XML or `{{variables}}`.
+      keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF],
+      run: () => {
+        const error = this.prettify();
+        if (error) this.prettifyFailed.emit(error);
+      },
+    });
     this.editor = editor;
     this.updateVariableDecorations();
     this.ready.set(true);
@@ -164,6 +189,33 @@ export class CodeEditor {
   find(): void {
     this.editor?.focus();
     void this.editor?.getAction('actions.find')?.run();
+  }
+
+  /**
+   * Re-indents the JSON or XML text as one undoable edit. Returns why it couldn't, or `null` when
+   * it did (or the text was already pretty). `{{variable}}` references are kept when the editor
+   * highlights them.
+   */
+  prettify(): string | null {
+    const language = this.language();
+    if (!canPrettyPrint(language)) return 'Only JSON and XML can be prettified.';
+    const model = this.editor?.getModel();
+    const text = model?.getValue() ?? this.value();
+    const pretty = prettyPrint(text, language, { variables: this.highlightVariables() });
+    if (pretty === null) {
+      return `The text is not valid ${language.toUpperCase()}, so it was left as it is.`;
+    }
+    if (pretty === text) return null;
+    if (!this.editor || !model) {
+      this.valueChange.emit(pretty);
+      return null;
+    }
+    this.editor.pushUndoStop();
+    this.editor.executeEdits('dynpost.prettify', [
+      { range: model.getFullModelRange(), text: pretty },
+    ]);
+    this.editor.pushUndoStop();
+    return null;
   }
 
   /** Marks every `{{variable}}` reference (styled by `.variable-highlight` in styles.scss). */

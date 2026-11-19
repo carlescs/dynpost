@@ -9,12 +9,14 @@ import {
   linkedSignal,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faBan,
   faFileCode,
   faFloppyDisk,
+  faIndent,
   faPaperPlane,
   faSpinner,
   faTerminal,
@@ -34,6 +36,8 @@ import {
 import { EnvironmentStore } from '../../../../services/environment-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
+import { requestBodyLanguage } from '../../models/body-language';
+import { canPrettyPrint } from '../../../../models/pretty-print';
 import { KeyValueTable } from '../../../../components/key-value-table/key-value-table';
 import { ResponseViewer } from '../response-viewer/response-viewer';
 import { VariableInput } from '../../../../components/variable-input/variable-input';
@@ -147,6 +151,7 @@ export class RequestEditor {
   protected readonly faFloppyDisk = faFloppyDisk;
   protected readonly faSpinner = faSpinner;
   protected readonly faBan = faBan;
+  protected readonly faIndent = faIndent;
   protected readonly captureExample = '{{token}}';
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -271,6 +276,23 @@ export class RequestEditor {
 
   protected showError(error: unknown): void {
     this.store.error.set(error instanceof Error ? error.message : String(error));
+  }
+
+  /** The Monaco language of a JSON or raw text body (raw: from its `Content-Type`). */
+  protected readonly bodyLanguage = computed(() => {
+    const doc = this.document();
+    return requestBodyLanguage(doc.bodyType, doc.body, doc.headers, this.inherited()?.headers);
+  });
+
+  protected readonly canPrettifyBody = computed(() => canPrettyPrint(this.bodyLanguage()));
+
+  private readonly bodyEditor = viewChild<CodeEditor>('bodyEditor');
+  private readonly variablesEditor = viewChild<CodeEditor>('variablesEditor');
+
+  /** Re-indents the JSON or XML body (or the GraphQL variables); says so when it isn't valid. */
+  protected prettify(editor: 'body' | 'variables'): void {
+    const error = (editor === 'body' ? this.bodyEditor() : this.variablesEditor())?.prettify();
+    if (error) this.showError(error);
   }
 
   /** The fields of a form or urlencoded body, also when an older file keeps them as text. */

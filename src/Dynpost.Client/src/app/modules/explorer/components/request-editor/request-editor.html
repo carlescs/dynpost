@@ -241,6 +241,16 @@
             {{ bodyLabels[type] }}
           </label>
         }
+        @if (canPrettifyBody()) {
+          <button
+            type="button"
+            class="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200"
+            [title]="'Re-indent the ' + bodyLanguage().toUpperCase() + ' body (Shift+Alt+F)'"
+            (click)="prettify('body')"
+          >
+            <fa-icon [icon]="faIndent" /> Prettify
+          </button>
+        }
       </div>
       @if (doc.bodyType === 'none') {
         <p class="mt-3 text-sm text-slate-500">This request does not have a body.</p>
@@ -256,8 +266,19 @@
           (valueChange)="patch({ body: $event })"
           (submit)="send()"
         />
-        <label class="mt-2 text-xs text-slate-500">Variables (JSON)</label>
+        <div class="mt-2 flex items-center text-xs text-slate-500">
+          <label>Variables (JSON)</label>
+          <button
+            type="button"
+            class="ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-slate-600 hover:bg-slate-200"
+            title="Re-indent the variables (Shift+Alt+F)"
+            (click)="prettify('variables')"
+          >
+            <fa-icon [icon]="faIndent" /> Prettify
+          </button>
+        </div>
         <app-code-editor
+          #variablesEditor
           class="mt-1 min-h-20 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
           ariaLabel="GraphQL variables"
           [value]="doc.bodyVariables"
@@ -265,6 +286,7 @@
           [highlightVariables]="true"
           [variables]="variables()"
           (valueChange)="patch({ bodyVariables: $event })"
+          (prettifyFailed)="showError($event)"
           (submit)="send()"
         />
       } @else if (doc.bodyType === 'form' || doc.bodyType === 'urlencoded') {
@@ -305,13 +327,15 @@
           }
         } @else {
           <app-code-editor
+            #bodyEditor
             class="mt-2 min-h-24 flex-1 overflow-hidden rounded border border-slate-300 focus-within:border-sky-500"
             ariaLabel="Request body"
             [value]="doc.body"
-            [language]="doc.bodyType === 'json' ? 'json' : 'plaintext'"
+            [language]="bodyLanguage()"
             [highlightVariables]="true"
             [variables]="variables()"
             (valueChange)="patch({ body: $event })"
+            (prettifyFailed)="showError($event)"
             (submit)="send()"
           />
         }
