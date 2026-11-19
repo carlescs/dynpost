@@ -199,4 +199,81 @@ describe('AppHeader', () => {
     expect(restart).toHaveBeenCalled();
     expect(root.querySelector('#settings-panel')).toBeNull();
   });
+  function openSettings(fixture: { nativeElement: HTMLElement; detectChanges(): void }) {
+    fixture.nativeElement.querySelector<HTMLButtonElement>('[aria-label="Settings"]')!.click();
+    fixture.detectChanges();
+  }
+
+  const checkEntry = (root: HTMLElement) =>
+    [...root.querySelectorAll<HTMLButtonElement>('#settings-panel button')].find((b) =>
+      b.textContent?.includes('for updates'),
+    );
+
+  it('checks for updates on demand and shows the result', async () => {
+    const { fixture, send } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    let answer!: (status: unknown) => void;
+    send.mockImplementation((type: string) =>
+      type === 'update.check' ? new Promise((resolve) => (answer = resolve)) : Promise.resolve([]),
+    );
+    openSettings(fixture);
+
+    checkEntry(root)!.click();
+    fixture.detectChanges();
+    expect(send).toHaveBeenCalledWith('update.check');
+    expect(checkEntry(root)!.disabled).toBe(true);
+    expect(checkEntry(root)!.textContent).toContain('Checking for updates…');
+
+    answer({ state: 'upToDate', currentVersion: '1.0.0' });
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+    expect(checkEntry(root)!.disabled).toBe(false);
+    expect(root.querySelector('[data-update-check-note]')!.textContent).toContain(
+      'Dynpost 1.0.0 is up to date',
+    );
+  });
+
+  it('offers the restart when a check on demand downloads an update', async () => {
+    const { fixture, send } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    send.mockImplementation(async (type: string) =>
+      type === 'update.check' ? { state: 'ready', currentVersion: '1.0.0', version: '1.1.0' } : [],
+    );
+    openSettings(fixture);
+
+    checkEntry(root)!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(checkEntry(root)).toBeUndefined();
+    expect(root.querySelector('#settings-panel')!.textContent).toContain('Dynpost 1.1.0 is ready');
+  });
+
+  it('shows why a check on demand failed', async () => {
+    const { fixture, send } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    send.mockImplementation(async (type: string) => {
+      if (type === 'update.check') throw new Error('Could not check for updates: offline');
+      return [];
+    });
+    openSettings(fixture);
+
+    checkEntry(root)!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const note = root.querySelector('[data-update-check-note]')!;
+    expect(note.textContent).toContain('offline');
+    expect(note.classList).toContain('text-rose-700');
+  });
+
+  it('disables the check for copies that cannot update themselves', () => {
+    const { fixture } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    TestBed.inject(UpdateStore).supported.set(false);
+    openSettings(fixture);
+
+    expect(checkEntry(root)!.disabled).toBe(true);
+    expect(checkEntry(root)!.textContent).toContain('Only installed copies can update themselves');
+  });
 });

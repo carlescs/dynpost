@@ -47,8 +47,9 @@ Download the file for your system from the
 
 Dynpost checks for a new version at startup and downloads it in the background;
 when one is ready, a badge appears on the settings button and the settings menu
-offers **Restart to update**. Nothing is installed until you click it. Builds run
-from source don't update themselves.
+offers **Restart to update**. To look again without restarting, choose **Check
+for updates** in the settings menu. Nothing is installed until you click
+**Restart to update**. Builds run from source don't update themselves.
 
 Dates and times (response history, cookies, commits, branches, load runs) are
 shown in your operating system's regional format, including formats you

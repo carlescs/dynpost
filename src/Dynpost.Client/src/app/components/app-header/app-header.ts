@@ -15,6 +15,7 @@ import {
   faMagnifyingGlass,
   faPaperPlane,
   faRobot,
+  faRotate,
   faWindowMaximize,
   faWindowMinimize,
   faWindowRestore,
@@ -92,6 +93,15 @@ export class AppHeader {
   protected readonly faCodeBranch = faCodeBranch;
   protected readonly faXmark = faXmark;
   protected readonly faRobot = faRobot;
+  protected readonly faRotate = faRotate;
+  /** The note under "Check for updates": why it is disabled, or what the last check found. */
+  protected readonly updateNote = computed(() =>
+    this.updates.supported() === false
+      ? { ok: true, message: 'Only installed copies can update themselves' }
+      : this.updates.checking()
+        ? null
+        : this.updates.lastCheck(),
+  );
   protected readonly faWindowMinimize = faWindowMinimize;
   protected readonly faWindowMaximize = faWindowMaximize;
   protected readonly faWindowRestore = faWindowRestore;
