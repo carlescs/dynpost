@@ -150,16 +150,6 @@ export class ExplorerView {
     return [this.compareItem(selection[0]), this.compareItem(selection[1])];
   }
 
-  protected selectForCompare(node: WorkspaceNode): void {
-    this.closeMenu();
-    this.compare.select(this.compareItem(node));
-  }
-
-  protected compareWithSelected(node: WorkspaceNode): void {
-    this.closeMenu();
-    void this.compare.compareWithSelected(this.compareItem(node));
-  }
-
   protected compareSelection([left, right]: [CompareItem, CompareItem]): void {
     this.closeMenu();
     void this.compare.compare(left, right);

@@ -273,8 +273,8 @@
           />
           {{ menu.node.localOnly ? 'Share through git' : 'Keep on this computer only' }}
         </button>
-        <div role="separator" class="my-1 border-t border-slate-200"></div>
         @if (selectedPair(menu.node); as pair) {
+          <div role="separator" class="my-1 border-t border-slate-200"></div>
           <button
             type="button"
             role="menuitem"
@@ -285,29 +285,6 @@
             Compare selected
           </button>
         }
-        @if (compare.canCompareWith(compareItem(menu.node))) {
-          <button
-            type="button"
-            role="menuitem"
-            class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
-            [title]="compare.selected()?.path ?? ''"
-            (click)="compareWithSelected(menu.node)"
-          >
-            <fa-icon class="w-4 text-slate-500" [icon]="faCodeCompare" />
-            <span class="min-w-0 flex-1 truncate"
-              >Compare with “{{ compare.selected()?.name }}”</span
-            >
-          </button>
-        }
-        <button
-          type="button"
-          role="menuitem"
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
-          (click)="selectForCompare(menu.node)"
-        >
-          <fa-icon class="w-4 text-slate-500" [icon]="faCodeCompare" />
-          Select for compare
-        </button>
       }
       <div role="separator" class="my-1 border-t border-slate-200"></div>
       <button

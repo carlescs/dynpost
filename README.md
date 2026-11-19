@@ -780,10 +780,9 @@ stops after the first 1000 matching lines (refine the search to see the rest).
 
 ## Comparing requests and run plans
 
-To compare two requests, right-click one in the explorer and choose **Select
-for compare**, then right-click the other and choose **Compare with "…"**. Or
-select both with Ctrl+click (Cmd+click on macOS) and choose **Compare selected**.
-Run plans are compared the same way from the **Load runs** view.
+To compare two requests, select both in the explorer with Ctrl+click (Cmd+click
+on macOS) or Shift+click, then right-click one of them and choose **Compare
+selected**. The option only appears when exactly two requests are selected. Run plans are compared the same way from the **Load runs** view.
 
 The comparison replaces the editor area until you close it (✕ or Ctrl+W) or
 open a tab. It can be shown two ways:
