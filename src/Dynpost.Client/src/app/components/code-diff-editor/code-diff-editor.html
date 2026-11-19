@@ -1,4 +1,6 @@
-<div #container class="absolute inset-0"></div>
+<!-- `monaco-component` gives the container Monaco's theme colors, which its right-click menu
+     (attached here, outside `.monaco-editor`) needs for its background, border and highlight. -->
+<div #container class="monaco-component absolute inset-0"></div>
 @if (!ready()) {
   <p class="absolute inset-0 p-2 text-xs text-slate-400">Loading the editor…</p>
 }
