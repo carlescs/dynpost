@@ -1,16 +1,10 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, input, linkedSignal } from '@angular/core';
-import { CodeDiffEditor } from '../../../../components/code-diff-editor/code-diff-editor';
-import {
-  AUTH_LABELS,
-  BODY_LABELS,
-  METHOD_COLORS,
-  RequestContent,
-} from '../../../../models/workspace';
+import { CodeDiffEditor } from '../code-diff-editor/code-diff-editor';
+import { AUTH_LABELS, BODY_LABELS, METHOD_COLORS, RequestContent } from '../../models/workspace';
 import {
   EMPTY_REQUEST,
   RequestChanges,
-  RowChange,
   authFields,
   authValue,
   captureRows,
@@ -21,16 +15,10 @@ import {
   textChange,
 } from '../../models/request-diff-model';
 import { TextChange } from '../text-change/text-change';
-import { bodyText } from '../../../../models/form-fields';
+import { RowDiffTable } from '../row-diff-table/row-diff-table';
+import { bodyText } from '../../models/form-fields';
 
 type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'settings' | 'capture' | 'docs';
-
-const ROW_STYLES: Record<RowChange['kind'], { marker: string; row: string; label: string }> = {
-  same: { marker: '', row: '', label: 'Unchanged' },
-  added: { marker: '+', row: 'bg-emerald-50 text-emerald-900', label: 'Added' },
-  removed: { marker: '−', row: 'bg-rose-50 text-rose-900 line-through', label: 'Removed' },
-  changed: { marker: '~', row: 'bg-amber-50', label: 'Changed' },
-};
 
 /**
  * Two versions of a request laid out like the request editor, read-only, with what changed
@@ -38,7 +26,7 @@ const ROW_STYLES: Record<RowChange['kind'], { marker: string; row: string; label
  */
 @Component({
   selector: 'app-request-diff',
-  imports: [NgTemplateOutlet, TextChange, CodeDiffEditor],
+  imports: [NgTemplateOutlet, TextChange, CodeDiffEditor, RowDiffTable],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './request-diff.html',
 })
@@ -100,10 +88,6 @@ export class RequestDiff {
 
   protected methodColor(request: RequestContent): string {
     return METHOD_COLORS[request.method];
-  }
-
-  protected rowStyle(change: RowChange): (typeof ROW_STYLES)[RowChange['kind']] {
-    return ROW_STYLES[change.kind];
   }
 
   protected changeCount(c: RequestChanges, tab: RequestTab): number | boolean {

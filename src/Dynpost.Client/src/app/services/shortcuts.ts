@@ -11,6 +11,7 @@ import { GitHistoryStore } from './git-history-store';
 import { GitStore } from './git-store';
 import { RunStore, isRunPlanDirty, isRunPlanRunning } from './run-store';
 import { WorkspaceStore } from './workspace-store';
+import { CompareStore } from './compare-store';
 import { SHORTCUTS, ShortcutAction, matches } from '../models/shortcuts';
 
 /** The app-wide keyboard shortcuts, handled from the shell's `document:keydown` listener. */
@@ -27,6 +28,7 @@ export class Shortcuts {
   private readonly folders = inject(FolderSettingsStore);
   private readonly git = inject(GitStore);
   private readonly history = inject(GitHistoryStore);
+  private readonly compare = inject(CompareStore);
   private quitting = false;
 
   /** The shortcuts this host offers. */
@@ -97,27 +99,30 @@ export class Shortcuts {
     });
   }
 
-  /** Whether a git screen (conflict, commit review or diff) covers the editor tabs. */
+  /** Whether a git screen (conflict, commit review or diff) or a comparison covers the editor tabs. */
   private get gitScreen(): boolean {
-    return !!this.git.conflict() || this.history.reviewing() || !!this.git.diff();
+    return (
+      !!this.git.conflict() || this.history.reviewing() || !!this.git.diff() || this.compare.open()
+    );
   }
 
   private async save(): Promise<void> {
     const draft = this.environments.draft();
     const plan = this.runs.draft();
     const folder = this.folders.draft();
-    const editing = !this.git.conflict() && !this.git.diff();
+    const editing = !this.git.conflict() && !this.git.diff() && !this.compare.open();
     if (draft && editing) await this.environments.save(draft.key);
     else if (plan && editing) await this.runs.save(plan.key);
     else if (folder && editing) await this.folders.save(folder.key);
     else await this.workspace.saveActive();
   }
 
-  /** Closes the screen in front (a conflict, commit or diff), or else the active tab. */
+  /** Closes the screen in front (a conflict, commit, diff or comparison), or else the active tab. */
   private async close(): Promise<void> {
     if (this.git.conflict()) return this.git.closeConflict();
     if (this.history.reviewing()) return this.history.close();
     if (this.git.diff()) return this.git.closeDiff();
+    if (this.compare.open()) return this.compare.close();
     const key = this.workspace.activeTab();
     if (!key) return;
     const doc = this.workspace.documents().find((d) => d.key === key);

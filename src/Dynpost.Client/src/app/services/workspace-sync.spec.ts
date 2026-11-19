@@ -5,6 +5,7 @@ import { EnvironmentStore } from './environment-store';
 import { GitStore } from './git-store';
 import { RunStore } from './run-store';
 import { WorkspaceStore } from './workspace-store';
+import { CompareStore } from './compare-store';
 import { WorkspaceSync } from './workspace-sync';
 
 describe('WorkspaceSync', () => {
@@ -34,8 +35,10 @@ describe('WorkspaceSync', () => {
       followStarted: vi.fn().mockResolvedValue(undefined),
       open: vi.fn().mockResolvedValue(undefined),
     };
+    const compare = { reload: vi.fn().mockResolvedValue(undefined) };
     TestBed.configureTestingModule({
       providers: [
+        { provide: CompareStore, useValue: compare },
         { provide: Bridge, useValue: { isDesktop: true, on } },
         { provide: WorkspaceStore, useValue: workspace },
         { provide: EnvironmentStore, useValue: environments },
@@ -53,15 +56,16 @@ describe('WorkspaceSync', () => {
       emit('workspace.filesChanged', { paths });
       await new Promise((resolve) => setTimeout(resolve));
     };
-    return { on, stop, emit, workspace, environments, git, runs, changed, filesChanged };
+    return { on, stop, emit, workspace, environments, git, runs, compare, changed, filesChanged };
   }
 
   it('re-reads the tree, the changed files, the environments, the run plans and the git status', async () => {
-    const { on, workspace, environments, git, runs, changed } = setup();
+    const { on, workspace, environments, git, runs, compare, changed } = setup();
     expect(on).toHaveBeenCalledWith('workspace.changed', expect.any(Function));
 
     await changed(['requests/get-user.yaml']);
 
+    expect(compare.reload).toHaveBeenCalledWith(['requests/get-user.yaml']);
     expect(workspace.refresh).toHaveBeenCalled();
     expect(workspace.reloadFromDisk).toHaveBeenCalledWith(['requests/get-user.yaml']);
     expect(environments.refresh).toHaveBeenCalledWith(['requests/get-user.yaml']);

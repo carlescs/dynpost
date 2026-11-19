@@ -1,0 +1,65 @@
+<table class="w-full table-fixed border-collapse text-sm">
+  <thead>
+    <tr class="text-left text-xs text-slate-500">
+      <th class="w-6"><span class="sr-only">Change</span></th>
+      @if (toggles()) {
+        <th class="w-8"><span class="sr-only">Enabled</span></th>
+      }
+      <th class="px-2 py-1 font-medium">{{ label() }}</th>
+      <th class="px-2 py-1 font-medium">{{ valueLabel() }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (change of rows(); track $index) {
+      @let style = rowStyle(change);
+      <tr class="border-t border-slate-200 align-top" [class]="style.row">
+        <td
+          class="py-1 text-center font-mono font-bold"
+          [title]="style.label"
+          [class.text-emerald-600]="change.kind === 'added'"
+          [class.text-rose-600]="change.kind === 'removed'"
+          [class.text-amber-600]="change.kind === 'changed'"
+        >
+          {{ style.marker }}
+        </td>
+        @if (toggles()) {
+          <td class="py-1 text-center">
+            <input
+              type="checkbox"
+              disabled
+              [checked]="change.row.enabled"
+              [attr.aria-label]="(change.row.enabled ? 'Enabled: ' : 'Disabled: ') + change.row.key"
+            />
+            @if (change.kind === 'changed' && change.before.enabled !== change.row.enabled) {
+              <span class="block text-[10px] leading-3 text-amber-700">{{
+                change.row.enabled ? 'enabled' : 'disabled'
+              }}</span>
+            }
+          </td>
+        }
+        <td class="px-2 py-1 font-mono">
+          @if (change.kind === 'changed') {
+            <app-text-change [before]="change.before.key" [after]="change.row.key" />
+          } @else {
+            <span class="break-all">{{ change.row.key }}</span>
+          }
+        </td>
+        <td class="px-2 py-1 font-mono">
+          @if (change.kind === 'changed') {
+            <app-text-change
+              [before]="change.before.value"
+              [after]="change.row.value"
+              placeholder="(empty)"
+            />
+          } @else {
+            <span class="break-all">{{ change.row.value }}</span>
+          }
+        </td>
+      </tr>
+    } @empty {
+      <tr class="border-t border-slate-200">
+        <td [attr.colspan]="toggles() ? 4 : 3" class="px-2 py-2 text-slate-500">None.</td>
+      </tr>
+    }
+  </tbody>
+</table>

@@ -14,6 +14,7 @@ import {
   faArrowUpRightFromSquare,
   faArrowsRotate,
   faClone,
+  faCodeCompare,
   faEllipsis,
   faFileExport,
   faFileImport,
@@ -34,7 +35,8 @@ import { Dialogs } from '../../../../services/dialogs';
 import { openCloneDialog } from '../../../../components/clone-dialog/open-clone-dialog';
 import { CurlImportDialog } from '../curl-import-dialog/curl-import-dialog';
 import { FolderSettingsStore } from '../../../../services/folder-settings-store';
-import { REQUESTS_FOLDER } from '../../../../models/workspace';
+import { REQUESTS_FOLDER, WorkspaceNode } from '../../../../models/workspace';
+import { CompareItem, CompareStore } from '../../../../services/compare-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { TreeState } from '../../../../services/tree-state';
 import { ExplorerState } from '../../services/explorer-state';
@@ -57,6 +59,7 @@ export class ExplorerView {
   protected readonly interchange = inject(InterchangeStore);
   private readonly dialogs = inject(Dialogs);
   private readonly folders = inject(FolderSettingsStore);
+  protected readonly compare = inject(CompareStore);
   protected readonly root = REQUESTS_FOLDER;
   protected readonly faSliders = faSliders;
   protected readonly faTerminal = faTerminal;
@@ -66,6 +69,7 @@ export class ExplorerView {
   protected readonly includeEnvironments = signal(true);
   protected readonly faPlus = faPlus;
   protected readonly faClone = faClone;
+  protected readonly faCodeCompare = faCodeCompare;
   protected readonly faLaptop = faLaptop;
   protected readonly faPen = faPen;
   protected readonly faShareNodes = faShareNodes;
@@ -132,6 +136,33 @@ export class ExplorerView {
   protected openFolderSettings(path: string): void {
     this.closeMenu();
     void this.folders.open(path);
+  }
+
+  protected compareItem(node: WorkspaceNode): CompareItem {
+    return { kind: 'request', path: node.path, name: node.name };
+  }
+
+  /** The two requests selected with Ctrl or Shift, when `node` is one of them. */
+  protected selectedPair(node: WorkspaceNode): [CompareItem, CompareItem] | null {
+    const selection = this.state.selection();
+    if (selection.length !== 2 || selection.some((n) => n.kind !== 'request')) return null;
+    if (!selection.some((n) => n.path === node.path)) return null;
+    return [this.compareItem(selection[0]), this.compareItem(selection[1])];
+  }
+
+  protected selectForCompare(node: WorkspaceNode): void {
+    this.closeMenu();
+    this.compare.select(this.compareItem(node));
+  }
+
+  protected compareWithSelected(node: WorkspaceNode): void {
+    this.closeMenu();
+    void this.compare.compareWithSelected(this.compareItem(node));
+  }
+
+  protected compareSelection([left, right]: [CompareItem, CompareItem]): void {
+    this.closeMenu();
+    void this.compare.compare(left, right);
   }
 
   protected cloneRepository(): void {

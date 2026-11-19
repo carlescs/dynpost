@@ -20,6 +20,8 @@ import { RequestEditor } from './modules/explorer/components/request-editor/requ
 import { CommitView } from './modules/git/components/commit-view/commit-view';
 import { ConflictView } from './modules/git/components/conflict-view/conflict-view';
 import { DiffView } from './modules/git/components/diff-view/diff-view';
+import { CompareView } from './components/compare-view/compare-view';
+import { CompareStore } from './services/compare-store';
 import { GitHistoryStore } from './services/git-history-store';
 import { GitStore } from './services/git-store';
 import { ActivityBar } from './components/activity-bar/activity-bar';
@@ -47,6 +49,7 @@ import { WorkspaceSync } from './services/workspace-sync';
     ConflictView,
     CommitView,
     DiffView,
+    CompareView,
     EnvironmentEditor,
     RunEditor,
     FolderEditor,
@@ -70,6 +73,7 @@ export class App implements OnInit {
   protected readonly environments = inject(EnvironmentStore);
   protected readonly runs = inject(RunStore);
   protected readonly folders = inject(FolderSettingsStore);
+  protected readonly compare = inject(CompareStore);
   protected readonly interchange = inject(InterchangeStore);
   private readonly updates = inject(UpdateStore);
   private readonly theme = inject(ThemeStore);

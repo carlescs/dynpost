@@ -67,6 +67,11 @@
       @defer (on immediate) {
         <app-diff-view />
       }
+    } @else if (compare.open()) {
+      <!-- Lazy chunk, like the diff view: only needed once two items are compared. -->
+      @defer (on immediate) {
+        <app-compare-view />
+      }
     } @else {
       @if (store.tabs().length) {
         <app-document-tabs />

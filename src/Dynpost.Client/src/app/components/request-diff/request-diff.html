@@ -112,14 +112,10 @@
 <section class="flex min-h-32 flex-1 flex-col overflow-y-auto px-4 py-2">
   @switch (activeTab()) {
     @case ('params') {
-      <ng-container
-        *ngTemplateOutlet="table; context: { $implicit: paramRows(), label: 'Parameter' }"
-      />
+      <app-row-diff-table [rows]="paramRows()" label="Parameter" />
     }
     @case ('headers') {
-      <ng-container
-        *ngTemplateOutlet="table; context: { $implicit: headerRows(), label: 'Header' }"
-      />
+      <app-row-diff-table [rows]="headerRows()" label="Header" />
     }
     @case ('auth') {
       <div class="grid max-w-2xl grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-2 text-sm">
@@ -185,14 +181,10 @@
       }
     }
     @case ('settings') {
-      <ng-container
-        *ngTemplateOutlet="table; context: { $implicit: settingChanges(), label: 'Setting' }"
-      />
+      <app-row-diff-table [rows]="settingChanges()" label="Setting" />
     }
     @case ('capture') {
-      <ng-container
-        *ngTemplateOutlet="table; context: { $implicit: captureChanges(), label: 'Variable' }"
-      />
+      <app-row-diff-table [rows]="captureChanges()" label="Variable" />
     }
     @case ('docs') {
       @if (!a.description && !b.description) {
@@ -210,67 +202,3 @@
     }
   }
 </section>
-
-<ng-template #table let-rows let-label="label">
-  <table class="w-full table-fixed border-collapse text-sm">
-    <thead>
-      <tr class="text-left text-xs text-slate-500">
-        <th class="w-6"><span class="sr-only">Change</span></th>
-        <th class="w-8"><span class="sr-only">Enabled</span></th>
-        <th class="px-2 py-1 font-medium">{{ label }}</th>
-        <th class="px-2 py-1 font-medium">Value</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (change of rows; track $index) {
-        @let style = rowStyle(change);
-        <tr class="border-t border-slate-200 align-top" [class]="style.row">
-          <td
-            class="py-1 text-center font-mono font-bold"
-            [title]="style.label"
-            [class.text-emerald-600]="change.kind === 'added'"
-            [class.text-rose-600]="change.kind === 'removed'"
-            [class.text-amber-600]="change.kind === 'changed'"
-          >
-            {{ style.marker }}
-          </td>
-          <td class="py-1 text-center">
-            <input
-              type="checkbox"
-              disabled
-              [checked]="change.row.enabled"
-              [attr.aria-label]="(change.row.enabled ? 'Enabled: ' : 'Disabled: ') + change.row.key"
-            />
-            @if (change.kind === 'changed' && change.before.enabled !== change.row.enabled) {
-              <span class="block text-[10px] leading-3 text-amber-700">{{
-                change.row.enabled ? 'enabled' : 'disabled'
-              }}</span>
-            }
-          </td>
-          <td class="px-2 py-1 font-mono">
-            @if (change.kind === 'changed') {
-              <app-text-change [before]="change.before.key" [after]="change.row.key" />
-            } @else {
-              <span class="break-all">{{ change.row.key }}</span>
-            }
-          </td>
-          <td class="px-2 py-1 font-mono">
-            @if (change.kind === 'changed') {
-              <app-text-change
-                [before]="change.before.value"
-                [after]="change.row.value"
-                placeholder="(empty)"
-              />
-            } @else {
-              <span class="break-all">{{ change.row.value }}</span>
-            }
-          </td>
-        </tr>
-      } @empty {
-        <tr class="border-t border-slate-200">
-          <td colspan="4" class="px-2 py-2 text-slate-500">None.</td>
-        </tr>
-      }
-    </tbody>
-  </table>
-</ng-template>

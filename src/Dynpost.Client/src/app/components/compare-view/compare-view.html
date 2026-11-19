@@ -1,0 +1,138 @@
+<header class="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-2">
+  <fa-icon class="text-slate-500" [icon]="faCodeCompare" />
+  <div class="min-w-0 flex-1">
+    @if (store.comparison(); as c) {
+      <h2 class="truncate font-semibold">
+        Compare {{ c.kind === 'request' ? 'requests' : 'run plans' }}
+        @if (store.loading()) {
+          <fa-icon class="ml-1 text-xs text-slate-400" [icon]="faSpinner" animation="spin" />
+        }
+      </h2>
+      <p class="flex min-w-0 items-center gap-1 text-xs" aria-label="Original">
+        <span class="w-3 shrink-0 font-mono font-bold text-rose-600" aria-hidden="true">−</span>
+        <span class="truncate text-slate-600" [title]="c.left.path">{{ c.left.path }}</span>
+        @if (c.left.unsaved) {
+          <span class="shrink-0 rounded bg-amber-100 px-1 text-amber-800">unsaved edits</span>
+        }
+      </p>
+      <p class="flex min-w-0 items-center gap-1 text-xs" aria-label="Compared with">
+        <span class="w-3 shrink-0 font-mono font-bold text-emerald-600" aria-hidden="true">+</span>
+        <span class="truncate text-slate-600" [title]="c.right.path">{{ c.right.path }}</span>
+        @if (c.right.unsaved) {
+          <span class="shrink-0 rounded bg-amber-100 px-1 text-amber-800">unsaved edits</span>
+        }
+      </p>
+    } @else {
+      <h2 class="font-semibold">
+        Compare
+        <fa-icon class="ml-1 text-xs text-slate-400" [icon]="faSpinner" animation="spin" />
+      </h2>
+    }
+  </div>
+
+  @if (store.comparison(); as c) {
+    <div
+      class="flex shrink-0 overflow-hidden rounded border border-slate-300 text-sm"
+      role="radiogroup"
+      aria-label="Compare as"
+    >
+      <button
+        type="button"
+        role="radio"
+        class="flex items-center gap-1.5 px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+        [class]="effectiveMode() === 'visual' ? 'bg-sky-600 text-white' : 'hover:bg-slate-100'"
+        [attr.aria-checked]="effectiveMode() === 'visual'"
+        [disabled]="!canShowVisual()"
+        [title]="
+          canShowVisual()
+            ? 'Compare laid out like the editor'
+            : 'A side can\'t be read as a run plan'
+        "
+        (click)="mode.set('visual')"
+      >
+        <fa-icon [icon]="faFileCode" /> Visual
+      </button>
+      <button
+        type="button"
+        role="radio"
+        class="flex items-center gap-1.5 border-l border-slate-300 px-2.5 py-1"
+        [class]="effectiveMode() === 'text' ? 'bg-sky-600 text-white' : 'hover:bg-slate-100'"
+        [attr.aria-checked]="effectiveMode() === 'text'"
+        title="Compare the text of the files"
+        (click)="mode.set('text')"
+      >
+        <fa-icon [icon]="faFileLines" /> Text
+      </button>
+    </div>
+
+    <label class="flex shrink-0 items-center gap-1.5 text-sm text-slate-600">
+      <input
+        type="checkbox"
+        class="accent-sky-600"
+        [checked]="sideBySide()"
+        (change)="sideBySide.set($any($event.target).checked)"
+      />
+      Side by side
+    </label>
+
+    <button
+      type="button"
+      class="flex size-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+      title="Swap sides"
+      aria-label="Swap sides"
+      [disabled]="store.loading()"
+      (click)="store.swap()"
+    >
+      <fa-icon [icon]="faRightLeft" />
+    </button>
+  }
+
+  <button
+    type="button"
+    class="flex size-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+    title="Close"
+    aria-label="Close"
+    (click)="store.close()"
+  >
+    <fa-icon [icon]="faXmark" />
+  </button>
+</header>
+
+@if (store.comparison(); as c) {
+  @if (same()) {
+    <p
+      class="mx-4 mt-3 flex items-start gap-2 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800"
+      role="status"
+    >
+      <fa-icon class="mt-0.5" [icon]="faCircleInfo" />
+      The files are the same.
+    </p>
+  } @else if (!canShowVisual()) {
+    <p
+      class="mx-4 mt-3 flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+      role="status"
+    >
+      <fa-icon class="mt-0.5" [icon]="faCircleInfo" />
+      Showing the text: a side can't be read as a run plan.
+    </p>
+  }
+
+  @if (effectiveMode() === 'visual' && c.left.request && c.right.request) {
+    <app-request-diff
+      [before]="c.left.request"
+      [after]="c.right.request"
+      [sideBySide]="sideBySide()"
+    />
+  } @else if (effectiveMode() === 'visual' && c.left.plan && c.right.plan) {
+    <app-plan-diff [before]="c.left.plan" [after]="c.right.plan" />
+  } @else {
+    <app-code-diff-editor
+      class="m-4 min-h-0 flex-1 overflow-hidden rounded border border-slate-300"
+      [ariaLabel]="'Differences between ' + c.left.path + ' and ' + c.right.path"
+      [original]="c.left.text"
+      [modified]="c.right.text"
+      language="yaml"
+      [sideBySide]="sideBySide()"
+    />
+  }
+}

@@ -13,7 +13,7 @@ import { CodeDiffEditor } from '../../../../components/code-diff-editor/code-dif
 import { fromRequestDto } from '../../../../models/request-mapping';
 import { languageForPath } from '../../models/git-format';
 import { GitStore } from '../../../../services/git-store';
-import { RequestDiff } from '../request-diff/request-diff';
+import { RequestDiff } from '../../../../components/request-diff/request-diff';
 
 type DiffMode = 'request' | 'text';
 

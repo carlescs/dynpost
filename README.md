@@ -15,7 +15,8 @@ With Dynpost you can:
 - **Inspect responses** — status, timing breakdown with redirects, headers,
   cookies, and a pretty-printed body with HTML, PDF and image previews.
 - **Organize collections** — nested folders, drag and drop, Markdown docs per
-  request, and values captured from responses into variables.
+  request, values captured from responses into variables, and side-by-side
+  comparison of two requests or two run plans.
 - **Sync with git** — status, diffs, commit, pull, push, branches, stashes and worktrees, with
   clear reporting of merge conflicts, using your existing git setup.
 - **Load test** — `*.run.yaml` plans that send requests from concurrent
@@ -109,6 +110,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       client certificates (mutual TLS) per environment
 - [x] Local response history per request, compared with the latest response
       in a diff view (kept out of git, see [Response history](#response-history))
+- [x] Compare two requests or two run plans, laid out like their editors or as
+      text (see [Comparing requests and run plans](#comparing-requests-and-run-plans))
 - [x] Watch the workspace folder, so edits made in other programs show up
       (see [Changes made outside Dynpost](#changes-made-outside-dynpost))
 - [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
@@ -717,7 +720,7 @@ the settings menu, lists them in the app.
 | Ctrl+S | Save the active request, environment or run plan |
 | Ctrl+N | New request |
 | Ctrl+O | Open a workspace folder |
-| Ctrl+W, Ctrl+F4 | Close the open conflict, commit or diff, or else the active tab (asking first if it has unsaved changes) |
+| Ctrl+W, Ctrl+F4 | Close the open conflict, commit, diff or comparison, or else the active tab (asking first if it has unsaved changes) |
 | Ctrl+Tab, Ctrl+PageDown | Next tab |
 | Ctrl+Shift+Tab, Ctrl+PageUp | Previous tab |
 | Ctrl+B | Show or hide the sidebar |
@@ -773,6 +776,30 @@ turn it off to find only the exact text, in the explorer's order. *Match case*
 (the **A** button) makes letter case count. Click a request or a line to open
 it. The search reads the files on disk, so it doesn't see unsaved edits, and it
 stops after the first 1000 matching lines (refine the search to see the rest).
+
+## Comparing requests and run plans
+
+To compare two requests, right-click one in the explorer and choose **Select
+for compare**, then right-click the other and choose **Compare with "…"**. Or
+select both with Ctrl+click (Cmd+click on macOS) and choose **Compare selected**.
+Run plans are compared the same way from the **Load runs** view.
+
+The comparison replaces the editor area until you close it (✕ or Ctrl+W) or
+open a tab. It can be shown two ways:
+
+- **Visual** — laid out like the editor, read-only, with what differs marked.
+  For requests: the name, method and URL, and each tab (params, headers, auth,
+  body, settings, captures, docs), with the number of differences on each tab.
+  For run plans: the name and each section of the plan form (requests with
+  their weights and whether they are sent, environments, load, data, bodies,
+  assertions and thresholds), with added, removed and changed rows marked.
+- **Text** — the two YAML files side by side (or inline, with **Side by side**
+  off), with the differences highlighted.
+
+The swap button (⇄) exchanges the sides. A request or plan open in a tab with
+unsaved edits is compared as edited (marked *unsaved edits*); otherwise the
+files on disk are compared, and the comparison follows changes made to them.
+A plan whose text can't be read as a plan is compared as text only.
 
 ## cURL
 
