@@ -51,7 +51,10 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   custom styles, `<name>.scss` (`styleUrl`); `ng generate component` is set up
   to emit the same (SCSS, no inline template or styles, plus a `.spec.ts`):
   - `components/<name>/<name>.ts` — the shell (header, activity bar, sidebar,
-    document tabs) and UI shared by several modules (code and diff editors, PDF
+    document tabs) and UI shared by several modules (code and diff editors, the visual
+    request and run-plan diffs (`request-diff`, `plan-diff`, `row-diff-table`), the
+    `compare-view` (two requests or two run plans, picked from the explorer or Load runs
+    menus through `services/compare-store.ts`, shown by the shell like the git diff), PDF
     viewer, key/value table, variable input, `info-tip` (an info icon whose tooltip explains a
     setting), folder drop target and name input of the folder trees).
   - `services/` — root-provided stores and the `Bridge` (with its `MockBackend`).

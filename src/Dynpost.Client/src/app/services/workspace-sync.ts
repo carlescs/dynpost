@@ -7,6 +7,7 @@ import { EnvironmentStore } from './environment-store';
 import { GitStore } from './git-store';
 import { RunStore } from './run-store';
 import { WorkspaceStore } from './workspace-store';
+import { CompareStore } from './compare-store';
 
 /**
  * Keeps the UI in step with the open workspace on disk, whoever changes it. The host watches the
@@ -24,6 +25,7 @@ export class WorkspaceSync {
   private readonly environments = inject(EnvironmentStore);
   private readonly git = inject(GitStore);
   private readonly runs = inject(RunStore);
+  private readonly compare = inject(CompareStore);
 
   constructor() {
     const stops = [
@@ -63,6 +65,7 @@ export class WorkspaceSync {
     // The selected environment, its variables or captured values may have changed too.
     await this.environments.refresh(paths);
     await this.runs.reloadFromDisk(paths);
+    await this.compare.reload(paths);
     if (this.git.available) void this.git.refreshInBackground();
   }
 
@@ -85,6 +88,7 @@ export class WorkspaceSync {
       await this.runs.refresh();
       await this.runs.reloadFromDisk(paths);
     }
+    await this.compare.reload(paths);
   }
 }
 

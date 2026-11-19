@@ -79,6 +79,12 @@ export abstract class TreeState<T extends TreeItem = TreeItem> {
   readonly multiSelecting = signal(false);
   /** The entry a Shift + click selects the range from: the last one clicked. */
   private anchor: string | null = null;
+  /** The entries selected with Ctrl or Shift, in tree order; empty for a plain click's selection. */
+  readonly selection = computed<T[]>(() => {
+    if (!this.multiSelecting()) return [];
+    const selected = this.selected();
+    return flatten(this.items()).filter((item) => selected.has(item.path));
+  });
 
   /** The node the drag started on, or `null`. */
   readonly dragged = signal<T | null>(null);

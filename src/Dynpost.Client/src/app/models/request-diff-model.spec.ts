@@ -1,5 +1,5 @@
-import { EMPTY_AUTH } from '../../../models/request-mapping';
-import { KeyValue, RequestContent } from '../../../models/workspace';
+import { EMPTY_AUTH } from './request-mapping';
+import { KeyValue, RequestContent } from './workspace';
 import {
   EMPTY_REQUEST,
   authFields,

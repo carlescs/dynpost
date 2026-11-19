@@ -14,7 +14,7 @@ import { CodeDiffEditor } from '../../../../components/code-diff-editor/code-dif
 import { fromRequestDto } from '../../../../models/request-mapping';
 import { GitHistoryStore } from '../../../../services/git-history-store';
 import { STATUS_BADGES, fileName, folderOf, languageForPath } from '../../models/git-format';
-import { RequestDiff } from '../request-diff/request-diff';
+import { RequestDiff } from '../../../../components/request-diff/request-diff';
 import { DateFormatStore } from '../../../../services/date-format-store';
 
 type DiffMode = 'request' | 'text';

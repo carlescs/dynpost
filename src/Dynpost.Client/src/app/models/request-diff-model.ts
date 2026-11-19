@@ -1,6 +1,6 @@
-import { KeyValue, RequestAuth, RequestContent } from '../../../models/workspace';
-import { EMPTY_AUTH } from '../../../models/request-mapping';
-import { bodyText } from '../../../models/form-fields';
+import { KeyValue, RequestAuth, RequestContent } from './workspace';
+import { EMPTY_AUTH } from './request-mapping';
+import { bodyText } from './form-fields';
 
 /** A request with nothing in it: the missing side of an added or deleted request file. */
 export const EMPTY_REQUEST: RequestContent = {

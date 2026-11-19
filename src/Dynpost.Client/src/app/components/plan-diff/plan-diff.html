@@ -1,0 +1,34 @@
+<div class="flex items-center gap-2 px-4 pt-3 text-lg font-semibold">
+  <app-text-change [before]="before().name" [after]="after().name" placeholder="(unnamed)" />
+</div>
+<p class="px-4 pb-1 text-xs text-slate-500" role="status">
+  @if (changeCount()) {
+    {{ changeCount() }} difference(s).
+  } @else {
+    The plans are the same.
+  }
+</p>
+
+@for (section of shown(); track section.id) {
+  <section class="px-4 py-2" [attr.aria-label]="section.title">
+    <h3 class="mb-1 flex items-center gap-2 font-semibold">
+      {{ section.title }}
+      @if (section.changes) {
+        <span
+          class="rounded-full bg-amber-100 px-1.5 text-xs font-normal text-amber-800"
+          [title]="section.changes + ' changed'"
+          >{{ section.changes }}</span
+        >
+      }
+    </h3>
+    <app-row-diff-table
+      [rows]="section.rows"
+      [label]="section.label"
+      [valueLabel]="section.valueLabel"
+      [toggles]="section.toggles"
+    />
+  </section>
+}
+@if (unset()) {
+  <p class="px-4 py-2 text-sm text-slate-500">Not set in either plan: {{ unset() }}.</p>
+}
