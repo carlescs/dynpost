@@ -66,6 +66,18 @@ describe('prettyPrint (XML)', () => {
     );
   });
 
+  it('copies a doctype with an internal subset', () => {
+    expect(prettyPrint('<!DOCTYPE a [<!ENTITY x "y">]><a>&x;</a>', 'xml')).toBe(
+      '<!DOCTYPE a [<!ENTITY x "y">]>\n<a>&x;</a>',
+    );
+  });
+
+  it('rejects a malformed doctype quickly', () => {
+    const start = performance.now();
+    expect(prettyPrint('<!doctype[' + ']['.repeat(5000), 'xml')).toBeNull();
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
   it('keeps namespaces and entities', () => {
     expect(
       prettyPrint('<s:Envelope xmlns:s="urn:x"><s:Body>a &amp; b</s:Body></s:Envelope>', 'xml'),

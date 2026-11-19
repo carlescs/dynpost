@@ -110,9 +110,12 @@ function prettyJsonText(text: string, options: PrettyOptions): string | null {
 // ---------------------------------------------------------------------------------------------
 // XML
 
-/** Markup that is copied as it is: declarations, comments, CDATA and doctypes. */
+/**
+ * Markup that is copied as it is: declarations, comments, CDATA and doctypes. A doctype may have
+ * one internal subset in brackets; each part matches one way only, so no input backtracks badly.
+ */
 const XML_VERBATIM =
-  /<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<!DOCTYPE(?:[^<>[]|\[[\s\S]*?\])*>/iy;
+  /<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<!DOCTYPE[^<>[]*(?:\[[^\]]*\][^<>[]*)?>/iy;
 /** A start, end or empty-element tag; attribute values may contain `>`. */
 const XML_TAG = /<(\/?)([^\s/>"'=<]+)((?:[^<>"']|"[^"]*"|'[^']*')*?)(\/?)>/y;
 
