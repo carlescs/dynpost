@@ -41,8 +41,7 @@ export interface Comparison {
 }
 
 /**
- * Compares two requests or two run plans: the user selects one for comparing in its tree, then
- * compares another of the same kind with it. The comparison is shown in the main area, instead of
+ * Compares two requests or two run plans, selected together in their tree. The comparison is shown in the main area, instead of
  * the editor tabs, until it is closed or a tab is opened.
  */
 @Injectable({ providedIn: 'root' })
@@ -51,8 +50,6 @@ export class CompareStore {
   private readonly workspace = inject(WorkspaceStore);
   private readonly runs = inject(RunStore);
 
-  /** The item selected for comparing, the left side of the next comparison. */
-  readonly selected = signal<CompareItem | null>(null);
   /** The comparison shown in the main area, if any. */
   readonly comparison = signal<Comparison | null>(null);
   /** Whether the sides of a comparison are being read. */
@@ -68,33 +65,13 @@ export class CompareStore {
   constructor() {
     effect(() => {
       this.workspace.workspace();
-      untracked(() => {
-        this.selected.set(null);
-        this.close();
-      });
+      untracked(() => this.close());
     });
     // Opening or selecting a tab (even the one shown) shows it instead.
     effect(() => {
       this.workspace.shown();
       untracked(() => this.close());
     });
-  }
-
-  /** Selects an item to compare others with. */
-  select(item: CompareItem): void {
-    this.selected.set(item);
-  }
-
-  /** Whether `item` can be compared with the selected item: same kind, another file. */
-  canCompareWith(item: CompareItem): boolean {
-    const selected = this.selected();
-    return !!selected && selected.kind === item.kind && selected.path !== item.path;
-  }
-
-  /** Compares the selected item (left) with `item` (right). */
-  async compareWithSelected(item: CompareItem): Promise<void> {
-    const selected = this.selected();
-    if (selected && this.canCompareWith(item)) await this.compare(selected, item);
   }
 
   /** Compares two items of the same kind, `left` as the original side. */

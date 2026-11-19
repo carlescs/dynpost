@@ -73,16 +73,8 @@ describe('CompareStore', () => {
     TestBed.tick();
   });
 
-  it('compares an item of the same kind with the selected one', async () => {
-    expect(store.canCompareWith(itemB)).toBe(false);
-
-    store.select(itemA);
-
-    expect(store.canCompareWith(itemA)).toBe(false);
-    expect(store.canCompareWith(planOne)).toBe(false);
-    expect(store.canCompareWith(itemB)).toBe(true);
-
-    await store.compareWithSelected(itemB);
+  it('compares two requests', async () => {
+    await store.compare(itemA, itemB);
 
     const c = store.comparison()!;
     expect(c.kind).toBe('request');

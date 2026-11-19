@@ -60,16 +60,6 @@ export class RunsView {
     return [this.compareItem(selection[0]), this.compareItem(selection[1])];
   }
 
-  protected selectForCompare(node: RunTreeNode): void {
-    this.state.closeMenu();
-    this.compare.select(this.compareItem(node));
-  }
-
-  protected compareWithSelected(node: RunTreeNode): void {
-    this.state.closeMenu();
-    void this.compare.compareWithSelected(this.compareItem(node));
-  }
-
   protected compareSelection([left, right]: [CompareItem, CompareItem]): void {
     this.state.closeMenu();
     void this.compare.compare(left, right);
