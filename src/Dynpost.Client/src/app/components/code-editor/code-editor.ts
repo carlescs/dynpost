@@ -3,6 +3,7 @@ import {
   DestroyRef,
   ElementRef,
   afterNextRender,
+  computed,
   effect,
   inject,
   input,
@@ -61,7 +62,13 @@ export class CodeEditor {
   private applyingInput = false;
   private variableDecorations: editor.IEditorDecorationsCollection | null = null;
   /** Whether "Prettify" is offered: an editable JSON or XML text. */
+  private readonly canPrettify = computed(
+    () => !this.readOnly() && canPrettyPrint(this.language()),
+  );
+  /** Whether "Copy JSONPath" is offered: a JSON text that asked for it. */
+  private readonly canCopyJsonPath = computed(() => this.jsonPaths() && this.language() === 'json');
   private canPrettifyKey: { set(value: boolean): void } | null = null;
+  private canCopyJsonPathKey: { set(value: boolean): void } | null = null;
   private destroyed = false;
   private readonly themes = inject(ThemeStore);
 
@@ -105,7 +112,11 @@ export class CodeEditor {
     });
 
     effect(() => {
-      this.canPrettifyKey?.set(!this.readOnly() && canPrettyPrint(this.language()));
+      // Read the inputs before the keys exist, so the effect follows them once Monaco has loaded.
+      const canPrettify = this.canPrettify();
+      const canCopyJsonPath = this.canCopyJsonPath();
+      this.canPrettifyKey?.set(canPrettify);
+      this.canCopyJsonPathKey?.set(canCopyJsonPath);
     });
 
     effect(() => {
@@ -151,11 +162,15 @@ export class CodeEditor {
       if (!this.applyingInput) this.valueChange.emit(model.getValue());
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => this.submit.emit());
+    this.canCopyJsonPathKey = editor.createContextKey(
+      'dynpost.canCopyJsonPath',
+      this.canCopyJsonPath(),
+    );
     editor.addAction({
       id: 'dynpost.copyJsonPath',
       label: 'Copy JSONPath',
       contextMenuGroupId: '9_cutcopypaste',
-      precondition: undefined,
+      precondition: 'dynpost.canCopyJsonPath',
       run: (ed) => {
         const position = ed.getPosition();
         const current = ed.getModel();
@@ -164,10 +179,7 @@ export class CodeEditor {
         if (path) void copyText(path);
       },
     });
-    this.canPrettifyKey = editor.createContextKey(
-      'dynpost.canPrettify',
-      !this.readOnly() && canPrettyPrint(this.language()),
-    );
+    this.canPrettifyKey = editor.createContextKey('dynpost.canPrettify', this.canPrettify());
     editor.addAction({
       id: 'dynpost.prettify',
       label: 'Prettify',
