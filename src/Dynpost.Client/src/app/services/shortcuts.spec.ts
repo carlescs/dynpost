@@ -221,5 +221,11 @@ describe('formatCombo', () => {
 
   it('uses the modifier symbols on macOS', () => {
     expect(formatCombo({ key: 'q', mod: true }, true)).toBe('⌘Q');
+    expect(formatCombo({ key: 'Tab', mod: true, shift: true }, true)).toBe('⌘⇧⇥');
+  });
+
+  it('shortens long key names', () => {
+    expect(formatCombo({ key: 'PageDown', mod: true }, false)).toBe('Ctrl+PgDn');
+    expect(formatCombo({ key: 'Delete' }, false)).toBe('Del');
   });
 });

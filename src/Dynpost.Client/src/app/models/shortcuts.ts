@@ -81,11 +81,45 @@ export const SHORTCUTS: readonly Shortcut[] = [
 export const IS_MAC =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
 
-/** A combination as the user reads it, e.g. `Ctrl+Shift+Tab` (`⌘⇧Tab` on macOS). */
+/** How a key is labelled on Windows and Linux, when its `KeyboardEvent.key` name is too long. */
+const KEY_NAMES: Readonly<Record<string, string>> = {
+  PageDown: 'PgDn',
+  PageUp: 'PgUp',
+  Delete: 'Del',
+  Escape: 'Esc',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+};
+
+/** How a key is labelled on macOS, whose keyboards print symbols on these keys. */
+const MAC_KEY_NAMES: Readonly<Record<string, string>> = {
+  ...KEY_NAMES,
+  Enter: '↩',
+  Tab: '⇥',
+  Delete: '⌦',
+  Backspace: '⌫',
+  Escape: '⎋',
+};
+
+/**
+ * The keys of a combination, one label per key, as printed on the keyboard: e.g.
+ * `['Ctrl', 'Shift', 'Tab']` (`['⌘', '⇧', '⇥']` on macOS).
+ */
+export function comboKeys(combo: KeyCombo, mac = IS_MAC): string[] {
+  const names = mac ? MAC_KEY_NAMES : KEY_NAMES;
+  const key = names[combo.key] ?? (combo.key.length === 1 ? combo.key.toUpperCase() : combo.key);
+  const keys: string[] = [];
+  if (combo.mod) keys.push(mac ? '⌘' : 'Ctrl');
+  if (combo.shift) keys.push(mac ? '⇧' : 'Shift');
+  keys.push(key);
+  return keys;
+}
+
+/** A combination as plain text, e.g. `Ctrl+Shift+Tab` (`⌘⇧⇥` on macOS), for titles. */
 export function formatCombo(combo: KeyCombo, mac = IS_MAC): string {
-  const key = combo.key.length === 1 ? combo.key.toUpperCase() : combo.key;
-  if (mac) return (combo.mod ? '⌘' : '') + (combo.shift ? '⇧' : '') + key;
-  return [combo.mod && 'Ctrl', combo.shift && 'Shift', key].filter(Boolean).join('+');
+  return comboKeys(combo, mac).join(mac ? '' : '+');
 }
 
 /** Whether `event` presses `combo`. */

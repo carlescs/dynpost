@@ -248,7 +248,7 @@
         >
           <fa-icon class="w-4 text-slate-500" [icon]="faPen" />
           <span class="flex-1">Rename</span>
-          <kbd class="font-sans text-xs text-slate-400">F2</kbd>
+          <app-key-combo class="text-slate-400" [combo]="{ key: 'F2' }" />
         </button>
       }
       <button
@@ -295,7 +295,7 @@
       >
         <fa-icon class="w-4" [icon]="faTrash" />
         <span class="flex-1">Delete</span>
-        <kbd class="font-sans text-xs text-rose-400">Del</kbd>
+        <app-key-combo class="text-rose-400" [combo]="{ key: 'Delete' }" />
       </button>
     </div>
   }
