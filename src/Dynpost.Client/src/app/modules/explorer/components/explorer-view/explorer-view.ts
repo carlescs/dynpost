@@ -40,12 +40,13 @@ import { CompareItem, CompareStore } from '../../../../services/compare-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { TreeState } from '../../../../services/tree-state';
 import { ExplorerState } from '../../services/explorer-state';
+import { KeyComboView } from '../../../../components/key-combo/key-combo';
 import { FolderDrop } from '../../../../components/folder-drop/folder-drop';
 import { TreeLevel } from '../tree-level/tree-level';
 
 @Component({
   selector: 'app-explorer-view',
-  imports: [CdkDropListGroup, FaIconComponent, FolderDrop, TreeLevel],
+  imports: [CdkDropListGroup, FaIconComponent, FolderDrop, KeyComboView, TreeLevel],
   providers: [ExplorerState, { provide: TreeState, useExisting: ExplorerState }],
   host: {
     class: 'relative flex min-h-0 flex-1 flex-col',

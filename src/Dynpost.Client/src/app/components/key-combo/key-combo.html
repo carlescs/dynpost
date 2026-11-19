@@ -1,0 +1,15 @@
+<kbd
+  class="inline-flex items-center gap-0.5 font-sans whitespace-nowrap"
+  [attr.aria-label]="label()"
+>
+  @for (key of keys(); track $index) {
+    @if (!$first && !mac()) {
+      <span class="text-[0.6875rem] opacity-60" aria-hidden="true">+</span>
+    }
+    <kbd
+      class="inline-flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded font-sans border border-current/25 bg-current/5 px-1 text-[0.6875rem] leading-none font-medium shadow-[inset_0_-1px_0] shadow-current/20"
+      aria-hidden="true"
+      >{{ key }}</kbd
+    >
+  }
+</kbd>

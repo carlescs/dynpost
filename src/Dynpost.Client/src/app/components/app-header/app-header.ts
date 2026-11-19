@@ -32,6 +32,7 @@ import { EnvironmentStore } from '../../services/environment-store';
 import { environmentColor } from '../../models/environment-colors';
 import { Shortcuts } from '../../services/shortcuts';
 import { formatCombo } from '../../models/shortcuts';
+import { KeyComboView } from '../key-combo/key-combo';
 import { ThemeStore } from '../../services/theme-store';
 import { UpdateStore } from '../../services/update-store';
 import { WindowFrame } from '../../services/window-frame';
@@ -43,7 +44,7 @@ import { WorkspaceStore } from '../../services/workspace-store';
  */
 @Component({
   selector: 'app-header',
-  imports: [FaIconComponent],
+  imports: [FaIconComponent, KeyComboView],
   host: {
     class:
       'always-dark relative flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
@@ -88,7 +89,8 @@ export class AppHeader {
   protected readonly faPaperPlane = faPaperPlane;
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faMagnifyingGlass = faMagnifyingGlass;
-  protected readonly quickOpenKeys = formatCombo({ key: 'p', mod: true });
+  protected readonly quickOpenCombo = { key: 'p', mod: true };
+  protected readonly quickOpenKeys = formatCombo(this.quickOpenCombo);
   protected readonly faFolderOpen = faFolderOpen;
   protected readonly faCodeBranch = faCodeBranch;
   protected readonly faXmark = faXmark;

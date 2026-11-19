@@ -56,7 +56,7 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
     `compare-view` (two requests or two run plans, picked from the explorer or Load runs
     menus through `services/compare-store.ts`, shown by the shell like the git diff), PDF
     viewer, key/value table, variable input, `info-tip` (an info icon whose tooltip explains a
-    setting), folder drop target and name input of the folder trees).
+    setting), `key-combo` (a shortcut drawn as keycaps; show shortcuts with it), folder drop target and name input of the folder trees).
   - `services/` — root-provided stores and the `Bridge` (with its `MockBackend`).
   - `models/` — bridge message types (`messages.ts`), the client model
     (`workspace.ts`), DTO mapping and other pure helpers.

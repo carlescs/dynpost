@@ -29,7 +29,7 @@
     >
       <fa-icon [icon]="faMagnifyingGlass" />
       <span class="hidden xl:inline">Open request…</span>
-      <kbd class="hidden font-sans text-xs text-slate-500 xl:inline">{{ quickOpenKeys }}</kbd>
+      <app-key-combo class="hidden text-slate-400 xl:inline-flex" [combo]="quickOpenCombo" />
     </button>
     <label
       class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300"
@@ -292,7 +292,7 @@
         >
           <fa-icon class="w-4 text-slate-500" [icon]="faKeyboard" />
           <span class="flex-1">Keyboard shortcuts</span>
-          <kbd class="text-xs text-slate-400">F1</kbd>
+          <app-key-combo class="text-slate-400" [combo]="{ key: 'F1' }" />
         </button>
         <button
           type="button"
