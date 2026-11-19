@@ -1,5 +1,11 @@
 import { ResponseDto } from '../../../models/messages';
-import { comparableBody, comparableHeaders, looksLikeJson, prettyJson } from './response-text';
+import {
+  bodyLanguage,
+  comparableBody,
+  comparableHeaders,
+  looksLikeJson,
+  prettyBody,
+} from './response-text';
 
 const response = (overrides: Partial<ResponseDto> = {}): ResponseDto => ({
   status: 200,
@@ -20,10 +26,22 @@ describe('response text', () => {
     expect(looksLikeJson(response({ contentType: 'text/html', body: '{' }))).toBe(false);
   });
 
-  it('pretty prints JSON bodies and leaves others as received', () => {
-    expect(prettyJson(response())).toBe('{\n  "a": 1\n}');
-    expect(prettyJson(response({ body: '{oops' }))).toBeNull();
+  it('pretty prints JSON and XML bodies and leaves others as received', () => {
+    expect(prettyBody(response())).toBe('{\n  "a": 1\n}');
+    expect(prettyBody(response({ body: '{"id":12345678901234567890}' }))).toBe(
+      '{\n  "id": 12345678901234567890\n}',
+    );
+    expect(prettyBody(response({ body: '{oops' }))).toBeNull();
+    const xml = response({ contentType: 'application/soap+xml', body: '<a><b>1</b></a>' });
+    expect(prettyBody(xml)).toBe('<a>\n  <b>1</b>\n</a>');
+    expect(comparableBody(xml)).toBe('<a>\n  <b>1</b>\n</a>');
     expect(comparableBody(response({ contentType: 'text/plain', body: 'hi' }))).toBe('hi');
+  });
+
+  it('picks the language from the content type, or JSON when the body looks like it', () => {
+    expect(bodyLanguage(response({ contentType: 'text/xml' }))).toBe('xml');
+    expect(bodyLanguage(response({ contentType: null, body: '{}' }))).toBe('json');
+    expect(bodyLanguage(response({ contentType: 'text/plain', body: 'hi' }))).toBe('plaintext');
   });
 
   it('describes binary and omitted bodies instead of comparing them', () => {

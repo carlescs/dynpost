@@ -87,10 +87,11 @@ until you allow it in *System Settings* → *Privacy & Security*.
       [Finding requests](#finding-requests))
 - [x] Request descriptions in Markdown (a **Docs** tab), imported and exported
 - [x] Request editor: method, URL, query parameters, headers, auth and body
-      (JSON, raw text, form-data, `x-www-form-urlencoded`, GraphQL), saved as YAML files
+      (JSON, raw text, form-data, `x-www-form-urlencoded`, GraphQL; JSON and XML
+      bodies can be prettified), saved as YAML files
 - [x] Sending requests
 - [x] Response viewer: status (hover any status code for its name and a short
-      explanation), time, size, headers and a pretty-printed body, with HTML,
+      explanation), time, size, headers and a pretty-printed JSON or XML body, with HTML,
       PDF and image previews; copy or save the body, cookies set, a timing
       breakdown with redirects, and the request as sent
 - [x] Optional cookie jar per environment (kept out of git)
@@ -870,9 +871,19 @@ body size and these tabs:
 Request and response bodies are shown in the Monaco
 editor with syntax highlighting (JSON, XML, HTML, JavaScript, CSS, YAML,
 GraphQL and Markdown, chosen from the body type or the response's
-`Content-Type`); JSON request bodies are also validated as you type. JSON
-responses are pretty-printed (switch to **Raw** for the original text), and
-their objects and arrays can be folded with the arrows in the gutter.
+`Content-Type`); JSON request bodies are also validated as you type. A raw text
+request body is highlighted as XML when it starts with `<`, as JSON when it
+starts with `{` or `[`, and otherwise by the request's (or its folders')
+`Content-Type` header. **Prettify** (next to the body types, above GraphQL
+variables, in the editor's context menu, or Shift+Alt+F) re-indents a JSON or
+XML request body as one edit that Ctrl+Z undoes; it leaves the body alone and
+says so when it isn't valid. JSON and XML responses are pretty-printed (switch
+to **Raw** for the original text), and their objects, arrays and elements can be
+folded with the arrows in the gutter. Prettifying only changes whitespace:
+`{{variables}}` stay where they are (also as bare JSON values, as in
+`"id": {{userId}}`), and numbers, string escapes, duplicate keys, entities,
+comments and CDATA are kept as written — an id too large for JavaScript is
+shown exactly as received.
 **Find** (or Ctrl+F in the body) searches the body, with Monaco's options for
 case, whole words and regular expressions. A pretty JSON body can be narrowed
 with a JSONPath in the filter box above it — `$.items[*].id`, `$..name`,
@@ -975,7 +986,7 @@ Every response to a saved request is kept on this computer, in the workspace's
 git-ignored `.dynpost/history/` folder. The **History** button in the response
 panel lists the responses kept for the request, newest first, with their
 status, time, duration and size. Select one to see its body (pretty-printed
-when it is JSON) or its status line and headers, and tick **Compare with
+when it is JSON or XML) or its status line and headers, and tick **Compare with
 current response** to see the differences from the response in the viewer in a
 diff editor. Responses can be deleted one by one, or all at once with **Clear**.
 Requests that have never been saved have no history.

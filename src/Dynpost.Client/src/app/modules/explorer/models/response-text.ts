@@ -1,5 +1,7 @@
 import { ResponseDto } from '../../../models/messages';
 import { formatSize } from '../../../models/format-size';
+import { prettyPrint } from '../../../models/pretty-print';
+import { languageForMediaType } from '../../../components/code-editor/monaco-loader';
 
 /** Whether a text body is JSON, also when a server sends it as `text/plain` or untyped. */
 export function looksLikeJson(r: ResponseDto): boolean {
@@ -10,18 +12,23 @@ export function looksLikeJson(r: ResponseDto): boolean {
   return (!type || type === 'text/plain') && (start === '{' || start === '[');
 }
 
-/** The body re-indented when it is JSON; `null` when it isn't text JSON (or can't be parsed). */
-export function prettyJson(r: ResponseDto): string | null {
-  if (r.bodyEncoding !== 'text' || !looksLikeJson(r)) return null;
-  try {
-    return JSON.stringify(JSON.parse(r.body), null, 2);
-  } catch {
-    return null;
-  }
+/** The Monaco language of a body; JSON sent with a generic content type counts as JSON. */
+export function bodyLanguage(r: ResponseDto): string {
+  const language = languageForMediaType(r.contentType);
+  return language === 'plaintext' && looksLikeJson(r) ? 'json' : language;
 }
 
 /**
- * The body as compared in the history: pretty JSON when it is JSON, the text as received
+ * The body re-indented when it is JSON or XML; `null` when it isn't text JSON or XML (or isn't
+ * well-formed). Literals, escapes and entities stay as received.
+ */
+export function prettyBody(r: ResponseDto): string | null {
+  if (r.bodyEncoding !== 'text') return null;
+  return prettyPrint(r.body, bodyLanguage(r));
+}
+
+/**
+ * The body as compared in the history: pretty when it is JSON or XML, the text as received
  * otherwise, and a one-line description of a binary or missing body.
  */
 export function comparableBody(r: ResponseDto, omitted = false): string {
@@ -29,7 +36,7 @@ export function comparableBody(r: ResponseDto, omitted = false): string {
   if (r.bodyEncoding !== 'text') {
     return `(Binary body: ${formatSize(r.size)}, ${r.contentType || 'unknown type'}.)`;
   }
-  return prettyJson(r) ?? r.body;
+  return prettyBody(r) ?? r.body;
 }
 
 /**

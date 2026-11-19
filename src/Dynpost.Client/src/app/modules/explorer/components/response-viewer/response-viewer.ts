@@ -28,10 +28,9 @@ import { formatSize } from '../../../../models/format-size';
 import { httpStatusName, httpStatusTooltip } from '../../../../models/http-status';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
-import { languageForMediaType } from '../../../../components/code-editor/monaco-loader';
 import { previewKind, ResponsePreview } from '../response-preview/response-preview';
 import { ResponseHistory } from '../response-history/response-history';
-import { looksLikeJson, prettyJson } from '../../models/response-text';
+import { bodyLanguage, prettyBody } from '../../models/response-text';
 import { DateFormatStore } from '../../../../services/date-format-store';
 import { copyText } from '../../../../models/clipboard';
 import { filterJson } from '../../../../models/json-path';
@@ -124,10 +123,10 @@ export class ResponseViewer {
     return state?.kind === 'error' ? state : null;
   });
 
-  /** The body re-indented when it is JSON; `null` when it isn't (or can't be parsed). */
+  /** The body re-indented when it is JSON or XML; `null` when it isn't (or isn't well-formed). */
   protected readonly prettyBody = computed(() => {
     const r = this.response();
-    return r ? prettyJson(r) : null;
+    return r ? prettyBody(r) : null;
   });
 
   /** The ways the text body can be shown; the first is the default. */
@@ -165,9 +164,7 @@ export class ResponseViewer {
   /** The Monaco language for the body; JSON sent with a generic content type counts as JSON. */
   protected readonly language = computed(() => {
     const r = this.response();
-    if (!r) return 'plaintext';
-    const language = languageForMediaType(r.contentType);
-    return language === 'plaintext' && looksLikeJson(r) ? 'json' : language;
+    return r ? bodyLanguage(r) : 'plaintext';
   });
 
   /** The waterfall of the response's timing phases; empty when they weren't measured. */

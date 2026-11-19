@@ -8,8 +8,7 @@ import { Bridge, BridgeError } from '../../../../services/bridge';
 import { Dialogs } from '../../../../services/dialogs';
 import { CodeEditor } from '../../../../components/code-editor/code-editor';
 import { CodeDiffEditor } from '../../../../components/code-diff-editor/code-diff-editor';
-import { languageForMediaType } from '../../../../components/code-editor/monaco-loader';
-import { comparableBody, comparableHeaders, looksLikeJson } from '../../models/response-text';
+import { bodyLanguage, comparableBody, comparableHeaders } from '../../models/response-text';
 import { DateFormatStore } from '../../../../services/date-format-store';
 
 type HistoryView = 'body' | 'headers';
@@ -77,8 +76,7 @@ export class ResponseHistory {
   protected readonly language = computed(() => {
     const r = this.selected()?.response;
     if (!r || this.view() === 'headers' || r.bodyEncoding !== 'text') return 'plaintext';
-    const language = languageForMediaType(r.contentType);
-    return language === 'plaintext' && looksLikeJson(r) ? 'json' : language;
+    return bodyLanguage(r);
   });
 
   constructor() {
