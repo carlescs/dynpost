@@ -902,9 +902,11 @@ GraphQL and Markdown, chosen from the body type or the response's
 request body is highlighted as XML when it starts with `<`, as JSON when it
 starts with `{` or `[`, and otherwise by the request's (or its folders')
 `Content-Type` header. **Prettify** (next to the body types, above GraphQL
-variables, in the editor's context menu, or Shift+Alt+F) re-indents a JSON or
-XML request body as one edit that Ctrl+Z undoes; it leaves the body alone and
-says so when it isn't valid. JSON and XML responses are pretty-printed (switch
+variables, in the editor's right-click menu, or Shift+Alt+F) re-indents a JSON
+or XML request body as one edit that Ctrl+Z undoes; it leaves the body alone and
+says so when it isn't valid. The right-click menu offers only what applies to
+the editor: **Prettify**, **Copy JSONPath** in a JSON response, and cut, copy
+and paste. JSON and XML responses are pretty-printed (switch
 to **Raw** for the original text), and their objects, arrays and elements can be
 folded with the arrows in the gutter. Prettifying only changes whitespace:
 `{{variables}}` stay where they are (also as bare JSON values, as in
