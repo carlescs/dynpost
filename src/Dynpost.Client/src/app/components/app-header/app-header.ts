@@ -47,7 +47,7 @@ import { WorkspaceStore } from '../../services/workspace-store';
   imports: [FaIconComponent, KeyComboView],
   host: {
     class:
-      'always-dark relative flex h-10 shrink-0 items-center gap-2 border-b border-slate-700 bg-slate-900 px-3',
+      'always-dark relative grid shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] grid-rows-[2.5rem_auto] items-center gap-x-2 border-b border-slate-700 bg-slate-900 px-3 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:grid-rows-[2.5rem]',
     role: 'banner',
     '[class.pl-20]': 'frame.trafficLights()',
     '[class.pr-0]': 'frame.showButtons()',

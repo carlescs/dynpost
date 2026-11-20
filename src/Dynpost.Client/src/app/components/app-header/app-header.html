@@ -7,29 +7,35 @@
     data-environment-stripe
   ></span>
 }
-<fa-icon class="shrink-0 text-sky-400" [icon]="faPaperPlane" />
-<span class="shrink-0 text-sm font-semibold tracking-wide whitespace-nowrap text-white"
-  >Dynpost</span
->
-@if (store.workspace(); as workspace) {
-  <span class="shrink-0 text-sm text-slate-400" aria-hidden="true">—</span>
-  <span class="min-w-0 truncate text-sm text-slate-400" [title]="workspace.root">{{
-    workspace.name
-  }}</span>
-}
-<div class="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap">
-  @if (store.workspace()) {
+<div class="flex min-w-0 items-center gap-2">
+  <fa-icon class="shrink-0 text-sky-400" [icon]="faPaperPlane" />
+  <span class="shrink-0 text-sm font-semibold tracking-wide whitespace-nowrap text-white"
+    >Dynpost</span
+  >
+  @if (store.workspace(); as workspace) {
+    <span class="shrink-0 text-sm text-slate-400" aria-hidden="true">—</span>
+    <span class="min-w-0 truncate text-sm text-slate-400" [title]="workspace.root">{{
+      workspace.name
+    }}</span>
+  }
+</div>
+@if (store.workspace()) {
+  <!-- On narrow windows these go to a second row so the workspace name keeps its room. -->
+  <div
+    class="col-span-full row-start-2 flex min-w-0 items-center gap-1 pb-1.5 whitespace-nowrap lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:pb-0"
+    data-header-tools
+  >
     <button
       type="button"
-      class="flex items-center gap-2 rounded border border-slate-600 px-2 py-1 text-sm text-slate-400 hover:bg-slate-700 hover:text-white"
+      class="flex min-w-0 flex-1 items-center gap-2 rounded border border-slate-600 px-2 py-1 text-sm text-slate-400 hover:bg-slate-700 hover:text-white lg:flex-none"
       [title]="'Open a request by name, path, method or URL (' + quickOpenKeys + ')'"
       aria-label="Open a request"
       [attr.aria-keyshortcuts]="'Control+P'"
       (click)="shortcuts.run('quickOpen')"
     >
       <fa-icon [icon]="faMagnifyingGlass" />
-      <span class="hidden xl:inline">Open request…</span>
-      <app-key-combo class="hidden text-slate-400 xl:inline-flex" [combo]="quickOpenCombo" />
+      <span class="flex-1 truncate text-left lg:hidden xl:inline">Open request…</span>
+      <app-key-combo class="text-slate-400 lg:hidden xl:inline-flex" [combo]="quickOpenCombo" />
     </button>
     <label
       class="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-300"
@@ -39,7 +45,7 @@
       <span class="sr-only">Environment</span>
       <select
         [class]="activeColor()?.border ?? 'border-slate-600'"
-        class="max-w-32 rounded border lg:max-w-48 bg-slate-800 px-1.5 py-0.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+        class="max-w-48 rounded border bg-slate-800 px-1.5 py-0.5 text-sm text-white focus:border-sky-500 focus:outline-none"
         aria-label="Environment"
         [value]="environments.activeId() ?? ''"
         (change)="environments.select($any($event.target).value || null)"
@@ -56,7 +62,11 @@
         }
       </select>
     </label>
-  }
+  </div>
+}
+<div
+  class="col-start-2 row-start-1 flex shrink-0 items-center gap-1 whitespace-nowrap lg:col-start-3"
+>
   <div #recentMenu class="relative">
     <div
       class="flex items-stretch rounded border border-slate-600"
@@ -307,7 +317,11 @@
   </div>
 </div>
 @if (frame.showButtons()) {
-  <div class="ml-1 flex h-full items-stretch" role="group" aria-label="Window">
+  <div
+    class="col-start-3 row-start-1 ml-1 flex items-stretch self-stretch lg:col-start-4"
+    role="group"
+    aria-label="Window"
+  >
     <button
       type="button"
       class="flex w-11 items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white"
