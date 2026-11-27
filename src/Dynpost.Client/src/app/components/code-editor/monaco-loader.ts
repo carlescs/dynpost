@@ -1,3 +1,5 @@
+import { InjectionToken } from '@angular/core';
+
 export type Monaco = typeof import('monaco-editor/editor/editor.api');
 
 let loading: Promise<Monaco> | null = null;
@@ -17,6 +19,16 @@ export function loadMonaco(): Promise<Monaco> {
   })();
   return loading;
 }
+
+/**
+ * How the editors load Monaco: `loadMonaco` in the app. Unit tests provide a loader that never
+ * resolves (`src/test-providers.ts`), because jsdom can't run Monaco and an import still pending
+ * when a spec file's environment is torn down fails the run.
+ */
+export const MONACO_LOADER = new InjectionToken<() => Promise<Monaco>>('MONACO_LOADER', {
+  providedIn: 'root',
+  factory: () => loadMonaco,
+});
 
 /** The Monaco language for a response's media type (without parameters). */
 export function languageForMediaType(mediaType: string | null | undefined): string {

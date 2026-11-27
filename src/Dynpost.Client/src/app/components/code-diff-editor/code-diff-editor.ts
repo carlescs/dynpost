@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import type { editor } from 'monaco-editor/editor/editor.api';
 import { ThemeStore } from '../../services/theme-store';
-import { Monaco, loadMonaco } from '../code-editor/monaco-loader';
+import { MONACO_LOADER, Monaco } from '../code-editor/monaco-loader';
 
 /**
  * A read-only Monaco diff editor comparing two texts. Monaco is loaded lazily, like in
@@ -41,6 +41,7 @@ export class CodeDiffEditor {
   private models: { original: editor.ITextModel; modified: editor.ITextModel } | null = null;
   private destroyed = false;
   private readonly themes = inject(ThemeStore);
+  private readonly loadMonaco = inject(MONACO_LOADER);
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -87,7 +88,7 @@ export class CodeDiffEditor {
   }
 
   private async create(): Promise<void> {
-    const monaco = await loadMonaco();
+    const monaco = await this.loadMonaco();
     if (this.destroyed) return;
 
     this.monaco = monaco;

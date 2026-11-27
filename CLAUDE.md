@@ -198,7 +198,9 @@ Prettier. Client unit tests run on Vitest with jsdom through Angular's
 `<name>.spec.ts` sits next to the file it tests, uses `TestBed` for components
 and services, and fakes the `Bridge` with `vi.fn()` rather than talking to the
 `MockBackend`. Helpers shared by client specs live in `src/app/testing/` (e.g.
-`useTestDateFormat()` to check dates are shown in the system format). Before finishing, run `dotnet build Dynpost.sln` and
+`useTestDateFormat()` to check dates are shown in the system format), and `src/test-providers.ts`
+(the test `providersFile`) gives every spec a Monaco loader (`MONACO_LOADER`) that never resolves,
+so specs rendering an editor never import Monaco. Before finishing, run `dotnet build Dynpost.sln` and
 `dotnet test Dynpost.sln` (or `npm run build` for client-only changes), and
 `npm test -- --watch=false` and `npm run format:check` when you touch the client.
 
