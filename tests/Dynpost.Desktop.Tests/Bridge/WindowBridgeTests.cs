@@ -12,6 +12,7 @@ public sealed class WindowBridgeTests : IDisposable
 {
     private readonly IAppWindow _window = Substitute.For<IAppWindow>();
     private readonly IAppSettingsStore _settings = Substitute.For<IAppSettingsStore>();
+    private readonly ISystemTray _tray = Substitute.For<ISystemTray>();
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
     private AppSettings _saved = AppSettings.Default;
@@ -26,7 +27,9 @@ public sealed class WindowBridgeTests : IDisposable
             });
         _services = new ServiceCollection()
             .AddSingleton(_settings)
+            .AddSingleton(_tray)
             .AddTransient<SetTitleBar>()
+            .AddTransient<SetTraySettings>()
             .BuildServiceProvider();
         _router = BridgeHandlers.Create(_services, Substitute.For<IFileDialogs>(), _window);
     }
@@ -36,22 +39,24 @@ public sealed class WindowBridgeTests : IDisposable
     [Fact]
     public async Task Get_SendsEveryFieldTheClientReads()
     {
-        _window.GetState().Returns(new WindowStateDto(WindowFrames.Custom, "windows", Maximized: true));
+        _window.GetState().Returns(new WindowStateDto(WindowFrames.Custom, "windows", Maximized: true, Tray: true));
 
         var response = await SendAsync("window.get", "null");
 
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         var payload = response.GetProperty("payload");
         // The names of models/messages.ts WindowStateDto.
-        Assert.Equal(["frame", "maximized", "platform"], payload.EnumerateObject().Select(p => p.Name).Order());
+        Assert.Equal(["frame", "maximized", "platform", "tray"], payload.EnumerateObject().Select(p => p.Name).Order());
         Assert.Equal("custom", payload.GetProperty("frame").GetString());
         Assert.True(payload.GetProperty("maximized").GetBoolean());
+        Assert.True(payload.GetProperty("tray").GetBoolean());
     }
 
     [Theory]
     [InlineData("window.minimize")]
     [InlineData("window.toggleMaximize")]
     [InlineData("window.startDrag")]
+    [InlineData("window.hide")]
     public async Task WindowButtons_CallTheWindow(string type)
     {
         var response = await SendAsync(type, "null");
@@ -61,6 +66,7 @@ public sealed class WindowBridgeTests : IDisposable
         {
             case "window.minimize": _window.Received(1).Minimize(); break;
             case "window.toggleMaximize": _window.Received(1).ToggleMaximize(); break;
+            case "window.hide": _window.Received(1).HideToTray(); break;
             default: _window.Received(1).StartDrag(); break;
         }
     }
@@ -97,6 +103,22 @@ public sealed class WindowBridgeTests : IDisposable
         Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
         Assert.True(response.GetProperty("payload").GetProperty("nativeTitleBar").GetBoolean());
         Assert.True(_saved.NativeTitleBar);
+    }
+
+    [Fact]
+    public async Task SetTray_RemembersTheChoiceAndAppliesIt()
+    {
+        _tray.IsSupported.Returns(true);
+
+        var response = await SendAsync("settings.setTray", """{ "minimizeToTray": true, "closeToTray": false }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var tray = response.GetProperty("payload").GetProperty("tray");
+        // The names of models/messages.ts TraySettingsDto.
+        Assert.Equal(["closeToTray", "minimizeToTray"], tray.EnumerateObject().Select(p => p.Name).Order());
+        Assert.True(tray.GetProperty("minimizeToTray").GetBoolean());
+        Assert.Equal(new TraySettings(MinimizeToTray: true), _saved.Tray);
+        _tray.Received(1).Apply(new TraySettings(MinimizeToTray: true));
     }
 
     private async Task<JsonElement> SendAsync(string type, string payload)

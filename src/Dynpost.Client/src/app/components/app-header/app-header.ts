@@ -15,6 +15,7 @@ import {
   faMagnifyingGlass,
   faPaperPlane,
   faRobot,
+  faRectangleXmark,
   faRotate,
   faWindowMaximize,
   faWindowMinimize,
@@ -107,6 +108,7 @@ export class AppHeader {
   protected readonly faWindowMinimize = faWindowMinimize;
   protected readonly faWindowMaximize = faWindowMaximize;
   protected readonly faWindowRestore = faWindowRestore;
+  protected readonly faRectangleXmark = faRectangleXmark;
 
   constructor() {
     // Removing the last other recent workspace (or a reload finding none) leaves nothing to

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faCircleCheck,
@@ -38,6 +38,7 @@ import { WorkspaceStore } from './services/workspace-store';
 import { Dialogs } from './services/dialogs';
 import { openCloneDialog } from './components/clone-dialog/open-clone-dialog';
 import { WorkspaceSync } from './services/workspace-sync';
+import { Bridge } from './services/bridge';
 
 @Component({
   imports: [
@@ -90,6 +91,12 @@ export class App implements OnInit {
   protected readonly faXmark = faXmark;
   protected readonly faCircleExclamation = faCircleExclamation;
   protected readonly faCircleCheck = faCircleCheck;
+
+  constructor() {
+    // Quit in the tray icon's menu quits as the app's own Quit does, asking about unsaved changes.
+    const stop = inject(Bridge).on('app.quitRequested', () => void this.shortcuts.run('quit'));
+    inject(DestroyRef).onDestroy(stop);
+  }
 
   ngOnInit(): void {
     void this.theme.load();

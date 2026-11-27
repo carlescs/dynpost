@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Bridge } from './bridge';
-import { WindowEdge, WindowStateDto } from '../models/messages';
+import { TraySettingsDto, WindowEdge, WindowStateDto } from '../models/messages';
 
 /** How close in time and place two presses on the title bar must be to count as a double click. */
 const DOUBLE_CLICK_MS = 500;
@@ -20,15 +20,27 @@ const RESIZE_EDGES: Record<WindowStateDto['platform'], readonly WindowEdge[]> = 
 /**
  * The desktop window. Unless the user chose the system's title bar, the app's header is the
  * title bar: it moves the window, and draws the window buttons where the platform has none.
- * The choice is read when the window opens, so changing it applies after a restart.
+ * The choice is read when the window opens, so changing it applies after a restart. The window
+ * can also hide to the system tray when minimized or closed, where the app keeps running.
  */
 @Injectable({ providedIn: 'root' })
 export class WindowFrame {
   private readonly bridge = inject(Bridge);
 
-  readonly state = signal<WindowStateDto>({ frame: 'native', platform: 'web', maximized: false });
+  readonly state = signal<WindowStateDto>({
+    frame: 'native',
+    platform: 'web',
+    maximized: false,
+    tray: false,
+  });
   /** The saved choice, which the window follows from the next start. */
   readonly nativeTitleBar = signal(false);
+  /** Whether minimizing or closing hides the window to the tray (applies at once). */
+  readonly tray = signal<TraySettingsDto>({ minimizeToTray: false, closeToTray: false });
+  /** Whether the tray settings can be changed: the system can show a tray icon. */
+  readonly trayAvailable = computed(() => this.state().tray);
+  /** Whether the header's close button hides the window to the tray rather than quitting. */
+  readonly closesToTray = computed(() => this.trayAvailable() && this.tray().closeToTray);
 
   /** Whether the app's header is the window's title bar. */
   readonly custom = computed(() => this.state().frame === 'custom');
@@ -67,6 +79,7 @@ export class WindowFrame {
       ]);
       if (state) this.state.set(state);
       this.nativeTitleBar.set(settings?.nativeTitleBar ?? false);
+      if (settings?.tray) this.tray.set(settings.tray);
     } catch (error) {
       console.warn('Could not read the window state', error);
     }
@@ -81,6 +94,25 @@ export class WindowFrame {
       this.nativeTitleBar.set(previous);
       console.warn('Could not save the title bar setting', error);
     }
+  }
+
+  /** Saves and applies whether minimizing or closing hides the window to the tray. */
+  async setTray(change: Partial<TraySettingsDto>): Promise<void> {
+    const previous = this.tray();
+    const next = { ...previous, ...change };
+    this.tray.set(next);
+    try {
+      const settings = await this.bridge.send('settings.setTray', next);
+      if (settings?.tray) this.tray.set(settings.tray);
+    } catch (error) {
+      this.tray.set(previous);
+      console.warn('Could not save the tray setting', error);
+    }
+  }
+
+  /** Hides the window to the tray, as the header's close button does when closing goes there. */
+  hideToTray(): void {
+    this.call(() => this.bridge.send('window.hide'));
   }
 
   minimize(): void {

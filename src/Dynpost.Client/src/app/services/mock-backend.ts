@@ -221,6 +221,7 @@ export class MockBackend {
   private theme: Theme = 'light';
   private activityOrder: string[] = [];
   private nativeTitleBar = false;
+  private tray = { minimizeToTray: false, closeToTray: false };
   /** The MCP server's settings; it never runs in the browser preview. */
   private mcp = { enabled: false, port: 47823, token: null as string | null };
   private historySettings: HistorySettingsDto = {
@@ -400,6 +401,7 @@ export class MockBackend {
       history: { ...this.historySettings },
       activityOrder: [...this.activityOrder],
       nativeTitleBar: this.nativeTitleBar,
+      tray: { ...this.tray },
     });
     if (request.type === 'settings.get') return ok(settings());
     if (request.type === 'settings.setTheme') {
@@ -477,15 +479,19 @@ export class MockBackend {
     if (request.type === 'app.quit') return ok(null);
     // The browser preview is the browser's window: it has no title bar of its own to draw.
     if (request.type === 'window.get') {
-      return ok({ frame: 'native', platform: 'web', maximized: false });
+      return ok({ frame: 'native', platform: 'web', maximized: false, tray: false });
     }
     if (
       request.type === 'window.minimize' ||
+      request.type === 'window.hide' ||
       request.type === 'window.toggleMaximize' ||
       request.type === 'window.startDrag' ||
       request.type === 'window.startResize'
     ) {
       return ok(null);
+    }
+    if (request.type === 'settings.setTray') {
+      return fail('settings.tray_unsupported', "The browser preview can't show a tray icon.");
     }
     if (request.type === 'settings.setTitleBar') {
       this.nativeTitleBar = payload?.['native'] === true;

@@ -145,7 +145,7 @@ describe('AppHeader', () => {
     const run = vi.spyOn(TestBed.inject(Shortcuts), 'run').mockResolvedValue();
     const minimize = vi.spyOn(frame, 'minimize').mockReturnValue();
 
-    frame.state.set({ frame: 'custom', platform: 'windows', maximized: true });
+    frame.state.set({ frame: 'custom', platform: 'windows', maximized: true, tray: false });
     fixture.detectChanges();
 
     root.querySelector<HTMLButtonElement>('[aria-label="Minimize"]')!.click();
@@ -160,7 +160,7 @@ describe('AppHeader', () => {
     const root: HTMLElement = fixture.nativeElement;
     const frame = TestBed.inject(WindowFrame);
     const setNative = vi.spyOn(frame, 'setNativeTitleBar').mockResolvedValue();
-    frame.state.set({ frame: 'custom', platform: 'linux', maximized: false });
+    frame.state.set({ frame: 'custom', platform: 'linux', maximized: false, tray: false });
     root.querySelector<HTMLButtonElement>('[aria-label="Settings"]')!.click();
     fixture.detectChanges();
 
@@ -171,6 +171,44 @@ describe('AppHeader', () => {
     toggle.click();
 
     expect(setNative).toHaveBeenCalledWith(true);
+  });
+
+  it('closes to the tray instead of quitting when the user chose that', () => {
+    const { fixture } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    const frame = TestBed.inject(WindowFrame);
+    const run = vi.spyOn(TestBed.inject(Shortcuts), 'run').mockResolvedValue();
+    const hide = vi.spyOn(frame, 'hideToTray').mockReturnValue();
+    frame.state.set({ frame: 'custom', platform: 'windows', maximized: false, tray: true });
+    frame.tray.set({ minimizeToTray: false, closeToTray: true });
+    fixture.detectChanges();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click();
+
+    expect(hide).toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('offers the tray settings in the settings menu where the system has a tray', () => {
+    const { fixture } = setup();
+    const root: HTMLElement = fixture.nativeElement;
+    const frame = TestBed.inject(WindowFrame);
+    const setTray = vi.spyOn(frame, 'setTray').mockResolvedValue();
+    const switchNamed = (name: string) =>
+      [...root.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find((b) =>
+        b.textContent?.includes(name),
+      );
+    root.querySelector<HTMLButtonElement>('[aria-label="Settings"]')!.click();
+    fixture.detectChanges();
+    expect(switchNamed('Minimize to tray')).toBeUndefined();
+
+    frame.state.set({ frame: 'custom', platform: 'linux', maximized: false, tray: true });
+    fixture.detectChanges();
+    switchNamed('Minimize to tray')!.click();
+    switchNamed('Close to tray')!.click();
+
+    expect(setTray).toHaveBeenCalledWith({ minimizeToTray: true });
+    expect(setTray).toHaveBeenCalledWith({ closeToTray: true });
   });
 
   it('offers a ready update in the settings menu and marks the settings button', () => {

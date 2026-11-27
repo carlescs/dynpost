@@ -89,10 +89,15 @@ internal static class Program
         // The app's header is the title bar unless the user chose the system's (read once: the
         // frame can't change while the window is open).
         var settings = services.GetRequiredService<GetAppSettings>().ExecuteAsync().GetAwaiter().GetResult();
-        var appWindow = AppWindow.Create(window, settings.Value?.NativeTitleBar ?? false);
+        var tray = services.GetRequiredService<WindowTray>();
+        var appWindow = AppWindow.Create(window, settings.Value?.NativeTitleBar ?? false, tray);
 
         var bridge = new PhotinoBridge(window);
         var events = services.GetRequiredService<HostEvents>();
+        // While the tray icon is on, the window can hide there and the app keeps running: sends,
+        // load runs and the MCP server carry on. The tray's Quit asks the UI, which confirms first.
+        tray.Attach(window, () => _ = events.QuitRequestedAsync());
+        _ = services.GetRequiredService<StartSystemTray>().ExecuteAsync();
         bridge.Attach(BridgeHandlers.Create(services, bridge, appWindow), events);
         appWindow.OnStateChanged(state => _ = events.WindowStateChangedAsync(state));
         // Keep the source control view and the open files current as files and git state change,
@@ -104,6 +109,7 @@ internal static class Program
         _ = services.GetRequiredService<StartMcpServer>().ExecuteAsync();
 
         window.Load(BundledAssets.StartUri).WaitForClose();
+        tray.Remove();
     }
 
     private static ServiceProvider ConfigureServices() =>
@@ -175,6 +181,10 @@ internal static class Program
             .AddTransient<SetHistorySettings>()
             .AddTransient<SetActivityOrder>()
             .AddTransient<SetTitleBar>()
+            .AddSingleton<WindowTray>()
+            .AddSingleton<ISystemTray>(provider => provider.GetRequiredService<WindowTray>())
+            .AddTransient<SetTraySettings>()
+            .AddTransient<StartSystemTray>()
             .AddTransient<ListResponseHistory>()
             .AddTransient<GetResponseHistoryEntry>()
             .AddTransient<DeleteResponseHistory>()

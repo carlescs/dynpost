@@ -127,6 +127,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       plans; export for Postman, Insomnia, OpenAPI 3.0 and HAR
 - [x] A built-in MCP server, off by default, so AI assistants can control the
       app (see [AI assistants (MCP)](#ai-assistants-mcp))
+- [x] Minimize or close to the system tray and keep running in the background
+      (see [Running in the system tray](#running-in-the-system-tray))
 
 ### Non-goals
 
@@ -757,6 +759,25 @@ buttons, shown in the header's top-left corner.
 To use the operating system's title bar instead, turn on **System title bar**
 in the settings menu; the change applies the next time Dynpost starts. It is
 kept in your user settings.
+
+### Running in the system tray
+
+Dynpost can keep running in the background with its window hidden, so requests
+already sent, load runs and the [MCP server](#ai-assistants-mcp) carry on. Turn
+on **Minimize to tray** and/or **Close to tray** in the settings menu (they apply
+at once and are kept in your user settings). While either is on, Dynpost has an
+icon in the system tray — the notification area on Windows, the menu bar on
+macOS — and minimizing or closing the window, as you chose, hides it there
+instead (on macOS the Dock icon goes too). Click the icon (or choose **Show
+Dynpost** in its menu) to bring the window back; **Quit Dynpost** in its menu
+quits, asking first like Ctrl+Q when tabs have unsaved changes or load runs
+are running. Ctrl+Q always quits.
+
+On Linux the icon is an AppIndicator when `libayatana-appindicator3` (or
+`libappindicator3`) is installed; GNOME shows these with its AppIndicator
+extension. Without it, Dynpost falls back to GTK's tray icon, which only
+desktops with a legacy (XEmbed) tray show; when no tray shows the icon, the
+window is minimized rather than hidden, so it is never lost.
 
 ## Finding requests
 

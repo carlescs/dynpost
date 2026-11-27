@@ -47,6 +47,10 @@ internal sealed class HostEvents
     public Task WindowStateChangedAsync(WindowStateDto state) =>
         SendAsync(BridgeEventTypes.WindowStateChanged, state);
 
+    /// <summary>The user chose Quit in the tray icon's menu, so the UI should quit as its own Quit does.</summary>
+    public Task QuitRequestedAsync() =>
+        SendAsync(BridgeEventTypes.QuitRequested, new QuitRequestedEvent());
+
     private async Task SendAsync(string type, object payload)
     {
         if (Volatile.Read(ref _send) is not { } send)

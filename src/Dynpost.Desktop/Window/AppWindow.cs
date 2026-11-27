@@ -12,18 +12,21 @@ internal sealed class AppWindow : IAppWindow
 {
     private readonly PhotinoWindow _window;
     private readonly WindowChrome? _chrome;
+    private readonly WindowTray _tray;
 
-    private AppWindow(PhotinoWindow window, WindowChrome? chrome)
+    private AppWindow(PhotinoWindow window, WindowChrome? chrome, WindowTray tray)
     {
         _window = window;
         _chrome = chrome;
+        _tray = tray;
     }
 
     /// <summary>
     /// Sets up <paramref name="window"/> (before it is created) with the app's title bar, or the
-    /// native one when <paramref name="nativeTitleBar"/> is set or the platform has no chrome.
+    /// native one when <paramref name="nativeTitleBar"/> is set or the platform has no chrome, and
+    /// the system tray icon <paramref name="tray"/> (attached to the window separately).
     /// </summary>
-    public static AppWindow Create(PhotinoWindow window, bool nativeTitleBar)
+    public static AppWindow Create(PhotinoWindow window, bool nativeTitleBar, WindowTray tray)
     {
         var chrome = nativeTitleBar ? null : WindowChrome.ForCurrentPlatform();
         if (chrome is not null)
@@ -32,7 +35,7 @@ internal sealed class AppWindow : IAppWindow
             window.RegisterWindowCreatedHandler((_, _) => Safely(() => chrome.Created(window)));
         }
 
-        return new AppWindow(window, chrome);
+        return new AppWindow(window, chrome, tray);
     }
 
     /// <summary>Calls <paramref name="changed"/> with the new state when the window is maximized or restored.</summary>
@@ -53,7 +56,19 @@ internal sealed class AppWindow : IAppWindow
         _window.RegisterRestoredHandler((_, _) => Report(false));
     }
 
-    public void Close() => _window.Invoke(_window.Close);
+    public void Close()
+    {
+        _tray.Quitting();
+        _window.Invoke(_window.Close);
+    }
+
+    public void HideToTray()
+    {
+        if (_tray.ClosesToTray)
+        {
+            _tray.HideWindow();
+        }
+    }
 
     public WindowStateDto GetState()
     {
@@ -100,7 +115,8 @@ internal sealed class AppWindow : IAppWindow
         new(
             _chrome is null ? WindowFrames.Native : WindowFrames.Custom,
             _chrome?.Platform ?? WindowChrome.CurrentPlatform,
-            maximized);
+            maximized,
+            _tray.IsSupported);
 
     private void OnUiThread(Action action) => _window.Invoke(() => Safely(action));
 
