@@ -271,6 +271,50 @@
             </span>
           </button>
         }
+        @if (frame.trayAvailable()) {
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+            role="switch"
+            title="Minimizing hides Dynpost to the system tray; requests, load runs and the MCP server keep running"
+            [attr.aria-checked]="frame.tray().minimizeToTray"
+            (click)="frame.setTray({ minimizeToTray: !frame.tray().minimizeToTray })"
+          >
+            <fa-icon class="w-4 text-slate-500" [icon]="faWindowMinimize" />
+            <span class="flex-1">Minimize to tray</span>
+            <span
+              class="relative h-4 w-7 shrink-0 rounded-full transition-colors"
+              [class]="frame.tray().minimizeToTray ? 'bg-sky-600' : 'bg-slate-300'"
+              aria-hidden="true"
+            >
+              <span
+                class="absolute top-0.5 left-0.5 size-3 rounded-full bg-[#fff] shadow transition-transform"
+                [class.translate-x-3]="frame.tray().minimizeToTray"
+              ></span>
+            </span>
+          </button>
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
+            role="switch"
+            title="Closing the window hides Dynpost to the system tray instead of quitting; quit from the tray icon or with the Quit shortcut"
+            [attr.aria-checked]="frame.tray().closeToTray"
+            (click)="frame.setTray({ closeToTray: !frame.tray().closeToTray })"
+          >
+            <fa-icon class="w-4 text-slate-500" [icon]="faRectangleXmark" />
+            <span class="flex-1">Close to tray</span>
+            <span
+              class="relative h-4 w-7 shrink-0 rounded-full transition-colors"
+              [class]="frame.tray().closeToTray ? 'bg-sky-600' : 'bg-slate-300'"
+              aria-hidden="true"
+            >
+              <span
+                class="absolute top-0.5 left-0.5 size-3 rounded-full bg-[#fff] shadow transition-transform"
+                [class.translate-x-3]="frame.tray().closeToTray"
+              ></span>
+            </span>
+          </button>
+        }
         <button
           type="button"
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-100"
@@ -346,9 +390,9 @@
     <button
       type="button"
       class="flex w-11 items-center justify-center text-slate-300 hover:bg-red-600 hover:text-white"
-      title="Close"
+      [title]="frame.closesToTray() ? 'Close to the tray' : 'Close'"
       aria-label="Close"
-      (click)="shortcuts.run('quit')"
+      (click)="frame.closesToTray() ? frame.hideToTray() : shortcuts.run('quit')"
     >
       <fa-icon [icon]="faXmark" />
     </button>

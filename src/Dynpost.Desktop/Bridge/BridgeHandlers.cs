@@ -350,6 +350,8 @@ internal static class BridgeHandlers
                 (p, ct) => Use<SetActivityOrder>().ExecuteAsync(p.Order, ct))
             .Register<SetTitleBarPayload, AppSettingsDto>(BridgeMessageTypes.SettingsSetTitleBar,
                 (p, ct) => Use<SetTitleBar>().ExecuteAsync(p.Native, ct))
+            .Register<TraySettings, AppSettingsDto>(BridgeMessageTypes.SettingsSetTray,
+                (p, ct) => Use<SetTraySettings>().ExecuteAsync(p, ct))
             .Register(BridgeMessageTypes.McpStatus,
                 ct => Use<GetMcpStatus>().ExecuteAsync(ct))
             .Register<SetMcpPayload, McpStatusDto>(BridgeMessageTypes.McpSet,
@@ -376,6 +378,8 @@ internal static class BridgeHandlers
                 _ => Task.FromResult(Result<WindowStateDto>.Success(window.GetState())))
             .Register(BridgeMessageTypes.WindowMinimize,
                 _ => Task.FromResult(Done(window.Minimize)))
+            .Register(BridgeMessageTypes.WindowHide,
+                _ => Task.FromResult(Done(window.HideToTray)))
             .Register(BridgeMessageTypes.WindowToggleMaximize,
                 _ => Task.FromResult(Done(window.ToggleMaximize)))
             .Register(BridgeMessageTypes.WindowStartDrag,

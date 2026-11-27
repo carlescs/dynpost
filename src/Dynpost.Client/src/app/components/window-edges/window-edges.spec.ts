@@ -14,6 +14,7 @@ describe('WindowEdges', () => {
       frame: 'custom',
       platform: 'windows',
       maximized: false,
+      tray: false,
     });
     const fixture = TestBed.createComponent(WindowEdges);
     fixture.detectChanges();

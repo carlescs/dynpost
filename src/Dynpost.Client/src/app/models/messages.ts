@@ -783,6 +783,17 @@ export interface AppSettingsDto {
   activityOrder: string[];
   /** Whether the window keeps the operating system's title bar (from the next start). */
   nativeTitleBar: boolean;
+  /** Whether minimizing or closing the window hides it to the system tray. */
+  tray: TraySettingsDto;
+}
+
+/**
+ * Whether the window hides to the system tray, where the app keeps running (sends, load runs and
+ * the MCP server carry on). The tray icon shows while either is on.
+ */
+export interface TraySettingsDto {
+  minimizeToTray: boolean;
+  closeToTray: boolean;
 }
 
 /** The edge or corner of the window a resize starts from. */
@@ -796,6 +807,8 @@ export interface WindowStateDto {
   /** The platform the app runs on; `web` in the browser preview. */
   platform: 'windows' | 'linux' | 'macos' | 'web';
   maximized: boolean;
+  /** Whether the system can show the app's tray icon, so the tray settings apply. */
+  tray: boolean;
 }
 
 /** The MCP server AI assistants connect to, as set up and as running. */
@@ -1419,6 +1432,8 @@ export interface BridgeMessages {
   'window.get': { payload: void; result: WindowStateDto };
   /** Minimizes the window. */
   'window.minimize': { payload: void; result: null };
+  /** Hides the window to the tray, when closing it does that (the app keeps running). */
+  'window.hide': { payload: void; result: null };
   /** Maximizes or restores the window (zooms it on macOS). */
   'window.toggleMaximize': { payload: void; result: null };
   /** Moves the window with the mouse pressed on the app's title bar, until it is released. */
@@ -1427,6 +1442,8 @@ export interface BridgeMessages {
   'window.startResize': { payload: { edge: WindowEdge }; result: null };
   /** Uses the system's title bar (or the app's own) from the next start. */
   'settings.setTitleBar': { payload: { native: boolean }; result: AppSettingsDto };
+  /** Shows or removes the tray icon and what minimizing or closing does, at once. */
+  'settings.setTray': { payload: TraySettingsDto; result: AppSettingsDto };
 }
 
 export type BridgeMessageType = keyof BridgeMessages;
@@ -1496,6 +1513,8 @@ export interface BridgeEvents {
   'workspace.filesChanged': { paths: string[] | null };
   /** The window was maximized or restored. */
   'window.stateChanged': WindowStateDto;
+  /** The user chose Quit in the tray icon's menu: the window shows again, and the UI quits as its own Quit does. */
+  'app.quitRequested': Record<string, never>;
 }
 
 export type BridgeEventType = keyof BridgeEvents;

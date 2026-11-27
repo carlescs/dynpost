@@ -14,9 +14,7 @@ internal sealed class GtkChrome : WindowChrome
 {
     private const string Gtk = "libgtk-3.so.0";
     private const string Gdk = "libgdk-3.so.0";
-    private const string GLib = "libglib-2.0.so.0";
     private const int PrimaryButton = 1;
-    private const int ToplevelWindow = 0;
     private const uint Button1Mask = 1 << 8;
 
     private IntPtr _window;
@@ -54,35 +52,7 @@ internal sealed class GtkChrome : WindowChrome
         }
     }
 
-    // Photino doesn't expose its GtkWindow; it is the app's only top-level window that isn't a
-    // dialog (dialogs are transient for it).
-    private IntPtr FindWindow()
-    {
-        if (_window != IntPtr.Zero)
-        {
-            return _window;
-        }
-
-        var list = gtk_window_list_toplevels();
-        try
-        {
-            for (var node = list; node != IntPtr.Zero; node = Marshal.ReadIntPtr(node, IntPtr.Size))
-            {
-                var candidate = Marshal.ReadIntPtr(node);
-                if (gtk_window_get_window_type(candidate) == ToplevelWindow
-                    && gtk_window_get_transient_for(candidate) == IntPtr.Zero)
-                {
-                    return _window = candidate;
-                }
-            }
-        }
-        finally
-        {
-            g_list_free(list);
-        }
-
-        return IntPtr.Zero;
-    }
+    private IntPtr FindWindow() => _window != IntPtr.Zero ? _window : _window = GtkWindows.FindMain();
 
     /// <summary>
     /// Where the pointer is, while its primary button is still down; <see langword="null"/> once it
@@ -103,15 +73,6 @@ internal sealed class GtkChrome : WindowChrome
         gdk_window_get_device_position(root, pointer, out var x, out var y, out var mask);
         return (mask & Button1Mask) != 0 ? (x, y) : null;
     }
-
-    [DllImport(Gtk)]
-    private static extern IntPtr gtk_window_list_toplevels();
-
-    [DllImport(Gtk)]
-    private static extern int gtk_window_get_window_type(IntPtr window);
-
-    [DllImport(Gtk)]
-    private static extern IntPtr gtk_window_get_transient_for(IntPtr window);
 
     [DllImport(Gtk)]
     private static extern uint gtk_get_current_event_time();
@@ -136,7 +97,4 @@ internal sealed class GtkChrome : WindowChrome
 
     [DllImport(Gdk)]
     private static extern IntPtr gdk_window_get_device_position(IntPtr window, IntPtr device, out int x, out int y, out uint mask);
-
-    [DllImport(GLib)]
-    private static extern void g_list_free(IntPtr list);
 }

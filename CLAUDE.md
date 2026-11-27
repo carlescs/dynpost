@@ -155,6 +155,16 @@ runners, mock servers, cloud accounts. See `README.md` for the planned workspace
   lights with a transparent, full-size-content title bar and `performWindowDragWithEvent:`. The
   client's `services/window-frame.ts` starts drags from the header and `components/window-edges`
   draws the resize handles the platform lacks.
+- Tray: the per-user `AppSettings.Tray` (`Application/Settings/TraySettings.cs`, changed by
+  `SetTraySettings`, applied at startup by `StartSystemTray`, through the `ISystemTray` port) shows
+  an icon in the system tray and hides the window there when it is minimized or closed, so sends,
+  runs and the MCP server keep going. `Desktop/Window/WindowTray.cs` implements the port, hooks
+  Photino's minimized and closing handlers (`IAppWindow.Close`, i.e. `app.quit`, always quits) and
+  uses one `TrayIcon` per platform, all native interop: `Win32Tray` (`Shell_NotifyIcon`, a hidden
+  window for its clicks), `GtkTray` (AppIndicator loaded at run time, else `GtkStatusIcon`; a window
+  is minimized instead of hidden when no tray shows the icon) and `CocoaTray` (`NSStatusItem`, a
+  runtime ObjC class as the menu's target). The tray's Quit sends `app.quitRequested` so the UI
+  confirms like Ctrl+Q; the header's close button sends `window.hide` when closing goes to the tray.
 - Dates: the client never formats dates with the webview's locale or Angular's
   `DatePipe`; it uses `DateFormatStore` (`services/date-format-store.ts`), which formats
   with the operating system's regional patterns read by the host

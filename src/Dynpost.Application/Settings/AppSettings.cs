@@ -22,6 +22,7 @@ namespace Dynpost.Application.Settings;
 /// Whether the window keeps the operating system's title bar instead of the app's own; <c>null</c>
 /// is <c>false</c>. Read when the window opens, so a change applies the next time the app starts.
 /// </param>
+/// <param name="Tray">Whether the window hides to the system tray; <c>null</c> is <see cref="TraySettings.Default"/> (never).</param>
 public sealed record AppSettings(
     string? LastWorkspacePath = null,
     string? Theme = null,
@@ -30,7 +31,8 @@ public sealed record AppSettings(
     IReadOnlyList<string>? ActivityOrder = null,
     McpSettings? Mcp = null,
     SecretSettings? Secrets = null,
-    bool? NativeTitleBar = null)
+    bool? NativeTitleBar = null,
+    TraySettings? Tray = null)
 {
     public static AppSettings Default { get; } = new();
 }

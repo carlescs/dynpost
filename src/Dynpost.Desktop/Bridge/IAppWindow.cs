@@ -3,8 +3,14 @@ namespace Dynpost.Desktop.Bridge;
 /// <summary>The app's window, as the bridge handlers see it.</summary>
 internal interface IAppWindow
 {
-    /// <summary>Closes the window, which ends the app.</summary>
+    /// <summary>Closes the window, which ends the app (even when closing it would hide it to the tray).</summary>
     void Close();
+
+    /// <summary>
+    /// Hides the window to the system tray, as closing it does when the user chose that; does
+    /// nothing otherwise. The app keeps running.
+    /// </summary>
+    void HideToTray();
 
     /// <summary>Which title bar the window has, on which platform, and whether it is maximized.</summary>
     WindowStateDto GetState();
@@ -42,7 +48,8 @@ internal enum WindowEdge
 /// <param name="Frame"><see cref="WindowFrames.Custom"/> when the app draws the title bar, else <see cref="WindowFrames.Native"/>.</param>
 /// <param name="Platform"><c>windows</c>, <c>linux</c> or <c>macos</c>.</param>
 /// <param name="Maximized">Whether the window is maximized.</param>
-internal sealed record WindowStateDto(string Frame, string Platform, bool Maximized);
+/// <param name="Tray">Whether the system can show the app's tray icon, so the tray settings apply.</param>
+internal sealed record WindowStateDto(string Frame, string Platform, bool Maximized, bool Tray = false);
 
 /// <summary>The kinds of title bar a window can have.</summary>
 internal static class WindowFrames

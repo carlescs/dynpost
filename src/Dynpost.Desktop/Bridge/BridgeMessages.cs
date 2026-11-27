@@ -505,8 +505,14 @@ internal static class BridgeMessageTypes
     /// <summary>The window's title bar (the app's or the system's), platform and state. Payload: none. Result: <see cref="WindowStateDto"/>.</summary>
     public const string WindowGet = "window.get";
 
-    /// <summary>Minimizes the window. Payload: none. Result: none.</summary>
+    /// <summary>Minimizes the window (to the tray when the user chose that). Payload: none. Result: none.</summary>
     public const string WindowMinimize = "window.minimize";
+
+    /// <summary>
+    /// Hides the window to the system tray, as closing it does when the user chose that; the app
+    /// keeps running. Payload: none. Result: none.
+    /// </summary>
+    public const string WindowHide = "window.hide";
 
     /// <summary>Maximizes or restores the window (zooms it on macOS). Payload: none. Result: none.</summary>
     public const string WindowToggleMaximize = "window.toggleMaximize";
@@ -519,6 +525,12 @@ internal static class BridgeMessageTypes
 
     /// <summary>Uses the system's title bar or the app's own from the next start. Payload: <see cref="SetTitleBarPayload"/>. Result: settings.</summary>
     public const string SettingsSetTitleBar = "settings.setTitleBar";
+
+    /// <summary>
+    /// Shows or removes the tray icon and whether minimizing or closing the window hides it there,
+    /// at once. Payload: <see cref="Dynpost.Application.Settings.TraySettings"/>. Result: settings.
+    /// </summary>
+    public const string SettingsSetTray = "settings.setTray";
 
     /// <summary>Reads the user settings. Payload: none. Result: settings.</summary>
     public const string SettingsGet = "settings.get";
@@ -581,6 +593,12 @@ internal static class BridgeEventTypes
 
     /// <summary>The window was maximized or restored. Payload: <see cref="WindowStateDto"/>.</summary>
     public const string WindowStateChanged = "window.stateChanged";
+
+    /// <summary>
+    /// The user chose Quit in the tray icon's menu: the window is showing again, and the UI quits
+    /// as its own Quit does (asking about unsaved changes first). Payload: <see cref="QuitRequestedEvent"/>.
+    /// </summary>
+    public const string QuitRequested = "app.quitRequested";
 }
 
 /// <summary>A message from the host the UI didn't ask for; unlike a <see cref="BridgeResponse"/> it has no id.</summary>
@@ -591,6 +609,9 @@ internal sealed record WorkspaceChangedEvent(IReadOnlyList<string> Paths);
 
 /// <summary>The payload of <see cref="BridgeEventTypes.GitChanged"/>: nothing, the UI reads the status again.</summary>
 internal sealed record GitChangedEvent;
+
+/// <summary>The payload of <see cref="BridgeEventTypes.QuitRequested"/>: nothing.</summary>
+internal sealed record QuitRequestedEvent;
 
 /// <param name="Paths">
 /// The workspace paths of the files and folders that changed, or <see langword="null"/> when
