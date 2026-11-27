@@ -2,20 +2,20 @@
   <title>Dynpost</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6D7CFF"/>
-      <stop offset="0.55" stop-color="#4F46E5"/>
-      <stop offset="1" stop-color="#3B2CB8"/>
+      <stop offset="0" stop-color="#7C6BFF"/>
+      <stop offset="0.5" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#2E1F9E"/>
     </linearGradient>
-    <radialGradient id="shine" cx="0.3" cy="0.12" r="0.75">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+    <radialGradient id="shine" cx="0.25" cy="0.1" r="0.8">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.3"/>
       <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E8EBFF"/>
+    <linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="820" y1="220" x2="480" y2="680">
+      <stop offset="0" stop-color="#FFD166"/>
+      <stop offset="1" stop-color="#FF6B6B"/>
     </linearGradient>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#1E1470" flood-opacity="0.35"/>
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#160D5C" flood-opacity="0.4"/>
     </filter>
   </defs>
 
@@ -23,21 +23,14 @@
   <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#bg)"/>
   <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#shine)"/>
 
-  <!-- Speed lines: the message is on its way -->
-  <g stroke="#FFFFFF" stroke-linecap="round" stroke-width="36">
-    <line x1="168" y1="440" x2="262" y2="440" stroke-opacity="0.9"/>
-    <line x1="208" y1="522" x2="262" y2="522" stroke-opacity="0.65"/>
-    <line x1="140" y1="604" x2="262" y2="604" stroke-opacity="0.45"/>
-  </g>
+  <!-- Trail: the request is on its way -->
+  <path d="M170 800 C 270 650, 380 770, 470 640" fill="none" stroke="#FFFFFF"
+        stroke-width="36" stroke-linecap="round" stroke-dasharray="1 68" stroke-opacity="0.65"/>
 
-  <!-- Envelope -->
+  <!-- Paper plane -->
   <g filter="url(#shadow)">
-    <rect x="312" y="336" width="560" height="380" rx="56" fill="url(#paper)"/>
+    <path d="M820 220 L250 470 L470 560 Z" fill="#FFFFFF"/>
+    <path d="M820 220 L470 560 L560 790 Z" fill="#E4E7FF"/>
+    <path d="M820 220 L470 560 L520 670 Z" fill="url(#accent)"/>
   </g>
-  <!-- Lower folds -->
-  <path d="M332 694 L540 520 M852 694 L644 520" fill="none" stroke="#C7CCFA"
-        stroke-width="22" stroke-linecap="round"/>
-  <!-- Flap -->
-  <path d="M340 364 L592 566 L844 364" fill="none" stroke="#4F46E5"
-        stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
