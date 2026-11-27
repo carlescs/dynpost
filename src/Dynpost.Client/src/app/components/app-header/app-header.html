@@ -174,7 +174,7 @@
       <div
         id="settings-panel"
         data-no-drag
-        class="adaptive absolute top-full right-0 z-50 mt-1 w-56 rounded border border-slate-300 bg-white py-1 text-sm text-slate-800 shadow-lg"
+        class="adaptive absolute top-full right-0 z-50 mt-1 w-56 rounded border border-slate-300 bg-white py-1 text-sm whitespace-normal text-slate-800 shadow-lg"
       >
         @if (updates.readyVersion(); as version) {
           <button
@@ -185,7 +185,7 @@
             (click)="restartToUpdate()"
           >
             <fa-icon class="w-4 text-emerald-600" [icon]="faCircleArrowUp" />
-            <span class="flex flex-1 flex-col">
+            <span class="flex min-w-0 flex-1 flex-col">
               <span>Restart to update</span>
               <span class="text-xs text-slate-500">Dynpost {{ version }} is ready</span>
             </span>
@@ -205,7 +205,7 @@
               [icon]="faRotate"
               [animation]="updates.checking() ? 'spin' : undefined"
             />
-            <span class="flex flex-1 flex-col">
+            <span class="flex min-w-0 flex-1 flex-col">
               <span>{{ updates.checking() ? 'Checking for updates…' : 'Check for updates' }}</span>
               @if (updateNote(); as note) {
                 <span
@@ -251,7 +251,7 @@
             (click)="frame.setNativeTitleBar(!frame.nativeTitleBar())"
           >
             <fa-icon class="w-4 text-slate-500" [icon]="faWindowMaximize" />
-            <span class="flex flex-1 flex-col">
+            <span class="flex min-w-0 flex-1 flex-col">
               <span>System title bar</span>
               @if (frame.restartNeeded()) {
                 <span id="title-bar-restart" class="text-xs text-slate-500"
