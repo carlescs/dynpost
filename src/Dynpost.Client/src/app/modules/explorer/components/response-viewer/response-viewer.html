@@ -154,19 +154,55 @@
             }
             @if (canFilter()) {
               <label
-                class="ml-2 flex min-w-0 flex-1 items-center gap-1 rounded border border-slate-300 px-1.5 focus-within:border-sky-500"
+                class="relative ml-2 flex min-w-0 flex-1 items-center gap-1 rounded border border-slate-300 px-1.5 focus-within:border-sky-500"
                 [class.border-rose-400]="filtered() && 'error' in filtered()!"
               >
                 <fa-icon class="text-slate-400" [icon]="faFilter" />
                 <input
+                  #filterInput
                   class="min-w-0 flex-1 bg-transparent py-0.5 font-mono focus:outline-none"
                   aria-label="Filter the body with JSONPath"
                   placeholder="Filter with JSONPath, e.g. $.items[*].id or $..name"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-controls="json-filter-completions"
+                  [attr.aria-expanded]="completions().length > 0"
+                  [attr.aria-activedescendant]="
+                    completions().length ? 'json-filter-completion-' + completionIndex() : null
+                  "
+                  autocomplete="off"
                   spellcheck="false"
                   [value]="jsonFilter()"
-                  (input)="jsonFilter.set($any($event.target).value)"
-                  (keydown.escape)="jsonFilter.set('')"
+                  (input)="onFilterInput(filterInput)"
+                  (keydown)="onFilterKeydown($event, filterInput)"
+                  (keyup)="onFilterCaret(filterInput)"
+                  (click)="onFilterCaret(filterInput)"
+                  (focus)="onFilterInput(filterInput)"
+                  (blur)="completionsOpen.set(false)"
                 />
+                @if (completions().length) {
+                  <ul
+                    id="json-filter-completions"
+                    class="adaptive absolute top-full left-0 z-20 mt-1 max-h-48 w-max max-w-full min-w-56 overflow-y-auto rounded border border-slate-300 bg-white py-1 font-mono shadow-lg"
+                    role="listbox"
+                    aria-label="JSONPath suggestions"
+                  >
+                    @for (c of completions(); track c.text; let i = $index) {
+                      <li
+                        class="cursor-pointer truncate px-2 py-0.5"
+                        role="option"
+                        [id]="'json-filter-completion-' + i"
+                        [attr.aria-selected]="i === completionIndex()"
+                        [class.bg-sky-100]="i === completionIndex()"
+                        [class.text-slate-500]="c.kind === 'index'"
+                        (mousemove)="completionIndex.set(i)"
+                        (mousedown)="$event.preventDefault(); applyCompletion(c, filterInput)"
+                      >
+                        {{ c.label }}
+                      </li>
+                    }
+                  </ul>
+                }
               </label>
               @if (filtered(); as f) {
                 @if ('error' in f) {

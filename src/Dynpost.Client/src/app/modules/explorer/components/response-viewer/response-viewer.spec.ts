@@ -156,6 +156,35 @@ describe('ResponseViewer', () => {
     ).toBeNull();
   });
 
+  it('suggests JSONPath keys while typing the filter and takes one with Enter', () => {
+    const body = JSON.stringify({ headers: { 'Content-Length': '19', Host: 'x' } });
+    const fixture = render(
+      response({ contentType: 'application/json', body, bodyEncoding: 'text', size: body.length }),
+    );
+    const filter = fixture.nativeElement.querySelector(
+      'input[aria-label="Filter the body with JSONPath"]',
+    ) as HTMLInputElement;
+
+    filter.value = '$.headers.co';
+    filter.setSelectionRange(filter.value.length, filter.value.length);
+    filter.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const options = () =>
+      [...fixture.nativeElement.querySelectorAll('[role=option]')].map((o: HTMLElement) =>
+        o.textContent?.trim(),
+      );
+    expect(options()).toEqual(['Content-Length']);
+    expect(filter.getAttribute('aria-expanded')).toBe('true');
+
+    filter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    fixture.detectChanges();
+
+    expect(filter.value).toBe("$.headers['Content-Length']");
+    expect(options()).toEqual([]);
+    expect(fixture.nativeElement.textContent).toContain('1 match');
+  });
+
   it('offers copying only for text bodies', () => {
     const fixture = render(response());
     const labels = [...fixture.nativeElement.querySelectorAll('button')].map((b: HTMLElement) =>

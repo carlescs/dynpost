@@ -33,7 +33,12 @@ import { ResponseHistory } from '../response-history/response-history';
 import { bodyLanguage, prettyBody } from '../../models/response-text';
 import { DateFormatStore } from '../../../../services/date-format-store';
 import { copyText } from '../../../../models/clipboard';
-import { filterJson } from '../../../../models/json-path';
+import {
+  filterJson,
+  JsonPathCompletion,
+  jsonPathCompletions,
+  JsonValue,
+} from '../../../../models/json-path';
 
 type ResponseTab = 'body' | 'headers' | 'cookies' | 'captures' | 'timing' | 'request';
 
@@ -198,6 +203,94 @@ export class ResponseViewer {
     if (!r || !path || !this.canFilter()) return null;
     return filterJson(r.body, path);
   });
+
+  /** The JSON body the filter runs on; `null` when it can't be filtered. */
+  private readonly jsonBody = computed<{ value: JsonValue } | null>(() => {
+    const r = this.response();
+    if (!r || !this.canFilter()) return null;
+    try {
+      return { value: JSON.parse(r.body) as JsonValue };
+    } catch {
+      return null;
+    }
+  });
+
+  /** Where the caret is in the filter; completions are for the text before it. */
+  private readonly filterCaret = signal(0);
+  /** Whether the filter's suggestion list is open (while it has focus and something to offer). */
+  protected readonly completionsOpen = signal(false);
+  /** The highlighted suggestion. */
+  protected readonly completionIndex = signal(0);
+
+  /** Keys (and array selectors) that can follow the path typed before the caret. */
+  protected readonly completions = computed<JsonPathCompletion[]>(() => {
+    const body = this.jsonBody();
+    if (!body || !this.completionsOpen()) return [];
+    const text = this.jsonFilter().slice(0, this.filterCaret());
+    return jsonPathCompletions(body.value, text);
+  });
+
+  protected onFilterInput(input: HTMLInputElement): void {
+    this.jsonFilter.set(input.value);
+    this.filterCaret.set(input.selectionStart ?? input.value.length);
+    this.completionIndex.set(0);
+    this.completionsOpen.set(true);
+  }
+
+  protected onFilterCaret(input: HTMLInputElement): void {
+    const caret = input.selectionStart ?? input.value.length;
+    if (caret !== this.filterCaret()) {
+      this.filterCaret.set(caret);
+      this.completionIndex.set(0);
+    }
+  }
+
+  protected onFilterKeydown(event: KeyboardEvent, input: HTMLInputElement): void {
+    const items = this.completions();
+    if (event.key === ' ' && event.ctrlKey) {
+      event.preventDefault();
+      this.filterCaret.set(input.selectionStart ?? input.value.length);
+      this.completionsOpen.set(true);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (items.length) this.completionsOpen.set(false);
+      else this.jsonFilter.set('');
+      return;
+    }
+    if (!items.length) return;
+    const count = items.length;
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        this.completionIndex.update((i) => (i + 1) % count);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        this.completionIndex.update((i) => (i - 1 + count) % count);
+        break;
+      case 'Enter':
+      case 'Tab':
+        event.preventDefault();
+        this.applyCompletion(items[Math.min(this.completionIndex(), count - 1)], input);
+        break;
+    }
+  }
+
+  /** Puts the suggestion in place of the text before the caret. */
+  protected applyCompletion(completion: JsonPathCompletion, input: HTMLInputElement): void {
+    const after = this.jsonFilter().slice(this.filterCaret());
+    const value = completion.text + after;
+    input.value = value;
+    input.setSelectionRange(completion.text.length, completion.text.length);
+    input.focus();
+    this.jsonFilter.set(value);
+    this.filterCaret.set(completion.text.length);
+    this.completionIndex.set(0);
+    // Typing the next `.` or `[` opens the list again.
+    this.completionsOpen.set(false);
+  }
 
   private readonly bodyEditor = viewChild<CodeEditor>('bodyEditor');
 
