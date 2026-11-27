@@ -22,7 +22,7 @@ import { ThemeStore } from '../../services/theme-store';
 import { jsonPathAt } from '../../models/json-path';
 import { copyText } from '../../models/clipboard';
 import { canPrettyPrint, prettyPrint } from '../../models/pretty-print';
-import { Monaco, loadMonaco } from './monaco-loader';
+import { MONACO_LOADER, Monaco } from './monaco-loader';
 
 /**
  * A Monaco editor with syntax highlighting, for request and response bodies. Monaco is loaded
@@ -71,6 +71,7 @@ export class CodeEditor {
   private canCopyJsonPathKey: { set(value: boolean): void } | null = null;
   private destroyed = false;
   private readonly themes = inject(ThemeStore);
+  private readonly loadMonaco = inject(MONACO_LOADER);
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -129,7 +130,7 @@ export class CodeEditor {
   }
 
   private async create(): Promise<void> {
-    const monaco = await loadMonaco();
+    const monaco = await this.loadMonaco();
     if (this.destroyed) return;
 
     this.monaco = monaco;
