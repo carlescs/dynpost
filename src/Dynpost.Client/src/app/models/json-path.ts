@@ -352,3 +352,95 @@ export function jsonPathAt(text: string, offset: number): string | null {
   }
   return stack.length === 0 ? '$' : null;
 }
+
+/** A suggestion for the JSONPath being typed: what the list shows and the path it completes to. */
+export interface JsonPathCompletion {
+  label: string;
+  /** The text before the caret once the suggestion is taken. */
+  text: string;
+  /** Whether `label` is a key (otherwise an array selector such as `[*]`). */
+  kind: 'key' | 'index';
+}
+
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+
+/**
+ * Suggestions for the JSONPath `text` (what is before the caret) typed against `value`: the keys of
+ * what the path before the last `.`, `..`, `[` or `['` matches that start with (or else contain)
+ * what follows it, ignoring case, and `[*]` for arrays. Empty when that path isn't valid.
+ */
+export function jsonPathCompletions(
+  value: JsonValue,
+  text: string,
+  limit = 50,
+): JsonPathCompletion[] {
+  const split = splitPartial(text);
+  if (!split) return [];
+  const { base, sep, partial, quote } = split;
+  const result = queryJsonPath(value, base || '$');
+  if (!result.ok || !base.startsWith('$')) return [];
+  const nodes = sep === '..' ? result.matches.flatMap(descendants) : result.matches;
+
+  const keys = new Set<string>();
+  let arrays = false;
+  let maxLength = 0;
+  for (const node of nodes) {
+    if (Array.isArray(node)) {
+      arrays = true;
+      maxLength = Math.max(maxLength, node.length);
+    } else if (node !== null && typeof node === 'object') {
+      for (const key of Object.keys(node)) keys.add(key);
+    }
+  }
+
+  const needle = partial.toLowerCase();
+  const ranked = [...keys]
+    .map((key) => ({ key, at: key.toLowerCase().indexOf(needle) }))
+    .filter((k) => k.at >= 0)
+    .sort((a, b) => Number(a.at !== 0) - Number(b.at !== 0));
+  const dots = sep === '..' ? '..' : '.';
+  const completions: JsonPathCompletion[] = ranked.map(({ key }) => ({
+    label: key,
+    kind: 'key',
+    text:
+      sep === '['
+        ? `${base}[${quote ?? "'"}${escapeName(key, quote ?? "'")}${quote ?? "'"}]`
+        : IDENTIFIER.test(key)
+          ? `${base}${dots}${key}`
+          : `${base}${sep === '..' ? '..' : ''}['${escapeName(key, "'")}']`,
+  }));
+  if (arrays && quote === null && (partial === '' || partial === '*')) {
+    const prefix = sep === '..' ? `${base}..` : base;
+    completions.unshift({ label: '[*]', kind: 'index', text: `${prefix}[*]` });
+    if (sep !== '..') {
+      for (let i = 0; i < Math.min(maxLength, 3); i++)
+        completions.push({ label: `[${i}]`, kind: 'index', text: `${base}[${i}]` });
+    }
+  }
+  return completions.filter((c) => c.text !== text).slice(0, limit);
+}
+
+/** Splits the typed path into the part already complete and the name being typed after it. */
+function splitPartial(
+  text: string,
+): { base: string; sep: '.' | '..' | '['; partial: string; quote: string | null } | null {
+  if (/^\s*\$?$/.test(text)) return { base: '$', sep: '.', partial: '', quote: null };
+  // Inside an open bracket: `[` or `['par` / `["par`.
+  const bracket = /^(.*)\[\s*(?:(['"])((?:[^\\]|\\.)*))?$/s.exec(text);
+  if (bracket && !(bracket[2] && bracket[3].includes(bracket[2]))) {
+    if (bracket[2] === undefined && !/^\s*$/.test(text.slice(bracket[1].length + 1))) return null;
+    return {
+      base: bracket[1],
+      sep: '[',
+      partial: (bracket[3] ?? '').replace(/\\(.)/g, '$1'),
+      quote: bracket[2] ?? null,
+    };
+  }
+  const dot = /^(.*?)(\.\.|\.)([^.[\]\s'"]*)$/s.exec(text);
+  if (dot) return { base: dot[1], sep: dot[2] as '.' | '..', partial: dot[3], quote: null };
+  return null;
+}
+
+function escapeName(name: string, quote: string): string {
+  return name.replace(/\\/g, '\\\\').replaceAll(quote, `\\${quote}`);
+}

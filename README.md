@@ -939,8 +939,11 @@ case, whole words and regular expressions. A pretty JSON body can be narrowed
 with a JSONPath in the filter box above it — `$.items[*].id`, `$..name`,
 `$.items[0:5]`, `$.items[?(@.price < 10)].name` (filters compare a child with a
 number, a quoted string, `true`, `false` or `null`, or test that it exists) —
-which shows the value it names, or the list of matches with their count; Esc
-clears it, and **Raw** still shows the whole body. Right-click a key or value
+which shows the value it names, or the list of matches with their count. While
+you type, it suggests the keys that can follow the path so far (after `.`, `..`,
+`[` or `['`) and `[*]` for arrays: arrows pick one, Enter or Tab takes it,
+Ctrl+Space shows the list again; Esc closes the list, then clears the filter,
+and **Raw** still shows the whole body. Right-click a key or value
 and pick **Copy JSONPath** to copy its path (`$.items[2].id`). HTML
 responses are previewed rendered in a sandboxed frame that runs no scripts and
 loads nothing from the network
